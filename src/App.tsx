@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 
 
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 // --- CONFIGURAÇÃO GOOGLE ---
 const GOOGLE_API_KEY = "AIzaSyA1-UOlhqE8wK-YhXZshbSwoU7Fs4TycFI"; 
@@ -247,7 +247,7 @@ function App() {
   const [driveErrorMsg, setDriveErrorMsg] = useState("");
   const [lastBackup, setLastBackup] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'FINANCEIRO' | 'OFICINA' | 'PROCESSOS' | 'CONFIG'>('FINANCEIRO');
+  const [activeTab, setActiveTab] = useState<'FINANCEIRO' | 'OFICINA' | 'PROCESSOS' | 'CLIENTES' | 'CONFIG'>('FINANCEIRO');
 
   // Estados UI
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -265,6 +265,10 @@ function App() {
   
   // ESTADO PARA EDIÇÃO RÁPIDA DE STATUS NA ABA PROCESSOS
   const [editingStatusId, setEditingStatusId] = useState<string | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: 'createdAt' | 'clientName' | 'total', direction: 'asc' | 'desc' }>({ key: 'createdAt', direction: 'desc' });
+
+  // CRM
+  const [selectedClientForCRM, setSelectedClientForCRM] = useState<Client | null>(null);
 
   // Form OS
   const [formOSNumber, setFormOSNumber] = useState("");
@@ -695,9 +699,14 @@ function App() {
   const chartDataStatus = useMemo(() => { const c = {ORCAMENTO:0, APROVADO:0, EM_SERVICO:0, FINALIZADO:0}; workOrders.forEach(o => { if(c[o.status]!==undefined) c[o.status]++; }); return [{name:'Orç.',qtd:c.ORCAMENTO,fill:COLORS.info},{name:'Aprov.',qtd:c.APROVADO,fill:COLORS.warning},{name:'Serv.',qtd:c.EM_SERVICO,fill:COLORS.primary},{name:'Final.',qtd:c.FINALIZADO,fill:COLORS.success}]; }, [workOrders]);
   const kpiData = useMemo(() => { 
     const s = ledger.reduce((a,e)=>a+(e.type==='DEBIT'?-e.amount:e.amount),0); 
+    
+    // Filtra apenas as ordens de serviço com status 'FINALIZADO'
     const finalizedOrders = workOrders.filter(o => o.status === 'FINALIZADO');
+    // Calcula o total dessas ordens
     const totalFinalized = finalizedOrders.reduce((a, o) => a + o.total, 0);
+    // Calcula a média. Se não houver ordens finalizadas, ticket médio é 0
     const ticket = finalizedOrders.length > 0 ? totalFinalized / finalizedOrders.length : 0;
+
     return { 
       saldo: s, 
       receitas: ledger.filter(e=>e.type==='CREDIT').reduce((a,e)=>a+e.amount,0), 
@@ -707,10 +716,56 @@ function App() {
   }, [ledger, workOrders]);
 
 
-  // --- FUNÇÕES DA NOVA ABA PROCESSOS ---
+  // --- FUNÇÕES DA NOVA ABA PROCESSOS (COM REGRAS DE NEGÓCIO) ---
   const handleUpdateStatus = (osId: string, newStatus: OSStatus) => {
-      setWorkOrders(prev => prev.map(os => os.id === osId ? { ...os, status: newStatus } : os));
-      setEditingStatusId(null);
+    const os = workOrders.find(o => o.id === osId);
+    if (!os) return;
+
+    const oldStatus = os.status;
+
+    // Regra 1: Entrando em FINALIZADO
+    if (newStatus === 'FINALIZADO' && oldStatus !== 'FINALIZADO') {
+        if (!os.financialId) {
+            if (confirm("Lançar no Financeiro?")) {
+                const entry = createEntry(`Receita OS #${os.osNumber} - ${os.vehicle}`, os.total, 'CREDIT', os.createdAt);
+                setLedger(prev => [entry, ...prev]);
+                
+                // Atualiza OS com novo status E financialId
+                setWorkOrders(prev => prev.map(o => o.id === osId ? { ...o, status: newStatus, financialId: entry.id } : o));
+            } else {
+                 // Se cancelar o lançamento financeiro, apenas muda o status (igual ao Avançar do Kanban)
+                 setWorkOrders(prev => prev.map(o => o.id === osId ? { ...o, status: newStatus } : o));
+            }
+        } else {
+            // Já tem ID financeiro, só muda status
+            setWorkOrders(prev => prev.map(o => o.id === osId ? { ...o, status: newStatus } : o));
+        }
+    }
+    // Regra 2: Saindo de FINALIZADO
+    else if (oldStatus === 'FINALIZADO' && newStatus !== 'FINALIZADO') {
+        if (os.financialId) {
+            if (confirm("Remover do Financeiro?")) {
+                // Remove do Ledger
+                setLedger(prev => prev.filter(e => e.id !== os.financialId));
+                // Atualiza OS: remove financialId e muda status
+                setWorkOrders(prev => prev.map(o => o.id === osId ? { ...o, status: newStatus, financialId: undefined } : o));
+            } else {
+                // Se cancelar a remoção do financeiro, CANCELA a mudança de status (segurança)
+                // Retorna sem fazer nada
+                setEditingStatusId(null);
+                return; 
+            }
+        } else {
+             // Sem ID financeiro, só muda status
+             setWorkOrders(prev => prev.map(o => o.id === osId ? { ...o, status: newStatus } : o));
+        }
+    }
+    // Regra 3: Transição Normal
+    else {
+        setWorkOrders(prev => prev.map(o => o.id === osId ? { ...o, status: newStatus } : o));
+    }
+
+    setEditingStatusId(null);
   };
 
   const handleUpdateOSDate = (osId: string, newDate: string) => {
@@ -797,11 +852,46 @@ function App() {
       </div>
     );
   };
+  
+  // --- HELPER CRM (Histórico do Cliente) ---
+  const getClientHistory = (clientName: string) => {
+    return workOrders.filter(os => os.clientName === clientName).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  };
+
+  const getClientReminders = (clientName: string) => {
+      const history = getClientHistory(clientName);
+      const reminders = [];
+      const now = new Date();
+
+      // Exemplo: Troca de Óleo (a cada 6 meses / 180 dias)
+      const lastOilChange = history.find(os => 
+          os.status === 'FINALIZADO' && 
+          (os.parts.some(p => p.description.toLowerCase().includes('óleo') || p.description.toLowerCase().includes('oleo')) ||
+           os.services.some(s => s.description.toLowerCase().includes('óleo') || s.description.toLowerCase().includes('oleo')))
+      );
+
+      if (lastOilChange) {
+          const lastDate = new Date(lastOilChange.createdAt);
+          const diffTime = Math.abs(now.getTime() - lastDate.getTime());
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+
+          if (diffDays > 180) {
+              reminders.push({ type: 'danger', text: 'Troca de Óleo Vencida (+6 meses)' });
+          } else if (diffDays > 150) {
+              reminders.push({ type: 'warning', text: 'Troca de Óleo Próxima' });
+          }
+      } else {
+         // Se nunca fez, talvez sugerir?
+         // reminders.push({ type: 'info', text: 'Sugerir Troca de Óleo' });
+      }
+
+      return reminders;
+  };
 
   return (
     <>
       <div className="app-container">
-        <nav className="sidebar"><div className="logo-area"><div className="logo-text">OFICINA<span className="logo-highlight">PRO</span></div></div><div className="nav-menu"><div className={`nav-item ${activeTab === 'FINANCEIRO' ? 'active' : ''}`} onClick={() => setActiveTab('FINANCEIRO')}>📊 Financeiro</div><div className={`nav-item ${activeTab === 'PROCESSOS' ? 'active' : ''}`} onClick={() => setActiveTab('PROCESSOS')}>📋 Processos</div><div className={`nav-item ${activeTab === 'OFICINA' ? 'active' : ''}`} onClick={() => setActiveTab('OFICINA')}>🔧 Oficina</div><div className={`nav-item ${activeTab === 'CONFIG' ? 'active' : ''}`} onClick={() => setActiveTab('CONFIG')}>⚙️ Config</div></div></nav>
+        <nav className="sidebar"><div className="logo-area"><div className="logo-text">OFICINA<span className="logo-highlight">PRO</span></div></div><div className="nav-menu"><div className={`nav-item ${activeTab === 'FINANCEIRO' ? 'active' : ''}`} onClick={() => setActiveTab('FINANCEIRO')}>📊 Financeiro</div><div className={`nav-item ${activeTab === 'PROCESSOS' ? 'active' : ''}`} onClick={() => setActiveTab('PROCESSOS')}>📋 Processos</div><div className={`nav-item ${activeTab === 'CLIENTES' ? 'active' : ''}`} onClick={() => setActiveTab('CLIENTES')}>👥 Clientes (CRM)</div><div className={`nav-item ${activeTab === 'OFICINA' ? 'active' : ''}`} onClick={() => setActiveTab('OFICINA')}>🔧 Oficina</div><div className={`nav-item ${activeTab === 'CONFIG' ? 'active' : ''}`} onClick={() => setActiveTab('CONFIG')}>⚙️ Config</div></div></nav>
         <main className="main-content">
           {activeTab === 'FINANCEIRO' && (
             <>
@@ -814,7 +904,7 @@ function App() {
               </div>
               <div className="dashboard-grid">
                 <div className="chart-card"><div className="chart-header"><div className="chart-title">Faturamento Diário</div></div><div style={{flex:1}}><ResponsiveContainer><AreaChart data={chartDataFluxo}><defs><linearGradient id="c" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.primary} stopOpacity={0.5}/><stop offset="95%" stopColor={COLORS.primary} stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} vertical={false}/><XAxis dataKey="name" stroke={COLORS.text} fontSize={10} tickLine={false} axisLine={false}/><YAxis stroke={COLORS.text} fontSize={10} tickLine={false} axisLine={false}/><Tooltip contentStyle={{background:COLORS.tooltipBg, border:'none'}}/><Area type="monotone" dataKey="valor" stroke={COLORS.primary} fill="url(#c)" strokeWidth={3} activeDot={{r: 6}} /></AreaChart></ResponsiveContainer></div></div>
-                <div className="chart-card"><div className="chart-header"><div className="chart-title">Receita</div></div><div style={{flex:1}}><ResponsiveContainer><PieChart><Pie data={chartDataPie} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value"><Cell fill={COLORS.secondary}/><Cell fill={COLORS.warning}/></Pie><Tooltip/></PieChart></ResponsiveContainer></div></div>
+                <div className="chart-card"><div className="chart-header"><div className="chart-title">Receita</div></div><div style={{flex:1}}><ResponsiveContainer><PieChart><Pie data={chartDataPie} cx="50%" cy="50%" innerRadius={60} outerRadius={80} dataKey="value"><Cell fill={COLORS.secondary}/><Cell fill={COLORS.warning}/></Pie><Tooltip/></PieChart></ResponsiveContainer></div></div>
                 <div className="chart-card"><div className="chart-header"><div className="chart-title">Status (Distribuição)</div></div><div style={{flex:1}}><ResponsiveContainer><PieChart><Pie data={chartDataStatus} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="qtd" stroke="none">{chartDataStatus.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.fill} />))}</Pie><Tooltip contentStyle={{ backgroundColor: COLORS.tooltipBg, border: 'none', borderRadius: '8px' }} itemStyle={{ color: '#fff' }} formatter={(value, name, props) => [`${value} OS`, props.payload.name]} /><Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '0.8rem', color: COLORS.text }} /></PieChart></ResponsiveContainer></div></div>
               </div>
               <div className="card"><table className="data-table"><thead><tr><th>Descrição</th><th>Valor</th><th>Ações</th></tr></thead><tbody>{ledger.slice(0, 50).map(e => (<tr key={e.id}><td>{e.description}</td><td style={{fontWeight:'bold', color: e.type === 'DEBIT' ? COLORS.danger : COLORS.success}}>{e.type === 'DEBIT' ? '- ' : '+ '}{Money.format(e.amount)}</td><td><button className="btn-sm" onClick={() => handleEditEntry(e.id)}>Edit</button> <button className="btn-sm" onClick={() => handleDeleteEntry(e)}>Del</button></td></tr>))}</tbody></table></div>
@@ -826,6 +916,99 @@ function App() {
             <>
               <div className="header-area"><h1 className="page-title">Gestão de Processos</h1><button className="btn" onClick={openNewOSModal}>+ Novo Processo</button></div>
               {renderProcessList()}
+            </>
+          )}
+
+          {/* --- NOVA ABA CRM (CLIENTES) --- */}
+          {activeTab === 'CLIENTES' && (
+            <>
+              <div className="header-area"><h1 className="page-title">CRM & Clientes</h1></div>
+              <div className="crm-layout">
+                  {/* Lista de Clientes */}
+                  <div className="client-list">
+                      {clients.map(client => (
+                          <div 
+                              key={client.id} 
+                              className={`client-list-item ${selectedClientForCRM?.id === client.id ? 'active' : ''}`}
+                              onClick={() => setSelectedClientForCRM(client)}
+                          >
+                              <div className="client-name">{client.name}</div>
+                              <div className="client-contact">{client.phone || 'Sem telefone'} • {client.vehicles.length} veículo(s)</div>
+                          </div>
+                      ))}
+                      {clients.length === 0 && <div style={{padding:20, color:'var(--text-muted)'}}>Nenhum cliente cadastrado. Crie uma OS para adicionar.</div>}
+                  </div>
+
+                  {/* Detalhes do Cliente */}
+                  <div className="crm-details">
+                      {selectedClientForCRM ? (
+                          <>
+                              <div className="crm-header">
+                                  <h2 style={{margin:0, fontSize:'1.8rem'}}>{selectedClientForCRM.name}</h2>
+                                  <div style={{color: 'var(--text-muted)', marginTop: 5}}>
+                                      📞 {selectedClientForCRM.phone} <br/>
+                                      🚗 {selectedClientForCRM.vehicles.map(v => `${v.model} (${v.plate})`).join(', ')}
+                                  </div>
+                              </div>
+
+                              <div className="crm-stats">
+                                  <div className="crm-stat-box">
+                                      <div className="crm-stat-label">Total Gasto</div>
+                                      <div className="crm-stat-value" style={{color: 'var(--success)'}}>
+                                          {Money.format(getClientHistory(selectedClientForCRM.name).reduce((acc, os) => acc + (os.status === 'FINALIZADO' ? os.total : 0), 0))}
+                                      </div>
+                                  </div>
+                                  <div className="crm-stat-box">
+                                      <div className="crm-stat-label">Visitas</div>
+                                      <div className="crm-stat-value">
+                                          {getClientHistory(selectedClientForCRM.name).filter(os => os.status === 'FINALIZADO').length}
+                                      </div>
+                                  </div>
+                              </div>
+
+                              <h3 style={{marginBottom: 20}}>Lembretes Automáticos</h3>
+                              <div style={{marginBottom: 30}}>
+                                  {getClientReminders(selectedClientForCRM.name).length > 0 ? (
+                                      getClientReminders(selectedClientForCRM.name).map((rem, idx) => (
+                                          <div key={idx} className={`reminder-badge ${rem.type}`}>
+                                              {rem.type === 'danger' ? '🔴' : '⚠️'} {rem.text}
+                                          </div>
+                                      ))
+                                  ) : (
+                                      <span style={{color: 'var(--text-muted)'}}>Nenhum lembrete pendente.</span>
+                                  )}
+                              </div>
+
+                              <h3 style={{marginBottom: 20}}>Histórico de Serviços</h3>
+                              <div className="history-timeline">
+                                  {getClientHistory(selectedClientForCRM.name).map(os => (
+                                      <div key={os.id} className="history-item">
+                                          <div className="history-dot">🔧</div>
+                                          <div className="history-content">
+                                              <div className="history-date">{new Date(os.createdAt).toLocaleDateString()} • {STATUS_LABELS[os.status]}</div>
+                                              <div className="history-title">OS #{os.osNumber} - {os.vehicle}</div>
+                                              <div className="history-desc">
+                                                  {os.parts.length > 0 && <div>Peças: {os.parts.map(p => p.description).join(', ')}</div>}
+                                                  {os.services.length > 0 && <div>Serviços: {os.services.map(s => s.description).join(', ')}</div>}
+                                              </div>
+                                              <div style={{marginTop: 8, fontWeight: 700, color: 'var(--success)'}}>
+                                                  {Money.format(os.total)}
+                                              </div>
+                                          </div>
+                                      </div>
+                                  ))}
+                                  {getClientHistory(selectedClientForCRM.name).length === 0 && (
+                                      <div style={{color: 'var(--text-muted)'}}>Nenhum serviço encontrado.</div>
+                                  )}
+                              </div>
+                          </>
+                      ) : (
+                          <div style={{display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:'var(--text-muted)'}}>
+                              Selecione um cliente para ver detalhes.
+                          </div>
+                      )}
+                  </div>
+              </div>
             </>
           )}
 
@@ -982,18 +1165,6 @@ function App() {
       )}
 
       {isModalOpen && (<div className="modal-overlay"><div className="modal-content"><h2 className="modal-title">{editingOS?"Editar OS":"Nova OS"}</h2><div style={{display:'flex', gap:16}}><div className="form-group" style={{flex:1}}><label className="form-label">Nº OS</label><input className="form-input" value={formOSNumber} onChange={e=>setFormOSNumber(e.target.value)} style={{fontWeight:'bold', color:'var(--primary)'}} /></div><div className="form-group" style={{flex:1}}><label className="form-label">Data</label><input className="form-input" type="date" value={formDate} onChange={e=>setFormDate(e.target.value)} style={{color:'var(--text-main)'}} /></div><div className="form-group" style={{flex:2}}><label className="form-label">Cliente</label><input className="form-input" list="clients" value={formClient} onChange={e=>setFormClient(e.target.value)} /><datalist id="clients">{clients.map(c=><option key={c.id} value={c.name}/>)}</datalist></div></div><div style={{display:'flex', gap:16}}><div className="form-group" style={{flex:1}}><label className="form-label">Contato</label><input className="form-input" value={formContact} onChange={e=>setFormContact(e.target.value)} /></div></div><div className="form-group"><label className="form-label">Obs.</label><textarea className="form-input form-textarea" value={formClientNotes} onChange={e=>setFormClientNotes(e.target.value)} /></div><div style={{display:'flex', gap:16}}><div className="form-group" style={{flex:2}}><label className="form-label">Veículo</label><input className="form-input" list="vehicles" value={formVehicle} onChange={e=>setFormVehicle(e.target.value)} /><datalist id="vehicles">{suggestedVehicles.map((v,i)=><option key={i} value={v.model}/>)}</datalist></div><div className="form-group" style={{flex:1}}><label className="form-label">Placa</label><input className="form-input" value={formPlate} onChange={e=>setFormPlate(e.target.value.toUpperCase())} maxLength={8}/></div><div className="form-group" style={{flex:1}}><label className="form-label">Km</label><input className="form-input" type="number" value={formMileage} onChange={e=>setFormMileage(e.target.value)}/></div></div><div className="items-list-container"><div className="items-header"><span>Peças</span> <span>{Money.format(calcTotal(formParts))}</span></div>{formParts.map((p,i)=><div key={p.id} className="item-row"><input className="form-input" list="cat-parts" value={p.description} onChange={e=>updatePart(i,'description',e.target.value)} style={{flex:2}} placeholder="Peça"/><datalist id="cat-parts">{catalogParts.map((cp,idx)=><option key={idx} value={cp.description}>{Money.format(cp.price)}</option>)}</datalist><input className="form-input" type="number" value={Money.toFloat(p.price)} onChange={e=>updatePart(i,'price',Money.fromFloat(parseFloat(e.target.value)||0))} style={{flex:1}}/><button className="btn-icon danger" onClick={()=>removePart(i)}>x</button></div>)}<button className="btn-secondary" style={{width:'100%', marginTop:10}} onClick={addPart}>+ Peça</button></div><div className="items-list-container"><div className="items-header"><span>Serviços</span> <span>{Money.format(calcTotal(formServices))}</span></div>{formServices.map((s,i)=><div key={s.id} className="item-row"><input className="form-input" list="cat-services" value={s.description} onChange={e=>updateService(i,'description',e.target.value)} style={{flex:2}} placeholder="Serviço"/><datalist id="cat-services">{catalogServices.map((cs,idx)=><option key={idx} value={cs.description}>{Money.format(cs.price)}</option>)}</datalist><input className="form-input" type="number" value={Money.toFloat(s.price)} onChange={e=>updateService(i,'price',Money.fromFloat(parseFloat(e.target.value)||0))} style={{flex:1}}/><button className="btn-icon danger" onClick={()=>removeService(i)}>x</button></div>)}<button className="btn-secondary" style={{width:'100%', marginTop:10}} onClick={addService}>+ Serviço</button></div><div className="total-display"><span>Total</span> <span>{Money.format(calcTotal(formParts)+calcTotal(formServices))}</span></div><div className="modal-actions"><button className="btn-secondary" onClick={()=>setIsModalOpen(false)}>Cancelar</button><button className="btn" onClick={handleSaveModal}>Salvar</button></div></div></div>)}
-      {isChecklistOpen && checklistOS && (<div className="modal-overlay"><div className="modal-content"><h2 className="modal-title">Checklist</h2><div className="form-group"><label className="form-label">Combustível</label><div className="fuel-gauge">{[0,1,2,3,4].map(l=><div key={l} className={`fuel-bar ${checkFuel>=l?'active-'+checkFuel:''}`} onClick={()=>setCheckFuel(l)}/>)}</div></div><div className="tires-container"><div className="tire-grid"><div style={{gridArea:'fl'}} className={`tire-item ${!checkTires.fl?'damaged':''}`} onClick={()=>setCheckTires(p=>({...p,fl:!p.fl}))}>{!checkTires.fl?'⚠️':'🆗'}</div><div style={{gridArea:'fr'}} className={`tire-item ${!checkTires.fr?'damaged':''}`} onClick={()=>setCheckTires(p=>({...p,fr:!p.fr}))}>{!checkTires.fr?'⚠️':'🆗'}</div><div className="car-silhouette"><span className="car-label">FRENTE</span><span style={{fontSize:'2rem', opacity:0.3}}>🚗</span><span className="car-label">TRÁS</span></div><div style={{gridArea:'bl'}} className={`tire-item ${!checkTires.bl?'damaged':''}`} onClick={()=>setCheckTires(p=>({...p,bl:!p.bl}))}>{!checkTires.bl?'⚠️':'🆗'}</div><div style={{gridArea:'br'}} className={`tire-item ${!checkTires.br?'damaged':''}`} onClick={()=>setCheckTires(p=>({...p,br:!p.br}))}>{!checkTires.br?'⚠️':'🆗'}</div></div></div><div className="form-group"><label className="form-label">Obs.</label><textarea className="form-input form-textarea" value={checkNotes} onChange={e=>setCheckNotes(e.target.value)}/></div><div className="modal-actions"><button className="btn-secondary" onClick={()=>setIsChecklistOpen(false)}>Fechar</button><button className="btn" onClick={handleSaveChecklist}>Salvar</button></div></div></div>)}
-      
-      {printingOS && (
-  <div className="printable-content">
-    <div className="print-header"><div className="brand-section"><h1>{settings.name}</h1><p>{settings.address} • {settings.cnpj}</p></div><div className="meta-section"><span className="doc-label">Comprovante de Serviço</span><h2 className="doc-number">#{printingOS.osNumber}</h2><div className="doc-label" style={{marginTop:5}}>{new Date(printingOS.createdAt).toLocaleDateString()}</div></div></div>
-    <div className="info-grid"><div className="info-col"><span className="info-label">Cliente</span><span className="info-value">{printingOS.clientName}</span></div><div className="info-col"><span className="info-label">Veículo</span><span className="info-value">{printingOS.vehicle}</span><span className="info-sub">Quilometragem: {printingOS.mileage} km</span></div></div>
-    <div className="section-title">Detalhamento Técnico</div>
-    <table className="print-table"><thead><tr><th>Descrição do Item / Serviço</th><th style={{textAlign:'right'}}>Valor</th></tr></thead><tbody>{printingOS.parts.map(p => (<tr key={p.id}><td>{p.description} <small style={{color:'#666'}}>(Peça)</small></td><td className="money">{Money.format(p.price)}</td></tr>))}{printingOS.services.map(s => (<tr key={s.id}><td>{s.description} <small style={{color:'#666'}}>(Serviço)</small></td><td className="money">{Money.format(s.price)}</td></tr>))}</tbody></table>
-    <div className="total-area"><div className="total-wrapper"><span className="total-label">Valor Total</span><span className="total-value">{Money.format(printingOS.total)}</span></div></div>
-    <div className="print-footer"><div className="sign-line">Cliente</div><div className="sign-line">{settings.technician || "Técnico Responsável"}</div></div><div className="print-legal">Documento processado digitalmente. Válido como garantia de 90 dias.</div>
-  </div>
-)}
     </>
   );
 }

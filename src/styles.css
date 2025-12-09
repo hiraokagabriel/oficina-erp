@@ -49,7 +49,7 @@
 
   /* Cores de Status Adaptadas (Tons pastéis terrosos) */
   --success: #81b29a;              
-  --danger: #d08c7f;               
+  --danger: #d08c7f;               /* Blush mais escuro para texto */
   --warning: #e9c46a;              
   --info: #98c1d9;                 
 
@@ -247,12 +247,12 @@ body {
 .theme-card.active::after { content: '✓'; position: absolute; top: 10px; right: 10px; color: var(--primary); font-weight: bold; }
 .theme-preview { width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--border); }
 
-/* ... (Resto do CSS permanece o mesmo: modal, checklist, impressao, etc.) ... */
 .system-status { position: absolute; bottom: 20px; left: 30px; right: 30px; background: var(--bg-panel); padding: 10px 20px; border-radius: 50px; border: 1px solid var(--border); font-size: 0.85rem; color: var(--text-muted); display: flex; align-items: center; gap: 10px; width: fit-content; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); }
 .status-dot.active { background: var(--success); box-shadow: 0 0 8px var(--success); }
 .status-dot.error { background: var(--danger); }
 
+/* Modais e Componentes Internos */
 .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .modal-content { background: var(--bg-panel); width: 600px; max-width: 95%; max-height: 90vh; overflow-y: auto; padding: 32px; border-radius: 24px; border: 1px solid var(--border); box-shadow: 0 25px 60px rgba(0,0,0,0.6); animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
 @keyframes slideUp { from { transform: translateY(40px) scale(0.95); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
@@ -278,28 +278,23 @@ body {
 .car-lights-rear { width: 80%; height: 6px; background: var(--danger); border-radius: 4px; box-shadow: 0 0 15px var(--danger); }
 
 /* ==========================================================================
-   6. IMPRESSÃO BAZUCA (CORREÇÃO DEFINITIVA)
+   6. IMPRESSÃO BAZUCA
    ========================================================================== */
 .printable-content { display: none; }
 
 @media print {
-  /* --- RESET --- */
   @page { margin: 0; size: auto; }
   html, body, #root { width: 100%; height: auto !important; margin: 0 !important; padding: 0 !important; background: #fff !important; color: #000 !important; overflow: visible !important; display: block !important; position: static !important; }
   .app-container, .modal-overlay, .system-status { display: none !important; }
 
-  /* --- CONTAINER PRINCIPAL --- */
   .printable-content {
     display: block !important; visibility: visible !important; position: absolute; top: 0; left: 0; width: 100%;
-    padding: 20mm; /* Margem generosa */
-    box-sizing: border-box; background: #fff !important; color: #111 !important; z-index: 9999;
+    padding: 20mm; box-sizing: border-box; background: #fff !important; color: #111 !important; z-index: 9999;
     font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
-    font-size: 9pt; line-height: 1.5;
-    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    font-size: 9pt; line-height: 1.5; -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
   .printable-content * { color: #000 !important; background: transparent !important; box-shadow: none !important; }
 
-  /* --- HEADER --- */
   .print-header { display: flex; justify-content: space-between; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 1px solid #000; }
   .brand-section h1 { font-size: 18pt; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; margin: 0; }
   .brand-section p { margin: 5px 0 0 0; font-size: 8pt; color: #555 !important; letter-spacing: 0.5px; }
@@ -307,14 +302,12 @@ body {
   .doc-label { font-size: 7pt; text-transform: uppercase; letter-spacing: 2px; font-weight: 600; color: #888 !important; display: block; margin-bottom: 5px; }
   .doc-number { font-size: 14pt; font-weight: 400; margin: 0; font-family: monospace; }
 
-  /* --- INFO GRID --- */
   .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 50px; }
   .info-col { display: flex; flex-direction: column; }
   .info-label { font-size: 7pt; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; color: #888 !important; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 4px; }
   .info-value { font-size: 11pt; font-weight: 500; }
   .info-sub { font-size: 9pt; color: #444 !important; margin-top: 2px; }
 
-  /* --- TABELAS --- */
   .section-title { font-size: 8pt; text-transform: uppercase; letter-spacing: 2px; font-weight: 700; margin: 30px 0 15px 0; color: #000; }
   .print-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
   .print-table th { text-align: left; font-size: 7pt; text-transform: uppercase; letter-spacing: 1px; color: #888 !important; padding: 8px 0; border-bottom: 1px solid #000; }
@@ -322,13 +315,11 @@ body {
   .print-table td.money { text-align: right; font-feature-settings: "tnum"; font-variant-numeric: tabular-nums; }
   .subtotal-row { text-align: right; font-size: 9pt; color: #555 !important; margin-top: 5px; }
 
-  /* --- TOTAIS --- */
   .total-area { display: flex; justify-content: flex-end; margin-top: 40px; border-top: 2px solid #000; padding-top: 20px; }
   .total-wrapper { text-align: right; }
   .total-label { font-size: 8pt; text-transform: uppercase; letter-spacing: 2px; display: block; margin-bottom: 5px; }
   .total-value { font-size: 24pt; font-weight: 300; display: block; }
 
-  /* --- FOOTER --- */
   .print-footer { position: fixed; bottom: 15mm; left: 20mm; right: 20mm; display: flex; justify-content: space-between; }
   .sign-line { width: 40%; border-top: 1px solid #000; padding-top: 10px; text-align: center; font-size: 7pt; text-transform: uppercase; letter-spacing: 1px; }
   .print-legal { position: fixed; bottom: 5mm; left: 0; right: 0; text-align: center; font-size: 6pt; color: #aaa !important; letter-spacing: 1px; }

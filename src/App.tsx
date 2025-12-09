@@ -26,6 +26,9 @@ const COLORS = {
   info: '#00bcd4'
 };
 
+// --- CONFIGURAÇÃO GOOGLE ---
+const GOOGLE_API_KEY = "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"; 
+
 // --- DOMAIN: SHARED/MONEY ---
 const Money = {
   format: (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val / 100),
@@ -166,6 +169,10 @@ const learnCatalogItems = (catalog: CatalogItem[], newItems: CatalogItem[]): Cat
   return updated;
 };
 
+// --- APP CONSTANTS ---
+const DB_PATH = "C:\\OficinaData\\database.json";
+const BACKUP_PATH = "C:\\OficinaData\\Backups";
+
 interface WorkshopSettings { 
   name: string; 
   cnpj: string; 
@@ -191,6 +198,22 @@ const DEFAULT_SETTINGS: WorkshopSettings = {
   technician: "", 
   exportPath: "C:\\OficinaData\\Exportacoes",
   googleDriveToken: "" 
+};
+
+const EMPTY_CHECKLIST: ChecklistSchema = { fuelLevel: 0, tires: { fl: true, fr: true, bl: true, br: true }, notes: "" };
+
+const COLORS = {
+  primary: '#8257e6',
+  secondary: '#00bcd4',
+  success: '#04d361',
+  warning: '#ff9800',
+  danger: '#e54c4c',
+  grid: '#323238',
+  text: '#a8a8b3',
+  tooltipBg: '#202024',
+  cardBg: '#2b2b3b',
+  border: '#3e3e4e',
+  info: '#00bcd4'
 };
 
 // --- FUNÇÃO AUXILIAR: UPLOAD GOOGLE DRIVE ---
@@ -234,7 +257,7 @@ function App() {
   const [catalogServices, setCatalogServices] = useState<CatalogItem[]>([]);
   const [settings, setSettings] = useState<WorkshopSettings>(DEFAULT_SETTINGS);
   
-  // Theme Manager
+  // Theme Manager: Vintage Earth adicionado
   const [currentTheme, setCurrentTheme] = useState<'dark' | 'vintage'>('dark');
 
   const [statusMsg, setStatusMsg] = useState("Inicializando...");
@@ -413,6 +436,57 @@ function App() {
 
         setStatusMsg("Enviando para nuvem Google...");
         
+        await uploadToDrive(filename, content, settings.googleDriveToken, GOOGLE_API_KEY);
+
+        setDriveStatus('success');
+        setLastBackup(now.toLocaleString());
+        setStatusMsg("Backup salvo na nuvem!");
+        
+    } catch (e: any) {
+        console.error("Erro Backup:", e);
+        setDriveStatus('error');
+        setDriveErrorMsg(e.message || "Erro de conexão/permissão");
+        setStatusMsg("Erro no backup.");
+    } finally {
+        setIsBackuping(false);
+    }
+  };
+
+  // --- LÓGICA DE BACKUP GOOGLE DRIVE ---
+  const handleGoogleDriveBackup = async () => {
+    if (isBackuping) return;
+    
+    // Validação
+    if (!settings.googleDriveToken || settings.googleDriveToken.trim() === "") {
+        alert("Por favor, insira um Token de Acesso válido nas configurações para usar o Google Drive.");
+        return;
+    }
+
+    setIsBackuping(true);
+    setDriveStatus('uploading');
+    setDriveErrorMsg("");
+    setStatusMsg("Criando backup local...");
+
+    try {
+        const fullDb: DatabaseSchema = { ledger, workOrders, clients, catalogParts, catalogServices, settings };
+        const content = JSON.stringify(fullDb, null, 2); 
+
+        const now = new Date();
+        const timestamp = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}-${String(now.getMinutes()).padStart(2,'0')}`;
+        const filename = `backup_oficina_${timestamp}.json`;
+        const localPath = `${BACKUP_PATH}\\${filename}`;
+
+        // Salva CÓPIA LOCAL (Via Rust)
+        try {
+          await invoke('create_backup_file', { path: localPath, content: content });
+        } catch (err) {
+          console.warn("create_backup_file falhou, tentando save_database_atomic", err);
+          await invoke('save_database_atomic', { filepath: localPath, content: content });
+        }
+
+        setStatusMsg("Enviando para nuvem Google...");
+        
+        // UPLOAD REAL PARA O GOOGLE DRIVE
         await uploadToDrive(filename, content, settings.googleDriveToken, GOOGLE_API_KEY);
 
         setDriveStatus('success');

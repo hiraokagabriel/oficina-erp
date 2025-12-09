@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts';
 
 // --- CONFIGURAÇÃO GOOGLE ---
-
-const GOOGLE_API_KEY = "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"; 
+const GOOGLE_API_KEY = "AIzaSyA1-UOlhqE8wK-YhXZshbSwoU7Fs4TycFI"; 
 
 // --- CONFIGURAÇÃO PADRÃO DO BANCO DE DADOS ---
 const DEFAULT_DB_PATH = "C:\\OficinaData\\database.json";
@@ -659,7 +659,24 @@ function App() {
 
   const chartDataPie = useMemo(() => { let tp=0, ts=0; workOrders.forEach(o => { tp+=o.parts.reduce((a,i)=>a+i.price,0); ts+=o.services.reduce((a,i)=>a+i.price,0); }); return tp+ts===0 ? [{name:'--',value:1}] : [{name:'Peças',value:Money.toFloat(tp)},{name:'Mão de Obra',value:Money.toFloat(ts)}]; }, [workOrders]);
   const chartDataStatus = useMemo(() => { const c = {ORCAMENTO:0, APROVADO:0, EM_SERVICO:0, FINALIZADO:0}; workOrders.forEach(o => { if(c[o.status]!==undefined) c[o.status]++; }); return [{name:'Orç.',qtd:c.ORCAMENTO,fill:COLORS.info},{name:'Aprov.',qtd:c.APROVADO,fill:COLORS.warning},{name:'Serv.',qtd:c.EM_SERVICO,fill:COLORS.primary},{name:'Final.',qtd:c.FINALIZADO,fill:COLORS.success}]; }, [workOrders]);
-  const kpiData = useMemo(() => { const s = ledger.reduce((a,e)=>a+(e.type==='DEBIT'?-e.amount:e.amount),0); return { saldo: s, receitas: ledger.filter(e=>e.type==='CREDIT').reduce((a,e)=>a+e.amount,0), despesas: ledger.filter(e=>e.type==='DEBIT').reduce((a,e)=>a+e.amount,0), ticketMedio: workOrders.length>0?workOrders.reduce((a,o)=>a+o.total,0)/workOrders.length:0 }; }, [ledger, workOrders]);
+  
+  const kpiData = useMemo(() => { 
+    const s = ledger.reduce((a,e)=>a+(e.type==='DEBIT'?-e.amount:e.amount),0); 
+    
+    // Filtra apenas as ordens de serviço com status 'FINALIZADO'
+    const finalizedOrders = workOrders.filter(o => o.status === 'FINALIZADO');
+    // Calcula o total dessas ordens
+    const totalFinalized = finalizedOrders.reduce((a, o) => a + o.total, 0);
+    // Calcula a média. Se não houver ordens finalizadas, ticket médio é 0
+    const ticket = finalizedOrders.length > 0 ? totalFinalized / finalizedOrders.length : 0;
+
+    return { 
+      saldo: s, 
+      receitas: ledger.filter(e=>e.type==='CREDIT').reduce((a,e)=>a+e.amount,0), 
+      despesas: ledger.filter(e=>e.type==='DEBIT').reduce((a,e)=>a+e.amount,0), 
+      ticketMedio: ticket 
+    }; 
+  }, [ledger, workOrders]);
 
   return (
     <>

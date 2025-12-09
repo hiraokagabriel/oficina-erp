@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
+// IMPORTANTE: Agora usando a API nativa do Tauri para comunicação com o Rust
 import { invoke } from '@tauri-apps/api/core';
-
 
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts';
 
@@ -11,7 +11,7 @@ const GOOGLE_API_KEY = "AIzaSyA1-UOlhqE8wK-YhXZshbSwoU7Fs4TycFI";
 const DEFAULT_DB_PATH = "C:\\OficinaData\\database.json";
 const BACKUP_PATH = "C:\\OficinaData\\Backups";
 
-// --- CONSTANTES VISUAIS (Definidas antes do uso) ---
+// --- CONSTANTES VISUAIS ---
 const COLORS = {
   primary: '#8257e6',
   secondary: '#00bcd4',
@@ -80,7 +80,6 @@ const updateEntryAmount = (entry: LedgerEntry, newAmount: number, user: string, 
 interface OrderItem { id: string; description: string; price: number; }
 interface ChecklistSchema { fuelLevel: number; tires: { fl: boolean; fr: boolean; bl: boolean; br: boolean }; notes: string; }
 
-// CONSTANTE DEFINIDA ANTES DO USO
 const EMPTY_CHECKLIST: ChecklistSchema = { fuelLevel: 0, tires: { fl: true, fr: true, bl: true, br: true }, notes: "" };
 
 interface WorkOrder {
@@ -246,8 +245,6 @@ async function uploadToDrive(fileName: string, content: string, accessToken: str
 
 function App() {
   // --- ESTADO GLOBAL ---
-  
-  // 1. Gerenciamento do Caminho do Banco de Dados
   const [dbPath, setDbPath] = useState(() => {
     return localStorage.getItem("oficina_db_path") || DEFAULT_DB_PATH;
   });
@@ -280,6 +277,13 @@ function App() {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [exportTargetMonth, setExportTargetMonth] = useState(""); 
   const [exportPathInput, setExportPathInput] = useState("");
+
+  // ESTADO PARA MODAL DE LANÇAMENTO
+  const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
+  const [entryDate, setEntryDate] = useState("");
+  const [entryDescription, setEntryDescription] = useState("");
+  const [entryValue, setEntryValue] = useState("");
+  const [entryType, setEntryType] = useState<'CREDIT' | 'DEBIT'>('CREDIT');
 
   // Form OS
   const [formOSNumber, setFormOSNumber] = useState("");
@@ -323,7 +327,7 @@ function App() {
     }
   }, [formVehicle, suggestedVehicles]);
 
-  // --- DATA LOAD (MODIFICADO PARA USAR dbPath DINÂMICO) ---
+  // --- DATA LOAD ---
   useEffect(() => {
     async function load() {
       setStatusMsg(`Carregando de: ${dbPath}...`);
@@ -369,9 +373,10 @@ function App() {
     load();
   }, [dbPath]); 
 
-  // --- DATA SAVE (MODIFICADO PARA USAR dbPath DINÂMICO) ---
+  // --- DATA SAVE ---
   useEffect(() => {
     const timer = setTimeout(async () => {
+      // Evita salvar se estivermos com erro de carregamento ou inicializando
       if (statusMsg.includes("Erro") || statusMsg.includes("Carregando")) return;
       if (ledger.length === 0 && workOrders.length === 0 && clients.length === 0 && statusMsg.includes("Iniciando")) return;
       
@@ -682,7 +687,39 @@ function App() {
   };
   
   const handleRegressOS = (id: string) => { const os = workOrders.find(o => o.id === id); if (!os) return; if (os.status === 'FINALIZADO' && os.financialId) { if (confirm("Remover do Financeiro?")) { setLedger(p => p.filter(e => e.id !== os.financialId)); setWorkOrders(p => p.map(o => o.id === id ? { ...regressStatus(o), financialId: undefined } : o)); } } else { setWorkOrders(p => p.map(o => o.id === id ? regressStatus(o) : o)); } };
-  const handleAddEntry = () => { const desc = prompt("Descrição:"); if (!desc) return; const valStr = prompt("Valor (- para despesa):"); if (!valStr) return; const val = parseFloat(valStr.replace(',', '.')); if (isNaN(val)) return; const type = val < 0 ? 'DEBIT' : 'CREDIT'; setLedger(p => [createEntry(desc, Money.fromFloat(Math.abs(val)), type), ...p]); };
+  
+  // -- ABRIR MODAL DE LANÇAMENTO --
+  const handleOpenEntryModal = () => {
+    setEntryDate(new Date().toISOString().split('T')[0]); // Data de hoje
+    setEntryDescription("");
+    setEntryValue("");
+    setEntryType('CREDIT'); // Padrão: Receita
+    setIsEntryModalOpen(true);
+  };
+
+  const handleSaveEntry = () => {
+    if (!entryDescription || !entryValue) {
+      alert("Preencha a descrição e o valor.");
+      return;
+    }
+    
+    let valFloat = parseFloat(entryValue.replace(',', '.'));
+    if (isNaN(valFloat)) {
+      alert("Valor inválido.");
+      return;
+    }
+    
+    // Converte para centavos (inteiro) para o backend
+    const valInt = Money.fromFloat(Math.abs(valFloat));
+
+    // IMPORTANTE: Agora usamos a data do estado entryDate, não o dia atual do sistema
+    const entry = createEntry(entryDescription, valInt, entryType, entryDate);
+    
+    // Correção: Atualiza o estado usando a versão anterior de forma segura
+    setLedger(prev => [entry, ...prev]);
+    setIsEntryModalOpen(false);
+  };
+  
   const handleEditEntry = (id: string) => { const reason = prompt("Motivo:"); if (!reason) return; const valStr = prompt("Novo Valor:"); if (!valStr) return; const val = parseFloat(valStr.replace(',', '.')); if (isNaN(val)) return; setLedger(p => p.map(e => e.id !== id ? e : updateEntryAmount(e, Money.fromFloat(Math.abs(val)), "Admin", reason))); };
   const handleDeleteEntry = (e: LedgerEntry) => { if (confirm("Excluir?")) { setLedger(p => p.filter(i => i.id !== e.id)); setWorkOrders(p => p.filter(os => os.financialId !== e.id)); } };
 
@@ -733,7 +770,6 @@ function App() {
 
   const chartDataPie = useMemo(() => { let tp=0, ts=0; workOrders.forEach(o => { tp+=o.parts.reduce((a,i)=>a+i.price,0); ts+=o.services.reduce((a,i)=>a+i.price,0); }); return tp+ts===0 ? [{name:'--',value:1}] : [{name:'Peças',value:Money.toFloat(tp)},{name:'Mão de Obra',value:Money.toFloat(ts)}]; }, [workOrders]);
   const chartDataStatus = useMemo(() => { const c = {ORCAMENTO:0, APROVADO:0, EM_SERVICO:0, FINALIZADO:0}; workOrders.forEach(o => { if(c[o.status]!==undefined) c[o.status]++; }); return [{name:'Orç.',qtd:c.ORCAMENTO,fill:COLORS.info},{name:'Aprov.',qtd:c.APROVADO,fill:COLORS.warning},{name:'Serv.',qtd:c.EM_SERVICO,fill:COLORS.primary},{name:'Final.',qtd:c.FINALIZADO,fill:COLORS.success}]; }, [workOrders]);
-  
   const kpiData = useMemo(() => { 
     const s = ledger.reduce((a,e)=>a+(e.type==='DEBIT'?-e.amount:e.amount),0); 
     
@@ -759,7 +795,7 @@ function App() {
         <main className="main-content">
           {activeTab === 'FINANCEIRO' && (
             <>
-              <div className="header-area"><h1 className="page-title">Painel Financeiro</h1><div style={{display:'flex', gap:10}}><button className="btn-secondary" onClick={handleOpenExportModal}>📄 Exportar</button><button className="btn" onClick={handleAddEntry}>+ Lançamento</button></div></div>
+              <div className="header-area"><h1 className="page-title">Painel Financeiro</h1><div style={{display:'flex', gap:10}}><button className="btn-secondary" onClick={handleOpenExportModal}>📄 Exportar</button><button className="btn" onClick={handleOpenEntryModal}>+ Lançamento</button></div></div>
               <div className="stats-row">
                 <div className="stat-card"><div className="stat-label">Saldo Atual</div><div className="stat-value" style={{color: kpiData.saldo >= 0 ? COLORS.success : COLORS.danger}}>{Money.format(kpiData.saldo)}</div><div className="stat-trend">Lucro Líquido</div></div>
                 <div className="stat-card"><div className="stat-label">Receitas</div><div className="stat-value" style={{color: COLORS.success}}>{Money.format(kpiData.receitas)}</div></div>
@@ -858,6 +894,74 @@ function App() {
 
       {/* ... MODAIS (Export, OS, Checklist) permanecem iguais ... */}
       {isExportModalOpen && (<div className="modal-overlay"><div className="modal-content" style={{width: 500}}><h2 className="modal-title">Exportar Dados</h2><div className="form-group"><label className="form-label">Mês de Referência</label><select className="form-input" value={exportTargetMonth} onChange={e => setExportTargetMonth(e.target.value)}>{availableMonths.map(dateStr => { const [y, m] = dateStr.split('-'); return (<option key={dateStr} value={dateStr}>{MONTH_NAMES[parseInt(m)-1]} / {y}</option>); })}</select></div><div className="form-group"><label className="form-label">Destino (Pasta)</label><input className="form-input" value={exportPathInput} onChange={e => setExportPathInput(e.target.value)}/></div><div className="modal-actions"><button className="btn-secondary" onClick={() => setIsExportModalOpen(false)}>Cancelar</button><button className="btn" onClick={handleConfirmExport}>Confirmar Exportação</button></div></div></div>)}
+      
+      {/* MODAL DE LANÇAMENTO FINANCEIRO (NOVO) */}
+      {isEntryModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{width: 450}}>
+            <h2 className="modal-title">Novo Lançamento</h2>
+            
+            <div className="form-group">
+              <label className="form-label">Data</label>
+              <input 
+                className="form-input" 
+                type="date" 
+                value={entryDate} 
+                onChange={e => setEntryDate(e.target.value)}
+                style={{color: 'var(--text-main)'}}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Tipo</label>
+              <div style={{display: 'flex', gap: 10}}>
+                <button 
+                  className={`btn ${entryType === 'CREDIT' ? '' : 'btn-secondary'}`} 
+                  onClick={() => setEntryType('CREDIT')}
+                  style={{flex: 1, borderColor: entryType === 'CREDIT' ? 'var(--success)' : ''}}
+                >
+                  Receita
+                </button>
+                <button 
+                  className={`btn ${entryType === 'DEBIT' ? '' : 'btn-secondary'}`} 
+                  onClick={() => setEntryType('DEBIT')}
+                  style={{flex: 1, borderColor: entryType === 'DEBIT' ? 'var(--danger)' : ''}}
+                >
+                  Despesa
+                </button>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Descrição</label>
+              <input 
+                className="form-input" 
+                value={entryDescription} 
+                onChange={e => setEntryDescription(e.target.value)}
+                placeholder="Ex: Conta de Luz"
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Valor (R$)</label>
+              <input 
+                className="form-input" 
+                type="number"
+                value={entryValue} 
+                onChange={e => setEntryValue(e.target.value)}
+                placeholder="0,00"
+                step="0.01"
+              />
+            </div>
+
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setIsEntryModalOpen(false)}>Cancelar</button>
+              <button className="btn" onClick={handleSaveEntry}>Salvar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isModalOpen && (<div className="modal-overlay"><div className="modal-content"><h2 className="modal-title">{editingOS?"Editar OS":"Nova OS"}</h2><div style={{display:'flex', gap:16}}><div className="form-group" style={{flex:1}}><label className="form-label">Nº OS</label><input className="form-input" value={formOSNumber} onChange={e=>setFormOSNumber(e.target.value)} style={{fontWeight:'bold', color:'var(--primary)'}} /></div><div className="form-group" style={{flex:1}}><label className="form-label">Data</label><input className="form-input" type="date" value={formDate} onChange={e=>setFormDate(e.target.value)} style={{color:'var(--text-main)'}} /></div><div className="form-group" style={{flex:2}}><label className="form-label">Cliente</label><input className="form-input" list="clients" value={formClient} onChange={e=>setFormClient(e.target.value)} /><datalist id="clients">{clients.map(c=><option key={c.id} value={c.name}/>)}</datalist></div></div><div style={{display:'flex', gap:16}}><div className="form-group" style={{flex:1}}><label className="form-label">Contato</label><input className="form-input" value={formContact} onChange={e=>setFormContact(e.target.value)} /></div></div><div className="form-group"><label className="form-label">Obs.</label><textarea className="form-input form-textarea" value={formClientNotes} onChange={e=>setFormClientNotes(e.target.value)} /></div><div style={{display:'flex', gap:16}}><div className="form-group" style={{flex:2}}><label className="form-label">Veículo</label><input className="form-input" list="vehicles" value={formVehicle} onChange={e=>setFormVehicle(e.target.value)} /><datalist id="vehicles">{suggestedVehicles.map((v,i)=><option key={i} value={v.model}/>)}</datalist></div><div className="form-group" style={{flex:1}}><label className="form-label">Placa</label><input className="form-input" value={formPlate} onChange={e=>setFormPlate(e.target.value.toUpperCase())} maxLength={8}/></div><div className="form-group" style={{flex:1}}><label className="form-label">Km</label><input className="form-input" type="number" value={formMileage} onChange={e=>setFormMileage(e.target.value)}/></div></div><div className="items-list-container"><div className="items-header"><span>Peças</span> <span>{Money.format(calcTotal(formParts))}</span></div>{formParts.map((p,i)=><div key={p.id} className="item-row"><input className="form-input" list="cat-parts" value={p.description} onChange={e=>updatePart(i,'description',e.target.value)} style={{flex:2}} placeholder="Peça"/><datalist id="cat-parts">{catalogParts.map((cp,idx)=><option key={idx} value={cp.description}>{Money.format(cp.price)}</option>)}</datalist><input className="form-input" type="number" value={Money.toFloat(p.price)} onChange={e=>updatePart(i,'price',Money.fromFloat(parseFloat(e.target.value)||0))} style={{flex:1}}/><button className="btn-icon danger" onClick={()=>removePart(i)}>x</button></div>)}<button className="btn-secondary" style={{width:'100%', marginTop:10}} onClick={addPart}>+ Peça</button></div><div className="items-list-container"><div className="items-header"><span>Serviços</span> <span>{Money.format(calcTotal(formServices))}</span></div>{formServices.map((s,i)=><div key={s.id} className="item-row"><input className="form-input" list="cat-services" value={s.description} onChange={e=>updateService(i,'description',e.target.value)} style={{flex:2}} placeholder="Serviço"/><datalist id="cat-services">{catalogServices.map((cs,idx)=><option key={idx} value={cs.description}>{Money.format(cs.price)}</option>)}</datalist><input className="form-input" type="number" value={Money.toFloat(s.price)} onChange={e=>updateService(i,'price',Money.fromFloat(parseFloat(e.target.value)||0))} style={{flex:1}}/><button className="btn-icon danger" onClick={()=>removeService(i)}>x</button></div>)}<button className="btn-secondary" style={{width:'100%', marginTop:10}} onClick={addService}>+ Serviço</button></div><div className="total-display"><span>Total</span> <span>{Money.format(calcTotal(formParts)+calcTotal(formServices))}</span></div><div className="modal-actions"><button className="btn-secondary" onClick={()=>setIsModalOpen(false)}>Cancelar</button><button className="btn" onClick={handleSaveModal}>Salvar</button></div></div></div>)}
       {isChecklistOpen && checklistOS && (<div className="modal-overlay"><div className="modal-content"><h2 className="modal-title">Checklist</h2><div className="form-group"><label className="form-label">Combustível</label><div className="fuel-gauge">{[0,1,2,3,4].map(l=><div key={l} className={`fuel-bar ${checkFuel>=l?'active-'+checkFuel:''}`} onClick={()=>setCheckFuel(l)}/>)}</div></div><div className="tires-container"><div className="tire-grid"><div style={{gridArea:'fl'}} className={`tire-item ${!checkTires.fl?'damaged':''}`} onClick={()=>setCheckTires(p=>({...p,fl:!p.fl}))}>{!checkTires.fl?'⚠️':'🆗'}</div><div style={{gridArea:'fr'}} className={`tire-item ${!checkTires.fr?'damaged':''}`} onClick={()=>setCheckTires(p=>({...p,fr:!p.fr}))}>{!checkTires.fr?'⚠️':'🆗'}</div><div className="car-silhouette"><span className="car-label">FRENTE</span><span style={{fontSize:'2rem', opacity:0.3}}>🚗</span><span className="car-label">TRÁS</span></div><div style={{gridArea:'bl'}} className={`tire-item ${!checkTires.bl?'damaged':''}`} onClick={()=>setCheckTires(p=>({...p,bl:!p.bl}))}>{!checkTires.bl?'⚠️':'🆗'}</div><div style={{gridArea:'br'}} className={`tire-item ${!checkTires.br?'damaged':''}`} onClick={()=>setCheckTires(p=>({...p,br:!p.br}))}>{!checkTires.br?'⚠️':'🆗'}</div></div></div><div className="form-group"><label className="form-label">Obs.</label><textarea className="form-input form-textarea" value={checkNotes} onChange={e=>setCheckNotes(e.target.value)}/></div><div className="modal-actions"><button className="btn-secondary" onClick={()=>setIsChecklistOpen(false)}>Fechar</button><button className="btn" onClick={handleSaveChecklist}>Salvar</button></div></div></div>)}
       

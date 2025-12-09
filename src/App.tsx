@@ -1,17 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
-// IMPORTANTE: Código ajustado para ambiente nativo Tauri.
-// import { invoke } from '@tauri-apps/api/core'; // DESCOMENTE NO SEU AMBIENTE
 
-// --- MOCK INVOKE (APENAS PARA VISUALIZAÇÃO WEB - REMOVA EM PRODUÇÃO) ---
-const invoke = async (cmd: string, args?: any): Promise<any> => {
-  console.log(`[SIMULAÇÃO WEB] Comando Tauri: ${cmd}`, args);
-  if (cmd === 'load_database') return null;
-  if (cmd === 'export_report') return { success: true, message: "Simulação: Arquivo salvo!" };
-  return null;
-};
-// ----------------------------------------------------------------------------
+// ============================================================================
+// INSTRUÇÕES PARA AMBIENTE LOCAL (TAURI):
+// 1. DESCOMENTE A LINHA ABAIXO:
+import { invoke } from '@tauri-apps/api/core';
 
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts';
+
+// --- CONFIGURAÇÃO GOOGLE ---
+const GOOGLE_API_KEY = "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"; 
 
 // --- DOMAIN: SHARED/MONEY ---
 const Money = {
@@ -153,8 +150,17 @@ const learnCatalogItems = (catalog: CatalogItem[], newItems: CatalogItem[]): Cat
 
 // --- APP CONSTANTS ---
 const DB_PATH = "C:\\OficinaData\\database.json";
+const BACKUP_PATH = "C:\\OficinaData\\Backups";
 
-interface WorkshopSettings { name: string; cnpj: string; address: string; technician: string; exportPath: string; }
+interface WorkshopSettings { 
+  name: string; 
+  cnpj: string; 
+  address: string; 
+  technician: string; 
+  exportPath: string;
+  googleDriveToken: string; 
+}
+
 interface DatabaseSchema { 
   ledger: LedgerEntry[]; 
   workOrders: WorkOrder[]; 
@@ -164,7 +170,15 @@ interface DatabaseSchema {
   settings: WorkshopSettings; 
 }
 
-const DEFAULT_SETTINGS: WorkshopSettings = { name: "OFICINA PREMIUM", cnpj: "", address: "", technician: "", exportPath: "C:\\OficinaData\\Exportacoes" };
+const DEFAULT_SETTINGS: WorkshopSettings = { 
+  name: "OFICINA PREMIUM", 
+  cnpj: "", 
+  address: "", 
+  technician: "", 
+  exportPath: "C:\\OficinaData\\Exportacoes",
+  googleDriveToken: "" 
+};
+
 const EMPTY_CHECKLIST: ChecklistSchema = { fuelLevel: 0, tires: { fl: true, fr: true, bl: true, br: true }, notes: "" };
 
 const COLORS = {
@@ -181,6 +195,33 @@ const COLORS = {
   info: '#00bcd4'
 };
 
+// --- FUNÇÃO AUXILIAR: UPLOAD GOOGLE DRIVE ---
+async function uploadToDrive(fileName: string, content: string, accessToken: string, apiKey: string) {
+  const metadata = {
+    name: fileName,
+    mimeType: 'application/json',
+  };
+
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  form.append('file', new Blob([content], { type: 'application/json' }));
+
+  const response = await fetch(`https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&key=${apiKey}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    body: form
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error?.message || "Erro desconhecido no upload");
+  }
+
+  return await response.json();
+}
+
 function App() {
   // --- ESTADO GLOBAL ---
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
@@ -190,11 +231,18 @@ function App() {
   const [catalogServices, setCatalogServices] = useState<CatalogItem[]>([]);
   const [settings, setSettings] = useState<WorkshopSettings>(DEFAULT_SETTINGS);
   
-  // Theme Manager: Renamed 'pastel' to 'vintage'
+  // Theme Manager: Vintage Earth adicionado
   const [currentTheme, setCurrentTheme] = useState<'dark' | 'vintage'>('dark');
 
   const [statusMsg, setStatusMsg] = useState("Inicializando...");
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Estado do Backup
+  const [isBackuping, setIsBackuping] = useState(false);
+  const [driveStatus, setDriveStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+  const [driveErrorMsg, setDriveErrorMsg] = useState("");
+  const [lastBackup, setLastBackup] = useState<string | null>(null);
+
   const [activeTab, setActiveTab] = useState<'FINANCEIRO' | 'OFICINA' | 'CONFIG'>('FINANCEIRO');
 
   // --- ESTADOS UI ---
@@ -278,7 +326,7 @@ function App() {
             setClients(parsed.clients || []);
             setCatalogParts(parsed.catalogParts || []);
             setCatalogServices(parsed.catalogServices || []);
-            setSettings(parsed.settings || DEFAULT_SETTINGS);
+            setSettings({ ...DEFAULT_SETTINGS, ...(parsed.settings || {}) });
           }
           setStatusMsg("Sistema pronto.");
         }
@@ -304,6 +352,57 @@ function App() {
     }, 1500);
     return () => clearTimeout(timer);
   }, [ledger, workOrders, clients, catalogParts, catalogServices, settings]);
+
+  // --- LÓGICA DE BACKUP GOOGLE DRIVE ---
+  const handleGoogleDriveBackup = async () => {
+    if (isBackuping) return;
+    
+    // Validação
+    if (!settings.googleDriveToken || settings.googleDriveToken.trim() === "") {
+        alert("Por favor, insira um Token de Acesso válido nas configurações para usar o Google Drive.");
+        return;
+    }
+
+    setIsBackuping(true);
+    setDriveStatus('uploading');
+    setDriveErrorMsg("");
+    setStatusMsg("Criando backup local...");
+
+    try {
+        const fullDb: DatabaseSchema = { ledger, workOrders, clients, catalogParts, catalogServices, settings };
+        const content = JSON.stringify(fullDb, null, 2); 
+
+        const now = new Date();
+        const timestamp = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}-${String(now.getMinutes()).padStart(2,'0')}`;
+        const filename = `backup_oficina_${timestamp}.json`;
+        const localPath = `${BACKUP_PATH}\\${filename}`;
+
+        // Salva CÓPIA LOCAL (Via Rust)
+        try {
+          await invoke('create_backup_file', { path: localPath, content: content });
+        } catch (err) {
+          console.warn("create_backup_file falhou, tentando save_database_atomic", err);
+          await invoke('save_database_atomic', { filepath: localPath, content: content });
+        }
+
+        setStatusMsg("Enviando para nuvem Google...");
+        
+        // UPLOAD REAL PARA O GOOGLE DRIVE
+        await uploadToDrive(filename, content, settings.googleDriveToken, GOOGLE_API_KEY);
+
+        setDriveStatus('success');
+        setLastBackup(now.toLocaleString());
+        setStatusMsg("Backup salvo na nuvem!");
+        
+    } catch (e: any) {
+        console.error("Erro Backup:", e);
+        setDriveStatus('error');
+        setDriveErrorMsg(e.message || "Erro de conexão/permissão");
+        setStatusMsg("Erro no backup.");
+    } finally {
+        setIsBackuping(false);
+    }
+  };
 
   // --- LOGICA EXPORTAÇÃO ---
   const availableMonths = useMemo(() => {
@@ -577,6 +676,38 @@ function App() {
               <div className="form-group"><label className="form-label">CNPJ</label><input className="form-input" value={settings.cnpj} onChange={e=>handleUpdateSettings('cnpj',e.target.value)}/></div>
               <div className="form-group"><label className="form-label">Endereço</label><input className="form-input" value={settings.address} onChange={e=>handleUpdateSettings('address',e.target.value)}/></div>
               
+              <h3 style={{marginTop: 30}}>Backup & Google Drive</h3>
+              <div style={{background: 'rgba(0,0,0,0.2)', padding: 20, borderRadius: 12, border: '1px solid var(--border)'}}>
+                <div style={{marginBottom: 15, fontSize: '0.9rem', color: 'var(--text-muted)'}}>
+                  Esta função cria uma cópia de segurança dos dados atuais e envia para a nuvem.
+                  <br/>
+                  <a href="https://developers.google.com/oauthplayground/" target="_blank" style={{color: 'var(--primary)', textDecoration: 'none'}}>
+                    Gerar Token no Google Playground (Escopo: Drive API v3)
+                  </a>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Token de Acesso (Google Drive)</label>
+                  <input 
+                    className="form-input" 
+                    type="password"
+                    placeholder="Cole seu Access Token aqui (ya29...)" 
+                    value={settings.googleDriveToken} 
+                    onChange={e=>handleUpdateSettings('googleDriveToken',e.target.value)}
+                  />
+                </div>
+                
+                <div style={{display: 'flex', gap: 15, alignItems: 'center', marginTop: 15}}>
+                  <button className="btn" onClick={handleGoogleDriveBackup} disabled={isBackuping}>
+                    {isBackuping ? 'Processando...' : '☁️ Criar Backup & Sincronizar'}
+                  </button>
+                  
+                  {driveStatus === 'uploading' && <span style={{color: 'var(--info)'}}>⏳ Enviando...</span>}
+                  {driveStatus === 'success' && <span style={{color: 'var(--success)'}}>✅ Sucesso! Último: {lastBackup}</span>}
+                  {driveStatus === 'error' && <span style={{color: 'var(--danger)'}} title={driveErrorMsg}>❌ Erro (Passe o mouse).</span>}
+                </div>
+              </div>
+
               <h3 style={{marginTop: 30}}>Aparência</h3>
               <div className="theme-selector-container">
                 <div className={`theme-card ${currentTheme === 'dark' ? 'active' : ''}`} onClick={() => setCurrentTheme('dark')}>

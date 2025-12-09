@@ -2,26 +2,15 @@
    1. DESIGN SYSTEM (GERENCIADOR DE TEMAS)
    ========================================================================== */
 :root {
-  /* --- PALETA RETRO CLASSIC (Novas Cores Fornecidas) --- */
-  --retro-primary: #c1121f;       /* Base: brick-red */
-  --retro-primary-dark: #780000;  /* Base: molten-lava */
-  --retro-primary-light: #d64a50; 
-
-  --retro-secondary: #003049;     /* Base: deep-space-blue */
-  --retro-secondary-light: #669bbc;
-  --retro-secondary-dark: #001d2a;
-
-  --retro-bg: #fdf0d5;            /* Base: papaya-whip */
+  /* --- PALETA RETRO CLASSIC --- */
+  --retro-primary: #c1121f;       
+  --retro-primary-dark: #780000;  
+  --retro-secondary: #003049;     
+  --retro-bg: #fdf0d5;            
   --retro-bg-dark: #eee8d4;
-
-  --retro-text: #2c3e50;          /* Cinza escuro */
-  --retro-text-light: #7f8c8d;    /* Cinza médio */
-  --retro-border: #bdc3c7;        /* Cinza claro */
-
-  /* Cores Semânticas Retro */
-  --retro-success: #27ae60;
-  --retro-warning: #f39c12;
-  --retro-error: #780000;         /* Usando primary-dark conforme pedido */
+  --retro-text: #2c3e50;
+  --retro-text-light: #7f8c8d;
+  --retro-border: #bdc3c7;
 
   /* --- TEMA PADRÃO (DARK AERO) --- */
   --bg-app: #1e1e2e;
@@ -46,7 +35,7 @@
   --glass-border: rgba(255,255,255,0.1);
 }
 
-/* --- TEMA RETRO CLASSIC (Aplicado) --- */
+/* --- TEMA RETRO CLASSIC --- */
 [data-theme="vintage"] {
   --bg-app: var(--retro-bg);
   --bg-panel: #ffffff;
@@ -149,7 +138,7 @@ select.form-input {
 .chart-title { font-weight: 600; color: var(--text-main); font-size: 1.1rem; }
 
 /* ==========================================================================
-   4. KANBAN BOARD
+   4. KANBAN BOARD (COM SCROLL INTERNO)
    ========================================================================== */
 .kanban-board { display: flex; gap: 24px; height: 100%; overflow-x: auto; padding-bottom: 20px; padding-top: 10px; }
 
@@ -167,7 +156,7 @@ select.form-input {
   max-height: 100%;
   transition: 0.5s;
 }
-[data-theme="vintage"] .kanban-column { background-color: rgba(255, 255, 255, 0.6); }
+[data-theme="vintage"] .kanban-column { background-color: rgba(253, 240, 213, 0.6); }
 
 .kanban-header { font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 16px; display: flex; justify-content: space-between; font-size: 0.85rem; letter-spacing: 1px; flex-shrink: 0; }
 
@@ -256,7 +245,136 @@ select.form-input {
 .btn-icon[title="Voltar"]:hover { background: #a0aec0; }
 
 /* ==========================================================================
-   5. TABELAS E OUTROS
+   5. ABA PROCESSOS (LIST VIEW ROBUSTA)
+   ========================================================================== */
+.process-view {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  padding-bottom: 40px;
+}
+
+.process-group {
+  background: transparent;
+}
+
+.process-group-header {
+  padding: 8px 16px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-weight: 700;
+  color: var(--text-main);
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px var(--shadow-color);
+}
+.process-group-header.status-ORCAMENTO { border-left: 4px solid var(--info); }
+.process-group-header.status-APROVADO { border-left: 4px solid var(--warning); }
+.process-group-header.status-EM_SERVICO { border-left: 4px solid var(--primary); }
+.process-group-header.status-FINALIZADO { border-left: 4px solid var(--success); }
+
+.process-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 8px;
+}
+
+.process-row {
+  background: var(--bg-panel);
+  transition: transform 0.2s, box-shadow 0.2s;
+  cursor: default;
+}
+.process-row td {
+  padding: 16px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-main);
+}
+.process-row td:first-child {
+  border-left: 1px solid var(--border);
+  border-top-left-radius: 12px;
+  border-bottom-left-radius: 12px;
+}
+.process-row td:last-child {
+  border-right: 1px solid var(--border);
+  border-top-right-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+.process-row:hover {
+  transform: scale(1.005);
+  box-shadow: 0 5px 15px var(--shadow-color);
+  z-index: 1;
+  position: relative;
+  background: var(--bg-card-hover);
+}
+
+.status-badge {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: 0.2s;
+  display: inline-block;
+  border: 1px solid transparent;
+}
+.status-badge:hover { filter: brightness(1.2); transform: translateY(-1px); }
+
+.status-badge.st-ORCAMENTO { background: rgba(0, 188, 212, 0.15); color: var(--info); border-color: var(--info); }
+.status-badge.st-APROVADO { background: rgba(255, 152, 0, 0.15); color: var(--warning); border-color: var(--warning); }
+.status-badge.st-EM_SERVICO { background: rgba(130, 87, 230, 0.15); color: var(--primary); border-color: var(--primary); }
+.status-badge.st-FINALIZADO { background: rgba(4, 211, 97, 0.15); color: var(--success); border-color: var(--success); }
+
+.status-dropdown {
+  position: absolute;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 150px;
+}
+.status-option {
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  transition: 0.2s;
+}
+.status-option:hover { background: var(--bg-card-hover); color: var(--text-main); }
+.status-option.active { color: var(--primary); font-weight: 700; background: rgba(130, 87, 230, 0.1); }
+
+/* Input de data transparente na lista */
+.inline-date-input {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+}
+.inline-date-input:hover, .inline-date-input:focus {
+  background: var(--bg-input);
+  color: var(--text-main);
+  outline: 1px solid var(--border);
+}
+
+
+/* ==========================================================================
+   6. TABELAS E OUTROS
    ========================================================================== */
 .data-table { width: 100%; border-collapse: collapse; }
 .data-table th { text-align: left; padding: 16px; border-bottom: 1px solid var(--border); color: var(--text-muted); font-weight: 600; font-size: 0.875rem; }
@@ -313,7 +431,7 @@ select.form-input {
 .car-lights-rear { width: 80%; height: 6px; background: var(--danger); border-radius: 4px; box-shadow: 0 0 15px var(--danger); }
 
 /* ==========================================================================
-   6. IMPRESSÃO BAZUCA (CORREÇÃO DEFINITIVA)
+   7. IMPRESSÃO BAZUCA (CORREÇÃO DEFINITIVA)
    ========================================================================== */
 .printable-content { display: none; }
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-// IMPORTANTE: Agora usando a API nativa do Tauri para comunicação com o Rust
+
 import { invoke } from '@tauri-apps/api/core';
+
 
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts';
 
@@ -246,9 +247,9 @@ function App() {
   const [driveErrorMsg, setDriveErrorMsg] = useState("");
   const [lastBackup, setLastBackup] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'FINANCEIRO' | 'OFICINA' | 'CONFIG'>('FINANCEIRO');
+  const [activeTab, setActiveTab] = useState<'FINANCEIRO' | 'OFICINA' | 'PROCESSOS' | 'CONFIG'>('FINANCEIRO');
 
-  // --- ESTADOS UI ---
+  // Estados UI
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOS, setEditingOS] = useState<WorkOrder | null>(null);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -261,6 +262,9 @@ function App() {
   const [entryDescription, setEntryDescription] = useState("");
   const [entryValue, setEntryValue] = useState("");
   const [entryType, setEntryType] = useState<'CREDIT' | 'DEBIT'>('CREDIT');
+  
+  // ESTADO PARA EDIÇÃO RÁPIDA DE STATUS NA ABA PROCESSOS
+  const [editingStatusId, setEditingStatusId] = useState<string | null>(null);
 
   // Form OS
   const [formOSNumber, setFormOSNumber] = useState("");
@@ -353,7 +357,6 @@ function App() {
   // --- DATA SAVE ---
   useEffect(() => {
     const timer = setTimeout(async () => {
-      // Evita salvar se estivermos com erro de carregamento ou inicializando
       if (statusMsg.includes("Erro") || statusMsg.includes("Carregando")) return;
       if (ledger.length === 0 && workOrders.length === 0 && clients.length === 0 && statusMsg.includes("Iniciando")) return;
       
@@ -369,7 +372,6 @@ function App() {
     return () => clearTimeout(timer);
   }, [ledger, workOrders, clients, catalogParts, catalogServices, settings, dbPath, statusMsg]);
 
-  // --- HANDLER PARA ATUALIZAR CAMINHO DO BANCO ---
   const handleUpdateDbPath = () => {
       if (tempDbPath.trim() === "") {
           alert("O caminho do arquivo não pode ser vazio.");
@@ -381,7 +383,6 @@ function App() {
       }
   };
 
-  // --- LÓGICA DE BACKUP GOOGLE DRIVE ---
   const handleGoogleDriveBackup = async () => {
     if (isBackuping) return;
     
@@ -429,7 +430,6 @@ function App() {
     }
   };
 
-  // --- LOGICA EXPORTAÇÃO ---
   const availableMonths = useMemo(() => {
     const dates = new Set<string>();
     ledger.forEach(e => {
@@ -635,13 +635,10 @@ function App() {
       return;
     }
     
-    // Converte para centavos (inteiro) para o backend
     const valInt = Money.fromFloat(Math.abs(valFloat));
 
-    // IMPORTANTE: Agora usamos a data do estado entryDate, não o dia atual do sistema
     const entry = createEntry(entryDescription, valInt, entryType, entryDate);
     
-    // Correção: Atualiza o estado usando a versão anterior de forma segura
     setLedger(prev => [entry, ...prev]);
     setIsEntryModalOpen(false);
   };
@@ -698,14 +695,9 @@ function App() {
   const chartDataStatus = useMemo(() => { const c = {ORCAMENTO:0, APROVADO:0, EM_SERVICO:0, FINALIZADO:0}; workOrders.forEach(o => { if(c[o.status]!==undefined) c[o.status]++; }); return [{name:'Orç.',qtd:c.ORCAMENTO,fill:COLORS.info},{name:'Aprov.',qtd:c.APROVADO,fill:COLORS.warning},{name:'Serv.',qtd:c.EM_SERVICO,fill:COLORS.primary},{name:'Final.',qtd:c.FINALIZADO,fill:COLORS.success}]; }, [workOrders]);
   const kpiData = useMemo(() => { 
     const s = ledger.reduce((a,e)=>a+(e.type==='DEBIT'?-e.amount:e.amount),0); 
-    
-    // Filtra apenas as ordens de serviço com status 'FINALIZADO'
     const finalizedOrders = workOrders.filter(o => o.status === 'FINALIZADO');
-    // Calcula o total dessas ordens
     const totalFinalized = finalizedOrders.reduce((a, o) => a + o.total, 0);
-    // Calcula a média. Se não houver ordens finalizadas, ticket médio é 0
     const ticket = finalizedOrders.length > 0 ? totalFinalized / finalizedOrders.length : 0;
-
     return { 
       saldo: s, 
       receitas: ledger.filter(e=>e.type==='CREDIT').reduce((a,e)=>a+e.amount,0), 
@@ -714,10 +706,102 @@ function App() {
     }; 
   }, [ledger, workOrders]);
 
+
+  // --- FUNÇÕES DA NOVA ABA PROCESSOS ---
+  const handleUpdateStatus = (osId: string, newStatus: OSStatus) => {
+      setWorkOrders(prev => prev.map(os => os.id === osId ? { ...os, status: newStatus } : os));
+      setEditingStatusId(null);
+  };
+
+  const handleUpdateOSDate = (osId: string, newDate: string) => {
+      setWorkOrders(prev => prev.map(os => os.id === osId ? { ...os, createdAt: new Date(newDate).toISOString() } : os));
+  };
+
+  const renderProcessList = () => {
+    // 1. Agrupar por Status
+    const groups: Record<OSStatus, WorkOrder[]> = {
+        ORCAMENTO: [], APROVADO: [], EM_SERVICO: [], FINALIZADO: []
+    };
+
+    workOrders.forEach(os => {
+        if (groups[os.status]) groups[os.status].push(os);
+    });
+
+    // 2. Ordenar e Renderizar
+    return (
+      <div className="process-view">
+        {Object.entries(groups).map(([statusKey, list]) => {
+          const status = statusKey as OSStatus;
+          if (list.length === 0) return null;
+
+          // Ordena por data (mais recente primeiro)
+          list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+          return (
+            <div key={status} className="process-group">
+               <div className={`process-group-header status-${status}`}>
+                   <span>{STATUS_LABELS[status]}</span>
+                   <span style={{background: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem'}}>{list.length}</span>
+               </div>
+               
+               <table className="process-table">
+                   <tbody>
+                       {list.map(os => (
+                           <tr key={os.id} className="process-row">
+                               <td width="10%">
+                                   <div className="os-number">#{os.osNumber}</div>
+                               </td>
+                               <td width="40%">
+                                   <div style={{fontWeight: 600, color: 'var(--text-main)'}}>{os.clientName}</div>
+                                   <div style={{fontSize: '0.8rem', color: 'var(--text-muted)'}}>{os.vehicle}</div>
+                               </td>
+                               <td width="20%">
+                                   {/* DATA EDITÁVEL */}
+                                   <input 
+                                     type="date" 
+                                     className="inline-date-input"
+                                     value={new Date(os.createdAt).toISOString().split('T')[0]}
+                                     onChange={(e) => handleUpdateOSDate(os.id, e.target.value)}
+                                   />
+                               </td>
+                               <td width="30%" style={{position: 'relative'}}>
+                                   {/* STATUS EDITÁVEL (DROPDOWN) */}
+                                   <div 
+                                      className={`status-badge st-${os.status}`} 
+                                      onClick={() => setEditingStatusId(editingStatusId === os.id ? null : os.id)}
+                                   >
+                                       {STATUS_LABELS[os.status]} ▾
+                                   </div>
+
+                                   {editingStatusId === os.id && (
+                                       <div className="status-dropdown">
+                                           {(Object.keys(STATUS_LABELS) as OSStatus[]).map(s => (
+                                               <div 
+                                                 key={s} 
+                                                 className={`status-option ${s === os.status ? 'active' : ''}`}
+                                                 onClick={() => handleUpdateStatus(os.id, s)}
+                                               >
+                                                   {STATUS_LABELS[s]}
+                                               </div>
+                                           ))}
+                                       </div>
+                                   )}
+                               </td>
+                           </tr>
+                       ))}
+                   </tbody>
+               </table>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <>
       <div className="app-container">
-        <nav className="sidebar"><div className="logo-area"><div className="logo-text">OFICINA<span className="logo-highlight">PRO</span></div></div><div className="nav-menu"><div className={`nav-item ${activeTab === 'FINANCEIRO' ? 'active' : ''}`} onClick={() => setActiveTab('FINANCEIRO')}>📊 Financeiro</div><div className={`nav-item ${activeTab === 'OFICINA' ? 'active' : ''}`} onClick={() => setActiveTab('OFICINA')}>🔧 Oficina</div><div className={`nav-item ${activeTab === 'CONFIG' ? 'active' : ''}`} onClick={() => setActiveTab('CONFIG')}>⚙️ Config</div></div></nav>
+        <nav className="sidebar"><div className="logo-area"><div className="logo-text">OFICINA<span className="logo-highlight">PRO</span></div></div><div className="nav-menu"><div className={`nav-item ${activeTab === 'FINANCEIRO' ? 'active' : ''}`} onClick={() => setActiveTab('FINANCEIRO')}>📊 Financeiro</div><div className={`nav-item ${activeTab === 'PROCESSOS' ? 'active' : ''}`} onClick={() => setActiveTab('PROCESSOS')}>📋 Processos</div><div className={`nav-item ${activeTab === 'OFICINA' ? 'active' : ''}`} onClick={() => setActiveTab('OFICINA')}>🔧 Oficina</div><div className={`nav-item ${activeTab === 'CONFIG' ? 'active' : ''}`} onClick={() => setActiveTab('CONFIG')}>⚙️ Config</div></div></nav>
         <main className="main-content">
           {activeTab === 'FINANCEIRO' && (
             <>
@@ -736,6 +820,15 @@ function App() {
               <div className="card"><table className="data-table"><thead><tr><th>Descrição</th><th>Valor</th><th>Ações</th></tr></thead><tbody>{ledger.slice(0, 50).map(e => (<tr key={e.id}><td>{e.description}</td><td style={{fontWeight:'bold', color: e.type === 'DEBIT' ? COLORS.danger : COLORS.success}}>{e.type === 'DEBIT' ? '- ' : '+ '}{Money.format(e.amount)}</td><td><button className="btn-sm" onClick={() => handleEditEntry(e.id)}>Edit</button> <button className="btn-sm" onClick={() => handleDeleteEntry(e)}>Del</button></td></tr>))}</tbody></table></div>
             </>
           )}
+
+          {/* --- NOVA ABA PROCESSOS --- */}
+          {activeTab === 'PROCESSOS' && (
+            <>
+              <div className="header-area"><h1 className="page-title">Gestão de Processos</h1><button className="btn" onClick={openNewOSModal}>+ Novo Processo</button></div>
+              {renderProcessList()}
+            </>
+          )}
+
           {activeTab === 'OFICINA' && (
             <>
               <div className="header-area"><h1 className="page-title">Quadro Oficina</h1><button className="btn" onClick={openNewOSModal}>+ Nova OS</button></div>

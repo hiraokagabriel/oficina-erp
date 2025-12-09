@@ -1,11 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
-
 import { invoke } from '@tauri-apps/api/core';
-
 
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 // --- CONFIGURAÇÃO GOOGLE ---
+
 const GOOGLE_API_KEY = "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"; 
 
 // --- CONFIGURAÇÃO PADRÃO DO BANCO DE DADOS ---
@@ -238,7 +237,7 @@ function App() {
   const [catalogServices, setCatalogServices] = useState<CatalogItem[]>([]);
   const [settings, setSettings] = useState<WorkshopSettings>(DEFAULT_SETTINGS);
   
-  // Theme Manager
+  // Theme Manager: Vintage -> Retro Classic
   const [currentTheme, setCurrentTheme] = useState<'dark' | 'vintage'>('dark');
 
   const [statusMsg, setStatusMsg] = useState("Inicializando...");
@@ -350,7 +349,6 @@ function App() {
   // --- DATA SAVE (MODIFICADO PARA USAR dbPath DINÂMICO) ---
   useEffect(() => {
     const timer = setTimeout(async () => {
-      // Evita salvar se estivermos com erro de carregamento ou inicializando
       if (statusMsg.includes("Erro") || statusMsg.includes("Carregando")) return;
       if (ledger.length === 0 && workOrders.length === 0 && clients.length === 0 && statusMsg.includes("Iniciando")) return;
       
@@ -758,8 +756,8 @@ function App() {
                   <span>Dark Aero (Padrão)</span>
                 </div>
                 <div className={`theme-card ${currentTheme === 'vintage' ? 'active' : ''}`} onClick={() => setCurrentTheme('vintage')}>
-                  <div className="theme-preview" style={{background: '#8a817c'}}></div>
-                  <span>Vintage Earth</span>
+                  <div className="theme-preview" style={{background: '#c1121f'}}></div>
+                  <span>Retro Classic</span>
                 </div>
               </div>
             </div>

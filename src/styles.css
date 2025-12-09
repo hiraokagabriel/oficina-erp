@@ -2,12 +2,15 @@
    1. DESIGN SYSTEM (GERENCIADOR DE TEMAS)
    ========================================================================== */
 :root {
-  /* --- PALETA VINTAGE --- */
-  --taupe: #463f3a;
-  --grey-olive: #8a817c;
-  --silver: #bcb8b1;
-  --parchment: #f4f3ee;
-  --powder-blush: #e0afa0;
+  /* --- PALETA RETRO CLASSIC (Novas Cores) --- */
+  --retro-primary: #c1121f;       /* Vermelho Tijolo */
+  --retro-primary-dark: #780000;  /* Lava */
+  --retro-secondary: #003049;     /* Azul Espaço Profundo */
+  --retro-bg: #fdf0d5;            /* Papaya Whip */
+  --retro-bg-dark: #eee8d4;
+  --retro-text: #2c3e50;
+  --retro-text-light: #7f8c8d;
+  --retro-border: #bdc3c7;
 
   /* --- TEMA PADRÃO (DARK AERO) --- */
   --bg-app: #1e1e2e;
@@ -32,29 +35,29 @@
   --glass-border: rgba(255,255,255,0.1);
 }
 
-/* --- TEMA VINTAGE EARTH --- */
+/* --- TEMA RETRO CLASSIC (Substitui o Vintage Earth) --- */
 [data-theme="vintage"] {
-  --bg-app: var(--parchment);      /* Fundo Pergaminho */
-  --bg-panel: #ffffff;             /* Painéis brancos */
-  --bg-input: #f9f9f7;             /* Inputs bem claros */
-  --bg-card-hover: #ebebe8;        /* Hover sutil */
+  --bg-app: var(--retro-bg);       /* Fundo Papaya Whip */
+  --bg-panel: #ffffff;             /* Painéis brancos para limpeza visual */
+  --bg-input: var(--retro-bg-dark);/* Inputs levemente mais escuros que o fundo */
+  --bg-card-hover: #fff5e6;        /* Hover sutilmente quente */
 
-  --primary: var(--taupe);         /* Taupe escuro como cor primária */
-  --primary-hover: var(--grey-olive);
+  --primary: var(--retro-primary);      /* Vermelho Tijolo */
+  --primary-hover: var(--retro-primary-dark); /* Lava no hover */
 
-  --text-main: #3d3632;            /* Texto quase preto para contraste */
-  --text-muted: #7a726d;
+  --text-main: var(--retro-text);       /* Azul/Cinza escuro */
+  --text-muted: var(--retro-text-light);
 
-  --border: var(--silver);         /* Bordas Prateadas */
+  --border: var(--retro-border);        /* Bordas cinzas suaves */
 
-  /* Cores de Status Adaptadas (Tons pastéis terrosos) */
-  --success: #81b29a;              
-  --danger: #d08c7f;               
-  --warning: #e9c46a;              
-  --info: #98c1d9;                 
+  /* Cores de Status */
+  --success: #27ae60;              /* Verde Esmeralda */
+  --danger: var(--retro-primary);  /* Usando o vermelho primário para erro/perigo */
+  --warning: #f39c12;              /* Laranja */
+  --info: var(--retro-secondary);  /* Azul Profundo para informações */
 
-  --shadow-color: rgba(70, 63, 58, 0.1);
-  --glass-border: rgba(70, 63, 58, 0.1);
+  --shadow-color: rgba(44, 62, 80, 0.15); /* Sombras baseadas na cor do texto */
+  --glass-border: rgba(189, 195, 199, 0.5);
 }
 
 body {
@@ -84,7 +87,7 @@ body {
 .nav-item { padding: 12px 16px; border-radius: 12px; color: var(--text-muted); cursor: pointer; font-weight: 500; transition: all 0.3s ease; display: flex; align-items: center; gap: 12px; }
 .nav-item:hover { background-color: var(--bg-card-hover); color: var(--text-main); transform: translateX(5px); }
 .nav-item.active { background: linear-gradient(90deg, var(--primary) -50%, transparent 100%); color: var(--primary); border-left: 3px solid var(--primary); font-weight: 700; }
-[data-theme="vintage"] .nav-item.active { background: linear-gradient(90deg, rgba(70, 63, 58, 0.1) 0%, transparent 100%); color: var(--taupe); }
+[data-theme="vintage"] .nav-item.active { background: linear-gradient(90deg, rgba(193, 18, 31, 0.15) 0%, transparent 100%); color: var(--primary); }
 
 /* UI Components */
 .header-area { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; }
@@ -142,7 +145,7 @@ body {
   max-height: 100%;
   transition: 0.5s;
 }
-[data-theme="vintage"] .kanban-column { background-color: rgba(255, 255, 255, 0.6); }
+[data-theme="vintage"] .kanban-column { background-color: rgba(253, 240, 213, 0.6); /* Transparencia baseada na cor de fundo */ }
 
 .kanban-header { font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 16px; display: flex; justify-content: space-between; font-size: 0.85rem; letter-spacing: 1px; flex-shrink: 0; }
 
@@ -214,10 +217,20 @@ body {
 }
 .btn-icon:hover { transform: scale(1.25) translateY(-5px); color: #fff; border-color: transparent; z-index: 10; }
 .btn-icon[title="Editar"]:hover { background: #9d74ff; }
+[data-theme="vintage"] .btn-icon[title="Editar"]:hover { background: var(--primary); }
+
 .btn-icon.check:hover { background: #4fd1c5; }
+[data-theme="vintage"] .btn-icon.check:hover { background: var(--success); }
+
 .btn-icon[title="Imprimir"]:hover { background: #d6bcfa; }
+[data-theme="vintage"] .btn-icon[title="Imprimir"]:hover { background: var(--info); }
+
 .btn-icon.danger:hover { background: #fc8181; }
+[data-theme="vintage"] .btn-icon.danger:hover { background: var(--danger); }
+
 .btn-icon[title="Avançar"]:hover { background: #68d391; }
+[data-theme="vintage"] .btn-icon[title="Avançar"]:hover { background: var(--success); }
+
 .btn-icon[title="Voltar"]:hover { background: #a0aec0; }
 
 /* ==========================================================================

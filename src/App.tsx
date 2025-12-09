@@ -190,8 +190,8 @@ function App() {
   const [catalogServices, setCatalogServices] = useState<CatalogItem[]>([]);
   const [settings, setSettings] = useState<WorkshopSettings>(DEFAULT_SETTINGS);
   
-  // Theme Manager
-  const [currentTheme, setCurrentTheme] = useState<'dark' | 'pastel'>('dark');
+  // Theme Manager: Renamed 'pastel' to 'vintage'
+  const [currentTheme, setCurrentTheme] = useState<'dark' | 'vintage'>('dark');
 
   const [statusMsg, setStatusMsg] = useState("Inicializando...");
   const [isSaving, setIsSaving] = useState(false);
@@ -583,9 +583,9 @@ function App() {
                   <div className="theme-preview" style={{background: '#1e1e2e'}}></div>
                   <span>Dark Aero (Padrão)</span>
                 </div>
-                <div className={`theme-card ${currentTheme === 'pastel' ? 'active' : ''}`} onClick={() => setCurrentTheme('pastel')}>
-                  <div className="theme-preview" style={{background: 'linear-gradient(135deg, #bde0fe, #cdb4db)'}}></div>
-                  <span>Pastel Dreams</span>
+                <div className={`theme-card ${currentTheme === 'vintage' ? 'active' : ''}`} onClick={() => setCurrentTheme('vintage')}>
+                  <div className="theme-preview" style={{background: '#8a817c'}}></div>
+                  <span>Vintage Earth</span>
                 </div>
               </div>
             </div>

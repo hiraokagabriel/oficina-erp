@@ -2,12 +2,12 @@
    1. DESIGN SYSTEM (GERENCIADOR DE TEMAS)
    ========================================================================== */
 :root {
-  /* --- PALETA PASTEL (Solicitada) --- */
-  --thistle: #cdb4db;
-  --pastel-petal: #ffc8dd;
-  --baby-pink: #ffafcc;
-  --icy-blue: #bde0fe;
-  --sky-blue: #a2d2ff;
+  /* --- PALETA VINTAGE (Solicitada) --- */
+  --taupe: #463f3a;
+  --grey-olive: #8a817c;
+  --silver: #bcb8b1;
+  --parchment: #f4f3ee;
+  --powder-blush: #e0afa0;
 
   /* --- TEMA PADRÃO (DARK AERO) --- */
   --bg-app: #1e1e2e;
@@ -32,29 +32,29 @@
   --glass-border: rgba(255,255,255,0.1);
 }
 
-/* --- TEMA PASTEL DREAMS --- */
-[data-theme="pastel"] {
-  --bg-app: var(--icy-blue);       /* Fundo principal azul gelo */
+/* --- TEMA VINTAGE EARTH (Substitui o Light anterior) --- */
+[data-theme="vintage"] {
+  --bg-app: var(--parchment);      /* Fundo Pergaminho */
   --bg-panel: #ffffff;             /* Painéis brancos para contraste limpo */
-  --bg-input: #f0f8ff;             /* Inputs levemente azulados */
-  --bg-card-hover: #fcfcfc;        /* Hover sutil */
+  --bg-input: #fcfcfb;             /* Inputs quase brancos */
+  --bg-card-hover: #f0f0ed;        /* Hover sutil */
 
-  --primary: var(--thistle);       /* Roxo suave como cor primária */
-  --primary-hover: #b59cb8;        /* Versão um pouco mais escura do Thistle */
+  --primary: var(--grey-olive);    /* Oliva Acinzentado como cor primária (sobria e elegante) */
+  --primary-hover: var(--taupe);   /* Taupe (mais escuro) no hover */
 
-  --text-main: #4a4a4a;            /* Texto escuro para legibilidade no fundo claro */
-  --text-muted: #787878;
+  --text-main: var(--taupe);       /* Texto escuro (Taupe) para leitura excelente */
+  --text-muted: #9c9692;           /* Versão clara do Taupe */
 
-  --border: var(--sky-blue);       /* Bordas em azul céu */
+  --border: var(--silver);         /* Bordas Prateadas */
 
-  /* Cores de Status Adaptadas para Pastel, mas mantendo semântica */
-  --success: #88d8b0;              /* Verde Pastel */
-  --danger: var(--baby-pink);      /* Rosa Bebê para erros/perigo */
-  --warning: var(--pastel-petal);  /* Pétala para avisos */
-  --info: var(--sky-blue);         /* Azul céu para info */
+  /* Cores de Status Adaptadas */
+  --success: #81b29a;              /* Verde Sálvia (Combina com o tema terra) */
+  --danger: var(--powder-blush);   /* Blush para alertas (suave mas visível) */
+  --warning: #e9c46a;              /* Ocre para avisos */
+  --info: #8ecae6;                 /* Azul suave */
 
-  --shadow-color: rgba(162, 210, 255, 0.3); /* Sombras coloridas suaves */
-  --glass-border: rgba(205, 180, 219, 0.5);
+  --shadow-color: rgba(70, 63, 58, 0.15); /* Sombras baseadas na cor Taupe */
+  --glass-border: rgba(188, 184, 177, 0.5); /* Prata translúcido */
 }
 
 body {
@@ -65,7 +65,7 @@ body {
   height: 100vh;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
-  transition: background-color 0.5s ease, color 0.5s ease; /* Transição suave de tema */
+  transition: background-color 0.5s ease, color 0.5s ease;
 }
 
 /* ==========================================================================
@@ -84,7 +84,7 @@ body {
 .nav-item { padding: 12px 16px; border-radius: 12px; color: var(--text-muted); cursor: pointer; font-weight: 500; transition: all 0.3s ease; display: flex; align-items: center; gap: 12px; }
 .nav-item:hover { background-color: var(--bg-card-hover); color: var(--text-main); transform: translateX(5px); }
 .nav-item.active { background: linear-gradient(90deg, var(--primary) -50%, transparent 100%); color: var(--primary); border-left: 3px solid var(--primary); font-weight: 700; }
-[data-theme="pastel"] .nav-item.active { background: linear-gradient(90deg, rgba(205, 180, 219, 0.4) 0%, transparent 100%); color: #6b4c7b; }
+[data-theme="vintage"] .nav-item.active { background: linear-gradient(90deg, rgba(138, 129, 124, 0.2) 0%, transparent 100%); color: var(--taupe); }
 
 /* UI Components */
 .header-area { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; }
@@ -142,7 +142,7 @@ body {
   max-height: 100%;
   transition: 0.5s;
 }
-[data-theme="pastel"] .kanban-column { background-color: rgba(255, 255, 255, 0.5); }
+[data-theme="vintage"] .kanban-column { background-color: rgba(255, 255, 255, 0.5); }
 
 .kanban-header { font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 16px; display: flex; justify-content: space-between; font-size: 0.85rem; letter-spacing: 1px; flex-shrink: 0; }
 

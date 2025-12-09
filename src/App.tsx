@@ -1,17 +1,31 @@
 import { useState, useEffect, useMemo } from 'react';
-// IMPORTANTE: Código ajustado para ambiente nativo Tauri.
-// import { invoke } from '@tauri-apps/api/core'; // DESCOMENTE NO SEU AMBIENTE
 
-// --- MOCK INVOKE (APENAS PARA VISUALIZAÇÃO WEB - REMOVA EM PRODUÇÃO) ---
-const invoke = async (cmd: string, args?: any): Promise<any> => {
-  console.log(`[SIMULAÇÃO WEB] Comando Tauri: ${cmd}`, args);
-  if (cmd === 'load_database') return null;
-  if (cmd === 'export_report') return { success: true, message: "Simulação: Arquivo salvo!" };
-  return null;
+import { invoke } from '@tauri-apps/api/core';
+
+
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+
+// --- CONFIGURAÇÃO GOOGLE ---
+const GOOGLE_API_KEY = "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"; 
+
+// --- CONFIGURAÇÃO PADRÃO DO BANCO DE DADOS ---
+const DEFAULT_DB_PATH = "C:\\OficinaData\\database.json";
+const BACKUP_PATH = "C:\\OficinaData\\Backups";
+
+// --- CONSTANTES VISUAIS (Definidas antes do uso) ---
+const COLORS = {
+  primary: '#8257e6',
+  secondary: '#00bcd4',
+  success: '#04d361',
+  warning: '#ff9800',
+  danger: '#e54c4c',
+  grid: '#323238',
+  text: '#a8a8b3',
+  tooltipBg: '#202024',
+  cardBg: '#2b2b3b',
+  border: '#3e3e4e',
+  info: '#00bcd4'
 };
-// ----------------------------------------------------------------------------
-
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts';
 
 // --- DOMAIN: SHARED/MONEY ---
 const Money = {
@@ -63,6 +77,9 @@ const updateEntryAmount = (entry: LedgerEntry, newAmount: number, user: string, 
 // --- DOMAIN: WORKSHOP/WORKORDER ---
 interface OrderItem { id: string; description: string; price: number; }
 interface ChecklistSchema { fuelLevel: number; tires: { fl: boolean; fr: boolean; bl: boolean; br: boolean }; notes: string; }
+
+// CONSTANTE DEFINIDA ANTES DO USO
+const EMPTY_CHECKLIST: ChecklistSchema = { fuelLevel: 0, tires: { fl: true, fr: true, bl: true, br: true }, notes: "" };
 
 interface WorkOrder {
   id: string;
@@ -151,10 +168,15 @@ const learnCatalogItems = (catalog: CatalogItem[], newItems: CatalogItem[]): Cat
   return updated;
 };
 
-// --- APP CONSTANTS ---
-const DB_PATH = "C:\\OficinaData\\database.json";
+interface WorkshopSettings { 
+  name: string; 
+  cnpj: string; 
+  address: string; 
+  technician: string; 
+  exportPath: string;
+  googleDriveToken: string; 
+}
 
-interface WorkshopSettings { name: string; cnpj: string; address: string; technician: string; exportPath: string; }
 interface DatabaseSchema { 
   ledger: LedgerEntry[]; 
   workOrders: WorkOrder[]; 
@@ -164,25 +186,51 @@ interface DatabaseSchema {
   settings: WorkshopSettings; 
 }
 
-const DEFAULT_SETTINGS: WorkshopSettings = { name: "OFICINA PREMIUM", cnpj: "", address: "", technician: "", exportPath: "C:\\OficinaData\\Exportacoes" };
-const EMPTY_CHECKLIST: ChecklistSchema = { fuelLevel: 0, tires: { fl: true, fr: true, bl: true, br: true }, notes: "" };
-
-const COLORS = {
-  primary: '#8257e6',
-  secondary: '#00bcd4',
-  success: '#04d361',
-  warning: '#ff9800',
-  danger: '#e54c4c',
-  grid: '#323238',
-  text: '#a8a8b3',
-  tooltipBg: '#202024',
-  cardBg: '#2b2b3b',
-  border: '#3e3e4e',
-  info: '#00bcd4'
+const DEFAULT_SETTINGS: WorkshopSettings = { 
+  name: "OFICINA PREMIUM", 
+  cnpj: "", 
+  address: "", 
+  technician: "", 
+  exportPath: "C:\\OficinaData\\Exportacoes",
+  googleDriveToken: "" 
 };
+
+// --- FUNÇÃO AUXILIAR: UPLOAD GOOGLE DRIVE ---
+async function uploadToDrive(fileName: string, content: string, accessToken: string, apiKey: string) {
+  const metadata = {
+    name: fileName,
+    mimeType: 'application/json',
+  };
+
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  form.append('file', new Blob([content], { type: 'application/json' }));
+
+  const response = await fetch(`https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&key=${apiKey}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    body: form
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error?.message || "Erro desconhecido no upload");
+  }
+
+  return await response.json();
+}
 
 function App() {
   // --- ESTADO GLOBAL ---
+  
+  // 1. Gerenciamento do Caminho do Banco de Dados
+  const [dbPath, setDbPath] = useState(() => {
+    return localStorage.getItem("oficina_db_path") || DEFAULT_DB_PATH;
+  });
+  const [tempDbPath, setTempDbPath] = useState(dbPath);
+
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -190,18 +238,23 @@ function App() {
   const [catalogServices, setCatalogServices] = useState<CatalogItem[]>([]);
   const [settings, setSettings] = useState<WorkshopSettings>(DEFAULT_SETTINGS);
   
-  // Theme Manager: Renamed 'pastel' to 'vintage'
+  // Theme Manager
   const [currentTheme, setCurrentTheme] = useState<'dark' | 'vintage'>('dark');
 
   const [statusMsg, setStatusMsg] = useState("Inicializando...");
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Estado do Backup
+  const [isBackuping, setIsBackuping] = useState(false);
+  const [driveStatus, setDriveStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+  const [driveErrorMsg, setDriveErrorMsg] = useState("");
+  const [lastBackup, setLastBackup] = useState<string | null>(null);
+
   const [activeTab, setActiveTab] = useState<'FINANCEIRO' | 'OFICINA' | 'CONFIG'>('FINANCEIRO');
 
   // --- ESTADOS UI ---
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOS, setEditingOS] = useState<WorkOrder | null>(null);
-  
-  // Estados de Exportação
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [exportTargetMonth, setExportTargetMonth] = useState(""); 
   const [exportPathInput, setExportPathInput] = useState("");
@@ -248,11 +301,12 @@ function App() {
     }
   }, [formVehicle, suggestedVehicles]);
 
-  // --- DATA LOAD ---
+  // --- DATA LOAD (MODIFICADO PARA USAR dbPath DINÂMICO) ---
   useEffect(() => {
     async function load() {
+      setStatusMsg(`Carregando de: ${dbPath}...`);
       try {
-        const data = await invoke<string>('load_database', { filepath: DB_PATH });
+        const data = await invoke<string>('load_database', { filepath: dbPath });
         
         if (data && data.trim() !== "") {
           const parsed = JSON.parse(data);
@@ -278,32 +332,99 @@ function App() {
             setClients(parsed.clients || []);
             setCatalogParts(parsed.catalogParts || []);
             setCatalogServices(parsed.catalogServices || []);
-            setSettings(parsed.settings || DEFAULT_SETTINGS);
+            setSettings({ ...DEFAULT_SETTINGS, ...(parsed.settings || {}) });
           }
           setStatusMsg("Sistema pronto.");
+        } else {
+          setStatusMsg("Banco vazio ou novo. Pronto para iniciar.");
         }
       } catch (e) {
-        setStatusMsg("Iniciando novo banco."); setLedger([]); setWorkOrders([]); setClients([]);
+        console.error("Erro ao carregar banco:", e);
+        setStatusMsg("Erro ao ler arquivo. Verifique o caminho nas configurações.");
+        setLedger([]); setWorkOrders([]); setClients([]);
       }
     }
     load();
-  }, []);
+  }, [dbPath]); 
 
-  // --- DATA SAVE ---
+  // --- DATA SAVE (MODIFICADO PARA USAR dbPath DINÂMICO) ---
   useEffect(() => {
     const timer = setTimeout(async () => {
+      // Evita salvar se estivermos com erro de carregamento ou inicializando
+      if (statusMsg.includes("Erro") || statusMsg.includes("Carregando")) return;
       if (ledger.length === 0 && workOrders.length === 0 && clients.length === 0 && statusMsg.includes("Iniciando")) return;
+      
       try {
         setIsSaving(true);
         setStatusMsg("Sincronizando...");
         const fullDb: DatabaseSchema = { ledger, workOrders, clients, catalogParts, catalogServices, settings };
-        await invoke('save_database_atomic', { filepath: DB_PATH, content: JSON.stringify(fullDb) });
+        await invoke('save_database_atomic', { filepath: dbPath, content: JSON.stringify(fullDb) });
         setStatusMsg("Dados seguros.");
         setIsSaving(false);
       } catch (e) { setStatusMsg("ERRO I/O: " + e); setIsSaving(false); }
     }, 1500);
     return () => clearTimeout(timer);
-  }, [ledger, workOrders, clients, catalogParts, catalogServices, settings]);
+  }, [ledger, workOrders, clients, catalogParts, catalogServices, settings, dbPath, statusMsg]);
+
+  // --- HANDLER PARA ATUALIZAR CAMINHO DO BANCO ---
+  const handleUpdateDbPath = () => {
+      if (tempDbPath.trim() === "") {
+          alert("O caminho do arquivo não pode ser vazio.");
+          return;
+      }
+      if (confirm(`Deseja alterar o local do banco de dados para:\n${tempDbPath}\n\nO sistema tentará carregar os dados deste local imediatamente.`)) {
+          setDbPath(tempDbPath);
+          localStorage.setItem("oficina_db_path", tempDbPath);
+      }
+  };
+
+  // --- LÓGICA DE BACKUP GOOGLE DRIVE ---
+  const handleGoogleDriveBackup = async () => {
+    if (isBackuping) return;
+    
+    if (!settings.googleDriveToken || settings.googleDriveToken.trim() === "") {
+        alert("Por favor, insira um Token de Acesso válido nas configurações para usar o Google Drive.");
+        return;
+    }
+
+    setIsBackuping(true);
+    setDriveStatus('uploading');
+    setDriveErrorMsg("");
+    setStatusMsg("Criando backup local...");
+
+    try {
+        const fullDb: DatabaseSchema = { ledger, workOrders, clients, catalogParts, catalogServices, settings };
+        const content = JSON.stringify(fullDb, null, 2); 
+
+        const now = new Date();
+        const timestamp = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}-${String(now.getMinutes()).padStart(2,'0')}`;
+        const filename = `backup_oficina_${timestamp}.json`;
+        const localPath = `${BACKUP_PATH}\\${filename}`;
+
+        try {
+          await invoke('create_backup_file', { path: localPath, content: content });
+        } catch (err) {
+          console.warn("create_backup_file falhou, tentando save_database_atomic", err);
+          await invoke('save_database_atomic', { filepath: localPath, content: content });
+        }
+
+        setStatusMsg("Enviando para nuvem Google...");
+        
+        await uploadToDrive(filename, content, settings.googleDriveToken, GOOGLE_API_KEY);
+
+        setDriveStatus('success');
+        setLastBackup(now.toLocaleString());
+        setStatusMsg("Backup salvo na nuvem!");
+        
+    } catch (e: any) {
+        console.error("Erro Backup:", e);
+        setDriveStatus('error');
+        setDriveErrorMsg(e.message || "Erro de conexão/permissão");
+        setStatusMsg("Erro no backup.");
+    } finally {
+        setIsBackuping(false);
+    }
+  };
 
   // --- LOGICA EXPORTAÇÃO ---
   const availableMonths = useMemo(() => {
@@ -339,7 +460,7 @@ function App() {
     });
 
     if (filteredLedger.length === 0) { 
-        alert(`Não há lançamentos financeiros (pagamentos/despesas) registrados para o mês de competência ${monthStr}/${yearStr}.`); 
+        alert(`Não há lançamentos financeiros registrados para o mês de competência ${monthStr}/${yearStr}.`); 
         return; 
     }
 
@@ -573,10 +694,63 @@ function App() {
           {activeTab === 'CONFIG' && (
             <div className="card">
               <h3>Configurações Gerais</h3>
+              
+              {/* --- NOVO CAMPO: CAMINHO DO BANCO --- */}
+              <div className="form-group" style={{marginBottom: 30}}>
+                <label className="form-label" style={{color: 'var(--primary)', fontWeight: 'bold'}}>Local do Banco de Dados</label>
+                <div style={{display: 'flex', gap: 10}}>
+                    <input 
+                        className="form-input" 
+                        value={tempDbPath} 
+                        onChange={e=>setTempDbPath(e.target.value)}
+                        placeholder="Ex: C:\OficinaData\database.json"
+                    />
+                    <button className="btn" onClick={handleUpdateDbPath}>
+                        Definir & Carregar
+                    </button>
+                </div>
+                <div style={{fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 5}}>
+                    Caminho atual em uso: {dbPath}
+                </div>
+              </div>
+              {/* ------------------------------------ */}
+
               <div className="form-group"><label className="form-label">Nome da Oficina</label><input className="form-input" value={settings.name} onChange={e=>handleUpdateSettings('name',e.target.value)}/></div>
               <div className="form-group"><label className="form-label">CNPJ</label><input className="form-input" value={settings.cnpj} onChange={e=>handleUpdateSettings('cnpj',e.target.value)}/></div>
               <div className="form-group"><label className="form-label">Endereço</label><input className="form-input" value={settings.address} onChange={e=>handleUpdateSettings('address',e.target.value)}/></div>
               
+              <h3 style={{marginTop: 30}}>Backup & Google Drive</h3>
+              <div style={{background: 'rgba(0,0,0,0.2)', padding: 20, borderRadius: 12, border: '1px solid var(--border)'}}>
+                <div style={{marginBottom: 15, fontSize: '0.9rem', color: 'var(--text-muted)'}}>
+                  Esta função cria uma cópia de segurança dos dados atuais e envia para a nuvem.
+                  <br/>
+                  <a href="https://developers.google.com/oauthplayground/" target="_blank" style={{color: 'var(--primary)', textDecoration: 'none'}}>
+                    Gerar Token no Google Playground (Escopo: Drive API v3)
+                  </a>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Token de Acesso (Google Drive)</label>
+                  <input 
+                    className="form-input" 
+                    type="password"
+                    placeholder="Cole seu Access Token aqui (ya29...)" 
+                    value={settings.googleDriveToken} 
+                    onChange={e=>handleUpdateSettings('googleDriveToken',e.target.value)}
+                  />
+                </div>
+                
+                <div style={{display: 'flex', gap: 15, alignItems: 'center', marginTop: 15}}>
+                  <button className="btn" onClick={handleGoogleDriveBackup} disabled={isBackuping}>
+                    {isBackuping ? 'Processando...' : '☁️ Criar Backup & Sincronizar'}
+                  </button>
+                  
+                  {driveStatus === 'uploading' && <span style={{color: 'var(--info)'}}>⏳ Enviando...</span>}
+                  {driveStatus === 'success' && <span style={{color: 'var(--success)'}}>✅ Sucesso! Último: {lastBackup}</span>}
+                  {driveStatus === 'error' && <span style={{color: 'var(--danger)'}} title={driveErrorMsg}>❌ Erro (Passe o mouse).</span>}
+                </div>
+              </div>
+
               <h3 style={{marginTop: 30}}>Aparência</h3>
               <div className="theme-selector-container">
                 <div className={`theme-card ${currentTheme === 'dark' ? 'active' : ''}`} onClick={() => setCurrentTheme('dark')}>

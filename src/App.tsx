@@ -1,16 +1,73 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+
+// --- BIBLIOTECA DE DRAG AND DROP PERFORMÁTICA ---
+// Requer: npm install @hello-pangea/dnd
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 
 import { invoke } from '@tauri-apps/api/core';
-
-
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 // --- CONFIGURAÇÃO GOOGLE ---
-const GOOGLE_API_KEY = "AIzaSyA1-UOlhqE8wK-YhXZshbSwoU7Fs4TycFI"; 
+const GOOGLE_API_KEY = "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"; 
 
 // --- CONFIGURAÇÃO PADRÃO DO BANCO DE DADOS ---
 const DEFAULT_DB_PATH = "C:\\OficinaData\\database.json";
 const BACKUP_PATH = "C:\\OficinaData\\Backups";
+
+// --- AUDIO SYNTH (GAMIFICAÇÃO SEM ARQUIVOS EXTERNOS) ---
+const SoundFX = {
+  playTone: (freq: number, type: 'sine' | 'square' | 'triangle', duration: number) => {
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      
+      gain.gain.setValueAtTime(0.1, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + duration);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      osc.start();
+      osc.stop(ctx.currentTime + duration);
+    } catch (e) { console.error("Audio error", e); }
+  },
+  success: () => {
+    SoundFX.playTone(600, 'sine', 0.1);
+    setTimeout(() => SoundFX.playTone(800, 'sine', 0.2), 100);
+  },
+  error: () => {
+    SoundFX.playTone(150, 'square', 0.3);
+  },
+  pop: () => {
+    SoundFX.playTone(400, 'triangle', 0.05);
+  }
+};
+
+// --- COMPONENTE DE CONFETI ---
+const Confetti = () => {
+  const pieces = Array.from({ length: 50 });
+  return (
+    <div className="confetti-container">
+      {pieces.map((_, i) => (
+        <div 
+          key={i} 
+          className="confetti-piece"
+          style={{
+            left: `${Math.random() * 100}vw`,
+            animationDelay: `${Math.random() * 2}s`,
+            backgroundColor: `hsl(${Math.random() * 360}, 70%, 50%)`
+          }}
+        />
+      ))}
+    </div>
+  );
+};
 
 // --- CONSTANTES VISUAIS ---
 const COLORS = {
@@ -263,6 +320,7 @@ function App() {
 
   const [statusMsg, setStatusMsg] = useState("Inicializando...");
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // NOVO: Estado de carregamento
   
   // Estado do Backup
   const [isBackuping, setIsBackuping] = useState(false);
@@ -278,6 +336,7 @@ function App() {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [exportTargetMonth, setExportTargetMonth] = useState(""); 
   const [exportPathInput, setExportPathInput] = useState("");
+  const [showConfetti, setShowConfetti] = useState(false); // NOVO: Gamificação
 
   // ESTADO PARA MODAL DE LANÇAMENTO
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
@@ -286,9 +345,9 @@ function App() {
   const [entryValue, setEntryValue] = useState("");
   const [entryType, setEntryType] = useState<'CREDIT' | 'DEBIT'>('CREDIT');
   
-  // ESTADO PARA EDIÇÃO RÁPIDA DE STATUS NA ABA PROCESSOS
+  // ESTADO PARA EDIÇÃO RÁPIDA DE STATUS NA ABA PROCESSOS E ORDENAÇÃO
   const [editingStatusId, setEditingStatusId] = useState<string | null>(null);
-  const [sortConfig, setSortConfig] = useState<{ key: 'createdAt' | 'clientName' | 'total', direction: 'asc' | 'desc' }>({ key: 'createdAt', direction: 'desc' });
+  const [sortConfig, setSortConfig] = useState<{ key: 'createdAt' | 'clientName' | 'total' | 'osNumber', direction: 'asc' | 'desc' }>({ key: 'createdAt', direction: 'desc' });
 
   // CRM
   const [selectedClientForCRM, setSelectedClientForCRM] = useState<Client | null>(null);
@@ -317,6 +376,14 @@ function App() {
     document.documentElement.setAttribute('data-theme', currentTheme);
   }, [currentTheme]);
 
+  // --- EFEITO: CONFETE ---
+  useEffect(() => {
+    if (showConfetti) {
+      const t = setTimeout(() => setShowConfetti(false), 3500);
+      return () => clearTimeout(t);
+    }
+  }, [showConfetti]);
+
   // --- LÓGICA CRM (Sugestões) ---
   const suggestedVehicles = useMemo(() => {
     if (!formClient) return [];
@@ -338,10 +405,14 @@ function App() {
   // --- DATA LOAD ---
   useEffect(() => {
     async function load() {
+      setIsLoading(true);
       setStatusMsg(`Carregando de: ${dbPath}...`);
       try {
         const data = await invoke<string>('load_database', { filepath: dbPath });
         
+        // Simular um pequeno delay para mostrar o Skeleton (Feedback Visual 2.1)
+        await new Promise(r => setTimeout(r, 600));
+
         if (data && data.trim() !== "") {
           const parsed = JSON.parse(data);
           if (Array.isArray(parsed)) {
@@ -376,6 +447,8 @@ function App() {
         console.error("Erro ao carregar banco:", e);
         setStatusMsg("Erro ao ler arquivo. Verifique o caminho nas configurações.");
         setLedger([]); setWorkOrders([]); setClients([]);
+      } finally {
+        setIsLoading(false);
       }
     }
     load();
@@ -398,6 +471,21 @@ function App() {
     }, 1500);
     return () => clearTimeout(timer);
   }, [ledger, workOrders, clients, catalogParts, catalogServices, settings, dbPath, statusMsg]);
+
+  // --- HANDLER PRINCIPAL DO DRAG AND DROP (LIBRARY) ---
+  const handleDragEnd = (result: DropResult) => {
+    const { destination, source, draggableId } = result;
+
+    // Se soltou fora ou no mesmo lugar, não faz nada
+    if (!destination) return;
+    if (destination.droppableId === source.droppableId && destination.index === source.index) return;
+
+    // Se mudou de coluna (Status)
+    if (destination.droppableId !== source.droppableId) {
+        const newStatus = destination.droppableId as OSStatus;
+        handleUpdateStatus(draggableId, newStatus);
+    } 
+  };
 
   const handleUpdateDbPath = () => {
       if (tempDbPath.trim() === "") {
@@ -444,12 +532,14 @@ function App() {
         await uploadToDrive(filename, content, settings.googleDriveToken, GOOGLE_API_KEY);
 
         setDriveStatus('success');
+        SoundFX.success(); // Sound Effect
         setLastBackup(now.toLocaleString());
         setStatusMsg("Backup salvo na nuvem!");
         
     } catch (e: any) {
         console.error("Erro Backup:", e);
         setDriveStatus('error');
+        SoundFX.error(); // Sound Effect
         setDriveErrorMsg(e.message || "Erro de conexão/permissão");
         setStatusMsg("Erro no backup.");
     } finally {
@@ -573,9 +663,11 @@ function App() {
         content: csvContent 
       });
       if (res && res.success) {
+        SoundFX.success();
         alert(`Sucesso!\n${res.message}`);
         setIsExportModalOpen(false);
       } else {
+        SoundFX.error();
         alert("Erro ao exportar: " + (res?.message || "Erro desconhecido no backend"));
       }
       setStatusMsg("Pronto.");
@@ -637,10 +729,10 @@ function App() {
   };
   
   const handleSaveModal = () => {
-    if (!formClient || !formVehicle) { alert("Preencha cliente e veículo."); return; }
+    if (!formClient || !formVehicle) { SoundFX.error(); alert("Preencha cliente e veículo."); return; }
     const mileage = parseInt(formMileage) || 0;
     const osNumber = parseInt(formOSNumber);
-    if (isNaN(osNumber)) { alert("Número OS inválido."); return; }
+    if (isNaN(osNumber)) { SoundFX.error(); alert("Número OS inválido."); return; }
     const duplicate = workOrders.find(o => o.osNumber === osNumber && o.id !== editingOS?.id);
     if (duplicate && !confirm(`Número ${osNumber} já existe. Duplicar?`)) return;
 
@@ -669,6 +761,7 @@ function App() {
       const newOS = createWorkOrder(osNumber, fullVehicleString, formClient, formContact, mileage, validParts, validServices, formDate);
       setWorkOrders(prev => [...prev, newOS]);
     }
+    SoundFX.success();
     setIsModalOpen(false);
   };
 
@@ -677,21 +770,20 @@ function App() {
   useEffect(() => { if (printingOS) { const t = setTimeout(() => window.print(), 500); return () => clearTimeout(t); } }, [printingOS]);
 
   const openChecklistModal = (os: WorkOrder) => { setChecklistOS(os); const d = os.checklist || EMPTY_CHECKLIST; setCheckFuel(d.fuelLevel); setCheckTires({ ...d.tires }); setCheckNotes(d.notes); setIsChecklistOpen(true); };
-  const handleSaveChecklist = () => { if (!checklistOS) return; setWorkOrders(p => p.map(o => o.id === checklistOS.id ? updateWorkOrderChecklist(o, { fuelLevel: checkFuel, tires: checkTires, notes: checkNotes }) : o)); setIsChecklistOpen(false); };
+  const handleSaveChecklist = () => { if (!checklistOS) return; setWorkOrders(p => p.map(o => o.id === checklistOS.id ? updateWorkOrderChecklist(o, { fuelLevel: checkFuel, tires: checkTires, notes: checkNotes }) : o)); SoundFX.success(); setIsChecklistOpen(false); };
   const handleDeleteOS = (os: WorkOrder) => { if (confirm("Excluir OS e lançamentos?")) { setWorkOrders(p => p.filter(i => i.id !== os.id)); if (os.financialId) setLedger(p => p.filter(e => e.id !== os.financialId)); } };
   
   const handleAdvanceOS = (id: string) => {
-    const os = workOrders.find(o => o.id === id); if (!os) return; const next = advanceStatus(os); let fid: string | undefined = undefined;
-    if (next.status === 'FINALIZADO' && os.status !== 'FINALIZADO' && !os.financialId) {
-      if (confirm("Lançar no Financeiro?")) { 
-          const entry = createEntry(`Receita OS #${os.osNumber} - ${os.vehicle}`, os.total, 'CREDIT', os.createdAt); 
-          fid = entry.id; setLedger(p => [entry, ...p]); 
-      }
-    }
-    setWorkOrders(p => p.map(o => { if (o.id !== id) return o; const up = advanceStatus(o); if (fid) return { ...up, financialId: fid }; return up; }));
+    const os = workOrders.find(o => o.id === id); if (!os) return; 
+    const next = advanceStatus(os);
+    handleUpdateStatus(id, next.status); // Usa a função centralizada
   };
   
-  const handleRegressOS = (id: string) => { const os = workOrders.find(o => o.id === id); if (!os) return; if (os.status === 'FINALIZADO' && os.financialId) { if (confirm("Remover do Financeiro?")) { setLedger(p => p.filter(e => e.id !== os.financialId)); setWorkOrders(p => p.map(o => o.id === id ? { ...regressStatus(o), financialId: undefined } : o)); } } else { setWorkOrders(p => p.map(o => o.id === id ? regressStatus(o) : o)); } };
+  const handleRegressOS = (id: string) => { 
+      const os = workOrders.find(o => o.id === id); if (!os) return;
+      const prev = regressStatus(os);
+      handleUpdateStatus(id, prev.status); // Usa a função centralizada
+  };
   
   // -- ABRIR MODAL DE LANÇAMENTO --
   const handleOpenEntryModal = () => {
@@ -704,53 +796,87 @@ function App() {
 
   const handleSaveEntry = () => {
     if (!entryDescription || !entryValue) {
+      SoundFX.error();
       alert("Preencha a descrição e o valor.");
       return;
     }
     
     let valFloat = parseFloat(entryValue.replace(',', '.'));
     if (isNaN(valFloat)) {
+      SoundFX.error();
       alert("Valor inválido.");
       return;
     }
     
     const valInt = Money.fromFloat(Math.abs(valFloat));
-
     const entry = createEntry(entryDescription, valInt, entryType, entryDate);
     
     setLedger(prev => [entry, ...prev]);
+    SoundFX.success();
     setIsEntryModalOpen(false);
   };
   
   const handleEditEntry = (id: string) => { const reason = prompt("Motivo:"); if (!reason) return; const valStr = prompt("Novo Valor:"); if (!valStr) return; const val = parseFloat(valStr.replace(',', '.')); if (isNaN(val)) return; setLedger(p => p.map(e => e.id !== id ? e : updateEntryAmount(e, Money.fromFloat(Math.abs(val)), "Admin", reason))); };
   const handleDeleteEntry = (e: LedgerEntry) => { if (confirm("Excluir?")) { setLedger(p => p.filter(i => i.id !== e.id)); setWorkOrders(p => p.filter(os => os.financialId !== e.id)); } };
 
-  // --- RENDER KANBAN (COM SCROLL INTERNO) ---
+  // --- RENDER KANBAN (COM @hello-pangea/dnd) ---
   const renderKanbanColumn = (status: OSStatus) => {
     const list = workOrders.filter(o => o.status === status).sort((a,b) => b.osNumber - a.osNumber);
+
     return (
       <div className={`kanban-column col-${status}`}>
         <div className="kanban-header">{STATUS_LABELS[status]} <span>{list.length}</span></div>
-        <div className="kanban-list-scroll">
-          {list.map(os => (
-            <div key={os.id} className="kanban-card">
-              <div className="os-header"><span className="os-number">OS #{os.osNumber}</span> <span className="os-price">{Money.format(os.total)}</span></div>
-              <div className="os-client">{os.clientName}</div>
-              <div className="os-vehicle">{os.vehicle}</div>
-              {os.clientPhone && <div className="os-id" style={{color: COLORS.info}}>📞 {os.clientPhone}</div>}
-              <div className="card-actions">
-                {status !== 'ORCAMENTO' ? <button className="btn-icon" onClick={() => handleRegressOS(os.id)}>⬅️</button> : <div/>} 
-                <div style={{display: 'flex', gap: 5}}>
-                  <button className="btn-icon" onClick={() => openEditOSModal(os)}>✏️</button>
-                  <button className="btn-icon check" onClick={() => openChecklistModal(os)}>📋</button>
-                  <button className="btn-icon" onClick={() => handlePrintOS(os)}>🖨️</button>
-                  <button className="btn-icon danger" onClick={() => handleDeleteOS(os)}>🗑️</button>
-                </div>
-                {status !== 'FINALIZADO' ? <button className="btn-icon" title="Avançar" onClick={() => handleAdvanceOS(os.id)}>➡️</button> : <div/>}
-              </div>
+        <Droppable droppableId={status}>
+          {(provided, snapshot) => (
+            <div 
+              className="kanban-list-scroll"
+              ref={provided.innerRef}
+              {...provided.droppableProps}
+              style={{
+                backgroundColor: snapshot.isDraggingOver ? 'rgba(255, 255, 255, 0.05)' : 'transparent',
+                transition: 'background-color 0.2s ease',
+              }}
+            >
+              {list.map((os, index) => (
+                <Draggable key={os.id} draggableId={os.id} index={index}>
+                  {(provided, snapshot) => (
+                    <div 
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        {...provided.dragHandleProps}
+                        className={`kanban-card ${snapshot.isDragging ? 'is-dragging' : ''}`}
+                        style={{ 
+                          ...provided.draggableProps.style,
+                          // ADICIONADO MANUALMENTE PARA EVITAR QUEBRA
+                          // Se estiver arrastando, injetamos a rotação na string de transform do JS
+                          // Isso garante que a rotação aconteça JUNTO com o translate(x,y)
+                          transform: snapshot.isDragging 
+                            ? `${provided.draggableProps.style?.transform} rotate(3deg) scale(1.05)` 
+                            : provided.draggableProps.style?.transform
+                        }}
+                    >
+                      <div className="os-header"><span className="os-number">OS #{os.osNumber}</span> <span className="os-price">{Money.format(os.total)}</span></div>
+                      <div className="os-client">{os.clientName}</div>
+                      <div className="os-vehicle">{os.vehicle}</div>
+                      {os.clientPhone && <div className="os-id" style={{color: COLORS.info}}>📞 {os.clientPhone}</div>}
+                      <div className="card-actions">
+                        {status !== 'ORCAMENTO' ? <button className="btn-icon" onClick={() => handleRegressOS(os.id)}>⬅️</button> : <div/>} 
+                        <div style={{display: 'flex', gap: 5}}>
+                          <button className="btn-icon" onClick={() => openEditOSModal(os)}>✏️</button>
+                          <button className="btn-icon check" onClick={() => openChecklistModal(os)}>📋</button>
+                          <button className="btn-icon" onClick={() => handlePrintOS(os)}>🖨️</button>
+                          <button className="btn-icon danger" onClick={() => handleDeleteOS(os)}>🗑️</button>
+                        </div>
+                        {status !== 'FINALIZADO' ? <button className="btn-icon" title="Avançar" onClick={() => handleAdvanceOS(os.id)}>➡️</button> : <div/>}
+                      </div>
+                    </div>
+                  )}
+                </Draggable>
+              ))}
+              {provided.placeholder}
             </div>
-          ))}
-        </div>
+          )}
+        </Droppable>
       </div>
     ); 
   };
@@ -774,14 +900,9 @@ function App() {
   const chartDataStatus = useMemo(() => { const c = {ORCAMENTO:0, APROVADO:0, EM_SERVICO:0, FINALIZADO:0}; workOrders.forEach(o => { if(c[o.status]!==undefined) c[o.status]++; }); return [{name:'Orç.',qtd:c.ORCAMENTO,fill:COLORS.info},{name:'Aprov.',qtd:c.APROVADO,fill:COLORS.warning},{name:'Serv.',qtd:c.EM_SERVICO,fill:COLORS.primary},{name:'Final.',qtd:c.FINALIZADO,fill:COLORS.success}]; }, [workOrders]);
   const kpiData = useMemo(() => { 
     const s = ledger.reduce((a,e)=>a+(e.type==='DEBIT'?-e.amount:e.amount),0); 
-    
-    // Filtra apenas as ordens de serviço com status 'FINALIZADO'
     const finalizedOrders = workOrders.filter(o => o.status === 'FINALIZADO');
-    // Calcula o total dessas ordens
     const totalFinalized = finalizedOrders.reduce((a, o) => a + o.total, 0);
-    // Calcula a média. Se não houver ordens finalizadas, ticket médio é 0
     const ticket = finalizedOrders.length > 0 ? totalFinalized / finalizedOrders.length : 0;
-
     return { 
       saldo: s, 
       receitas: ledger.filter(e=>e.type==='CREDIT').reduce((a,e)=>a+e.amount,0), 
@@ -796,47 +917,49 @@ function App() {
     const os = workOrders.find(o => o.id === osId);
     if (!os) return;
 
+    // Se já estiver no status, ignora
+    if (os.status === newStatus) return;
+
     const oldStatus = os.status;
 
-    // Regra 1: Entrando em FINALIZADO
+    // Regra 1: Entrando em FINALIZADO (GAMIFICAÇÃO + FINANCEIRO)
     if (newStatus === 'FINALIZADO' && oldStatus !== 'FINALIZADO') {
+        SoundFX.pop(); 
+        
         if (!os.financialId) {
             if (confirm("Lançar no Financeiro?")) {
                 const entry = createEntry(`Receita OS #${os.osNumber} - ${os.vehicle}`, os.total, 'CREDIT', os.createdAt);
                 setLedger(prev => [entry, ...prev]);
-                
-                // Atualiza OS com novo status E financialId
                 setWorkOrders(prev => prev.map(o => o.id === osId ? { ...o, status: newStatus, financialId: entry.id } : o));
+                
+                SoundFX.success();
+                setShowConfetti(true); // Dispara Confete!
             } else {
-                 // Se cancelar o lançamento financeiro, apenas muda o status (igual ao Avançar do Kanban)
                  setWorkOrders(prev => prev.map(o => o.id === osId ? { ...o, status: newStatus } : o));
             }
         } else {
-            // Já tem ID financeiro, só muda status
             setWorkOrders(prev => prev.map(o => o.id === osId ? { ...o, status: newStatus } : o));
+            SoundFX.success();
+            setShowConfetti(true); // Dispara Confete!
         }
     }
     // Regra 2: Saindo de FINALIZADO
     else if (oldStatus === 'FINALIZADO' && newStatus !== 'FINALIZADO') {
         if (os.financialId) {
             if (confirm("Remover do Financeiro?")) {
-                // Remove do Ledger
                 setLedger(prev => prev.filter(e => e.id !== os.financialId));
-                // Atualiza OS: remove financialId e muda status
                 setWorkOrders(prev => prev.map(o => o.id === osId ? { ...o, status: newStatus, financialId: undefined } : o));
             } else {
-                // Se cancelar a remoção do financeiro, CANCELA a mudança de status (segurança)
-                // Retorna sem fazer nada
                 setEditingStatusId(null);
                 return; 
             }
         } else {
-             // Sem ID financeiro, só muda status
              setWorkOrders(prev => prev.map(o => o.id === osId ? { ...o, status: newStatus } : o));
         }
     }
     // Regra 3: Transição Normal
     else {
+        SoundFX.pop();
         setWorkOrders(prev => prev.map(o => o.id === osId ? { ...o, status: newStatus } : o));
     }
 
@@ -847,25 +970,66 @@ function App() {
       setWorkOrders(prev => prev.map(os => os.id === osId ? { ...os, createdAt: new Date(newDate).toISOString() } : os));
   };
 
+  const handleSort = (key: 'createdAt' | 'clientName' | 'total' | 'osNumber') => {
+      setSortConfig(current => ({
+          key,
+          direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc'
+      }));
+  };
+
   const renderProcessList = () => {
     // 1. Agrupar por Status
     const groups: Record<OSStatus, WorkOrder[]> = {
         ORCAMENTO: [], APROVADO: [], EM_SERVICO: [], FINALIZADO: []
     };
 
-    workOrders.forEach(os => {
+    // Aplicar ordenação global antes de agrupar, ou ordenar cada grupo
+    // Opção: Ordenar cada grupo respeitando a config
+    const sortedOS = [...workOrders].sort((a, b) => {
+        let valA: any = a[sortConfig.key];
+        let valB: any = b[sortConfig.key];
+
+        if (sortConfig.key === 'createdAt') {
+            valA = new Date(a.createdAt).getTime();
+            valB = new Date(b.createdAt).getTime();
+        } else if (typeof valA === 'string') {
+            valA = valA.toLowerCase();
+            valB = valB.toLowerCase();
+        }
+
+        if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+    });
+
+    sortedOS.forEach(os => {
         if (groups[os.status]) groups[os.status].push(os);
     });
 
-    // 2. Ordenar e Renderizar
+    const SortIcon = ({ colKey }: { colKey: string }) => {
+        if (sortConfig.key !== colKey) return <span className="sort-indicator">↕</span>;
+        return <span className="sort-indicator">{sortConfig.direction === 'asc' ? '⬆' : '⬇'}</span>;
+    };
+
+    // 2. Renderizar (Feedback Visual 2.1: Skeleton se estiver carregando)
+    if (isLoading) {
+       return (
+         <div className="process-view">
+             {[1,2,3].map(i => (
+                 <div key={i} className="process-group" style={{padding: 20, background: 'var(--bg-panel)', borderRadius: 16, border: '1px solid var(--border)'}}>
+                    <div className="skeleton skeleton-text" style={{width: '200px'}}></div>
+                    <div className="skeleton skeleton-block" style={{height: '100px', marginTop: 15}}></div>
+                 </div>
+             ))}
+         </div>
+       );
+    }
+
     return (
       <div className="process-view">
         {Object.entries(groups).map(([statusKey, list]) => {
           const status = statusKey as OSStatus;
           if (list.length === 0) return null;
-
-          // Ordena por data (mais recente primeiro)
-          list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
           return (
             <div key={status} className="process-group">
@@ -875,18 +1039,25 @@ function App() {
                </div>
                
                <table className="process-table">
+                   <thead>
+                       <tr>
+                           <th width="10%" onClick={() => handleSort('osNumber')} className={sortConfig.key === 'osNumber' ? 'sort-active' : ''}>Nº <SortIcon colKey='osNumber'/></th>
+                           <th width="40%" onClick={() => handleSort('clientName')} className={sortConfig.key === 'clientName' ? 'sort-active' : ''}>Cliente / Veículo <SortIcon colKey='clientName'/></th>
+                           <th width="20%" onClick={() => handleSort('createdAt')} className={sortConfig.key === 'createdAt' ? 'sort-active' : ''}>Data <SortIcon colKey='createdAt'/></th>
+                           <th width="30%">Status</th>
+                       </tr>
+                   </thead>
                    <tbody>
                        {list.map(os => (
                            <tr key={os.id} className="process-row">
-                               <td width="10%">
+                               <td>
                                    <div className="os-number">#{os.osNumber}</div>
                                </td>
-                               <td width="40%">
+                               <td>
                                    <div style={{fontWeight: 600, color: 'var(--text-main)'}}>{os.clientName}</div>
                                    <div style={{fontSize: '0.8rem', color: 'var(--text-muted)'}}>{os.vehicle}</div>
                                </td>
-                               <td width="20%">
-                                   {/* DATA EDITÁVEL */}
+                               <td>
                                    <input 
                                      type="date" 
                                      className="inline-date-input"
@@ -894,8 +1065,7 @@ function App() {
                                      onChange={(e) => handleUpdateOSDate(os.id, e.target.value)}
                                    />
                                </td>
-                               <td width="30%" style={{position: 'relative'}}>
-                                   {/* STATUS EDITÁVEL (DROPDOWN) */}
+                               <td style={{position: 'relative'}}>
                                    <div 
                                       className={`status-badge st-${os.status}`} 
                                       onClick={() => setEditingStatusId(editingStatusId === os.id ? null : os.id)}
@@ -937,8 +1107,6 @@ function App() {
       const history = getClientHistory(clientName);
       const reminders = [];
       const now = new Date();
-
-      // Exemplo: Troca de Óleo (a cada 6 meses / 180 dias)
       const lastOilChange = history.find(os => 
           os.status === 'FINALIZADO' && 
           (os.parts.some(p => p.description.toLowerCase().includes('óleo') || p.description.toLowerCase().includes('oleo')) ||
@@ -955,38 +1123,59 @@ function App() {
           } else if (diffDays > 150) {
               reminders.push({ type: 'warning', text: 'Troca de Óleo Próxima' });
           }
-      } else {
-         // Se nunca fez, talvez sugerir?
-         // reminders.push({ type: 'info', text: 'Sugerir Troca de Óleo' });
-      }
-
+      } 
       return reminders;
   };
 
   return (
     <>
+      {showConfetti && <Confetti />}
       <div className="app-container">
         <nav className="sidebar"><div className="logo-area"><div className="logo-text">OFICINA<span className="logo-highlight">PRO</span></div></div><div className="nav-menu"><div className={`nav-item ${activeTab === 'FINANCEIRO' ? 'active' : ''}`} onClick={() => setActiveTab('FINANCEIRO')}>📊 Financeiro</div><div className={`nav-item ${activeTab === 'PROCESSOS' ? 'active' : ''}`} onClick={() => setActiveTab('PROCESSOS')}>📋 Processos</div><div className={`nav-item ${activeTab === 'CLIENTES' ? 'active' : ''}`} onClick={() => setActiveTab('CLIENTES')}>👥 Clientes (CRM)</div><div className={`nav-item ${activeTab === 'OFICINA' ? 'active' : ''}`} onClick={() => setActiveTab('OFICINA')}>🔧 Oficina</div><div className={`nav-item ${activeTab === 'CONFIG' ? 'active' : ''}`} onClick={() => setActiveTab('CONFIG')}>⚙️ Config</div></div></nav>
         <main className="main-content">
           {activeTab === 'FINANCEIRO' && (
             <>
               <div className="header-area"><h1 className="page-title">Painel Financeiro</h1><div style={{display:'flex', gap:10}}><button className="btn-secondary" onClick={handleOpenExportModal}>📄 Exportar</button><button className="btn" onClick={handleOpenEntryModal}>+ Lançamento</button></div></div>
-              <div className="stats-row">
-                <div className="stat-card"><div className="stat-label">Saldo Atual</div><div className="stat-value" style={{color: kpiData.saldo >= 0 ? COLORS.success : COLORS.danger}}>{Money.format(kpiData.saldo)}</div><div className="stat-trend">Lucro Líquido</div></div>
-                <div className="stat-card"><div className="stat-label">Receitas</div><div className="stat-value" style={{color: COLORS.success}}>{Money.format(kpiData.receitas)}</div></div>
-                <div className="stat-card"><div className="stat-label">Despesas</div><div className="stat-value" style={{color: COLORS.danger}}>{Money.format(kpiData.despesas)}</div></div>
-                <div className="stat-card" style={{borderColor: COLORS.border}}><div className="stat-label">Ticket Médio</div><div className="stat-value">{Money.format(kpiData.ticketMedio)}</div></div>
-              </div>
+              
+              {isLoading ? (
+                  // SKELETON LOADING
+                  <div className="stats-row">
+                      <div className="skeleton" style={{height: 120, borderRadius: 16}}></div>
+                      <div className="skeleton" style={{height: 120, borderRadius: 16}}></div>
+                      <div className="skeleton" style={{height: 120, borderRadius: 16}}></div>
+                      <div className="skeleton" style={{height: 120, borderRadius: 16}}></div>
+                  </div>
+              ) : (
+                  <div className="stats-row">
+                    <div className="stat-card"><div className="stat-label">Saldo Atual</div><div className="stat-value" style={{color: kpiData.saldo >= 0 ? COLORS.success : COLORS.danger}}>{Money.format(kpiData.saldo)}</div><div className="stat-trend">Lucro Líquido</div></div>
+                    <div className="stat-card"><div className="stat-label">Receitas</div><div className="stat-value" style={{color: COLORS.success}}>{Money.format(kpiData.receitas)}</div></div>
+                    <div className="stat-card"><div className="stat-label">Despesas</div><div className="stat-value" style={{color: COLORS.danger}}>{Money.format(kpiData.despesas)}</div></div>
+                    <div className="stat-card" style={{borderColor: COLORS.border}}><div className="stat-label">Ticket Médio</div><div className="stat-value">{Money.format(kpiData.ticketMedio)}</div></div>
+                  </div>
+              )}
+
               <div className="dashboard-grid">
-                <div className="chart-card"><div className="chart-header"><div className="chart-title">Faturamento Diário</div></div><div style={{flex:1}}><ResponsiveContainer><AreaChart data={chartDataFluxo}><defs><linearGradient id="c" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.primary} stopOpacity={0.5}/><stop offset="95%" stopColor={COLORS.primary} stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} vertical={false}/><XAxis dataKey="name" stroke={COLORS.text} fontSize={10} tickLine={false} axisLine={false}/><YAxis stroke={COLORS.text} fontSize={10} tickLine={false} axisLine={false}/><Tooltip contentStyle={{background:COLORS.tooltipBg, border:'none'}}/><Area type="monotone" dataKey="valor" stroke={COLORS.primary} fill="url(#c)" strokeWidth={3} activeDot={{r: 6}} /></AreaChart></ResponsiveContainer></div></div>
-                <div className="chart-card"><div className="chart-header"><div className="chart-title">Receita</div></div><div style={{flex:1}}><ResponsiveContainer><PieChart><Pie data={chartDataPie} cx="50%" cy="50%" innerRadius={60} outerRadius={80} dataKey="value"><Cell fill={COLORS.secondary}/><Cell fill={COLORS.warning}/></Pie><Tooltip/></PieChart></ResponsiveContainer></div></div>
-                <div className="chart-card"><div className="chart-header"><div className="chart-title">Status (Distribuição)</div></div><div style={{flex:1}}><ResponsiveContainer><PieChart><Pie data={chartDataStatus} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="qtd" stroke="none">{chartDataStatus.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.fill} />))}</Pie><Tooltip contentStyle={{ backgroundColor: COLORS.tooltipBg, border: 'none', borderRadius: '8px' }} itemStyle={{ color: '#fff' }} formatter={(value, name, props) => [`${value} OS`, props.payload.name]} /><Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '0.8rem', color: COLORS.text }} /></PieChart></ResponsiveContainer></div></div>
+                <div className="chart-card"><div className="chart-header"><div className="chart-title">Faturamento Diário</div></div><div style={{flex:1}}>
+                    {isLoading ? <div className="skeleton skeleton-block"></div> : (
+                    <ResponsiveContainer><AreaChart data={chartDataFluxo}><defs><linearGradient id="c" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={COLORS.primary} stopOpacity={0.5}/><stop offset="95%" stopColor={COLORS.primary} stopOpacity={0}/></linearGradient></defs><CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} vertical={false}/><XAxis dataKey="name" stroke={COLORS.text} fontSize={10} tickLine={false} axisLine={false}/><YAxis stroke={COLORS.text} fontSize={10} tickLine={false} axisLine={false}/><Tooltip contentStyle={{background:COLORS.tooltipBg, border:'none'}}/><Area type="monotone" dataKey="valor" stroke={COLORS.primary} fill="url(#c)" strokeWidth={3} activeDot={{r: 6}} /></AreaChart></ResponsiveContainer>
+                    )}
+                </div></div>
+                <div className="chart-card"><div className="chart-header"><div className="chart-title">Receita</div></div><div style={{flex:1}}>
+                    {isLoading ? <div className="skeleton skeleton-block"></div> : (
+                    <ResponsiveContainer><PieChart><Pie data={chartDataPie} cx="50%" cy="50%" innerRadius={60} outerRadius={80} dataKey="value"><Cell fill={COLORS.secondary}/><Cell fill={COLORS.warning}/></Pie><Tooltip/></PieChart></ResponsiveContainer>
+                    )}
+                </div></div>
               </div>
-              <div className="card"><table className="data-table"><thead><tr><th>Descrição</th><th>Valor</th><th>Ações</th></tr></thead><tbody>{ledger.slice(0, 50).map(e => (<tr key={e.id}><td>{e.description}</td><td style={{fontWeight:'bold', color: e.type === 'DEBIT' ? COLORS.danger : COLORS.success}}>{e.type === 'DEBIT' ? '- ' : '+ '}{Money.format(e.amount)}</td><td><button className="btn-sm" onClick={() => handleEditEntry(e.id)}>Edit</button> <button className="btn-sm" onClick={() => handleDeleteEntry(e)}>Del</button></td></tr>))}</tbody></table></div>
+              
+              <div className="card">
+                  {isLoading ? <div className="skeleton" style={{height: 200}}></div> : (
+                  <table className="data-table"><thead><tr><th>Descrição</th><th>Valor</th><th>Ações</th></tr></thead><tbody>{ledger.slice(0, 50).map(e => (<tr key={e.id}><td>{e.description}</td><td style={{fontWeight:'bold', color: e.type === 'DEBIT' ? COLORS.danger : COLORS.success}}>{e.type === 'DEBIT' ? '- ' : '+ '}{Money.format(e.amount)}</td><td><button className="btn-sm" onClick={() => handleEditEntry(e.id)}>Edit</button> <button className="btn-sm" onClick={() => handleDeleteEntry(e)}>Del</button></td></tr>))}</tbody></table>
+                  )}
+              </div>
             </>
           )}
 
-          {/* --- NOVA ABA PROCESSOS --- */}
+          {/* --- ABA PROCESSOS --- */}
           {activeTab === 'PROCESSOS' && (
             <>
               <div className="header-area"><h1 className="page-title">Gestão de Processos</h1><button className="btn" onClick={openNewOSModal}>+ Novo Processo</button></div>
@@ -994,14 +1183,14 @@ function App() {
             </>
           )}
 
-          {/* --- NOVA ABA CRM (CLIENTES) --- */}
+          {/* --- ABA CRM (CLIENTES) --- */}
           {activeTab === 'CLIENTES' && (
             <>
               <div className="header-area"><h1 className="page-title">CRM & Clientes</h1></div>
               <div className="crm-layout">
                   {/* Lista de Clientes */}
                   <div className="client-list">
-                      {clients.map(client => (
+                      {isLoading ? Array.from({length:5}).map((_,i)=><div key={i} className="skeleton" style={{height: 60, marginBottom: 10}}/>) : clients.map(client => (
                           <div 
                               key={client.id} 
                               className={`client-list-item ${selectedClientForCRM?.id === client.id ? 'active' : ''}`}
@@ -1011,7 +1200,7 @@ function App() {
                               <div className="client-contact">{client.phone || 'Sem telefone'} • {client.vehicles.length} veículo(s)</div>
                           </div>
                       ))}
-                      {clients.length === 0 && <div style={{padding:20, color:'var(--text-muted)'}}>Nenhum cliente cadastrado. Crie uma OS para adicionar.</div>}
+                      {!isLoading && clients.length === 0 && <div style={{padding:20, color:'var(--text-muted)'}}>Nenhum cliente cadastrado. Crie uma OS para adicionar.</div>}
                   </div>
 
                   {/* Detalhes do Cliente */}
@@ -1025,7 +1214,6 @@ function App() {
                                       🚗 {selectedClientForCRM.vehicles.map(v => `${v.model} (${v.plate})`).join(', ')}
                                   </div>
                               </div>
-
                               <div className="crm-stats">
                                   <div className="crm-stat-box">
                                       <div className="crm-stat-label">Total Gasto</div>
@@ -1033,14 +1221,7 @@ function App() {
                                           {Money.format(getClientHistory(selectedClientForCRM.name).reduce((acc, os) => acc + (os.status === 'FINALIZADO' ? os.total : 0), 0))}
                                       </div>
                                   </div>
-                                  <div className="crm-stat-box">
-                                      <div className="crm-stat-label">Visitas</div>
-                                      <div className="crm-stat-value">
-                                          {getClientHistory(selectedClientForCRM.name).filter(os => os.status === 'FINALIZADO').length}
-                                      </div>
-                                  </div>
                               </div>
-
                               <h3 style={{marginBottom: 20}}>Lembretes Automáticos</h3>
                               <div style={{marginBottom: 30}}>
                                   {getClientReminders(selectedClientForCRM.name).length > 0 ? (
@@ -1051,29 +1232,6 @@ function App() {
                                       ))
                                   ) : (
                                       <span style={{color: 'var(--text-muted)'}}>Nenhum lembrete pendente.</span>
-                                  )}
-                              </div>
-
-                              <h3 style={{marginBottom: 20}}>Histórico de Serviços</h3>
-                              <div className="history-timeline">
-                                  {getClientHistory(selectedClientForCRM.name).map(os => (
-                                      <div key={os.id} className="history-item">
-                                          <div className="history-dot">🔧</div>
-                                          <div className="history-content">
-                                              <div className="history-date">{new Date(os.createdAt).toLocaleDateString()} • {STATUS_LABELS[os.status]}</div>
-                                              <div className="history-title">OS #{os.osNumber} - {os.vehicle}</div>
-                                              <div className="history-desc">
-                                                  {os.parts.length > 0 && <div>Peças: {os.parts.map(p => p.description).join(', ')}</div>}
-                                                  {os.services.length > 0 && <div>Serviços: {os.services.map(s => s.description).join(', ')}</div>}
-                                              </div>
-                                              <div style={{marginTop: 8, fontWeight: 700, color: 'var(--success)'}}>
-                                                  {Money.format(os.total)}
-                                              </div>
-                                          </div>
-                                      </div>
-                                  ))}
-                                  {getClientHistory(selectedClientForCRM.name).length === 0 && (
-                                      <div style={{color: 'var(--text-muted)'}}>Nenhum serviço encontrado.</div>
                                   )}
                               </div>
                           </>
@@ -1090,14 +1248,25 @@ function App() {
           {activeTab === 'OFICINA' && (
             <>
               <div className="header-area"><h1 className="page-title">Quadro Oficina</h1><button className="btn" onClick={openNewOSModal}>+ Nova OS</button></div>
-              <div className="kanban-board">{renderKanbanColumn('ORCAMENTO')} {renderKanbanColumn('APROVADO')} {renderKanbanColumn('EM_SERVICO')} {renderKanbanColumn('FINALIZADO')}</div>
+              <DragDropContext onDragEnd={handleDragEnd}>
+                  <div className="kanban-board">
+                      {isLoading ? (
+                          [1,2,3,4].map(i => <div key={i} className="kanban-column"><div className="skeleton skeleton-block"/></div>)
+                      ) : (
+                        <>
+                            {renderKanbanColumn('ORCAMENTO')} 
+                            {renderKanbanColumn('APROVADO')} 
+                            {renderKanbanColumn('EM_SERVICO')} 
+                            {renderKanbanColumn('FINALIZADO')}
+                        </>
+                      )}
+                  </div>
+              </DragDropContext>
             </>
           )}
           {activeTab === 'CONFIG' && (
             <div className="card">
               <h3>Configurações Gerais</h3>
-              
-              {/* --- NOVO CAMPO: CAMINHO DO BANCO --- */}
               <div className="form-group" style={{marginBottom: 30}}>
                 <label className="form-label" style={{color: 'var(--primary)', fontWeight: 'bold'}}>Local do Banco de Dados</label>
                 <div style={{display: 'flex', gap: 10}}>
@@ -1115,22 +1284,42 @@ function App() {
                     Caminho atual em uso: {dbPath}
                 </div>
               </div>
-              {/* ------------------------------------ */}
 
               <div className="form-group"><label className="form-label">Nome da Oficina</label><input className="form-input" value={settings.name} onChange={e=>handleUpdateSettings('name',e.target.value)}/></div>
-              <div className="form-group"><label className="form-label">CNPJ</label><input className="form-input" value={settings.cnpj} onChange={e=>handleUpdateSettings('cnpj',e.target.value)}/></div>
-              <div className="form-group"><label className="form-label">Endereço</label><input className="form-input" value={settings.address} onChange={e=>handleUpdateSettings('address',e.target.value)}/></div>
               
-              <h3 style={{marginTop: 30}}>Backup & Google Drive</h3>
-              <div style={{background: 'rgba(0,0,0,0.2)', padding: 20, borderRadius: 12, border: '1px solid var(--border)'}}>
-                <div style={{marginBottom: 15, fontSize: '0.9rem', color: 'var(--text-muted)'}}>
-                  Esta função cria uma cópia de segurança dos dados atuais e envia para a nuvem.
-                  <br/>
-                  <a href="https://developers.google.com/oauthplayground/" target="_blank" style={{color: 'var(--primary)', textDecoration: 'none'}}>
-                    Gerar Token no Google Playground (Escopo: Drive API v3)
-                  </a>
+              <h3 style={{marginTop: 30}}>Aparência & Temas</h3>
+              <div className="theme-selection-area">
+                {/* TEMA DARK AERO (PADRÃO) */}
+                <div className={`theme-card-visual ${currentTheme === 'dark' ? 'active' : ''}`} onClick={() => setCurrentTheme('dark')}>
+                   <div className="theme-check-icon">✓</div>
+                   <div className="theme-preview-palette">
+                      <div className="theme-color-swatch" style={{background: '#1e1e2e'}}></div>
+                      <div className="theme-color-swatch" style={{background: '#8257e6'}}></div>
+                      <div className="theme-color-swatch" style={{background: '#2b2b3b'}}></div>
+                   </div>
+                   <div className="theme-info">
+                      <h4>Dark Aero</h4>
+                      <p>Moderno, escuro e com alto contraste.</p>
+                   </div>
                 </div>
 
+                {/* TEMA RETRO CLASSIC */}
+                <div className={`theme-card-visual ${currentTheme === 'vintage' ? 'active' : ''}`} onClick={() => setCurrentTheme('vintage')}>
+                   <div className="theme-check-icon">✓</div>
+                   <div className="theme-preview-palette">
+                      <div className="theme-color-swatch" style={{background: '#fdf0d5'}}></div>
+                      <div className="theme-color-swatch" style={{background: '#c1121f'}}></div>
+                      <div className="theme-color-swatch" style={{background: '#2c3e50'}}></div>
+                   </div>
+                   <div className="theme-info">
+                      <h4>Retro Classic</h4>
+                      <p>Estilo vintage com tons quentes e papel.</p>
+                   </div>
+                </div>
+              </div>
+
+              <h3 style={{marginTop: 40}}>Backup & Google Drive</h3>
+              <div style={{background: 'rgba(0,0,0,0.2)', padding: 20, borderRadius: 12, border: '1px solid var(--border)'}}>
                 <div className="form-group">
                   <label className="form-label">Token de Acesso (Google Drive)</label>
                   <input 
@@ -1144,24 +1333,11 @@ function App() {
                 
                 <div style={{display: 'flex', gap: 15, alignItems: 'center', marginTop: 15}}>
                   <button className="btn" onClick={handleGoogleDriveBackup} disabled={isBackuping}>
-                    {isBackuping ? 'Processando...' : '☁️ Criar Backup & Sincronizar'}
+                    {isBackuping ? <span className="spinner" style={{marginRight: 8}}></span> : '☁️ Criar Backup & Sincronizar'}
                   </button>
                   
-                  {driveStatus === 'uploading' && <span style={{color: 'var(--info)'}}>⏳ Enviando...</span>}
                   {driveStatus === 'success' && <span style={{color: 'var(--success)'}}>✅ Sucesso! Último: {lastBackup}</span>}
                   {driveStatus === 'error' && <span style={{color: 'var(--danger)'}} title={driveErrorMsg}>❌ Erro (Passe o mouse).</span>}
-                </div>
-              </div>
-
-              <h3 style={{marginTop: 30}}>Aparência</h3>
-              <div className="theme-selector-container">
-                <div className={`theme-card ${currentTheme === 'dark' ? 'active' : ''}`} onClick={() => setCurrentTheme('dark')}>
-                  <div className="theme-preview" style={{background: '#1e1e2e'}}></div>
-                  <span>Dark Aero (Padrão)</span>
-                </div>
-                <div className={`theme-card ${currentTheme === 'vintage' ? 'active' : ''}`} onClick={() => setCurrentTheme('vintage')}>
-                  <div className="theme-preview" style={{background: '#c1121f'}}></div>
-                  <span>Retro Classic</span>
                 </div>
               </div>
             </div>
@@ -1169,77 +1345,22 @@ function App() {
         </main>
       </div>
 
-      {/* ... MODAIS (Export, OS, Checklist) permanecem iguais ... */}
       {isExportModalOpen && (<div className="modal-overlay"><div className="modal-content" style={{width: 500}}><h2 className="modal-title">Exportar Dados</h2><div className="form-group"><label className="form-label">Mês de Referência</label><select className="form-input" value={exportTargetMonth} onChange={e => setExportTargetMonth(e.target.value)}>{availableMonths.map(dateStr => { const [y, m] = dateStr.split('-'); return (<option key={dateStr} value={dateStr}>{MONTH_NAMES[parseInt(m)-1]} / {y}</option>); })}</select></div><div className="form-group"><label className="form-label">Destino (Pasta)</label><input className="form-input" value={exportPathInput} onChange={e => setExportPathInput(e.target.value)}/></div><div className="modal-actions"><button className="btn-secondary" onClick={() => setIsExportModalOpen(false)}>Cancelar</button><button className="btn" onClick={handleConfirmExport}>Confirmar Exportação</button></div></div></div>)}
       
-      {/* MODAL DE LANÇAMENTO FINANCEIRO (NOVO) */}
       {isEntryModalOpen && (
         <div className="modal-overlay">
           <div className="modal-content" style={{width: 450}}>
             <h2 className="modal-title">Novo Lançamento</h2>
-            
-            <div className="form-group">
-              <label className="form-label">Data</label>
-              <input 
-                className="form-input" 
-                type="date" 
-                value={entryDate} 
-                onChange={e => setEntryDate(e.target.value)}
-                style={{color: 'var(--text-main)'}}
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Tipo</label>
-              <div style={{display: 'flex', gap: 10}}>
-                <button 
-                  className={`btn ${entryType === 'CREDIT' ? '' : 'btn-secondary'}`} 
-                  onClick={() => setEntryType('CREDIT')}
-                  style={{flex: 1, borderColor: entryType === 'CREDIT' ? 'var(--success)' : ''}}
-                >
-                  Receita
-                </button>
-                <button 
-                  className={`btn ${entryType === 'DEBIT' ? '' : 'btn-secondary'}`} 
-                  onClick={() => setEntryType('DEBIT')}
-                  style={{flex: 1, borderColor: entryType === 'DEBIT' ? 'var(--danger)' : ''}}
-                >
-                  Despesa
-                </button>
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Descrição</label>
-              <input 
-                className="form-input" 
-                value={entryDescription} 
-                onChange={e => setEntryDescription(e.target.value)}
-                placeholder="Ex: Conta de Luz"
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Valor (R$)</label>
-              <input 
-                className="form-input" 
-                type="number"
-                value={entryValue} 
-                onChange={e => setEntryValue(e.target.value)}
-                placeholder="0,00"
-                step="0.01"
-              />
-            </div>
-
-            <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setIsEntryModalOpen(false)}>Cancelar</button>
-              <button className="btn" onClick={handleSaveEntry}>Salvar</button>
-            </div>
+            <div className="form-group"><label className="form-label">Data</label><input className="form-input" type="date" value={entryDate} onChange={e => setEntryDate(e.target.value)} style={{color: 'var(--text-main)'}}/></div>
+            <div className="form-group"><label className="form-label">Tipo</label><div style={{display: 'flex', gap: 10}}><button className={`btn ${entryType === 'CREDIT' ? '' : 'btn-secondary'}`} onClick={() => setEntryType('CREDIT')} style={{flex: 1, borderColor: entryType === 'CREDIT' ? 'var(--success)' : ''}}>Receita</button><button className={`btn ${entryType === 'DEBIT' ? '' : 'btn-secondary'}`} onClick={() => setEntryType('DEBIT')} style={{flex: 1, borderColor: entryType === 'DEBIT' ? 'var(--danger)' : ''}}>Despesa</button></div></div>
+            <div className="form-group"><label className="form-label">Descrição</label><input className="form-input" value={entryDescription} onChange={e => setEntryDescription(e.target.value)} placeholder="Ex: Conta de Luz"/></div>
+            <div className="form-group"><label className="form-label">Valor (R$)</label><input className="form-input" type="number" value={entryValue} onChange={e => setEntryValue(e.target.value)} placeholder="0,00" step="0.01"/></div>
+            <div className="modal-actions"><button className="btn-secondary" onClick={() => setIsEntryModalOpen(false)}>Cancelar</button><button className="btn" onClick={handleSaveEntry}>Salvar</button></div>
           </div>
         </div>
       )}
 
-      {isModalOpen && (<div className="modal-overlay"><div className="modal-content"><h2 className="modal-title">{editingOS?"Editar OS":"Nova OS"}</h2><div style={{display:'flex', gap:16}}><div className="form-group" style={{flex:1}}><label className="form-label">Nº OS</label><input className="form-input" value={formOSNumber} onChange={e=>setFormOSNumber(e.target.value)} style={{fontWeight:'bold', color:'var(--primary)'}} /></div><div className="form-group" style={{flex:1}}><label className="form-label">Data</label><input className="form-input" type="date" value={formDate} onChange={e=>setFormDate(e.target.value)} style={{color:'var(--text-main)'}} /></div><div className="form-group" style={{flex:2}}><label className="form-label">Cliente</label><input className="form-input" list="clients" value={formClient} onChange={e=>setFormClient(e.target.value)} /><datalist id="clients">{clients.map(c=><option key={c.id} value={c.name}/>)}</datalist></div></div><div style={{display:'flex', gap:16}}><div className="form-group" style={{flex:1}}><label className="form-label">Contato</label><input className="form-input" value={formContact} onChange={e=>setFormContact(e.target.value)} /></div></div><div className="form-group"><label className="form-label">Obs.</label><textarea className="form-input form-textarea" value={formClientNotes} onChange={e=>setFormClientNotes(e.target.value)} /></div><div style={{display:'flex', gap:16}}><div className="form-group" style={{flex:2}}><label className="form-label">Veículo</label><input className="form-input" list="vehicles" value={formVehicle} onChange={e=>setFormVehicle(e.target.value)} /><datalist id="vehicles">{suggestedVehicles.map((v,i)=><option key={i} value={v.model}/>)}</datalist></div><div className="form-group" style={{flex:1}}><label className="form-label">Placa</label><input className="form-input" value={formPlate} onChange={e=>setFormPlate(e.target.value.toUpperCase())} maxLength={8}/></div><div className="form-group" style={{flex:1}}><label className="form-label">Km</label><input className="form-input" type="number" value={formMileage} onChange={e=>setFormMileage(e.target.value)}/></div></div><div className="items-list-container"><div className="items-header"><span>Peças</span> <span>{Money.format(calcTotal(formParts))}</span></div>{formParts.map((p,i)=><div key={p.id} className="item-row"><input className="form-input" list="cat-parts" value={p.description} onChange={e=>updatePart(i,'description',e.target.value)} style={{flex:2}} placeholder="Peça"/><datalist id="cat-parts">{catalogParts.map((cp,idx)=><option key={idx} value={cp.description}>{Money.format(cp.price)}</option>)}</datalist><input className="form-input" type="number" value={Money.toFloat(p.price)} onChange={e=>updatePart(i,'price',Money.fromFloat(parseFloat(e.target.value)||0))} style={{flex:1}}/><button className="btn-icon danger" onClick={()=>removePart(i)}>x</button></div>)}<button className="btn-secondary" style={{width:'100%', marginTop:10}} onClick={addPart}>+ Peça</button></div><div className="items-list-container"><div className="items-header"><span>Serviços</span> <span>{Money.format(calcTotal(formServices))}</span></div>{formServices.map((s,i)=><div key={s.id} className="item-row"><input className="form-input" list="cat-services" value={s.description} onChange={e=>updateService(i,'description',e.target.value)} style={{flex:2}} placeholder="Serviço"/><datalist id="cat-services">{catalogServices.map((cs,idx)=><option key={idx} value={cs.description}>{Money.format(cs.price)}</option>)}</datalist><input className="form-input" type="number" value={Money.toFloat(s.price)} onChange={e=>updateService(i,'price',Money.fromFloat(parseFloat(e.target.value)||0))} style={{flex:1}}/><button className="btn-icon danger" onClick={()=>removeService(i)}>x</button></div>)}<button className="btn-secondary" style={{width:'100%', marginTop:10}} onClick={addService}>+ Serviço</button></div><div className="total-display"><span>Total</span> <span>{Money.format(calcTotal(formParts)+calcTotal(formServices))}</span></div><div className="modal-actions"><button className="btn-secondary" onClick={()=>setIsModalOpen(false)}>Cancelar</button><button className="btn" onClick={handleSaveModal}>Salvar</button></div></div></div>)}
+      {isModalOpen && (<div className="modal-overlay"><div className="modal-content"><h2 className="modal-title">{editingOS?"Editar OS":"Nova OS"}</h2><div style={{display:'flex', gap:16}}><div className="form-group" style={{flex:1}}><label className="form-label">Nº OS</label><input className="form-input" value={formOSNumber} onChange={e=>setFormOSNumber(e.target.value)} style={{fontWeight:'bold', color:'var(--primary)'}} /></div><div className="form-group" style={{flex:1}}><label className="form-label">Data</label><input className="form-input" type="date" value={formDate} onChange={e=>setFormDate(e.target.value)} style={{color:'var(--text-main)'}} /></div><div className="form-group" style={{flex:2}}><label className="form-label">Cliente</label><input className="form-input" list="clients" value={formClient} onChange={e=>setFormClient(e.target.value)} /><datalist id="clients">{clients.map(c=><option key={c.id} value={c.name}/>)}</datalist></div></div><div style={{display:'flex', gap:16}}><div className="form-group" style={{flex:1}}><label className="form-label">Contato</label><input className="form-input" value={formContact} onChange={e=>setFormContact(e.target.value)} /></div></div><div className="form-group"><label className="form-label">Obs.</label><textarea className="form-input form-textarea" value={formClientNotes} onChange={e=>setFormClientNotes(e.target.value)} /></div><div style={{display:'flex', gap:16}}><div className="form-group" style={{flex:2}}><label className="form-label">Veículo</label><input className="form-input" list="vehicles" value={formVehicle} onChange={e=>setFormVehicle(e.target.value)} /><datalist id="vehicles">{suggestedVehicles.map((v,i)=><option key={i} value={v.model}/>)}</datalist></div><div className="form-group" style={{flex:1}}><label className="form-label">Placa</label><input className="form-input" value={formPlate} onChange={e=>setFormPlate(e.target.value.toUpperCase())} maxLength={8}/></div><div className="form-group" style={{flex:1}}><label className="form-label">Km</label><input className="form-input" type="number" value={formMileage} onChange={e=>setFormMileage(e.target.value)}/></div></div><div className="items-list-container"><div className="items-header"><span>Peças</span> <span>{Money.format(calcTotal(formParts))}</span></div>{formParts.map((p,i)=><div key={p.id} className="item-row"><input className="form-input" list="cat-parts" value={p.description} onChange={e=>updatePart(i,'description',e.target.value)} style={{flex:2}} placeholder="Peça"/><datalist id="cat-parts">{catalogParts.map((cp,idx)=><option key={idx} value={cp.description}>{Money.format(cp.price)}</option>)}</datalist><input className="form-input" type="number" value={Money.toFloat(p.price)} onChange={e=>updatePart(i,'price',Money.fromFloat(parseFloat(e.target.value)||0))} style={{flex:1}}/><button className="btn-icon danger" onClick={()=>removePart(i)}>x</button></div>)}<button className="btn-secondary" style={{width:'100%', marginTop:10}} onClick={addPart}>+ Peça</button></div><div className="items-list-container"><div className="items-header"><span>Serviços</span> <span>{Money.format(calcTotal(formServices))}</span></div>{formServices.map((s,i)=><div key={s.id} className="item-row"><input className="form-input" list="cat-services" value={s.description} onChange={e=>updateService(i,'description',e.target.value)} style={{flex:2}} placeholder="Serviço"/><datalist id="cat-services">{catalogServices.map((cs,idx)=><option key={idx} value={cs.description}>{Money.format(cs.price)}</option>)}</datalist><input className="form-input" type="number" value={Money.toFloat(s.price)} onChange={e=>updateService(i,'price',Money.fromFloat(parseFloat(e.target.value)||0))} style={{flex:1}}/><button className="btn-icon danger" onClick={()=>removeService(i)}>x</button></div>)}<button className="btn-secondary" style={{width:'100%', marginTop:10}} onClick={addService}>+ Serviço</button></div><div className="total-display"><span>Total</span> <span>{Money.format(calcTotal(formParts)+calcTotal(formServices))}</span></div><div className="modal-actions"><button className="btn-secondary" onClick={()=>setIsModalOpen(false)}>Cancelar</button><button className="btn" onClick={handleSaveModal}>{isSaving ? <span className="spinner"></span> : 'Salvar'}</button></div></div></div>)}
     </>
   );
 }

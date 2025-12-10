@@ -72,7 +72,7 @@ body {
 }
 
 /* ==========================================================================
-   2. LAYOUT GERAL
+   2. LAYOUT GERAL & COMPONENTES UI
    ========================================================================== */
 .app-container { display: flex; height: 100vh; width: 100vw; }
 .sidebar { width: 260px; background-color: var(--bg-panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 24px; z-index: 100; box-shadow: 5px 0 15px var(--shadow-color); transition: 0.5s; }
@@ -95,8 +95,10 @@ body {
 .card { background-color: var(--bg-panel); border-radius: 16px; border: 1px solid var(--border); padding: 24px; margin-bottom: 24px; box-shadow: 0 10px 30px var(--shadow-color); transition: 0.5s; }
 
 /* Botões Glossy */
-.btn { height: 44px; padding: 0 24px; border-radius: 22px; border: none; background: linear-gradient(180deg, var(--primary) 0%, #6b46c1 100%); color: white; font-weight: 600; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 15px var(--shadow-color), inset 0 1px 0 rgba(255,255,255,0.3); display: inline-flex; align-items: center; justify-content: center; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+.btn { height: 44px; padding: 0 24px; border-radius: 22px; border: none; background: linear-gradient(180deg, var(--primary) 0%, var(--primary-hover) 100%); color: white; font-weight: 600; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 15px var(--shadow-color), inset 0 1px 0 rgba(255,255,255,0.3); display: inline-flex; align-items: center; justify-content: center; text-shadow: 0 1px 2px rgba(0,0,0,0.2); gap: 8px; }
 .btn:hover { transform: translateY(-2px) scale(1.05); filter: brightness(1.1); }
+.btn:active { transform: translateY(0); }
+.btn:disabled { opacity: 0.7; cursor: wait; transform: none; filter: grayscale(0.5); }
 .btn-secondary { height: 44px; padding: 0 24px; border-radius: 22px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-main); font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: 0.2s; }
 .btn-secondary:hover { border-color: var(--primary); color: var(--primary); }
 .btn-sm { padding: 6px 12px; font-size: 0.85rem; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); cursor: pointer; transition: 0.2s; }
@@ -138,7 +140,7 @@ select.form-input {
 .chart-title { font-weight: 600; color: var(--text-main); font-size: 1.1rem; }
 
 /* ==========================================================================
-   4. KANBAN BOARD
+   4. KANBAN BOARD (DRAG AND DROP)
    ========================================================================== */
 .kanban-board { display: flex; gap: 24px; height: 100%; overflow-x: auto; padding-bottom: 20px; padding-top: 10px; }
 
@@ -153,9 +155,10 @@ select.form-input {
   flex-direction: column; 
   backdrop-filter: blur(5px);
   height: 100%;
-  max-height: 100%;
-  transition: 0.5s;
+  min-height: 500px; 
+  transition: border-color 0.3s, background-color 0.3s, box-shadow 0.3s;
 }
+
 [data-theme="vintage"] .kanban-column { background-color: rgba(253, 240, 213, 0.6); }
 
 .kanban-header { font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 16px; display: flex; justify-content: space-between; font-size: 0.85rem; letter-spacing: 1px; flex-shrink: 0; }
@@ -166,11 +169,12 @@ select.form-input {
   overflow-x: visible; 
   padding: 12px; 
   margin: 0 -12px; 
-  padding-bottom: 40px; 
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
+  min-height: 250px; 
+  transition: background-color 0.2s;
+  padding-bottom: 50px;
 }
-
 .kanban-list-scroll::-webkit-scrollbar { width: 6px; }
 .kanban-list-scroll::-webkit-scrollbar-track { background: transparent; }
 .kanban-list-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
@@ -188,7 +192,11 @@ select.form-input {
   padding: 16px; 
   padding-bottom: 16px; 
   margin-bottom: 16px;
-  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+  
+  /* FIX: Remover 'all' e 'transform' da transição padrão.
+     Isso evita que o navegador tente animar a posição X/Y enquanto a biblioteca JS tenta mover o card. */
+  transition: background-color 0.2s, box-shadow 0.2s, border-color 0.2s;
+  
   position: relative; 
   overflow: hidden; 
   display: flex; 
@@ -197,6 +205,21 @@ select.form-input {
   box-shadow: 0 4px 6px var(--shadow-color);
   width: 100%; 
   box-sizing: border-box; 
+  cursor: grab;
+  user-select: none;
+}
+.kanban-card:active { cursor: grabbing; }
+
+/* ANIMAÇÃO DE ARRASTO (LIBRARY DND) */
+.kanban-card.is-dragging {
+  /* FIX: REMOVIDO 'transform: rotate...' com !important. 
+     A rotação agora é feita via inline style no React para não quebrar a posição X/Y */
+  box-shadow: 0 20px 40px rgba(0,0,0,0.4) !important;
+  z-index: 1000 !important;
+  cursor: grabbing;
+  border-color: var(--primary) !important;
+  background: var(--bg-card-hover) !important;
+  opacity: 0.95;
 }
 
 .kanban-card:hover { 
@@ -208,12 +231,18 @@ select.form-input {
   background: var(--bg-card-hover);
 }
 
-.os-header { display: flex; justify-content: space-between; margin-bottom: 4px; }
+/* Evita conflito do hover com o drag da biblioteca */
+.kanban-card.is-dragging:hover {
+  transform: none; /* Deixa o JS controlar o transform durante o drag */
+  padding-bottom: 16px;
+}
+
+.os-header { display: flex; justify-content: space-between; margin-bottom: 4px; pointer-events: none; }
 .os-number { font-size: 0.75rem; font-weight: 700; color: var(--primary); background: var(--bg-input); border: 1px solid var(--border); padding: 4px 8px; border-radius: 6px; }
 .os-price { font-weight: 700; color: var(--success); font-family: monospace; font-size: 1.1rem; }
-.os-client { font-weight: 600; font-size: 1.1rem; color: var(--text-main); }
-.os-vehicle { font-size: 0.9rem; color: var(--text-muted); }
-.os-id { font-size: 0.75rem; color: var(--text-muted); opacity: 0.8; }
+.os-client { font-weight: 600; font-size: 1.1rem; color: var(--text-main); pointer-events: none; }
+.os-vehicle { font-size: 0.9rem; color: var(--text-muted); pointer-events: none; }
+.os-id { font-size: 0.75rem; color: var(--text-muted); opacity: 0.8; pointer-events: none; }
 
 .card-actions {
   position: absolute; bottom: 0; left: 0; right: 0; height: 64px; background: var(--bg-panel); backdrop-filter: blur(8px); border-top: 1px solid var(--border);
@@ -221,39 +250,26 @@ select.form-input {
 }
 .kanban-card:hover .card-actions { transform: translateY(0); opacity: 1; }
 
-/* Botões de Ícone */
-.btn-icon {
-  width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--border); color: var(--text-muted); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1.2rem;
-  background: var(--bg-input); box-shadow: 0 2px 5px var(--shadow-color); transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
+.btn-icon { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--border); color: var(--text-muted); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1.2rem; background: var(--bg-input); box-shadow: 0 2px 5px var(--shadow-color); transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .btn-icon:hover { transform: scale(1.25) translateY(-5px); color: #fff; border-color: transparent; z-index: 10; }
 .btn-icon[title="Editar"]:hover { background: #9d74ff; }
 [data-theme="vintage"] .btn-icon[title="Editar"]:hover { background: var(--primary); }
-
 .btn-icon.check:hover { background: #4fd1c5; }
 [data-theme="vintage"] .btn-icon.check:hover { background: var(--success); }
-
 .btn-icon[title="Imprimir"]:hover { background: #d6bcfa; }
 [data-theme="vintage"] .btn-icon[title="Imprimir"]:hover { background: var(--info); }
-
 .btn-icon.danger:hover { background: #fc8181; }
 [data-theme="vintage"] .btn-icon.danger:hover { background: var(--danger); }
-
 .btn-icon[title="Avançar"]:hover { background: #68d391; }
 [data-theme="vintage"] .btn-icon[title="Avançar"]:hover { background: var(--success); }
-
 .btn-icon[title="Voltar"]:hover { background: #a0aec0; }
 
 /* ==========================================================================
-   5. PROCESSOS E CRM (NOVO)
+   5. PROCESSOS & CRM
    ========================================================================== */
 .process-view { display: flex; flex-direction: column; gap: 30px; padding-bottom: 40px; }
 .process-group { background: transparent; }
-.process-group-header {
-  padding: 8px 16px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px;
-  font-weight: 700; color: var(--text-main); text-transform: uppercase; font-size: 0.85rem;
-  display: inline-flex; align-items: center; gap: 10px; margin-bottom: 12px; box-shadow: 0 2px 8px var(--shadow-color);
-}
+.process-group-header { padding: 8px 16px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px; font-weight: 700; color: var(--text-main); text-transform: uppercase; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 10px; margin-bottom: 12px; box-shadow: 0 2px 8px var(--shadow-color); }
 .process-group-header.status-ORCAMENTO { border-left: 4px solid var(--info); }
 .process-group-header.status-APROVADO { border-left: 4px solid var(--warning); }
 .process-group-header.status-EM_SERVICO { border-left: 4px solid var(--primary); }
@@ -265,6 +281,12 @@ select.form-input {
 .process-row td:first-child { border-left: 1px solid var(--border); border-top-left-radius: 12px; border-bottom-left-radius: 12px; }
 .process-row td:last-child { border-right: 1px solid var(--border); border-top-right-radius: 12px; border-bottom-right-radius: 12px; }
 .process-row:hover { transform: scale(1.005); box-shadow: 0 5px 15px var(--shadow-color); z-index: 1; position: relative; background: var(--bg-card-hover); }
+
+/* Cabeçalhos Clicáveis para Ordenação */
+.process-table th { cursor: pointer; user-select: none; transition: color 0.2s; padding: 10px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); text-align: left; }
+.process-table th:hover { color: var(--primary); text-shadow: 0 0 5px rgba(130,87,230,0.5); }
+.sort-indicator { margin-left: 5px; opacity: 0.5; font-size: 0.7rem; }
+.sort-active .sort-indicator { opacity: 1; color: var(--primary); }
 
 .status-badge { padding: 6px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; cursor: pointer; transition: 0.2s; display: inline-block; border: 1px solid transparent; }
 .status-badge:hover { filter: brightness(1.2); transform: translateY(-1px); }
@@ -288,14 +310,12 @@ select.form-input {
 .client-list-item:hover, .client-list-item.active { border-color: var(--primary); background: var(--bg-card-hover); transform: translateX(5px); }
 .client-name { font-weight: 600; color: var(--text-main); margin-bottom: 4px; }
 .client-contact { font-size: 0.8rem; color: var(--text-muted); }
-
 .crm-details { flex: 1; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 16px; padding: 32px; overflow-y: auto; display: flex; flex-direction: column; }
 .crm-header { margin-bottom: 32px; border-bottom: 1px solid var(--border); padding-bottom: 20px; }
 .crm-stats { display: flex; gap: 20px; margin-bottom: 32px; }
 .crm-stat-box { flex: 1; background: var(--bg-input); padding: 16px; border-radius: 12px; border: 1px solid var(--border); }
 .crm-stat-label { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
 .crm-stat-value { font-size: 1.5rem; font-weight: 700; color: var(--text-main); margin-top: 5px; }
-
 .history-timeline { display: flex; flex-direction: column; gap: 20px; position: relative; }
 .history-timeline::before { content: ''; position: absolute; left: 14px; top: 0; bottom: 0; width: 2px; background: var(--border); z-index: 0; }
 .history-item { display: flex; gap: 20px; position: relative; z-index: 1; }
@@ -304,72 +324,133 @@ select.form-input {
 .history-date { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; }
 .history-title { font-weight: 600; color: var(--text-main); margin-bottom: 8px; }
 .history-desc { font-size: 0.9rem; color: var(--text-muted); }
-
 .reminder-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; margin-left: 10px; }
 .reminder-badge.warning { background: rgba(243, 156, 18, 0.2); color: var(--warning); border: 1px solid var(--warning); }
 .reminder-badge.danger { background: rgba(247, 90, 104, 0.2); color: var(--danger); border: 1px solid var(--danger); }
 
 /* ==========================================================================
-   6. TABELAS E OUTROS
+   6. CARREGAMENTO E MICRO-INTERAÇÕES
    ========================================================================== */
-.data-table { width: 100%; border-collapse: collapse; }
-.data-table th { text-align: left; padding: 16px; border-bottom: 1px solid var(--border); color: var(--text-muted); font-weight: 600; font-size: 0.875rem; }
-.data-table td { padding: 16px; border-bottom: 1px solid var(--border); font-size: 0.95rem; }
-.data-table tr:hover { background-color: var(--bg-card-hover); }
-
-/* Theme Selector Cards */
-.theme-selector-container { display: flex; gap: 20px; margin-top: 10px; }
-.theme-card {
-  flex: 1;
-  border: 2px solid var(--border);
-  border-radius: 12px;
-  padding: 20px;
-  cursor: pointer;
-  background: var(--bg-input);
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  gap: 15px;
+/* SPINNER DE LOADING */
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 1s ease-in-out infinite;
+  display: inline-block;
 }
-.theme-card:hover { transform: translateY(-3px); border-color: var(--primary); box-shadow: 0 5px 15px var(--shadow-color); }
-.theme-card.active { border-color: var(--primary); background: var(--bg-panel); position: relative; }
-.theme-card.active::after { content: '✓'; position: absolute; top: 10px; right: 10px; color: var(--primary); font-weight: bold; }
-.theme-preview { width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--border); }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-/* ... (Resto do CSS permanece o mesmo: modal, checklist, impressao, etc.) ... */
-.system-status { position: absolute; bottom: 20px; left: 30px; right: 30px; background: var(--bg-panel); padding: 10px 20px; border-radius: 50px; border: 1px solid var(--border); font-size: 0.85rem; color: var(--text-muted); display: flex; align-items: center; gap: 10px; width: fit-content; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
-.status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); }
-.status-dot.active { background: var(--success); box-shadow: 0 0 8px var(--success); }
-.status-dot.error { background: var(--danger); }
+/* SKELETON LOADING */
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-input) 25%, var(--bg-card-hover) 50%, var(--bg-input) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 6px;
+  width: 100%;
+  min-height: 20px;
+  display: block;
+}
+.skeleton-text { height: 16px; margin-bottom: 8px; }
+.skeleton-block { height: 100%; width: 100%; min-height: 200px; }
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
 
-.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.modal-content { background: var(--bg-panel); width: 600px; max-width: 95%; max-height: 90vh; overflow-y: auto; padding: 32px; border-radius: 24px; border: 1px solid var(--border); box-shadow: 0 25px 60px rgba(0,0,0,0.6); animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
-@keyframes slideUp { from { transform: translateY(40px) scale(0.95); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
-.modal-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 24px; color: var(--text-main); text-shadow: 0 2px 10px rgba(0,0,0,0.2); }
-.modal-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border); }
-
-.items-list-container { background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 20px; }
-.items-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 0.9rem; font-weight: 600; color: var(--text-muted); border-bottom: 1px solid var(--border); padding-bottom: 5px; }
-.item-row { display: flex; gap: 12px; margin-bottom: 8px; }
-.total-display { display: flex; justify-content: space-between; align-items: center; font-size: 1.25rem; font-weight: 700; padding: 16px; background: rgba(4, 211, 97, 0.1); border: 1px solid var(--success); border-radius: 12px; color: var(--success); box-shadow: 0 0 20px rgba(4, 211, 97, 0.1); }
-
-.fuel-gauge { display: flex; gap: 4px; margin-top: 8px; }
-.fuel-bar { flex: 1; height: 8px; background: var(--border); border-radius: 4px; cursor: pointer; transition: 0.3s; }
-.fuel-bar:hover { transform: scaleY(1.5); }
-.fuel-bar.active-0 { background: var(--danger); box-shadow: 0 0 10px var(--danger); } .fuel-bar.active-1 { background: var(--warning); box-shadow: 0 0 10px var(--warning); } .fuel-bar.active-2 { background: var(--info); box-shadow: 0 0 10px var(--info); } .fuel-bar.active-3 { background: var(--primary); box-shadow: 0 0 10px var(--primary); } .fuel-bar.active-4 { background: var(--success); box-shadow: 0 0 10px var(--success); }
-.tires-container { display: flex; justify-content: center; margin: 24px 0; }
-.tire-grid { display: grid; grid-template-areas: "fl body fr" "bl body br"; grid-template-columns: 60px 120px 60px; gap: 16px; align-items: center; }
-.tire-item { width: 100%; height: 80px; background: var(--bg-app); border: 2px solid var(--success); border-radius: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; transition: 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
-.tire-item:hover { transform: scale(1.1); box-shadow: 0 0 20px var(--success); }
-.tire-item.damaged { border-color: var(--danger); background: rgba(247, 90, 104, 0.1); color: var(--danger); box-shadow: 0 0 10px var(--danger); }
-.car-silhouette { grid-area: body; height: 180px; border: 2px solid var(--border); border-radius: 24px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 20px 0; background: rgba(255,255,255,0.02); }
-.car-lights-front { width: 80%; height: 6px; background: var(--info); border-radius: 4px; box-shadow: 0 0 15px var(--info); }
-.car-lights-rear { width: 80%; height: 6px; background: var(--danger); border-radius: 4px; box-shadow: 0 0 15px var(--danger); }
+/* EFEITO CONFETI */
+.confetti-container {
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 9999; overflow: hidden;
+}
+.confetti-piece {
+  position: absolute; width: 10px; height: 10px; background: var(--primary); top: -10px; animation: confetti-fall 3s linear forwards;
+}
+@keyframes confetti-fall {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+}
 
 /* ==========================================================================
-   7. IMPRESSÃO BAZUCA (CORREÇÃO DEFINITIVA)
+   7. TABELAS E OUTROS
    ========================================================================== */
+.data-table { width: 100%; border-collapse: collapse; }
 .printable-content { display: none; }
+
+/* ==========================================================================
+   8. SELETOR DE TEMAS (VISUAL)
+   ========================================================================== */
+.theme-selection-area {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  margin-top: 20px;
+}
+
+.theme-card-visual {
+  background: var(--bg-panel);
+  border: 2px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.theme-card-visual:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px var(--shadow-color);
+  border-color: var(--text-muted);
+}
+
+.theme-card-visual.active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary), 0 15px 35px var(--shadow-color);
+  background: var(--bg-card-hover);
+}
+
+.theme-check-icon {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  width: 24px;
+  height: 24px;
+  background: var(--primary);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  opacity: 0;
+  transform: scale(0);
+  transition: 0.3s;
+}
+
+.theme-card-visual.active .theme-check-icon {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.theme-preview-palette {
+  display: flex;
+  height: 60px;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+}
+
+.theme-color-swatch {
+  flex: 1;
+  height: 100%;
+  position: relative;
+}
+
+.theme-info h4 { margin: 0 0 4px 0; font-size: 1.1rem; color: var(--text-main); }
+.theme-info p { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
 
 @media print {
   /* --- RESET --- */
@@ -421,4 +502,145 @@ select.form-input {
   .print-footer { position: fixed; bottom: 15mm; left: 20mm; right: 20mm; display: flex; justify-content: space-between; }
   .sign-line { width: 40%; border-top: 1px solid #000; padding-top: 10px; text-align: center; font-size: 7pt; text-transform: uppercase; letter-spacing: 1px; }
   .print-legal { position: fixed; bottom: 5mm; left: 0; right: 0; text-align: center; font-size: 6pt; color: #aaa !important; letter-spacing: 1px; }
+}
+
+/* ==========================================================================
+   9. MODAIS E OVERLAYS (Faltava esta seção)
+   ========================================================================== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 1000; /* Maior que a sidebar (100) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.modal-content {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  animation: scaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  position: relative;
+}
+
+[data-theme="vintage"] .modal-content {
+  box-shadow: 10px 10px 0px rgba(0,0,0,0.1);
+}
+
+.modal-title {
+  margin-top: 0;
+  margin-bottom: 24px;
+  font-size: 1.5rem;
+  color: var(--text-main);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 16px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+/* Lista de Itens dentro do Modal (Peças/Serviços) */
+.items-list-container {
+  background: var(--bg-input);
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+
+.items-header {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  margin-bottom: 12px;
+}
+
+.item-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+  align-items: center;
+}
+
+.total-display {
+  text-align: right;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--success);
+  margin: 20px 0;
+  padding: 10px;
+  background: rgba(4, 211, 97, 0.1);
+  border-radius: 12px;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* Animações de Entrada */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleUp {
+  from { transform: scale(0.9) translateY(20px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+/* ==========================================================================
+   10. TOAST NOTIFICATIONS (NOVO)
+   ========================================================================== */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.toast {
+  min-width: 250px;
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: slideInRight 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  font-weight: 500;
+}
+
+.toast-success { border-left: 4px solid var(--success); }
+.toast-error { border-left: 4px solid var(--danger); }
+.toast-info { border-left: 4px solid var(--info); }
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
 }

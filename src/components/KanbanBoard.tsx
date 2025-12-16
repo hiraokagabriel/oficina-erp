@@ -39,7 +39,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
               ref={provided.innerRef}
               {...provided.droppableProps}
               style={{ 
-                  // O segredo do alinhamento: GAP controla o espaço, não a margin do card
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '16px', 
@@ -54,7 +53,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
                   {(provided, snapshot) => {
                     
                     // ESTILO DA ÂNCORA (Div Externa)
-                    // Esta div segue o mouse. Não deve ter visual, apenas coordenadas.
                     const anchorStyle = {
                         ...provided.draggableProps.style,
                         // Z-Index altíssimo para flutuar sobre Sidebar e Modais
@@ -63,9 +61,9 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
                         cursor: snapshot.isDragging ? 'grabbing' : 'grab',
                         // Remove margens que causam o "offset" (desvio) do mouse
                         margin: 0,
-                        // Preserva a geometria para a animação de soltar funcionar
-                        left: provided.draggableProps.style?.left,
-                        top: provided.draggableProps.style?.top,
+                        // CORREÇÃO TYPESCRIPT: Força o tipo React.CSSProperties para acessar left/top
+                        left: (provided.draggableProps.style as React.CSSProperties)?.left,
+                        top: (provided.draggableProps.style as React.CSSProperties)?.top,
                     };
 
                     return (
@@ -75,19 +73,14 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
                             {...provided.dragHandleProps}
                             style={anchorStyle}
                         >
-                            {/* DIV VISUAL (O Card em si) 
-                                Aqui aplicamos a rotação e o estilo visual.
-                                Como está dentro da âncora, a rotação não afeta a coordenada X/Y do mouse.
-                            */}
+                            {/* DIV VISUAL (O Card em si) */}
                             <div 
                                 className={`kanban-card ${snapshot.isDragging ? 'is-dragging' : ''}`}
                                 style={{
-                                    // Rotação suave para dar a sensação de "pegar na mão"
                                     transform: snapshot.isDragging ? 'rotate(3deg) scale(1.02)' : 'none',
-                                    // Remove transições durante o arraste para resposta instantânea (1:1 com mouse)
                                     transition: snapshot.isDragging ? 'none' : 'all 0.2s ease',
                                     boxShadow: snapshot.isDragging ? '0 25px 50px rgba(0,0,0,0.5)' : '0 4px 6px rgba(0,0,0,0.1)',
-                                    opacity: snapshot.isDragging ? 1 : 1, // Opacidade total para destacar
+                                    opacity: snapshot.isDragging ? 1 : 1,
                                     border: snapshot.isDragging ? '1px solid var(--primary)' : '1px solid var(--border)'
                                 }}
                             >
@@ -99,7 +92,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
                                 <div className="os-vehicle">{os.vehicle}</div>
                                 {os.clientPhone && <div className="os-id">📞 {os.clientPhone}</div>}
                                 
-                                {/* Esconde botões ao arrastar para limpar a visão */}
                                 <div className="card-actions" style={{display: snapshot.isDragging ? 'none' : 'flex'}}>
                                     {status !== 'ORCAMENTO' && <button className="btn-icon" onClick={() => actions.onRegress(os.id)}>⬅️</button>} 
                                     <div style={{display: 'flex', gap: 5}}>

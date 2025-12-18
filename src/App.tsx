@@ -6,7 +6,7 @@ import { DropResult } from '@hello-pangea/dnd';
 import { Sidebar } from './components/Sidebar';
 import { Confetti } from './components/ui/Confetti';
 import { PrintableInvoice } from './components/PrintableInvoice';
-import { ToastContainer, ToastMessage, ToastType } from './components/ui/ToastContainer'; // IMPORT NOVO
+import { ToastContainer, ToastMessage, ToastType } from './components/ui/ToastContainer';
 
 // --- PÁGINAS ---
 import { FinancialPage } from './pages/FinancialPage';
@@ -32,9 +32,10 @@ import {
 // --- TYPES ---
 import { 
   LedgerEntry, WorkOrder, Client, WorkshopSettings, DatabaseSchema, 
-  OSStatus, OrderItem, CatalogItem, ChecklistSchema
+  OSStatus, ChecklistSchema
 } from './types';
 
+// --- CONSTANTES ---
 const DEFAULT_DB_PATH = "C:\\OficinaData\\database.json";
 const BACKUP_PATH = "C:\\OficinaData\\Backups";
 
@@ -358,15 +359,14 @@ function App() {
   const [isBackuping, setIsBackuping] = useState(false);
   const [driveStatus, setDriveStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
-  // NOVO: Estado de Notificações
+  // Estado de Notificações
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  // Helper de Notificação (Substitui alert)
+  // Helper de Notificação
   const addToast = (message: string, type: ToastType = 'info') => {
     const id = crypto.randomUUID();
     setToasts(prev => [...prev, { id, message, type }]);
     
-    // Tocar som baseado no tipo
     if (type === 'success') SoundFX.success();
     if (type === 'error') SoundFX.error();
   };
@@ -633,9 +633,28 @@ function App() {
      }
   };
 
+  // --- LÓGICA DE IMPRESSÃO COM NOME DE ARQUIVO AUTOMÁTICO ---
   const handlePrintOS = (os: WorkOrder) => {
       setPrintingOS(os);
-      setTimeout(() => window.print(), 100);
+      
+      // 1. Salva o título atual da janela ("OficinaPro")
+      const originalTitle = document.title;
+
+      // 2. Tenta obter a placa (caso exista na interface WorkOrder, senão usa string vazia)
+      // Se a placa já estiver escrita no campo 'vehicle', isso pode duplicar, mas garante o pedido.
+      const plateSuffix = (os as any).plate ? ` ${(os as any).plate}` : '';
+
+      // 3. Define o título da página para o nome do arquivo desejado
+      // Formato: OS [Numero] [Cliente] [Veiculo] [Placa]
+      // Ex: "OS 1042 João Silva Honda Civic ABC-1234"
+      document.title = `OS ${os.osNumber} ${os.clientName} ${os.vehicle}${plateSuffix}`;
+
+      // 4. Aguarda renderização e chama o print
+      setTimeout(() => {
+          window.print();
+          // 5. Restaura o título original
+          document.title = originalTitle;
+      }, 100);
   };
 
   const handleSaveChecklist = (data: ChecklistSchema) => {
@@ -746,14 +765,9 @@ function App() {
         </main>
       </div>
 
-      {/* --- MODAIS --- */}
-      {/* Precisamos atualizar os modais para usarem o addToast se eles tiverem validação interna */}
-      {/* Por enquanto, a lógica de validação está principalmente no pai (handleSaveOSModal), mas se movêssemos a validação para dentro, passaríamos addToast */}
-      
       <OSModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveOSModal} editingOS={editingOS} clients={clients} catalogParts={catalogParts} catalogServices={catalogServices} nextOSNumber={workOrders.length > 0 ? Math.max(...workOrders.map(o => o.osNumber)) + 1 : 1} isSaving={isSaving} formatMoney={Money.format} />
       <EntryModal isOpen={isEntryModalOpen} onClose={() => setIsEntryModalOpen(false)} onSave={handleSaveEntryModal} />
       
-      {/* O ExportModal precisa do addToast para erro/sucesso */}
       <ExportModal 
         isOpen={isExportModalOpen} 
         onClose={() => setIsExportModalOpen(false)} 

@@ -1,4 +1,4 @@
-import { Cents, Money } from '../shared/Money';
+import { Cents } from '../shared/Money';
 
 export type OSStatus = 'ORCAMENTO' | 'APROVADO' | 'EM_SERVICO' | 'FINALIZADO';
 

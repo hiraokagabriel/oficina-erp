@@ -32,7 +32,7 @@ import {
 // --- TYPES ---
 import { 
   LedgerEntry, WorkOrder, Client, WorkshopSettings, DatabaseSchema, 
-  OSStatus, ChecklistSchema
+  OSStatus, ChecklistSchema, CatalogItem
 } from './types';
 
 // --- CONSTANTES ---

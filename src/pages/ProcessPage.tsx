@@ -117,16 +117,16 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                    <table className="process-table">
                        <thead>
                            <tr>
-                               <th width="15%" onClick={() => handleSort(status, 'osNumber')} className="sortable-th">
-                                 Nº OS <SortIcon status={status} colKey="osNumber"/>
-                               </th>
+                               <th style={{ width: '15%' }} onClick={() => handleSort(status, 'osNumber')} className="sortable-th"> 
+                                Nº OS <SortIcon status={status} colKey="osNumber" />
+                                </th>
                                <th onClick={() => handleSort(status, 'clientName')} className="sortable-th">
                                  Cliente / Veículo <SortIcon status={status} colKey="clientName"/>
                                </th>
-                               <th width="20%" onClick={() => handleSort(status, 'createdAt')} className="sortable-th">
-                                 Data <SortIcon status={status} colKey="createdAt"/>
-                               </th>
-                               <th width="20%">Status (Alterar)</th>
+                               <th style={{ width: '20%' }} onClick={() => handleSort(status, 'createdAt')} className="sortable-th">
+                                Data <SortIcon status={status} colKey="createdAt" />
+                                </th>
+                               <th style={{ width: '20%' }}>Status (Alterar)</th>
                            </tr>
                        </thead>
                        <tbody>

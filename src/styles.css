@@ -99,7 +99,9 @@ body {
 
 [data-theme="pastel"] .logo-highlight {
   background: linear-gradient(90deg, #8B5CF6, #F472B6);
+  /* CORREÇÃO DO WARNING AQUI: */
   -webkit-background-clip: text;
+  background-clip: text; 
   -webkit-text-fill-color: transparent;
 }
 
@@ -571,8 +573,42 @@ body {
   .company-name, .client-name { font-size: 1.1rem; font-weight: 800; margin: 0 0 4px 0; text-transform: uppercase; color: #000; }
   .invoice-col p { margin: 2px 0; font-size: 0.8rem; color: #333; }
 
-  .invoice-logo-area { flex: 1; display: flex; justify-content: center; align-items: center; }
-  .invoice-logo-circle { width: 50px; height: 50px; background-color: #222; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: bold; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* LOGO AREA (AJUSTADO PARA AM + TÍTULO) */
+  .invoice-logo-area { 
+    flex: 1; 
+    display: flex; 
+    flex-direction: column; /* Empilha Título e Logo */
+    justify-content: flex-start; 
+    align-items: center; 
+    gap: 8px; /* Espaço entre o texto e a bolinha */
+  }
+
+  .invoice-main-title {
+    font-size: 0.8rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 0;
+    color: #000;
+    text-align: center;
+    line-height: 1;
+  }
+
+  .invoice-logo-circle { 
+    width: 50px; 
+    height: 50px; 
+    background-color: #222; 
+    color: #fff; 
+    border-radius: 50%; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    font-size: 1.4rem; 
+    font-weight: 800; 
+    letter-spacing: -1px; 
+    -webkit-print-color-adjust: exact; 
+    print-color-adjust: exact; 
+  }
 
   .divider { border: 0; border-top: 1px solid #ddd; margin: 15px 0; }
 

@@ -22,11 +22,11 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
     <div className="printable-invoice">
       
       {/* ESTRUTURA PRINCIPAL: TABELA DE LAYOUT 
-          O uso de tabela aqui é estritamente para controle de quebra de página na impressão.
+          Garante que o rodapé fixo não cubra o conteúdo ao quebrar páginas.
       */}
       <table className="invoice-layout-table">
         
-        {/* CORPO DA PÁGINA (Flui e quebra automaticamente) */}
+        {/* CORPO DA PÁGINA */}
         <tbody>
           <tr>
             <td className="invoice-content-cell">
@@ -41,10 +41,10 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
                   <p>{settings.technician && `Téc. Resp: ${settings.technician}`}</p>
                 </div>
 
+                {/* LOGO AREA - ATUALIZADA PARA "AM" E TÍTULO */}
                 <div className="invoice-logo-area">
-                   <div className="invoice-logo-circle">
-                      {settings.name ? settings.name.charAt(0).toUpperCase() : "O"}
-                   </div>
+                   <h1 className="invoice-main-title">ORDEM DE SERVIÇO</h1>
+                   <div className="invoice-logo-circle">AM</div>
                 </div>
 
                 <div className="invoice-col client-col">
@@ -101,7 +101,6 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
                     )}
                   </tbody>
                 </table>
-                {/* Subtotal fora da tabela interna para evitar problemas de coluna, mas dentro do fluxo */}
                 <div className="subtotal-row">
                     <span>Subtotal Peças:</span>
                     <span className="subtotal-value">{formatMoney(subtotalParts)}</span>
@@ -137,9 +136,7 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
                 </div>
               </div>
 
-              {/* --- 5. TOTAL GERAL --- 
-                  Colocado logo após os itens para aparecer naturalmente no fluxo.
-              */}
+              {/* --- 5. TOTAL GERAL --- */}
               <div className="invoice-total-block">
                  <div className="total-line">
                     <span className="label-total">TOTAL GERAL</span>
@@ -151,23 +148,17 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
           </tr>
         </tbody>
 
-        {/* --- RODAPÉ FANTASMA (Reserva de Espaço) --- 
-            O navegador repetirá este espaço vazio no final de cada página impressa.
-            Isso impede que o conteúdo do <tbody> invada a área onde o rodapé fixo estará.
-        */}
+        {/* --- RODAPÉ FANTASMA (Reserva Espaço) --- */}
         <tfoot>
           <tr>
             <td className="footer-space-cell">
-              {/* A altura deste elemento define a área reservada no final da página */}
               <div className="footer-space"></div>
             </td>
           </tr>
         </tfoot>
       </table>
 
-      {/* --- RODAPÉ FIXO REAL --- 
-          Este elemento flutua por cima do espaço reservado pelo tfoot acima.
-      */}
+      {/* --- RODAPÉ FIXO REAL --- */}
       <div className="invoice-fixed-footer">
           <div className="signature-area">
              <div className="signature-block">

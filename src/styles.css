@@ -865,3 +865,66 @@ input[type=number] {
 [data-theme="pastel"] .toast.success { background: #ECFDF5; border-color: #A7F3D0; border-left-color: #059669; color: #065F46; }
 [data-theme="pastel"] .toast.error { background: #FEF2F2; border-color: #FECACA; border-left-color: #DC2626; color: #991B1B; }
 [data-theme="pastel"] .toast.info { background: #F0F9FF; border-color: #BAE6FD; border-left-color: #0284C7; color: #075985; }
+
+/* ==========================================================================
+   KANBAN SEARCH & FILTER
+   ========================================================================== */
+.kanban-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  background: var(--bg-panel);
+  padding: 12px 20px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 6px var(--shadow-color);
+  gap: 20px;
+}
+
+[data-theme="pastel"] .kanban-filter-bar {
+  background: #FFFFFF;
+  border-color: #EAE4F5;
+}
+
+.search-wrapper {
+  position: relative;
+  flex: 1;
+  max-width: 400px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 1rem;
+  pointer-events: none;
+}
+
+.search-input {
+  padding-left: 40px !important; /* Espaço para o ícone */
+  border-radius: 20px !important;
+}
+
+.btn-clear-search {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-weight: bold;
+}
+.btn-clear-search:hover { color: var(--danger); }
+
+.filter-stats {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.filter-stats strong {
+  color: var(--text-main);
+}

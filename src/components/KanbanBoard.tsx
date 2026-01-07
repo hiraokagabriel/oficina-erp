@@ -1,6 +1,11 @@
+<<<<<<< HEAD
 import React, { useState, useMemo } from 'react';
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
 // REMOVIDO: import { open } from '@tauri-apps/plugin-opener'; 
+=======
+import React, { useState } from 'react';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+>>>>>>> 8fe8d422cec7fe329c6c0ee3d4df2c90512e43ba
 import { WorkOrder, OSStatus, STATUS_LABELS } from '../types';
 import { KanbanCard } from './KanbanCard';
 
@@ -43,6 +48,7 @@ const EmptyState = ({ status }: { status: OSStatus }) => {
 };
 
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading, onDragEnd, actions, formatMoney }) => {
+<<<<<<< HEAD
   const [searchTerm, setSearchTerm] = useState('');
 
   // Lógica de Filtro
@@ -104,16 +110,46 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
 
   const renderColumn = (status: OSStatus) => {
     const list = columnsData[status];
+=======
+  
+  // Estado local para a busca
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Lógica de Filtro
+  const filteredWorkOrders = workOrders.filter(os => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    
+    return (
+      os.clientName.toLowerCase().includes(term) || // Busca por Nome
+      os.vehicle.toLowerCase().includes(term) ||    // Busca por Veículo
+      os.osNumber.toString().includes(term) ||      // Busca por Número da OS
+      (os.clientPhone && os.clientPhone.includes(term)) // Busca por Telefone
+    );
+  });
+
+  const renderColumn = (status: OSStatus) => {
+    // Usa a lista filtrada em vez da lista completa
+    const list = filteredWorkOrders.filter(o => o.status === status).sort((a,b) => b.osNumber - a.osNumber);
+    
+>>>>>>> 8fe8d422cec7fe329c6c0ee3d4df2c90512e43ba
     const colColorMap: Record<string, string> = { 
         ORCAMENTO: 'var(--info)', APROVADO: 'var(--warning)', 
         EM_SERVICO: 'var(--primary)', FINALIZADO: 'var(--success)' 
     };
 
     return (
+<<<<<<< HEAD
       <div className={`kanban-column`} style={{ borderTop: `4px solid ${colColorMap[status]}` }}>
         <div className="kanban-header">
           {STATUS_LABELS[status]} 
           <span style={{background: 'rgba(0,0,0,0.05)', padding: '2px 8px', borderRadius: 10, fontSize: '0.75rem'}}>
+=======
+      <div className={`kanban-column`} style={{borderTop: `4px solid ${colColorMap[status]}`}}>
+        <div className="kanban-header">
+          {STATUS_LABELS[status]} 
+          <span style={{background: 'rgba(0,0,0,0.05)', padding: '2px 8px', borderRadius: 10}}>
+>>>>>>> 8fe8d422cec7fe329c6c0ee3d4df2c90512e43ba
             {list.length}
           </span>
         </div>
@@ -130,6 +166,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
                   transition: 'background-color 0.2s ease', minHeight: 150, flex: 1
               }}
             >
+<<<<<<< HEAD
               {list.length === 0 && !snapshot.isDraggingOver ? (
                  <EmptyState status={status} />
               ) : (
@@ -145,6 +182,62 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
                     />
                  ))
               )}
+=======
+              {list.map((os, index) => (
+                <Draggable key={os.id} draggableId={os.id} index={index}>
+                  {(provided, snapshot) => {
+                    
+                    const anchorStyle = {
+                        ...provided.draggableProps.style,
+                        zIndex: snapshot.isDragging ? 10000 : 'auto',
+                        cursor: snapshot.isDragging ? 'grabbing' : 'grab',
+                        margin: 0,
+                        left: (provided.draggableProps.style as React.CSSProperties)?.left,
+                        top: (provided.draggableProps.style as React.CSSProperties)?.top,
+                    };
+
+                    return (
+                        <div 
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            style={anchorStyle}
+                        >
+                            <div 
+                                className={`kanban-card ${snapshot.isDragging ? 'is-dragging' : ''}`}
+                                style={{
+                                    transform: snapshot.isDragging ? 'rotate(3deg) scale(1.02)' : 'none',
+                                    transition: snapshot.isDragging ? 'none' : 'all 0.2s ease',
+                                    boxShadow: snapshot.isDragging ? '0 25px 50px rgba(0,0,0,0.5)' : '0 4px 6px rgba(0,0,0,0.1)',
+                                    opacity: snapshot.isDragging ? 1 : 1,
+                                    border: snapshot.isDragging ? '1px solid var(--primary)' : '1px solid var(--border)'
+                                }}
+                            >
+                                <div className="os-header">
+                                    <span className="os-number">#{os.osNumber}</span> 
+                                    <span className="os-price">{formatMoney(os.total)}</span>
+                                </div>
+                                <div className="os-client">{os.clientName}</div>
+                                <div className="os-vehicle">{os.vehicle}</div>
+                                {os.clientPhone && <div className="os-id">📞 {os.clientPhone}</div>}
+                                
+                                <div className="card-actions" style={{display: snapshot.isDragging ? 'none' : 'flex'}}>
+                                    {status !== 'ORCAMENTO' && <button className="btn-icon" title="Voltar Etapa" onClick={() => actions.onRegress(os.id)}>⬅️</button>} 
+                                    <div style={{display: 'flex', gap: 5}}>
+                                        <button className="btn-icon" title="Editar" onClick={() => actions.onEdit(os)}>✏️</button>
+                                        <button className="btn-icon check" title="Checklist" onClick={() => actions.onChecklist(os)}>📋</button>
+                                        <button className="btn-icon" title="Imprimir" onClick={() => actions.onPrint(os)}>🖨️</button>
+                                        <button className="btn-icon danger" title="Excluir" onClick={() => actions.onDelete(os)}>🗑️</button>
+                                    </div>
+                                    {status !== 'FINALIZADO' && <button className="btn-icon" title="Avançar Etapa" onClick={() => actions.onAdvance(os.id)}>➡️</button>}
+                                </div>
+                            </div>
+                        </div>
+                    );
+                  }}
+                </Draggable>
+              ))}
+>>>>>>> 8fe8d422cec7fe329c6c0ee3d4df2c90512e43ba
               {provided.placeholder}
             </div>
           )}
@@ -157,12 +250,17 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+<<<<<<< HEAD
+=======
+        {/* BARRA DE BUSCA E FILTRO */}
+>>>>>>> 8fe8d422cec7fe329c6c0ee3d4df2c90512e43ba
         <div className="kanban-filter-bar">
             <div className="search-wrapper">
                 <span className="search-icon">🔍</span>
                 <input 
                     type="text" 
                     className="form-input search-input" 
+<<<<<<< HEAD
                     placeholder="Buscar Cliente, OS, Veículo..." 
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -170,6 +268,21 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
                 {searchTerm && <button className="btn-clear-search" onClick={() => setSearchTerm('')}>✕</button>}
             </div>
             <div className="filter-stats"><strong>{filteredWorkOrders.length}</strong> ordens encontradas</div>
+=======
+                    placeholder="Buscar por Cliente, OS, Veículo ou Placa..." 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                {searchTerm && (
+                    <button className="btn-clear-search" onClick={() => setSearchTerm('')}>
+                        ✕
+                    </button>
+                )}
+            </div>
+            <div className="filter-stats">
+               Mostrando <strong>{filteredWorkOrders.length}</strong> de {workOrders.length} ordens
+            </div>
+>>>>>>> 8fe8d422cec7fe329c6c0ee3d4df2c90512e43ba
         </div>
 
         <DragDropContext onDragEnd={onDragEnd}>

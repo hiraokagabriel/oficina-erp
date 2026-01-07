@@ -829,3 +829,162 @@ input[type=number] {
 [data-theme="pastel"] .toast.success { background: #ECFDF5; border-color: #A7F3D0; border-left-color: #059669; color: #065F46; }
 [data-theme="pastel"] .toast.error { background: #FEF2F2; border-color: #FECACA; border-left-color: #DC2626; color: #991B1B; }
 [data-theme="pastel"] .toast.info { background: #F0F9FF; border-color: #BAE6FD; border-left-color: #0284C7; color: #075985; }
+
+/* ==========================================================================
+   PERFORMANCE TWEAKS (OVERHAUL)
+   ========================================================================== */
+
+/* Forçar aceleração de hardware nos cards */
+.kanban-card {
+  /* Evita repintar o layout inteiro ao mover */
+  transform: translateZ(0); 
+  backface-visibility: hidden;
+  will-change: transform, box-shadow;
+}
+
+/* Otimização da Sidebar para não repintar ao fazer hover nos itens */
+.sidebar {
+  will-change: width;
+}
+
+/* Remove blur pesado em telas ou máquinas que não suportam bem */
+@media (prefers-reduced-motion: reduce) {
+  .kanban-column, .sidebar {
+    backdrop-filter: none !important;
+    background-color: var(--bg-panel) !important;
+  }
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Melhora a performance de scroll nas listas */
+.kanban-list-scroll, .main-content {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* ==========================================================================
+   KANBAN SEARCH & FILTER
+   ========================================================================== */
+.kanban-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  background: var(--bg-panel);
+  padding: 12px 20px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 6px var(--shadow-color);
+  gap: 20px;
+}
+
+[data-theme="pastel"] .kanban-filter-bar {
+  background: #FFFFFF;
+  border-color: #EAE4F5;
+}
+
+.search-wrapper {
+  position: relative;
+  flex: 1;
+  max-width: 400px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 1rem;
+  pointer-events: none;
+}
+
+.search-input {
+  padding-left: 40px !important; /* Espaço para o ícone */
+  border-radius: 20px !important;
+}
+
+.btn-clear-search {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-weight: bold;
+}
+.btn-clear-search:hover { color: var(--danger); }
+
+.filter-stats {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.filter-stats strong {
+  color: var(--text-main);
+}
+
+/* ==========================================================================
+   SCROLLBAR PERSONALIZADA E ESTABILIDADE DE JANELA
+   ========================================================================== */
+
+/* 1. Travar o scroll "elástico" do corpo da página para evitar pulos */
+html, body {
+  overflow: hidden; /* Remove barra de rolagem da janela principal */
+  height: 100%;
+  width: 100%;
+}
+
+/* 2. Estilização Global da Barra de Rolagem (Webkit - Chrome/Edge/Tauri) */
+* {
+  /* Propriedade moderna para evitar layout shift quando a barra aparece */
+  scrollbar-gutter: stable;
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: var(--border) transparent; /* Firefox */
+}
+
+::-webkit-scrollbar {
+  width: 8px;  /* Largura vertical */
+  height: 8px; /* Altura horizontal */
+}
+
+::-webkit-scrollbar-track {
+  background: transparent; /* Fundo invisível */
+  margin: 4px 0;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--border); /* Cor da barra */
+  border-radius: 20px;       /* Arredondamento */
+  border: 2px solid transparent; /* Cria um respiro interno */
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-muted); /* Cor ao passar o mouse */
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Ajuste específico para Listas dentro de Modais e Cards */
+.kanban-list-scroll, 
+.modal-content, 
+.sidebar, 
+.main-content,
+.items-list-scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Garante que o modal não ultrapasse a tela e gere barra dupla */
+.modal-content {
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}

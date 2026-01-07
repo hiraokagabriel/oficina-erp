@@ -18,17 +18,29 @@ interface FinancialPageProps {
   onOpenEntry: () => void;
   onEditEntry: (id: string) => void;
   onDeleteEntry: (entry: LedgerEntry) => void;
+  // NOVAS PROPS
+  selectedMonth: string;
+  onMonthChange: (val: string) => void;
 }
 
 export const FinancialPage: React.FC<FinancialPageProps> = ({ 
   isLoading, kpiData, chartDataFluxo, chartDataPie, ledger, Money, 
-  onOpenExport, onOpenEntry, onEditEntry, onDeleteEntry 
+  onOpenExport, onOpenEntry, onEditEntry, onDeleteEntry,
+  selectedMonth, onMonthChange
 }) => {
   return (
     <>
       <div className="header-area">
         <h1 className="page-title">Painel Financeiro</h1>
-        <div style={{display:'flex', gap:10}}>
+        <div style={{display:'flex', gap:10, alignItems: 'center'}}>
+          {/* SELETOR DE MÊS */}
+          <input 
+            type="month" 
+            className="form-input" 
+            style={{width: 'auto', fontWeight: 'bold', color: 'var(--primary)', cursor: 'pointer'}}
+            value={selectedMonth}
+            onChange={(e) => onMonthChange(e.target.value)}
+          />
           <button className="btn-secondary" onClick={onOpenExport}>📄 Exportar</button>
           <button className="btn" onClick={onOpenEntry}>+ Lançamento</button>
         </div>
@@ -41,9 +53,10 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
       ) : (
           <div className="stats-row">
             <div className="stat-card">
-               <div className="stat-label">Saldo Atual</div>
+               {/* Label Ajustado */}
+               <div className="stat-label">Resultado (Mês)</div>
                <div className="stat-value" style={{color: kpiData.saldo >= 0 ? 'var(--success)' : 'var(--danger)'}}>{Money.format(kpiData.saldo)}</div>
-               <div className="stat-trend">Lucro Líquido</div>
+               <div className="stat-trend">{kpiData.saldo >= 0 ? 'Lucro do período' : 'Prejuízo do período'}</div>
             </div>
             <div className="stat-card"><div className="stat-label">Receitas</div><div className="stat-value" style={{color: 'var(--success)'}}>{Money.format(kpiData.receitas)}</div></div>
             <div className="stat-card"><div className="stat-label">Despesas</div><div className="stat-value" style={{color: 'var(--danger)'}}>{Money.format(kpiData.despesas)}</div></div>
@@ -53,7 +66,7 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
 
       <div className="dashboard-grid">
         <div className="chart-card">
-            <div className="chart-header"><div className="chart-title">Faturamento Diário</div></div>
+            <div className="chart-header"><div className="chart-title">Faturamento Diário (Dia)</div></div>
             <div style={{flex:1}}>
                 <ResponsiveContainer>
                     <AreaChart data={chartDataFluxo}>
@@ -67,10 +80,9 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                         <XAxis dataKey="name" stroke={COLORS.text} fontSize={10} tickLine={false} axisLine={false}/>
                         <YAxis stroke={COLORS.text} fontSize={10} tickLine={false} axisLine={false}/>
                         
-                        {/* TOOLTIP DINÂMICO AQUI */}
                         <Tooltip 
                             contentStyle={{
-                                backgroundColor: 'var(--bg-panel)', // Cor do Card do Tema
+                                backgroundColor: 'var(--bg-panel)', 
                                 borderColor: 'var(--border)', 
                                 color: 'var(--text-main)',
                                 borderRadius: '12px',
@@ -78,6 +90,8 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                             }}
                             itemStyle={{ color: 'var(--text-main)' }}
                             labelStyle={{ color: 'var(--text-muted)' }}
+                            // CORREÇÃO: Alterado para 'any' para evitar erro de tipagem estrita
+                            formatter={(value: any) => [`R$ ${Number(value).toFixed(2)}`, 'Valor']}
                         />
                         
                         <Area type="monotone" dataKey="valor" stroke="var(--primary)" fill="url(#c)" strokeWidth={3} activeDot={{r: 6}} />
@@ -86,7 +100,7 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
             </div>
         </div>
         <div className="chart-card">
-            <div className="chart-header"><div className="chart-title">Receita</div></div>
+            <div className="chart-header"><div className="chart-title">Receita (Peças x Serviços)</div></div>
             <div style={{flex:1}}>
                 <ResponsiveContainer>
                     <PieChart>
@@ -102,20 +116,27 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
       
       <div className="card">
           <table className="data-table">
-            <thead><tr><th>Descrição</th><th>Valor</th><th>Ações</th></tr></thead>
+            <thead><tr><th>Descrição</th><th>Valor</th><th>Data</th><th>Ações</th></tr></thead>
             <tbody>
-                {ledger.slice(0, 50).map(e => (
-                    <tr key={e.id}>
-                        <td>{e.description}</td>
-                        <td style={{fontWeight:'bold', color: e.type === 'DEBIT' ? 'var(--danger)' : 'var(--success)'}}>
-                            {e.type === 'DEBIT' ? '- ' : '+ '}{Money.format(e.amount)}
-                        </td>
-                        <td>
-                            <button className="btn-sm" onClick={() => onEditEntry(e.id)}>Edit</button> 
-                            <button className="btn-sm" onClick={() => onDeleteEntry(e)}>Del</button>
-                        </td>
-                    </tr>
-                ))}
+                {ledger.length === 0 ? (
+                   <tr><td colSpan={4} style={{textAlign:'center', padding:20, color:'var(--text-muted)'}}>Sem lançamentos neste mês.</td></tr>
+                ) : (
+                    ledger.map(e => (
+                        <tr key={e.id}>
+                            <td>{e.description}</td>
+                            <td style={{fontWeight:'bold', color: e.type === 'DEBIT' ? 'var(--danger)' : 'var(--success)'}}>
+                                {e.type === 'DEBIT' ? '- ' : '+ '}{Money.format(e.amount)}
+                            </td>
+                            <td style={{fontSize: '0.8rem', color: 'var(--text-muted)'}}>
+                                {new Date(e.effectiveDate).toLocaleDateString()}
+                            </td>
+                            <td>
+                                <button className="btn-sm" onClick={() => onEditEntry(e.id)}>Edit</button> 
+                                <button className="btn-sm" onClick={() => onDeleteEntry(e)}>Del</button>
+                            </td>
+                        </tr>
+                    ))
+                )}
             </tbody>
           </table>
       </div>

@@ -2,6 +2,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { DropResult } from '@hello-pangea/dnd';
 
+// --- HOOKS ---
+import { useKeyboard } from './hooks/useKeyboard';
+
 // --- COMPONENTES VISUAIS ---
 import { Sidebar } from './components/Sidebar';
 import { Confetti } from './components/ui/Confetti';
@@ -556,6 +559,40 @@ function App() {
   useEffect(() => { document.documentElement.setAttribute('data-theme', currentTheme); }, [currentTheme]);
   useEffect(() => { if (showConfetti) setTimeout(() => setShowConfetti(false), 3000); }, [showConfetti]);
 
+  // --- ATALHOS GLOBAIS ---
+  useKeyboard('F2', () => {
+    if (activeTab === 'OFICINA') {
+      setEditingOS(null);
+      setIsModalOpen(true);
+    } else {
+      setActiveTab('OFICINA');
+      setTimeout(() => {
+          setEditingOS(null);
+          setIsModalOpen(true);
+      }, 100);
+    }
+    addToast("Nova OS (F2)", "info");
+  });
+
+  useKeyboard('F3', (e) => {
+     const searchInput = document.querySelector('.search-input') as HTMLInputElement;
+     if (searchInput) {
+         e.preventDefault();
+         searchInput.focus();
+         addToast("Busca Focada", "info");
+     } else {
+         setActiveTab('OFICINA');
+         addToast("Indo para Oficina...", "info");
+     }
+  });
+
+  useKeyboard('Escape', () => {
+    if (isModalOpen) setIsModalOpen(false);
+    if (isEntryModalOpen) setIsEntryModalOpen(false);
+    if (isExportModalOpen) setIsExportModalOpen(false);
+    if (isChecklistOpen) setIsChecklistOpen(false);
+  });
+
   // --- HANDLERS ---
   const handleImportData = (content: string) => {
     try {
@@ -633,26 +670,14 @@ function App() {
      }
   };
 
-  // --- LÓGICA DE IMPRESSÃO COM NOME DE ARQUIVO AUTOMÁTICO ---
   const handlePrintOS = (os: WorkOrder) => {
       setPrintingOS(os);
-      
-      // 1. Salva o título atual da janela ("OficinaPro")
       const originalTitle = document.title;
+      const fileName = `OS ${os.osNumber} - ${os.clientName} - ${os.vehicle}`;
+      document.title = fileName;
 
-      // 2. Tenta obter a placa (caso exista na interface WorkOrder, senão usa string vazia)
-      // Se a placa já estiver escrita no campo 'vehicle', isso pode duplicar, mas garante o pedido.
-      const plateSuffix = (os as any).plate ? ` ${(os as any).plate}` : '';
-
-      // 3. Define o título da página para o nome do arquivo desejado
-      // Formato: OS [Numero] [Cliente] [Veiculo] [Placa]
-      // Ex: "OS 1042 João Silva Honda Civic ABC-1234"
-      document.title = `OS ${os.osNumber} ${os.clientName} ${os.vehicle}${plateSuffix}`;
-
-      // 4. Aguarda renderização e chama o print
       setTimeout(() => {
           window.print();
-          // 5. Restaura o título original
           document.title = originalTitle;
       }, 100);
   };
@@ -706,30 +731,49 @@ function App() {
     finally { setIsBackuping(false); }
   };
 
+  // --- KPI & CHART DATA (COM FILTRO DE MÊS) ---
+
+  const filteredLedger = useMemo(() => {
+    return ledger.filter(e => e.effectiveDate.startsWith(selectedMonth));
+  }, [ledger, selectedMonth]);
+
+  const filteredWorkOrders = useMemo(() => {
+    // Filtra OS criadas no mês selecionado para estatísticas (Gráfico Pizza)
+    return workOrders.filter(o => o.createdAt.startsWith(selectedMonth));
+  }, [workOrders, selectedMonth]);
+
   const kpiData = useMemo(() => ({
-      saldo: ledger.reduce((a,e) => a + (e.type === 'CREDIT' ? e.amount : -e.amount), 0),
-      receitas: ledger.filter(e => e.type === 'CREDIT').reduce((a,e)=>a+e.amount, 0),
-      despesas: ledger.filter(e => e.type === 'DEBIT').reduce((a,e)=>a+e.amount, 0),
-      ticketMedio: workOrders.filter(o => o.status === 'FINALIZADO').reduce((a,o)=>a+o.total, 0) / (workOrders.filter(o => o.status === 'FINALIZADO').length || 1)
-  }), [ledger, workOrders]);
+      // Saldo do Mês = Receitas - Despesas (NÃO o acumulado histórico)
+      saldo: filteredLedger.reduce((a,e) => a + (e.type === 'CREDIT' ? e.amount : -e.amount), 0),
+      receitas: filteredLedger.filter(e => e.type === 'CREDIT').reduce((a,e)=>a+e.amount, 0),
+      despesas: filteredLedger.filter(e => e.type === 'DEBIT').reduce((a,e)=>a+e.amount, 0),
+      // Ticket Médio das OS Finalizadas neste mês
+      ticketMedio: filteredWorkOrders.filter(o => o.status === 'FINALIZADO').reduce((a,o)=>a+o.total, 0) / (filteredWorkOrders.filter(o => o.status === 'FINALIZADO').length || 1)
+  }), [filteredLedger, filteredWorkOrders]);
 
   const chartFluxo = useMemo(() => {
      const map: Record<string, number> = {};
-     ledger.forEach(e => { if(e.type==='CREDIT') map[e.effectiveDate.slice(5, 10)] = (map[e.effectiveDate.slice(5, 10)] || 0) + e.amount; });
-     return Object.entries(map).sort().slice(-10).map(([k, v]) => ({ name: k, valor: Money.toFloat(v) }));
-  }, [ledger]);
+     filteredLedger.forEach(e => { 
+       if(e.type==='CREDIT') {
+          // Usa apenas o DIA no gráfico mensal (DD)
+          const day = e.effectiveDate.slice(8, 10);
+          map[day] = (map[day] || 0) + e.amount;
+       }
+     });
+     // Ordena por dia
+     return Object.entries(map).sort((a,b) => a[0].localeCompare(b[0])).map(([k, v]) => ({ name: k, valor: Money.toFloat(v) }));
+  }, [filteredLedger]);
 
   const chartPie = useMemo(() => {
       let parts = 0, servs = 0;
-      workOrders.forEach(o => { parts += o.parts.reduce((a,i)=>a+i.price,0); servs += o.services.reduce((a,i)=>a+i.price,0); });
+      filteredWorkOrders.forEach(o => { parts += o.parts.reduce((a,i)=>a+i.price,0); servs += o.services.reduce((a,i)=>a+i.price,0); });
       return parts+servs === 0 ? [{name:'-', value:1}] : [{name:'Peças', value: Money.toFloat(parts)}, {name:'Serviços', value: Money.toFloat(servs)}];
-  }, [workOrders]);
+  }, [filteredWorkOrders]);
 
   return (
     <>
       {showConfetti && <Confetti />}
       
-      {/* Container de Notificações */}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
 
       <div className="app-container">
@@ -738,8 +782,18 @@ function App() {
         <main className="main-content">
           {activeTab === 'FINANCEIRO' && (
             <FinancialPage 
-              isLoading={isLoading} kpiData={kpiData} chartDataFluxo={chartFluxo} chartDataPie={chartPie} ledger={ledger} Money={Money}
-              onOpenExport={() => setIsExportModalOpen(true)} onOpenEntry={() => setIsEntryModalOpen(true)} onEditEntry={handleEditEntry} onDeleteEntry={handleDeleteEntry}
+              isLoading={isLoading} 
+              kpiData={kpiData} 
+              chartDataFluxo={chartFluxo} 
+              chartDataPie={chartPie} 
+              ledger={filteredLedger} // Passa apenas os dados do mês
+              selectedMonth={selectedMonth}
+              onMonthChange={setSelectedMonth}
+              Money={Money}
+              onOpenExport={() => setIsExportModalOpen(true)} 
+              onOpenEntry={() => setIsEntryModalOpen(true)} 
+              onEditEntry={handleEditEntry} 
+              onDeleteEntry={handleDeleteEntry}
             />
           )}
 

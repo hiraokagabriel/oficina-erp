@@ -41,11 +41,16 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
                   <p>{settings.technician && `Téc. Resp: ${settings.technician}`}</p>
                 </div>
 
-                <div className="invoice-logo-area">
+                {/* --- ÁREA DO LOGO ALTERADA --- */}
+                <div className="invoice-logo-area" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                   <span style={{ fontSize: '10px', fontWeight: 'bold', marginBottom: '4px', whiteSpace: 'nowrap' }}>
+                     ORDEM DE SERVIÇO
+                   </span>
                    <div className="invoice-logo-circle">
-                      {settings.name ? settings.name.charAt(0).toUpperCase() : "O"}
+                      AM
                    </div>
                 </div>
+                {/* ----------------------------- */}
 
                 <div className="invoice-col client-col">
                   <h4 className="label-sm">CLIENTE</h4>

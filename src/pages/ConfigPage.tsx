@@ -7,21 +7,21 @@ interface ConfigPageProps {
   currentTheme: 'dark' | 'pastel';
   setCurrentTheme: (t: 'dark' | 'pastel') => void;
   onBackup: () => void;
-  // NOVA PROP para receber o conteúdo do arquivo importado
-  onImportData: (content: string) => void; 
+  onImportData: (content: string) => void;
   isBackuping: boolean;
   driveStatus: 'idle' | 'success' | 'error';
+  // NOVA PROP
+  onOpenDatabase: () => void;
 }
 
 export const ConfigPage: React.FC<ConfigPageProps> = ({
-  settings, setSettings, currentTheme, setCurrentTheme, onBackup, onImportData, isBackuping, driveStatus
+  settings, setSettings, currentTheme, setCurrentTheme, onBackup, onImportData, isBackuping, driveStatus, onOpenDatabase
 }) => {
 
   const handleChange = (field: keyof WorkshopSettings, value: string) => {
     setSettings({ ...settings, [field]: value });
   };
 
-  // Handler para ler o arquivo localmente antes de mandar pro App
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -34,13 +34,27 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
       }
     };
     reader.readAsText(file);
-    // Limpa o input para permitir selecionar o mesmo arquivo novamente se necessário
     e.target.value = '';
   };
 
   return (
     <div className="config-container" style={{ maxWidth: 1000, margin: '0 auto' }}>
       
+      {/* SEÇÃO 0: GERENCIAMENTO DE CADASTROS (NOVO) */}
+      <div className="card" style={{ borderLeft: '4px solid var(--primary)', background: 'var(--bg-panel)' }}>
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+            <div>
+                <h3 style={{marginTop:0}}>🗂️ Banco de Dados e Cadastros</h3>
+                <p style={{marginBottom:0, color:'var(--text-muted)'}}>
+                    Gerencie manualmente seus clientes, veículos, peças e serviços.
+                </p>
+            </div>
+            <button className="btn" onClick={onOpenDatabase} style={{padding: '12px 24px', fontSize: '1rem'}}>
+                📂 Abrir Gerenciador
+            </button>
+        </div>
+      </div>
+
       {/* SEÇÃO 1: DADOS DA OFICINA */}
       <div className="card">
         <h3>🏢 Identidade da Oficina</h3>
@@ -108,7 +122,7 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
       <div className="card">
         <h3>💾 Gerenciamento de Dados</h3>
         
-        {/* IMPORTAÇÃO MANUAL (NOVO) */}
+        {/* IMPORTAÇÃO MANUAL */}
         <div style={{ marginBottom: 30, padding: 20, border: '1px dashed var(--border)', borderRadius: 12 }}>
             <label className="form-label" style={{ marginBottom: 10, display: 'block' }}>Restaurar Backup Manual (Local)</label>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -116,7 +130,7 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
                     type="file" 
                     accept=".json,.bak" 
                     className="form-input" 
-                    style={{ paddingTop: 8, height: 'auto' }} // Ajuste visual para input file
+                    style={{ paddingTop: 8, height: 'auto' }} 
                     onChange={handleFileSelect}
                 />
             </div>

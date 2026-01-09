@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
-// REMOVIDO: import { open } from '@tauri-apps/plugin-opener'; 
 import { WorkOrder, OSStatus, STATUS_LABELS } from '../types';
 import { KanbanCard } from './KanbanCard';
 
@@ -15,17 +14,21 @@ interface KanbanBoardProps {
     onPrint: (os: WorkOrder) => void;
     onDelete: (os: WorkOrder) => void;
     onAdvance: (id: string) => void;
+    onArchive?: (os: WorkOrder) => void;
+    onRestore?: (os: WorkOrder) => void;
+    // ADICIONADO AQUI TAMBÉM
+    onQuickFinish?: (id: string) => void;
   };
   formatMoney: (val: number) => string;
 }
 
-// Componente visual para quando a coluna está vazia
 const EmptyState = ({ status }: { status: OSStatus }) => {
   const messages: Record<string, { icon: string, text: string }> = {
     ORCAMENTO: { icon: '📝', text: 'Sem orçamentos pendentes' },
     APROVADO: { icon: '✅', text: 'Nada aprovado aguardando' },
     EM_SERVICO: { icon: '🔧', text: 'Nenhum veículo no elevador' },
     FINALIZADO: { icon: '🏁', text: 'Nenhuma OS finalizada hoje' },
+    ARQUIVADO: { icon: '📦', text: 'Lixeira vazia. Nenhuma OS arquivada.' },
   };
 
   const info = messages[status] || { icon: '📂', text: 'Lista vazia' };
@@ -44,23 +47,34 @@ const EmptyState = ({ status }: { status: OSStatus }) => {
 
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading, onDragEnd, actions, formatMoney }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
 
-  // Lógica de Filtro
+  const [visibleCounts, setVisibleCounts] = useState<Record<OSStatus, number>>({
+      ORCAMENTO: 50, APROVADO: 50, EM_SERVICO: 50, FINALIZADO: 50, ARQUIVADO: 50
+  });
+
+  const handleShowMore = (status: OSStatus) => {
+      setVisibleCounts(prev => ({ ...prev, [status]: prev[status] + 50 }));
+  };
+
   const filteredWorkOrders = useMemo(() => {
-    if (!searchTerm) return workOrders;
+    let list = workOrders;
+    if (showArchived) list = list.filter(os => os.status === 'ARQUIVADO');
+    else list = list.filter(os => os.status !== 'ARQUIVADO');
+
+    if (!searchTerm) return list;
     const term = searchTerm.toLowerCase();
-    return workOrders.filter(os => 
+    return list.filter(os => 
       os.clientName.toLowerCase().includes(term) ||
       os.vehicle.toLowerCase().includes(term) ||
       os.osNumber.toString().includes(term) ||
       (os.clientPhone && os.clientPhone.includes(term))
     );
-  }, [workOrders, searchTerm]);
+  }, [workOrders, searchTerm, showArchived]);
 
-  // Agrupamento
   const columnsData = useMemo(() => {
     const cols: Record<OSStatus, WorkOrder[]> = {
-        ORCAMENTO: [], APROVADO: [], EM_SERVICO: [], FINALIZADO: []
+        ORCAMENTO: [], APROVADO: [], EM_SERVICO: [], FINALIZADO: [], ARQUIVADO: []
     };
     filteredWorkOrders.forEach(os => {
         if(cols[os.status]) cols[os.status].push(os);
@@ -71,28 +85,17 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
     return cols;
   }, [filteredWorkOrders]);
 
-  // --- ONE-CLICK WHATSAPP INTEGRATION ---
   const handleWhatsApp = (os: WorkOrder) => {
     if (!os.clientPhone) return;
-    
-    // 1. Limpa o número (remove ( ) - e espaços)
     const cleanPhone = os.clientPhone.replace(/\D/g, '');
-    
-    // 2. Mensagem personalizada baseada no status
     let message = `Olá ${os.clientName.split(' ')[0]}, aqui é da Oficina. `;
-    if (os.status === 'ORCAMENTO') {
-        message += `O orçamento para o ${os.vehicle} ficou em ${formatMoney(os.total)}. Podemos aprovar?`;
-    } else if (os.status === 'FINALIZADO') {
-        message += `O serviço no ${os.vehicle} foi finalizado! Já pode vir buscar.`;
-    } else {
-        message += `Passando para dar um status sobre o ${os.vehicle}.`;
-    }
-
-    // 3. Monta o link (Adiciona 55 do Brasil se não tiver)
+    if (os.status === 'ORCAMENTO') message += `O orçamento para o ${os.vehicle} ficou em ${formatMoney(os.total)}. Podemos aprovar?`;
+    else if (os.status === 'FINALIZADO') message += `O serviço no ${os.vehicle} foi finalizado! Já pode vir buscar.`;
+    else message += `Passando para dar um status sobre o ${os.vehicle}.`;
+    
     const fullPhone = cleanPhone.length <= 11 ? `55${cleanPhone}` : cleanPhone;
     const url = `https://wa.me/${fullPhone}?text=${encodeURIComponent(message)}`;
 
-    // 4. Abertura do link (Método Seguro sem Plugin)
     const link = document.createElement('a');
     link.href = url;
     link.target = '_blank';
@@ -103,10 +106,14 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
   };
 
   const renderColumn = (status: OSStatus) => {
-    const list = columnsData[status];
+    const fullList = columnsData[status];
+    const visibleList = fullList.slice(0, visibleCounts[status]);
+    const hasMore = fullList.length > visibleCounts[status];
+
     const colColorMap: Record<string, string> = { 
         ORCAMENTO: 'var(--info)', APROVADO: 'var(--warning)', 
-        EM_SERVICO: 'var(--primary)', FINALIZADO: 'var(--success)' 
+        EM_SERVICO: 'var(--primary)', FINALIZADO: 'var(--success)',
+        ARQUIVADO: 'var(--text-muted)'
     };
 
     return (
@@ -114,7 +121,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
         <div className="kanban-header">
           {STATUS_LABELS[status]} 
           <span style={{background: 'rgba(0,0,0,0.05)', padding: '2px 8px', borderRadius: 10, fontSize: '0.75rem'}}>
-            {list.length}
+            {fullList.length}
           </span>
         </div>
         
@@ -130,20 +137,27 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
                   transition: 'background-color 0.2s ease', minHeight: 150, flex: 1
               }}
             >
-              {list.length === 0 && !snapshot.isDraggingOver ? (
+              {visibleList.length === 0 && !snapshot.isDraggingOver ? (
                  <EmptyState status={status} />
               ) : (
-                 list.map((os, index) => (
-                    <KanbanCard 
-                        key={os.id} 
-                        os={os} 
-                        index={index} 
-                        formatMoney={formatMoney} 
-                        status={status}
-                        actions={actions}
-                        onWhatsApp={() => handleWhatsApp(os)}
-                    />
-                 ))
+                 <>
+                    {visibleList.map((os, index) => (
+                        <KanbanCard 
+                            key={os.id} 
+                            os={os} 
+                            index={index} 
+                            formatMoney={formatMoney} 
+                            status={status}
+                            actions={actions}
+                            onWhatsApp={() => handleWhatsApp(os)}
+                        />
+                    ))}
+                    {hasMore && (
+                        <button onClick={() => handleShowMore(status)} className="btn-secondary" style={{ width: '100%', padding: '8px', fontSize: '0.85rem', marginTop: '10px', borderStyle: 'dashed' }}>
+                            ⬇ Carregar mais ({fullList.length - visibleCounts[status]})
+                        </button>
+                    )}
+                 </>
               )}
               {provided.placeholder}
             </div>
@@ -160,21 +174,20 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
         <div className="kanban-filter-bar">
             <div className="search-wrapper">
                 <span className="search-icon">🔍</span>
-                <input 
-                    type="text" 
-                    className="form-input search-input" 
-                    placeholder="Buscar Cliente, OS, Veículo..." 
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
+                <input type="text" className="form-input search-input" placeholder="Buscar Cliente, OS, Veículo..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                 {searchTerm && <button className="btn-clear-search" onClick={() => setSearchTerm('')}>✕</button>}
             </div>
-            <div className="filter-stats"><strong>{filteredWorkOrders.length}</strong> ordens encontradas</div>
+            
+            <button className={`btn ${showArchived ? 'btn-secondary' : 'btn-ghost'}`} onClick={() => setShowArchived(!showArchived)} style={{ marginLeft: 10, display: 'flex', alignItems: 'center', gap: 6, border: showArchived ? '1px solid var(--border)' : 'none', background: showArchived ? 'var(--bg-input)' : 'transparent' }}>
+                {showArchived ? '🔙 Voltar ao Quadro' : '📂 Ver Arquivados'}
+            </button>
+
+            <div className="filter-stats"><strong>{filteredWorkOrders.length}</strong> ordens</div>
         </div>
 
         <DragDropContext onDragEnd={onDragEnd}>
-            <div className="kanban-board">
-                {renderColumn('ORCAMENTO')} {renderColumn('APROVADO')} {renderColumn('EM_SERVICO')} {renderColumn('FINALIZADO')}
+            <div className="kanban-board" style={{ gridTemplateColumns: showArchived ? '1fr' : 'repeat(4, 1fr)' }}>
+                {showArchived ? renderColumn('ARQUIVADO') : <>{renderColumn('ORCAMENTO')}{renderColumn('APROVADO')}{renderColumn('EM_SERVICO')}{renderColumn('FINALIZADO')}</>}
             </div>
         </DragDropContext>
     </div>

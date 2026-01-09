@@ -1,4 +1,5 @@
 // Tipos de Status da Ordem de Serviço
+// ADICIONE 'ARQUIVADO' AQUI PARA CORRIGIR OS ERROS
 export type OSStatus = 'ORCAMENTO' | 'APROVADO' | 'EM_SERVICO' | 'FINALIZADO' | 'ARQUIVADO';
 
 // Labels para exibição (Mapeamento)
@@ -9,12 +10,6 @@ export const STATUS_LABELS: Record<OSStatus, string> = {
   FINALIZADO: 'Finalizado',
   ARQUIVADO: 'Arquivado'
 };
-
-// Constante de Meses (CORREÇÃO DO ERRO)
-export const MONTH_NAMES = [
-  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-];
 
 // Item de Pedido (Peça ou Serviço dentro da OS)
 export interface OrderItem {

@@ -1,9 +1,14 @@
-import { useState, useEffect, useMemo } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { useState, useEffect } from 'react';
 import { DropResult } from '@hello-pangea/dnd';
 
-// --- HOOKS ---
+// --- CONTEXT & HOOKS ---
+import { DatabaseProvider, useDatabase } from './context/DatabaseContext';
+import { useFinance } from './hooks/useFinance';
 import { useKeyboard } from './hooks/useKeyboard';
+
+// --- SERVICES ---
+import { updateClientCascading, updateCatalogItemCascading } from './services/cascadeService';
+import { uploadToDrive } from './services/googleDrive';
 
 // --- COMPONENTES VISUAIS ---
 import { Sidebar } from './components/Sidebar';
@@ -23,8 +28,11 @@ import { OSModal } from './modals/OSModal';
 import { EntryModal } from './modals/EntryModal';
 import { ExportModal } from './modals/ExportModal';
 import { ChecklistModal } from './modals/ChecklistModal';
+import { DatabaseModal } from './modals/DatabaseModal';
+import { DeleteConfirmationModal } from './modals/DeleteConfirmationModal'; // Modal Financeiro (Parcelas)
+import { ConfirmationModal } from './modals/ConfirmationModal'; // Modal Genérico (UX)
 
-// --- SERVICES & UTILS ---
+// --- UTILS ---
 import { SoundFX } from './utils/audio';
 import { uploadToDrive } from './services/googleDrive';
 import { 
@@ -348,28 +356,31 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
-
-  // Estados de Modais
+  
+  // Modais
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isChecklistOpen, setIsChecklistOpen] = useState(false);
-  
+  const [isDatabaseModalOpen, setIsDatabaseModalOpen] = useState(false);
+
+  // Estados de Edição
   const [editingOS, setEditingOS] = useState<WorkOrder | null>(null);
+  const [editingEntry, setEditingEntry] = useState<LedgerEntry | null>(null);
   const [checklistOS, setChecklistOS] = useState<WorkOrder | null>(null);
   const [printingOS, setPrintingOS] = useState<WorkOrder | null>(null);
 
+  // Estados de Confirmação (UX)
+  const [deleteModalInfo, setDeleteModalInfo] = useState<{ isOpen: boolean; entry: LedgerEntry | null }>({ isOpen: false, entry: null });
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+
   const [isBackuping, setIsBackuping] = useState(false);
   const [driveStatus, setDriveStatus] = useState<'idle' | 'success' | 'error'>('idle');
-
-  // Estado de Notificações
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  // Helper de Notificação
   const addToast = (message: string, type: ToastType = 'info') => {
     const id = crypto.randomUUID();
     setToasts(prev => [...prev, { id, message, type }]);
-    
     if (type === 'success') SoundFX.success();
     if (type === 'error') SoundFX.error();
   };
@@ -559,59 +570,85 @@ function App() {
   useEffect(() => { document.documentElement.setAttribute('data-theme', currentTheme); }, [currentTheme]);
   useEffect(() => { if (showConfetti) setTimeout(() => setShowConfetti(false), 3000); }, [showConfetti]);
 
-  // --- ATALHOS GLOBAIS ---
   useKeyboard('F2', () => {
-    if (activeTab === 'OFICINA') {
-      setEditingOS(null);
-      setIsModalOpen(true);
-    } else {
-      setActiveTab('OFICINA');
-      setTimeout(() => {
-          setEditingOS(null);
-          setIsModalOpen(true);
-      }, 100);
-    }
+    if (activeTab === 'OFICINA') { setEditingOS(null); setIsModalOpen(true); } 
+    else { setActiveTab('OFICINA'); setTimeout(() => { setEditingOS(null); setIsModalOpen(true); }, 100); }
     addToast("Nova OS (F2)", "info");
   });
-
-  useKeyboard('F3', (e) => {
-     const searchInput = document.querySelector('.search-input') as HTMLInputElement;
-     if (searchInput) {
-         e.preventDefault();
-         searchInput.focus();
-         addToast("Busca Focada", "info");
-     } else {
-         setActiveTab('OFICINA');
-         addToast("Indo para Oficina...", "info");
-     }
-  });
-
   useKeyboard('Escape', () => {
     if (isModalOpen) setIsModalOpen(false);
-    if (isEntryModalOpen) setIsEntryModalOpen(false);
+    if (isEntryModalOpen) { setIsEntryModalOpen(false); setEditingEntry(null); }
     if (isExportModalOpen) setIsExportModalOpen(false);
     if (isChecklistOpen) setIsChecklistOpen(false);
+    if (isDatabaseModalOpen) setIsDatabaseModalOpen(false);
+    if (deleteModalInfo.isOpen) setDeleteModalInfo({ isOpen: false, entry: null });
+    if (pendingAction) setPendingAction(null);
   });
 
-  // --- HANDLERS ---
-  const handleImportData = (content: string) => {
-    try {
-      const parsed = JSON.parse(content);
-      if (!parsed.workOrders && !parsed.clients && !parsed.ledger) {
-        addToast("Arquivo de backup inválido.", "error"); return;
+  // --- LÓGICA CENTRAL DE CONFIRMAÇÃO (UX Melhorada) ---
+  const executePendingAction = () => {
+      if (!pendingAction) return;
+
+      if (pendingAction.type === 'DELETE_OS') {
+          const os = pendingAction.data;
+          setWorkOrders(p => p.filter(i => i.id !== os.id));
+          if (os.financialId) setLedger(p => p.filter(e => e.id !== os.financialId));
+          addToast("OS excluída com sucesso.", "info");
       }
-      if (confirm(`Importar backup? Substituirá dados atuais.`)) {
-        setLedger(parsed.ledger || []);
-        setWorkOrders(parsed.workOrders || []);
-        setClients(parsed.clients || []);
-        setCatalogParts(parsed.catalogParts || []);
-        setCatalogServices(parsed.catalogServices || []);
-        if (parsed.settings) setSettings(parsed.settings);
-        addToast("Dados importados com sucesso!", "success");
+
+      if (pendingAction.type === 'ARCHIVE_OS') {
+          const os = pendingAction.data;
+          handleUpdateStatus(os.id, 'ARQUIVADO');
+          addToast("OS Arquivada.", "info");
       }
-    } catch (e) { addToast("Erro ao ler JSON.", "error"); }
+
+      if (pendingAction.type === 'FINISH_OS_FINANCIAL') {
+          const os = pendingAction.data;
+          const entry = createEntry(`Receita OS #${os.osNumber} - ${os.clientName}`, os.total, 'CREDIT', os.createdAt);
+          setLedger(prev => [entry, ...prev]);
+          setWorkOrders(prev => prev.map(o => o.id === os.id ? { ...o, status: 'FINALIZADO', financialId: entry.id } : o));
+          addToast("OS Finalizada e Receita lançada!", "success"); 
+          setShowConfetti(true);
+      }
+
+      if (pendingAction.type === 'RESTORE_FINANCIAL') {
+          const os = pendingAction.data;
+          setLedger(prev => prev.filter(e => e.id !== os.financialId));
+          setWorkOrders(prev => prev.map(o => o.id === os.id ? { ...o, status: 'EM_SERVICO', financialId: undefined } : o));
+          addToast("OS reaberta e financeiro estornado.", "info");
+      }
+
+      if (pendingAction.type === 'IMPORT_DATA') {
+          const parsed = JSON.parse(pendingAction.content);
+          setLedger(parsed.ledger || []); setWorkOrders(parsed.workOrders || []); setClients(parsed.clients || []);
+          setCatalogParts(parsed.catalogParts || []); setCatalogServices(parsed.catalogServices || []);
+          if (parsed.settings) setSettings(parsed.settings);
+          addToast("Dados importados com sucesso!", "success");
+      }
+
+      setPendingAction(null);
   };
 
+  // --- ACTIONS (Oficina & Geral) ---
+
+  const handleUpdateStatus = (osId: string, newStatus: OSStatus) => {
+    const os = workOrders.find(o => o.id === osId);
+    if (!os || os.status === newStatus) return;
+
+    if (newStatus === 'FINALIZADO' && os.status !== 'FINALIZADO' && !os.financialId) {
+       setPendingAction({ type: 'FINISH_OS_FINANCIAL', data: os });
+       return;
+    } 
+    else if (os.status === 'FINALIZADO' && newStatus !== 'FINALIZADO' && os.financialId) {
+       setPendingAction({ type: 'RESTORE_FINANCIAL', data: os });
+       return;
+    }
+    
+    setWorkOrders(prev => prev.map(o => o.id === osId ? { ...o, status: newStatus } : o));
+    SoundFX.pop();
+  };
+
+  // --- CORREÇÃO APLICADA AQUI: Adicionado data.publicNotes ---
   const handleSaveOSModal = (data: any) => {
     const duplicate = workOrders.find(o => o.osNumber === data.osNumber && o.id !== editingOS?.id);
     if (duplicate && !confirm(`OS #${data.osNumber} duplicada. Continuar?`)) return;
@@ -621,159 +658,121 @@ function App() {
     setCatalogServices(prev => learnCatalogItems(prev, data.services));
 
     if (editingOS) {
-      const updated = updateWorkOrderData(editingOS, data.osNumber, data.vehicle, data.clientName, data.clientPhone, data.mileage, data.parts, data.services, data.createdAt);
+      const updated = updateWorkOrderData(
+        editingOS, 
+        data.osNumber, 
+        data.vehicle, 
+        data.clientName, 
+        data.clientPhone, 
+        data.mileage, 
+        data.parts, 
+        data.services, 
+        data.createdAt,
+        data.publicNotes // <--- SALVANDO NOTA PÚBLICA
+      );
+
       setWorkOrders(prev => prev.map(o => o.id === editingOS.id ? updated : o));
+
       if (updated.financialId) {
-        setLedger(prev => prev.map(e => e.id === updated.financialId ? updateEntryAmount(e, Money.toFloat(updated.total), "Sistema", `Atualização OS #${data.osNumber}`) : e));
+        setLedger(prev => prev.map(e => {
+            if (e.id === updated.financialId) {
+                return { 
+                    ...e, 
+                    effectiveDate: updated.createdAt, 
+                    amount: updated.total, 
+                    description: `Receita OS #${data.osNumber} - ${data.clientName}`,
+                    updatedAt: new Date().toISOString()
+                };
+            }
+            return e;
+        }));
       }
-      addToast("OS atualizada com sucesso!", "success");
+      addToast("OS atualizada!", "success");
     } else {
-      const newOS = createWorkOrder(data.osNumber, data.vehicle, data.clientName, data.clientPhone, data.mileage, data.parts, data.services, data.createdAt);
+      const newOS = createWorkOrder(
+        data.osNumber, 
+        data.vehicle, 
+        data.clientName, 
+        data.clientPhone, 
+        data.mileage, 
+        data.parts, 
+        data.services, 
+        data.createdAt,
+        data.publicNotes // <--- SALVANDO NOTA PÚBLICA
+      );
       setWorkOrders(prev => [...prev, newOS]);
       addToast("Nova OS criada!", "success");
     }
-    
     setIsModalOpen(false);
   };
 
-  const handleUpdateStatus = (osId: string, newStatus: OSStatus) => {
-    const os = workOrders.find(o => o.id === osId);
-    if (!os || os.status === newStatus) return;
-
-    if (newStatus === 'FINALIZADO' && os.status !== 'FINALIZADO' && !os.financialId) {
-       if (confirm(`Lançar ${Money.format(os.total)} no financeiro?`)) {
-           const entry = createEntry(`Receita OS #${os.osNumber} - ${os.clientName}`, os.total, 'CREDIT', os.createdAt);
-           setLedger(prev => [entry, ...prev]);
-           setWorkOrders(prev => prev.map(o => o.id === osId ? { ...o, status: newStatus, financialId: entry.id } : o));
-           
-           addToast("OS Finalizada e Receita lançada!", "success"); 
-           setShowConfetti(true);
-           return;
-       }
-    } else if (os.status === 'FINALIZADO' && newStatus !== 'FINALIZADO' && os.financialId) {
-        if (confirm("Remover lançamento financeiro?")) {
-            setLedger(prev => prev.filter(e => e.id !== os.financialId));
-            setWorkOrders(prev => prev.map(o => o.id === osId ? { ...o, status: newStatus, financialId: undefined } : o));
-            addToast("OS reaberta e financeiro estornado.", "info");
-            return;
-        }
-    }
-    setWorkOrders(prev => prev.map(o => o.id === osId ? { ...o, status: newStatus } : o));
-    SoundFX.pop();
+  // --- ACTIONS (Financeiro) ---
+  const handleSaveEntryModal = (desc: string, val: number, type: 'CREDIT' | 'DEBIT', dateStr: string, recurrence: 'SINGLE' | 'INSTALLMENT' | 'RECURRING', count: number) => {
+      const absVal = Math.abs(val);
+      if (editingEntry) {
+          finance.updateEntry({ ...editingEntry, description: desc, amount: Money.fromFloat(absVal), type, effectiveDate: dateStr, updatedAt: new Date().toISOString() });
+          addToast("Lançamento atualizado.", "success");
+          setEditingEntry(null);
+      } else {
+          const createdCount = finance.addEntryWithRecurrence(desc, val, type, dateStr, recurrence, count);
+          addToast(createdCount > 1 ? `${createdCount} lançamentos gerados!` : "Lançamento registrado.", "success");
+      }
+      setIsEntryModalOpen(false);
   };
 
-  const handleDeleteOS = (os: WorkOrder) => {
-     if (confirm("Tem certeza? Isso excluirá a OS e o lançamento financeiro vinculado.")) {
-         setWorkOrders(p => p.filter(i => i.id !== os.id));
-         if (os.financialId) setLedger(p => p.filter(e => e.id !== os.financialId));
-         addToast("OS Excluída.", "info");
-     }
-  };
-
-  const handlePrintOS = (os: WorkOrder) => {
-      setPrintingOS(os);
-      const originalTitle = document.title;
-      const fileName = `OS ${os.osNumber} - ${os.clientName} - ${os.vehicle}`;
-      document.title = fileName;
-
-      setTimeout(() => {
-          window.print();
-          document.title = originalTitle;
-      }, 100);
-  };
-
-  const handleSaveChecklist = (data: ChecklistSchema) => {
-    if (!checklistOS) return;
-    setWorkOrders(prev => prev.map(o => o.id === checklistOS.id ? { ...o, checklist: data } : o));
-    addToast("Vistoria salva!", "success");
-    setIsChecklistOpen(false);
-  };
-
-  const handleSaveEntryModal = (desc: string, val: number, type: 'CREDIT' | 'DEBIT', date?: string) => {
-      const entry = createEntry(desc, Money.fromFloat(Math.abs(val)), type, date);
-      setLedger(prev => [entry, ...prev]);
-      addToast("Lançamento financeiro registrado.", "success");
-  };
-
-  const handleDeleteEntry = (entry: LedgerEntry) => {
-     if (confirm("Excluir lançamento?")) {
-         setLedger(p => p.filter(e => e.id !== entry.id));
-         setWorkOrders(p => p.map(o => o.financialId === entry.id ? { ...o, financialId: undefined } : o));
-         addToast("Lançamento excluído.", "info");
-     }
-  };
-  
   const handleEditEntry = (id: string) => {
-      const entry = ledger.find(e => e.id === id);
-      if (!entry) return;
-      const newValStr = prompt("Novo valor:", Money.toFloat(entry.amount).toString());
-      if (newValStr) {
-          const val = parseFloat(newValStr.replace(',', '.'));
-          if (!isNaN(val)) {
-            setLedger(p => p.map(e => e.id === id ? updateEntryAmount(e, Money.fromFloat(val), "Admin", "Edição") : e));
-            addToast("Valor atualizado.", "success");
-          }
+      const linkedOS = workOrders.find(o => o.financialId === id);
+      if (linkedOS) {
+          if(confirm(`Este lançamento pertence à OS #${linkedOS.osNumber}.\nAbrir OS para edição?`)) { setEditingOS(linkedOS); setIsModalOpen(true); }
+      } else {
+          const entry = ledger.find(e => e.id === id);
+          if (entry) { setEditingEntry(entry); setIsEntryModalOpen(true); }
       }
   };
 
+  const handleRequestDeleteEntry = (entry: LedgerEntry) => setDeleteModalInfo({ isOpen: true, entry });
+  const confirmDeleteSingle = () => { if (deleteModalInfo.entry) { finance.deleteEntry(deleteModalInfo.entry.id); addToast("Excluído.", "info"); } setDeleteModalInfo({ isOpen: false, entry: null }); };
+  const confirmDeleteGroup = () => { if (deleteModalInfo.entry?.groupId) { finance.deleteGroup(deleteModalInfo.entry.groupId); addToast("Série excluída.", "info"); } setDeleteModalInfo({ isOpen: false, entry: null }); };
+
+  // --- ACTIONS (Cadastros & Backup) ---
+  const handleSaveClient = (updatedClient: Client) => {
+    const oldClient = clients.find(c => c.id === updatedClient.id);
+    setClients(prev => { const exists = prev.find(c => c.id === updatedClient.id); return exists ? prev.map(c => c.id === updatedClient.id ? updatedClient : c) : [...prev, updatedClient]; });
+    const { newWorkOrders, newLedger, hasChanges } = updateClientCascading(oldClient, updatedClient, workOrders, ledger);
+    if (hasChanges) { setWorkOrders(newWorkOrders); setLedger(newLedger); addToast("Atualizado em cascata!", "success"); } else { addToast("Salvo!", "success"); }
+  };
+
+  const handleSaveCatalogItem = (updatedItem: CatalogItem, type: 'part' | 'service') => {
+    let oldItem: CatalogItem | undefined;
+    if (type === 'part') {
+        oldItem = catalogParts.find(p => p.id === updatedItem.id);
+        setCatalogParts(prev => { const ex = prev.find(p => p.id === updatedItem.id); return ex ? prev.map(p => p.id === updatedItem.id ? updatedItem : p) : [...prev, updatedItem]; });
+    } else {
+        oldItem = catalogServices.find(s => s.id === updatedItem.id);
+        setCatalogServices(prev => { const ex = prev.find(s => s.id === updatedItem.id); return ex ? prev.map(s => s.id === updatedItem.id ? updatedItem : s) : [...prev, updatedItem]; });
+    }
+    const { newWorkOrders, hasChanges } = updateCatalogItemCascading(oldItem, updatedItem, workOrders);
+    if (hasChanges) { setWorkOrders(newWorkOrders); addToast("Atualizado em cascata!", "success"); } else { addToast("Salvo!", "success"); }
+  };
+
   const handleBackup = async () => {
-    if (!settings.googleDriveToken) return addToast("Configure o Token do Google Drive na aba Config.", "error");
+    if (!settings.googleDriveToken) return addToast("Configure o Token.", "error");
     setIsBackuping(true); setDriveStatus('idle');
     try {
       const content = JSON.stringify({ ledger, workOrders, clients, settings, catalogParts, catalogServices });
       await uploadToDrive(`backup_${Date.now()}.json`, content, settings.googleDriveToken, GOOGLE_API_KEY);
-      setDriveStatus('success'); 
-      addToast("Backup na nuvem realizado!", "success");
-    } catch { 
-      setDriveStatus('error'); 
-      addToast("Erro no backup. Verifique sua conexão/token.", "error");
-    } 
-    finally { setIsBackuping(false); }
+      setDriveStatus('success'); addToast("Backup realizado!", "success");
+    } catch { setDriveStatus('error'); addToast("Erro no backup.", "error"); } finally { setIsBackuping(false); }
   };
 
-  // --- KPI & CHART DATA (COM FILTRO DE MÊS) ---
+  const handleImportData = (content: string) => {
+     setPendingAction({ type: 'IMPORT_DATA', content });
+  };
 
-  const filteredLedger = useMemo(() => {
-    return ledger.filter(e => e.effectiveDate.startsWith(selectedMonth));
-  }, [ledger, selectedMonth]);
-
-  const filteredWorkOrders = useMemo(() => {
-    // Filtra OS criadas no mês selecionado para estatísticas (Gráfico Pizza)
-    return workOrders.filter(o => o.createdAt.startsWith(selectedMonth));
-  }, [workOrders, selectedMonth]);
-
-  const kpiData = useMemo(() => ({
-      // Saldo do Mês = Receitas - Despesas (NÃO o acumulado histórico)
-      saldo: filteredLedger.reduce((a,e) => a + (e.type === 'CREDIT' ? e.amount : -e.amount), 0),
-      receitas: filteredLedger.filter(e => e.type === 'CREDIT').reduce((a,e)=>a+e.amount, 0),
-      despesas: filteredLedger.filter(e => e.type === 'DEBIT').reduce((a,e)=>a+e.amount, 0),
-      // Ticket Médio das OS Finalizadas neste mês
-      ticketMedio: filteredWorkOrders.filter(o => o.status === 'FINALIZADO').reduce((a,o)=>a+o.total, 0) / (filteredWorkOrders.filter(o => o.status === 'FINALIZADO').length || 1)
-  }), [filteredLedger, filteredWorkOrders]);
-
-  const chartFluxo = useMemo(() => {
-     const map: Record<string, number> = {};
-     filteredLedger.forEach(e => { 
-       if(e.type==='CREDIT') {
-          // Usa apenas o DIA no gráfico mensal (DD)
-          const day = e.effectiveDate.slice(8, 10);
-          map[day] = (map[day] || 0) + e.amount;
-       }
-     });
-     // Ordena por dia
-     return Object.entries(map).sort((a,b) => a[0].localeCompare(b[0])).map(([k, v]) => ({ name: k, valor: Money.toFloat(v) }));
-  }, [filteredLedger]);
-
-  const chartPie = useMemo(() => {
-      let parts = 0, servs = 0;
-      filteredWorkOrders.forEach(o => { parts += o.parts.reduce((a,i)=>a+i.price,0); servs += o.services.reduce((a,i)=>a+i.price,0); });
-      return parts+servs === 0 ? [{name:'-', value:1}] : [{name:'Peças', value: Money.toFloat(parts)}, {name:'Serviços', value: Money.toFloat(servs)}];
-  }, [filteredWorkOrders]);
-
+  // --- RENDER ---
   return (
     <>
       {showConfetti && <Confetti />}
-      
       <ToastContainer toasts={toasts} removeToast={removeToast} />
 
       <div className="app-container">
@@ -782,18 +781,9 @@ function App() {
         <main className="main-content">
           {activeTab === 'FINANCEIRO' && (
             <FinancialPage 
-              isLoading={isLoading} 
-              kpiData={kpiData} 
-              chartDataFluxo={chartFluxo} 
-              chartDataPie={chartPie} 
-              ledger={filteredLedger} // Passa apenas os dados do mês
-              selectedMonth={selectedMonth}
-              onMonthChange={setSelectedMonth}
-              Money={Money}
-              onOpenExport={() => setIsExportModalOpen(true)} 
-              onOpenEntry={() => setIsEntryModalOpen(true)} 
-              onEditEntry={handleEditEntry} 
-              onDeleteEntry={handleDeleteEntry}
+              isLoading={isLoading} kpiData={finance.kpiData} chartDataFluxo={finance.chartFluxo} chartDataPie={finance.chartPie} ledger={finance.filteredLedger} Money={Money}
+              onOpenExport={() => setIsExportModalOpen(true)} onOpenEntry={() => { setEditingEntry(null); setIsEntryModalOpen(true); }} onEditEntry={handleEditEntry} 
+              onDeleteEntry={handleRequestDeleteEntry} selectedMonth={finance.selectedMonth} onMonthChange={finance.setSelectedMonth} viewMode={finance.viewMode} setViewMode={finance.setViewMode} filterType={finance.filterType} setFilterType={finance.setFilterType}
             />
           )}
 
@@ -807,35 +797,65 @@ function App() {
                 onAdvance: (id) => { const os = workOrders.find(o=>o.id===id); if(os) handleUpdateStatus(id, os.status==='ORCAMENTO'?'APROVADO':os.status==='APROVADO'?'EM_SERVICO':'FINALIZADO'); },
                 onEdit: (os) => { setEditingOS(os); setIsModalOpen(true); },
                 onChecklist: (os) => { setChecklistOS(os); setIsChecklistOpen(true); },
-                onPrint: handlePrintOS,
-                onDelete: handleDeleteOS
+                onPrint: (os) => { setPrintingOS(os); setTimeout(() => window.print(), 100); },
+                onDelete: (os) => setPendingAction({ type: 'DELETE_OS', data: os }),
+                onArchive: (os) => setPendingAction({ type: 'ARCHIVE_OS', data: os }),
+                onRestore: (os) => handleUpdateStatus(os.id, 'ORCAMENTO'),
+                onQuickFinish: (id) => handleUpdateStatus(id, 'FINALIZADO')
               }}
             />
           )}
 
           {activeTab === 'PROCESSOS' && <ProcessPage workOrders={workOrders} onOpenNew={() => { setEditingOS(null); setIsModalOpen(true); }} onUpdateStatus={handleUpdateStatus} />}
           {activeTab === 'CLIENTES' && <CRMPage clients={clients} workOrders={workOrders} isLoading={isLoading} formatMoney={Money.format} />}
-          {activeTab === 'CONFIG' && <ConfigPage settings={settings} setSettings={setSettings} currentTheme={currentTheme} setCurrentTheme={setCurrentTheme} onBackup={handleBackup} isBackuping={isBackuping} driveStatus={driveStatus} onImportData={handleImportData} />}
+          
+          {activeTab === 'CONFIG' && (
+            <ConfigPage settings={settings} setSettings={setSettings} currentTheme={currentTheme} setCurrentTheme={setCurrentTheme} onBackup={handleBackup} isBackuping={isBackuping} driveStatus={driveStatus} onImportData={handleImportData} onOpenDatabase={() => setIsDatabaseModalOpen(true)} />
+          )}
         </main>
       </div>
 
       <OSModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveOSModal} editingOS={editingOS} clients={clients} catalogParts={catalogParts} catalogServices={catalogServices} nextOSNumber={workOrders.length > 0 ? Math.max(...workOrders.map(o => o.osNumber)) + 1 : 1} isSaving={isSaving} formatMoney={Money.format} />
-      <EntryModal isOpen={isEntryModalOpen} onClose={() => setIsEntryModalOpen(false)} onSave={handleSaveEntryModal} />
-      
-      <ExportModal 
-        isOpen={isExportModalOpen} 
-        onClose={() => setIsExportModalOpen(false)} 
-        ledger={ledger} 
-        workOrders={workOrders} 
-        defaultPath={settings.exportPath} 
-        Money={Money} 
-        SoundFX={{ success: () => addToast("Exportado com sucesso!", "success"), error: () => addToast("Erro ao exportar", "error") }} 
-      />
-      
-      <ChecklistModal isOpen={isChecklistOpen} onClose={() => setIsChecklistOpen(false)} onSave={handleSaveChecklist} os={checklistOS} />
-      
+      <EntryModal isOpen={isEntryModalOpen} onClose={() => { setIsEntryModalOpen(false); setEditingEntry(null); }} onSave={handleSaveEntryModal} initialData={editingEntry} />
+      <DatabaseModal isOpen={isDatabaseModalOpen} onClose={() => setIsDatabaseModalOpen(false)} clients={clients} catalogParts={catalogParts} catalogServices={catalogServices} onSaveClient={handleSaveClient} onDeleteClient={(id) => setClients(p => p.filter(c => c.id !== id))} onSaveCatalogItem={handleSaveCatalogItem} onDeleteCatalogItem={(id, type) => type === 'part' ? setCatalogParts(p=>p.filter(x=>x.id!==id)) : setCatalogServices(p=>p.filter(x=>x.id!==id))} formatMoney={Money.format} />
+      <ExportModal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} ledger={ledger} workOrders={workOrders} defaultPath={settings.exportPath} Money={Money} SoundFX={{ success: () => addToast("Sucesso!", "success"), error: () => addToast("Erro", "error") }} />
+      <ChecklistModal isOpen={isChecklistOpen} onClose={() => setIsChecklistOpen(false)} onSave={(data) => { if(checklistOS) setWorkOrders(p=>p.map(o=>o.id===checklistOS.id ? {...o, checklist:data} : o)); setIsChecklistOpen(false); }} os={checklistOS} />
       <PrintableInvoice data={printingOS} settings={settings} formatMoney={Money.format} />
+
+      <DeleteConfirmationModal 
+        isOpen={deleteModalInfo.isOpen}
+        onClose={() => setDeleteModalInfo({ isOpen: false, entry: null })}
+        onConfirmSingle={confirmDeleteSingle}
+        onConfirmGroup={confirmDeleteGroup}
+        isGroup={!!deleteModalInfo.entry?.groupId} 
+      />
+
+      <ConfirmationModal
+        isOpen={!!pendingAction}
+        onClose={() => setPendingAction(null)}
+        onConfirm={executePendingAction}
+        title={pendingAction?.type === 'DELETE_OS' ? 'Excluir Ordem de Serviço?' : 
+               pendingAction?.type === 'ARCHIVE_OS' ? 'Arquivar Ordem de Serviço?' :
+               pendingAction?.type === 'FINISH_OS_FINANCIAL' ? 'OS Finalizada' : 
+               pendingAction?.type === 'RESTORE_FINANCIAL' ? 'Reabrir OS?' :
+               pendingAction?.type === 'IMPORT_DATA' ? 'Importar Backup?' : 'Confirmar'}
+        message={pendingAction?.type === 'DELETE_OS' ? 'Esta ação removerá a OS e qualquer lançamento financeiro vinculado. Não pode ser desfeito.' : 
+                 pendingAction?.type === 'ARCHIVE_OS' ? 'A OS sairá do quadro Kanban mas ficará salva no histórico.' :
+                 pendingAction?.type === 'FINISH_OS_FINANCIAL' ? `Deseja lançar o valor de ${Money.format(pendingAction.data?.total || 0)} nas Receitas?` :
+                 pendingAction?.type === 'RESTORE_FINANCIAL' ? 'Isso removerá o lançamento financeiro vinculado e voltará a OS para "Em Serviço".' :
+                 pendingAction?.type === 'IMPORT_DATA' ? 'ATENÇÃO: Isso substituirá todos os dados atuais pelos do backup. Continuar?' : 'Tem certeza?'}
+        confirmText={pendingAction?.type === 'DELETE_OS' ? 'Excluir' : pendingAction?.type === 'IMPORT_DATA' ? 'Substituir Tudo' : 'Confirmar'}
+        confirmColor={pendingAction?.type === 'DELETE_OS' || pendingAction?.type === 'RESTORE_FINANCIAL' ? 'danger' : 'primary'}
+      />
     </>
+  );
+}
+
+function App() {
+  return (
+    <DatabaseProvider>
+      <AppContent />
+    </DatabaseProvider>
   );
 }
 

@@ -144,6 +144,16 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
                  </div>
               </div>
 
+              {/* --- 6. OBSERVAÇÕES (NOVO) --- */}
+              {data.publicNotes && data.publicNotes.trim() !== '' && (
+                  <div className="table-section" style={{ marginTop: '30px', borderTop: '1px solid #eee', paddingTop: '10px' }}>
+                    <h3 className="section-title" style={{ marginBottom: '5px' }}>OBSERVAÇÕES / GARANTIA</h3>
+                    <div style={{ fontSize: '10pt', lineHeight: '1.4', whiteSpace: 'pre-wrap', color: '#333' }}>
+                        {data.publicNotes}
+                    </div>
+                  </div>
+              )}
+
             </td>
           </tr>
         </tbody>

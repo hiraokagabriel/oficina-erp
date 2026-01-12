@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { LedgerEntry, WorkOrder, MONTH_NAMES } from '../types';
+import { LedgerEntry, WorkOrder, MONTH_NAMES } from '../types'; // Importando direto de 'types'
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -36,7 +36,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   }, [ledger]);
 
   // Define o mês padrão ao abrir
-  React.useEffect(() => {
+  useEffect(() => {
      if (isOpen && availableMonths.length > 0 && !targetMonth) {
          setTargetMonth(availableMonths[0]);
      }
@@ -50,7 +50,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     const targetYear = parseInt(yearStr);
     const mIndex = parseInt(monthStr);
 
-    // Filtra dados
+    // Filtra dados do mês selecionado
     const filteredLedger = ledger.filter(e => {
         const d = new Date(e.effectiveDate);
         return d.getFullYear() === targetYear && (d.getMonth() + 1) === mIndex;
@@ -62,16 +62,23 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         return; 
     }
 
-    // Gera CSV
+    // Gera o conteúdo do CSV
     const headers = ["ID", "Data", "Data Registro", "Nº OS", "Cliente", "Descricao", "Valor", "Tipo", "Auditado"];
     const rows = filteredLedger.map(entry => {
-      const valor = Money.toFloat(entry.amount).toFixed(2).replace('.', ',');
-      const audit = entry.history.length > 0 ? "SIM" : "NAO";
-      const desc = entry.description.replace(/;/g, " - ");
-      const dataCompetencia = new Date(entry.effectiveDate).toLocaleDateString();
-      const dataRegistro = entry.history.length > 0 ? new Date(entry.history[0].timestamp).toLocaleDateString() : dataCompetencia;
+      // CORREÇÃO AQUI: Garante que 'history' seja um array, mesmo que undefined
+      const safeHistory = entry.history || [];
       
-      // Cruza com OS
+      const valor = Money.toFloat(entry.amount).toFixed(2).replace('.', ',');
+      const audit = safeHistory.length > 0 ? "SIM" : "NAO";
+      const desc = entry.description.replace(/;/g, " - ");
+      
+      const dataCompetencia = new Date(entry.effectiveDate).toLocaleDateString();
+      // Pega a data do primeiro registro do histórico ou usa a competência se não houver
+      const dataRegistro = safeHistory.length > 0 
+          ? new Date(safeHistory[0].timestamp).toLocaleDateString() 
+          : dataCompetencia;
+      
+      // Cruza com dados da OS (se houver vínculo)
       const relatedOS = workOrders.find(w => w.financialId === entry.id);
       const osNum = relatedOS ? relatedOS.osNumber.toString() : "";
       const client = relatedOS ? relatedOS.clientName.replace(/;/g, " ") : ""; 
@@ -83,7 +90,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     const filename = `Fluxo_${MONTH_NAMES[mIndex - 1]}_${targetYear}_${Date.now()}.csv`;
 
     try {
-      // Chama o Rust para salvar arquivo
+      // Chama o comando Rust para salvar o arquivo
       const res = await invoke<{success: boolean, message: string}>('export_report', { 
         targetFolder: exportPath, 
         filename, 
@@ -99,7 +106,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
       }
     } catch (e: any) { 
         SoundFX.error();
-        alert("Erro: " + e.toString()); 
+        alert("Erro ao exportar: " + e.toString()); 
     } finally {
         setIsExporting(false);
     }
@@ -117,7 +124,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                 <select className="form-input" value={targetMonth} onChange={e => setTargetMonth(e.target.value)}>
                     {availableMonths.map(dateStr => { 
                         const [y, m] = dateStr.split('-'); 
-                        return (<option key={dateStr} value={dateStr}>{MONTH_NAMES[parseInt(m)-1]} / {y}</option>); 
+                        // Uso do MONTH_NAMES importado dos types
+                        const monthName = MONTH_NAMES[parseInt(m)-1] || "Mês Inválido";
+                        return (<option key={dateStr} value={dateStr}>{monthName} / {y}</option>); 
                     })}
                 </select>
             </div>

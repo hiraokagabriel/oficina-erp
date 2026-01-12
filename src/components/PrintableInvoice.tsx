@@ -21,7 +21,9 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
   return (
     <div className="printable-invoice">
       
-      {/* ESTRUTURA PRINCIPAL: TABELA DE LAYOUT */}
+      {/* ESTRUTURA PRINCIPAL: TABELA DE LAYOUT 
+          Garante que o rodapé fixo não cubra o conteúdo ao quebrar páginas.
+      */}
       <table className="invoice-layout-table">
         
         {/* CORPO DA PÁGINA */}
@@ -39,13 +41,10 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
                   <p>{settings.technician && `Téc. Resp: ${settings.technician}`}</p>
                 </div>
 
-                <div className="invoice-logo-area" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                   <span style={{ fontSize: '10px', fontWeight: 'bold', marginBottom: '4px', whiteSpace: 'nowrap' }}>
-                     ORDEM DE SERVIÇO
-                   </span>
-                   <div className="invoice-logo-circle">
-                      AM
-                   </div>
+                {/* LOGO AREA - ATUALIZADA PARA "AM" E TÍTULO */}
+                <div className="invoice-logo-area">
+                   <h1 className="invoice-main-title">ORDEM DE SERVIÇO</h1>
+                   <div className="invoice-logo-circle">AM</div>
                 </div>
 
                 <div className="invoice-col client-col">
@@ -159,7 +158,7 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
           </tr>
         </tbody>
 
-        {/* --- RODAPÉ FANTASMA (Reserva de Espaço) --- */}
+        {/* --- RODAPÉ FANTASMA (Reserva Espaço) --- */}
         <tfoot>
           <tr>
             <td className="footer-space-cell">

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
-import { WorkOrder, OSStatus, STATUS_LABELS } from '../types';
+import { WorkOrder, OSStatus, STATUS_LABELS } from '../types/index.ts';
 import { KanbanCard } from './KanbanCard';
 
 interface KanbanBoardProps {

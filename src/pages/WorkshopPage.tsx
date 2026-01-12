@@ -1,6 +1,6 @@
 import React from 'react';
 import { DropResult } from '@hello-pangea/dnd';
-import { WorkOrder, OSStatus } from '../types';
+import { WorkOrder } from '../types';
 import { KanbanBoard } from '../components/KanbanBoard';
 
 interface WorkshopPageProps {

@@ -27,7 +27,8 @@ export const OSModal: React.FC<OSModalProps> = ({
   const [date, setDate] = useState("");
   const [clientName, setClientName] = useState("");
   const [contact, setContact] = useState("");
-  const [notes, setNotes] = useState("");
+  const [notes, setNotes] = useState(""); // Obs. Interna (Cliente)
+  const [publicNotes, setPublicNotes] = useState(""); // NOVO: Obs. da OS (Impressão)
   const [vehicle, setVehicle] = useState("");
   const [plate, setPlate] = useState("");
   const [mileage, setMileage] = useState("");
@@ -69,6 +70,7 @@ export const OSModal: React.FC<OSModalProps> = ({
         const client = clients.find(c => c.name.toLowerCase() === editingOS.clientName.trim().toLowerCase());
         setContact(editingOS.clientPhone || client?.phone || "");
         setNotes(client?.notes || "");
+        setPublicNotes(editingOS.publicNotes || ""); // Carrega nota pública
         
         const sep = editingOS.vehicle.lastIndexOf(" - ");
         if (sep > 0) {
@@ -87,6 +89,7 @@ export const OSModal: React.FC<OSModalProps> = ({
         setClientName("");
         setContact("");
         setNotes("");
+        setPublicNotes(""); // Limpa nota pública
         setVehicle("");
         setPlate("");
         setMileage("");
@@ -187,7 +190,8 @@ export const OSModal: React.FC<OSModalProps> = ({
         plate: plate.toUpperCase(),
         mileage: parseInt(mileage) || 0,
         parts: parts.filter(p => p.description.trim() !== ""),
-        services: services.filter(s => s.description.trim() !== "")
+        services: services.filter(s => s.description.trim() !== ""),
+        publicNotes // Salva a nota
     });
   };
 
@@ -195,7 +199,6 @@ export const OSModal: React.FC<OSModalProps> = ({
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
         if (!isOpen) return;
-        // Verifica Ctrl + Shift + Enter
         if (e.ctrlKey && e.shiftKey && e.key === 'Enter') {
             e.preventDefault();
             handleConfirm();
@@ -203,7 +206,7 @@ export const OSModal: React.FC<OSModalProps> = ({
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [isOpen, clientName, vehicle, parts, services, osNumber]); // Dependências para garantir estado atualizado
+  }, [isOpen, clientName, vehicle, parts, services, osNumber, publicNotes]);
 
   if (!isOpen) return null;
 
@@ -237,7 +240,7 @@ export const OSModal: React.FC<OSModalProps> = ({
         </div>
 
         <div className="form-group">
-           <label className="form-label">Obs. Cliente</label>
+           <label className="form-label">Obs. Interna (Visível apenas aqui)</label>
            <textarea className="form-input form-textarea" value={notes} onChange={e => setNotes(e.target.value)} style={{minHeight: 60}}/>
         </div>
 
@@ -304,10 +307,21 @@ export const OSModal: React.FC<OSModalProps> = ({
                     ))}
                 </div>
             </div>
-        
         </div>
 
-        <div className="total-display" style={{ marginTop: 24 }}>
+        {/* NOVA ÁREA DE OBSERVAÇÕES PARA IMPRESSÃO */}
+        <div className="form-group" style={{ marginTop: 24 }}>
+           <label className="form-label">Observações da OS (Visível na Impressão)</label>
+           <textarea 
+                className="form-input form-textarea" 
+                value={publicNotes} 
+                onChange={e => setPublicNotes(e.target.value)} 
+                placeholder="Ex: Garantia de 3 meses, detalhes técnicos, peças trazidas pelo cliente..."
+                style={{minHeight: 60}}
+           />
+        </div>
+
+        <div className="total-display" style={{ marginTop: 10 }}>
             <span>Total Geral</span> 
             <span>{formatMoney(calcTotal(parts) + calcTotal(services))}</span>
         </div>

@@ -4,8 +4,8 @@ import { LedgerEntry } from '../types';
 interface EntryModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (description: string, amount: number, type: 'CREDIT' | 'DEBIT', date: string) => void;
-  initialData: LedgerEntry | null; // Recebe o dado para edição
+  onSave: (desc: string, val: number, type: 'CREDIT' | 'DEBIT', date: string, recurrence: 'SINGLE' | 'INSTALLMENT' | 'RECURRING', count: number) => void;
+  initialData: LedgerEntry | null;
 }
 
 export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave, initialData }) => {
@@ -13,23 +13,30 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<'CREDIT' | 'DEBIT'>('DEBIT');
   const [date, setDate] = useState('');
+  
+  const [recurrence, setRecurrence] = useState<'SINGLE' | 'INSTALLMENT' | 'RECURRING'>('SINGLE');
+  const [count, setCount] = useState<number>(2);
 
-  // Efeito: Quando o modal abre ou initialData muda, preenche os campos
   useEffect(() => {
     if (isOpen) {
         if (initialData) {
-            // Modo Edição
             setDescription(initialData.description);
-            setAmount(initialData.amount.toString());
+            
+            // --- CORREÇÃO DOS DECIMAIS ---
+            // Divide por 100 para exibir corretamente (ex: 1500 virar 15.00)
+            setAmount((initialData.amount / 100).toFixed(2));
+            
             setType(initialData.type);
-            // Formatar data ISO para YYYY-MM-DD do input type="date"
             setDate(initialData.effectiveDate.split('T')[0]);
+            setRecurrence('SINGLE');
+            setCount(1);
         } else {
-            // Modo Criação (Limpa tudo)
             setDescription('');
             setAmount('');
-            setType('DEBIT'); // Padrão Despesa
-            setDate(new Date().toISOString().split('T')[0]); // Hoje
+            setType('DEBIT');
+            setDate(new Date().toISOString().split('T')[0]);
+            setRecurrence('SINGLE');
+            setCount(2);
         }
     }
   }, [isOpen, initialData]);
@@ -40,30 +47,57 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
     const val = parseFloat(amount.replace(',', '.'));
     if (isNaN(val)) return alert("Valor inválido");
 
-    onSave(description, val, type, date);
-    // onClose é chamado pelo pai após salvar, ou podemos chamar aqui se preferir fechar imediato
+    onSave(description, val, type, date, recurrence, count);
   };
 
   if (!isOpen) return null;
 
   return (
     <div className="modal-overlay">
-      <div className="modal-content" style={{maxWidth: '400px'}}>
+      <div className="modal-content" style={{maxWidth: '450px'}}>
         <h2>{initialData ? 'Editar Lançamento' : 'Novo Lançamento'}</h2>
         
+        {!initialData && (
+            <div className="toggle-group" style={{display: 'flex', marginBottom: 15, justifyContent: 'center'}}>
+                <button 
+                    className="btn-sm" 
+                    style={{opacity: recurrence === 'SINGLE' ? 1 : 0.5, border: recurrence === 'SINGLE' ? '1px solid var(--primary)' : '1px solid transparent'}}
+                    onClick={() => setRecurrence('SINGLE')}
+                >
+                    Único
+                </button>
+                <button 
+                    className="btn-sm" 
+                    style={{opacity: recurrence === 'INSTALLMENT' ? 1 : 0.5, border: recurrence === 'INSTALLMENT' ? '1px solid var(--primary)' : '1px solid transparent'}}
+                    onClick={() => setRecurrence('INSTALLMENT')}
+                >
+                    Parcelado
+                </button>
+                <button 
+                    className="btn-sm" 
+                    style={{opacity: recurrence === 'RECURRING' ? 1 : 0.5, border: recurrence === 'RECURRING' ? '1px solid var(--primary)' : '1px solid transparent'}}
+                    onClick={() => setRecurrence('RECURRING')}
+                >
+                    Recorrente (Mensal)
+                </button>
+            </div>
+        )}
+
         <div className="form-group">
           <label>Descrição</label>
           <input 
             className="form-input" 
             value={description} 
             onChange={e => setDescription(e.target.value)} 
-            placeholder="Ex: Conta de Luz" 
+            placeholder={recurrence === 'INSTALLMENT' ? "Ex: Compra Peças (O sistema adicionará 1/X)" : "Ex: Aluguel / Conta Luz"} 
             autoFocus
           />
         </div>
 
         <div className="form-group">
-          <label>Valor (R$)</label>
+          <label>
+              {recurrence === 'INSTALLMENT' ? 'Valor da Compra (R$)' : 'Valor (R$)'}
+          </label>
           <input 
             className="form-input" 
             type="number" 
@@ -74,8 +108,38 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
           />
         </div>
 
+        {recurrence === 'INSTALLMENT' && (
+            <div className="form-group">
+                <label>Quantidade de Parcelas</label>
+                <input 
+                    className="form-input" 
+                    type="number" 
+                    min="2" 
+                    max="60"
+                    value={count} 
+                    onChange={e => setCount(parseInt(e.target.value))} 
+                />
+            </div>
+        )}
+
+        {recurrence === 'RECURRING' && (
+            <div className="form-group">
+                <label>Repetir por quantos meses?</label>
+                <input 
+                    className="form-input" 
+                    type="number" 
+                    min="2" 
+                    max="120"
+                    value={count} 
+                    onChange={e => setCount(parseInt(e.target.value))} 
+                    placeholder="Ex: 12 meses"
+                />
+                <small style={{color:'var(--text-muted)'}}>Isso lançará o valor mensalmente a partir da data selecionada.</small>
+            </div>
+        )}
+
         <div className="form-group">
-          <label>Data de Competência</label>
+          <label>Data {recurrence !== 'SINGLE' ? 'da 1ª Parcela/Mês' : 'de Competência'}</label>
           <input 
             className="form-input" 
             type="date" 
@@ -91,9 +155,13 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
                 className="btn" 
                 style={{
                     flex: 1, 
+                    // Lógica visual melhorada: Cor de fundo + Opacidade
                     backgroundColor: type === 'CREDIT' ? 'var(--success)' : 'var(--bg-panel)',
                     color: type === 'CREDIT' ? '#fff' : 'var(--text-main)',
-                    border: '1px solid var(--border)'
+                    border: type === 'CREDIT' ? '1px solid var(--success)' : '1px solid var(--border)',
+                    opacity: type === 'CREDIT' ? 1 : 0.5, // Visual "Desativado" se não for o escolhido
+                    transform: type === 'CREDIT' ? 'scale(1.02)' : 'scale(1)', // Leve destaque
+                    transition: 'all 0.2s ease'
                 }}
                 onClick={() => setType('CREDIT')}
             >
@@ -103,9 +171,13 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
                 className="btn" 
                 style={{
                     flex: 1, 
+                    // Lógica visual melhorada: Cor de fundo + Opacidade
                     backgroundColor: type === 'DEBIT' ? 'var(--danger)' : 'var(--bg-panel)',
                     color: type === 'DEBIT' ? '#fff' : 'var(--text-main)',
-                    border: '1px solid var(--border)'
+                    border: type === 'DEBIT' ? '1px solid var(--danger)' : '1px solid var(--border)',
+                    opacity: type === 'DEBIT' ? 1 : 0.5, // Visual "Desativado" se não for o escolhido
+                    transform: type === 'DEBIT' ? 'scale(1.02)' : 'scale(1)', // Leve destaque
+                    transition: 'all 0.2s ease'
                 }}
                 onClick={() => setType('DEBIT')}
             >
@@ -117,7 +189,7 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
         <div className="modal-actions">
           <button className="btn-secondary" onClick={onClose}>Cancelar</button>
           <button className="btn" onClick={handleSave}>
-            {initialData ? 'Atualizar' : 'Salvar'}
+            {initialData ? 'Atualizar' : 'Confirmar'}
           </button>
         </div>
       </div>

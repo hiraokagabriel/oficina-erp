@@ -1,7 +1,36 @@
-// Tipos de Status da Ordem de Serviço
+// src/types/index.ts
+
+export interface LedgerEntry {
+  id: string;
+  description: string;
+  amount: number;
+  type: 'CREDIT' | 'DEBIT';
+  effectiveDate: string;
+  createdAt: string;
+  updatedAt?: string;
+  groupId?: string;
+  history?: { timestamp: string; note: string }[];
+}
+
+export interface WorkOrder {
+  id: string;
+  osNumber: number;
+  vehicle: string;
+  clientName: string;
+  clientPhone: string;
+  mileage: number;
+  status: OSStatus;
+  parts: OrderItem[];
+  services: OrderItem[];
+  total: number;
+  createdAt: string;
+  financialId?: string;
+  checklist?: ChecklistSchema;
+  publicNotes?: string;
+}
+
 export type OSStatus = 'ORCAMENTO' | 'APROVADO' | 'EM_SERVICO' | 'FINALIZADO' | 'ARQUIVADO';
 
-// Labels para exibição (Mapeamento)
 export const STATUS_LABELS: Record<OSStatus, string> = {
   ORCAMENTO: 'Orçamento',
   APROVADO: 'Aprovado',
@@ -10,71 +39,12 @@ export const STATUS_LABELS: Record<OSStatus, string> = {
   ARQUIVADO: 'Arquivado'
 };
 
-// Constante de Meses (CORREÇÃO DO ERRO)
+// --- ADICIONADO: A constante que faltava para o ExportModal ---
 export const MONTH_NAMES = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
 ];
 
-// Item de Pedido (Peça ou Serviço dentro da OS)
-export interface OrderItem {
-  id: string;
-  description: string;
-  price: number;
-}
-
-// Item de Catálogo (Para autocompletar)
-export interface CatalogItem {
-  id: string;
-  description: string;
-  price: number;
-}
-
-// Estrutura do Checklist (Flexível)
-export interface ChecklistSchema {
-  [key: string]: boolean | string | undefined;
-}
-
-// Ordem de Serviço Principal
-export interface WorkOrder {
-  id: string;
-  osNumber: number;
-  
-  // Dados do Cliente
-  clientName: string;
-  clientPhone: string;
-  clientNotes?: string;
-  
-  // Dados do Veículo
-  vehicle: string;        // Nome completo ex: "Fiat Uno - Prata"
-  vehicleModelOnly?: string; // Apenas modelo ex: "Fiat Uno"
-  plate?: string;
-  mileage: number;
-  
-  // Controle
-  status: OSStatus;
-  createdAt: string;      // ISO Date String
-  total: number;
-  
-  // Itens
-  parts: OrderItem[];
-  services: OrderItem[];
-  
-  // Integrações
-  financialId?: string;   // ID do lançamento no financeiro (se houver)
-  checklist?: ChecklistSchema;
-}
-
-// Lançamento Financeiro
-export interface LedgerEntry {
-  id: string;
-  description: string;
-  amount: number;         // Valor em centavos ou float
-  type: 'CREDIT' | 'DEBIT';
-  effectiveDate: string;  // ISO Date YYYY-MM-DD
-}
-
-// Cliente (CRM)
 export interface Client {
   id: string;
   name: string;
@@ -83,7 +53,19 @@ export interface Client {
   vehicles: { model: string; plate: string }[];
 }
 
-// Configurações da Oficina
+export interface CatalogItem {
+  id: string;
+  description: string;
+  price: number;
+  cost?: number;
+}
+
+export interface OrderItem {
+  id: string;
+  description: string;
+  price: number;
+}
+
 export interface WorkshopSettings {
   name: string;
   cnpj: string;
@@ -93,7 +75,6 @@ export interface WorkshopSettings {
   googleDriveToken: string;
 }
 
-// Estrutura do Banco de Dados (JSON)
 export interface DatabaseSchema {
   ledger: LedgerEntry[];
   workOrders: WorkOrder[];
@@ -101,4 +82,8 @@ export interface DatabaseSchema {
   catalogParts: CatalogItem[];
   catalogServices: CatalogItem[];
   settings: WorkshopSettings;
+}
+
+export interface ChecklistSchema {
+  [key: string]: boolean | string | undefined;
 }

@@ -1,3 +1,4 @@
+// src/utils/helpers.ts
 import { LedgerEntry, WorkOrder, Client, CatalogItem, OrderItem } from '../types';
 
 // --- FORMATADORES ---
@@ -8,27 +9,67 @@ export const Money = {
 };
 
 // --- FACTORIES (Criação de Objetos) ---
-export const createEntry = (description: string, amount: number, type: 'CREDIT' | 'DEBIT' = 'CREDIT', date?: string): LedgerEntry => ({
-  id: crypto.randomUUID(), description, amount, type,
+
+// ATUALIZADO: Inclui createdAt e groupId
+export const createEntry = (
+  description: string, 
+  amount: number, 
+  type: 'CREDIT' | 'DEBIT' = 'CREDIT', 
+  date?: string,
+  groupId?: string 
+): LedgerEntry => ({
+  id: crypto.randomUUID(), 
+  description, 
+  amount, 
+  type,
   effectiveDate: date ? new Date(date).toISOString() : new Date().toISOString(),
+  
+  // Novos campos obrigatórios
+  createdAt: new Date().toISOString(),
+  groupId: groupId, 
+  
   history: [{ timestamp: new Date().toISOString(), note: 'Criação inicial' }]
 });
 
 export const updateEntryAmount = (entry: LedgerEntry, newAmount: number, user: string, reason: string): LedgerEntry => ({
   ...entry, amount: newAmount,
-  history: [...entry.history, { timestamp: new Date().toISOString(), note: `${user}: Alterou valor para ${newAmount} (${reason})` }]
+  history: entry.history 
+    ? [...entry.history, { timestamp: new Date().toISOString(), note: `${user}: Alterou valor para ${newAmount} (${reason})` }]
+    : [{ timestamp: new Date().toISOString(), note: `${user}: Alterou valor para ${newAmount} (${reason})` }]
 });
 
-export const createWorkOrder = (osNumber: number, vehicle: string, clientName: string, clientPhone: string, mileage: number, parts: OrderItem[], services: OrderItem[], date?: string): WorkOrder => ({
+export const createWorkOrder = (
+  osNumber: number, 
+  vehicle: string, 
+  clientName: string, 
+  clientPhone: string, 
+  mileage: number, 
+  parts: OrderItem[], 
+  services: OrderItem[], 
+  date?: string,
+  publicNotes?: string,
+): WorkOrder => ({
   id: crypto.randomUUID(), osNumber, vehicle, clientName, clientPhone, mileage, status: 'ORCAMENTO',
   parts, services, total: parts.reduce((a, b) => a + b.price, 0) + services.reduce((a, b) => a + b.price, 0),
-  createdAt: date ? new Date(date).toISOString() : new Date().toISOString()
+  createdAt: date ? new Date(date).toISOString() : new Date().toISOString(),
+  publicNotes
 });
 
-export const updateWorkOrderData = (old: WorkOrder, osNumber: number, vehicle: string, clientName: string, clientPhone: string, mileage: number, parts: OrderItem[], services: OrderItem[], date?: string): WorkOrder => ({
+export const updateWorkOrderData = ( 
+  old: WorkOrder,
+  osNumber: number, 
+  vehicle: string, 
+  clientName: string, 
+  clientPhone: string, 
+  mileage: number, 
+  parts: OrderItem[], 
+  services: OrderItem[], 
+  date?: string,
+  publicNotes?: string,
+): WorkOrder => ({
   ...old, osNumber, vehicle, clientName, clientPhone, mileage, parts, services,
   total: parts.reduce((a, b) => a + b.price, 0) + services.reduce((a, b) => a + b.price, 0),
-  createdAt: date ? new Date(date).toISOString() : old.createdAt
+  createdAt: date ? new Date(date).toISOString() : old.createdAt, publicNotes
 });
 
 // --- APRENDIZADO DE DADOS (CRM & Catálogo) ---

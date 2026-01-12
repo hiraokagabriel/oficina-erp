@@ -21,12 +21,10 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
   return (
     <div className="printable-invoice">
       
-      {/* ESTRUTURA PRINCIPAL: TABELA DE LAYOUT 
-          O uso de tabela aqui é estritamente para controle de quebra de página na impressão.
-      */}
+      {/* ESTRUTURA PRINCIPAL: TABELA DE LAYOUT */}
       <table className="invoice-layout-table">
         
-        {/* CORPO DA PÁGINA (Flui e quebra automaticamente) */}
+        {/* CORPO DA PÁGINA */}
         <tbody>
           <tr>
             <td className="invoice-content-cell">
@@ -41,7 +39,6 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
                   <p>{settings.technician && `Téc. Resp: ${settings.technician}`}</p>
                 </div>
 
-                {/* --- ÁREA DO LOGO ALTERADA --- */}
                 <div className="invoice-logo-area" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                    <span style={{ fontSize: '10px', fontWeight: 'bold', marginBottom: '4px', whiteSpace: 'nowrap' }}>
                      ORDEM DE SERVIÇO
@@ -50,7 +47,6 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
                       AM
                    </div>
                 </div>
-                {/* ----------------------------- */}
 
                 <div className="invoice-col client-col">
                   <h4 className="label-sm">CLIENTE</h4>
@@ -106,7 +102,6 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
                     )}
                   </tbody>
                 </table>
-                {/* Subtotal fora da tabela interna para evitar problemas de coluna, mas dentro do fluxo */}
                 <div className="subtotal-row">
                     <span>Subtotal Peças:</span>
                     <span className="subtotal-value">{formatMoney(subtotalParts)}</span>
@@ -142,9 +137,7 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
                 </div>
               </div>
 
-              {/* --- 5. TOTAL GERAL --- 
-                  Colocado logo após os itens para aparecer naturalmente no fluxo.
-              */}
+              {/* --- 5. TOTAL GERAL --- */}
               <div className="invoice-total-block">
                  <div className="total-line">
                     <span className="label-total">TOTAL GERAL</span>
@@ -152,27 +145,31 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
                  </div>
               </div>
 
+              {/* --- 6. OBSERVAÇÕES (NOVO) --- */}
+              {data.publicNotes && data.publicNotes.trim() !== '' && (
+                  <div className="table-section" style={{ marginTop: '30px', borderTop: '1px solid #eee', paddingTop: '10px' }}>
+                    <h3 className="section-title" style={{ marginBottom: '5px' }}>OBSERVAÇÕES / GARANTIA</h3>
+                    <div style={{ fontSize: '10pt', lineHeight: '1.4', whiteSpace: 'pre-wrap', color: '#333' }}>
+                        {data.publicNotes}
+                    </div>
+                  </div>
+              )}
+
             </td>
           </tr>
         </tbody>
 
-        {/* --- RODAPÉ FANTASMA (Reserva de Espaço) --- 
-            O navegador repetirá este espaço vazio no final de cada página impressa.
-            Isso impede que o conteúdo do <tbody> invada a área onde o rodapé fixo estará.
-        */}
+        {/* --- RODAPÉ FANTASMA (Reserva de Espaço) --- */}
         <tfoot>
           <tr>
             <td className="footer-space-cell">
-              {/* A altura deste elemento define a área reservada no final da página */}
               <div className="footer-space"></div>
             </td>
           </tr>
         </tfoot>
       </table>
 
-      {/* --- RODAPÉ FIXO REAL --- 
-          Este elemento flutua por cima do espaço reservado pelo tfoot acima.
-      */}
+      {/* --- RODAPÉ FIXO REAL --- */}
       <div className="invoice-fixed-footer">
           <div className="signature-area">
              <div className="signature-block">

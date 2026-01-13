@@ -1,6 +1,8 @@
-import React, { useState, useMemo } from 'react';
-import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
-import { WorkOrder, OSStatus, STATUS_LABELS } from '../types/index.ts';
+// REMOVIDO: import { open } from '@tauri-apps/plugin-opener'; 
+import React, { useState } from 'react';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+import { WorkOrder, OSStatus, STATUS_LABELS } from '../types';
+>>>>>>> main
 import { KanbanCard } from './KanbanCard';
 
 interface KanbanBoardProps {
@@ -46,70 +48,29 @@ const EmptyState = ({ status }: { status: OSStatus }) => {
 };
 
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading, onDragEnd, actions, formatMoney }) => {
+    const list = columnsData[status];
+  
+  // Estado local para a busca
   const [searchTerm, setSearchTerm] = useState('');
-  const [showArchived, setShowArchived] = useState(false);
 
-  const [visibleCounts, setVisibleCounts] = useState<Record<OSStatus, number>>({
-      ORCAMENTO: 50, APROVADO: 50, EM_SERVICO: 50, FINALIZADO: 50, ARQUIVADO: 50
+  // Lógica de Filtro
+  const filteredWorkOrders = workOrders.filter(os => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    
+    return (
+      os.clientName.toLowerCase().includes(term) || // Busca por Nome
+      os.vehicle.toLowerCase().includes(term) ||    // Busca por Veículo
+      os.osNumber.toString().includes(term) ||      // Busca por Número da OS
+      (os.clientPhone && os.clientPhone.includes(term)) // Busca por Telefone
+    );
   });
 
-  const handleShowMore = (status: OSStatus) => {
-      setVisibleCounts(prev => ({ ...prev, [status]: prev[status] + 50 }));
-  };
-
-  const filteredWorkOrders = useMemo(() => {
-    let list = workOrders;
-    if (showArchived) list = list.filter(os => os.status === 'ARQUIVADO');
-    else list = list.filter(os => os.status !== 'ARQUIVADO');
-
-    if (!searchTerm) return list;
-    const term = searchTerm.toLowerCase();
-    return list.filter(os => 
-      os.clientName.toLowerCase().includes(term) ||
-      os.vehicle.toLowerCase().includes(term) ||
-      os.osNumber.toString().includes(term) ||
-      (os.clientPhone && os.clientPhone.includes(term))
-    );
-  }, [workOrders, searchTerm, showArchived]);
-
-  const columnsData = useMemo(() => {
-    const cols: Record<OSStatus, WorkOrder[]> = {
-        ORCAMENTO: [], APROVADO: [], EM_SERVICO: [], FINALIZADO: [], ARQUIVADO: []
-    };
-    filteredWorkOrders.forEach(os => {
-        if(cols[os.status]) cols[os.status].push(os);
-    });
-    Object.keys(cols).forEach(key => {
-        cols[key as OSStatus].sort((a, b) => b.osNumber - a.osNumber);
-    });
-    return cols;
-  }, [filteredWorkOrders]);
-
-  const handleWhatsApp = (os: WorkOrder) => {
-    if (!os.clientPhone) return;
-    const cleanPhone = os.clientPhone.replace(/\D/g, '');
-    let message = `Olá ${os.clientName.split(' ')[0]}, aqui é da Oficina. `;
-    if (os.status === 'ORCAMENTO') message += `O orçamento para o ${os.vehicle} ficou em ${formatMoney(os.total)}. Podemos aprovar?`;
-    else if (os.status === 'FINALIZADO') message += `O serviço no ${os.vehicle} foi finalizado! Já pode vir buscar.`;
-    else message += `Passando para dar um status sobre o ${os.vehicle}.`;
-    
-    const fullPhone = cleanPhone.length <= 11 ? `55${cleanPhone}` : cleanPhone;
-    const url = `https://wa.me/${fullPhone}?text=${encodeURIComponent(message)}`;
-
-    const link = document.createElement('a');
-    link.href = url;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   const renderColumn = (status: OSStatus) => {
-    const fullList = columnsData[status];
-    const visibleList = fullList.slice(0, visibleCounts[status]);
-    const hasMore = fullList.length > visibleCounts[status];
-
+    // Usa a lista filtrada em vez da lista completa
+    const list = filteredWorkOrders.filter(o => o.status === status).sort((a,b) => b.osNumber - a.osNumber);
+    
+>>>>>>> main
     const colColorMap: Record<string, string> = { 
         ORCAMENTO: 'var(--info)', APROVADO: 'var(--warning)', 
         EM_SERVICO: 'var(--primary)', FINALIZADO: 'var(--success)',
@@ -117,11 +78,12 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
     };
 
     return (
-      <div className={`kanban-column`} style={{ borderTop: `4px solid ${colColorMap[status]}` }}>
+      <div className={`kanban-column`} style={{borderTop: `4px solid ${colColorMap[status]}`}}>
         <div className="kanban-header">
           {STATUS_LABELS[status]} 
-          <span style={{background: 'rgba(0,0,0,0.05)', padding: '2px 8px', borderRadius: 10, fontSize: '0.75rem'}}>
-            {fullList.length}
+          <span style={{background: 'rgba(0,0,0,0.05)', padding: '2px 8px', borderRadius: 10}}>
+            {list.length}
+>>>>>>> main
           </span>
         </div>
         
@@ -137,7 +99,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
                   transition: 'background-color 0.2s ease', minHeight: 150, flex: 1
               }}
             >
-              {visibleList.length === 0 && !snapshot.isDraggingOver ? (
                  <EmptyState status={status} />
               ) : (
                  <>
@@ -159,6 +120,62 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
                     )}
                  </>
               )}
+=======
+              {list.map((os, index) => (
+                <Draggable key={os.id} draggableId={os.id} index={index}>
+                  {(provided, snapshot) => {
+                    
+                    const anchorStyle = {
+                        ...provided.draggableProps.style,
+                        zIndex: snapshot.isDragging ? 10000 : 'auto',
+                        cursor: snapshot.isDragging ? 'grabbing' : 'grab',
+                        margin: 0,
+                        left: (provided.draggableProps.style as React.CSSProperties)?.left,
+                        top: (provided.draggableProps.style as React.CSSProperties)?.top,
+                    };
+
+                    return (
+                        <div 
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            style={anchorStyle}
+                        >
+                            <div 
+                                className={`kanban-card ${snapshot.isDragging ? 'is-dragging' : ''}`}
+                                style={{
+                                    transform: snapshot.isDragging ? 'rotate(3deg) scale(1.02)' : 'none',
+                                    transition: snapshot.isDragging ? 'none' : 'all 0.2s ease',
+                                    boxShadow: snapshot.isDragging ? '0 25px 50px rgba(0,0,0,0.5)' : '0 4px 6px rgba(0,0,0,0.1)',
+                                    opacity: snapshot.isDragging ? 1 : 1,
+                                    border: snapshot.isDragging ? '1px solid var(--primary)' : '1px solid var(--border)'
+                                }}
+                            >
+                                <div className="os-header">
+                                    <span className="os-number">#{os.osNumber}</span> 
+                                    <span className="os-price">{formatMoney(os.total)}</span>
+                                </div>
+                                <div className="os-client">{os.clientName}</div>
+                                <div className="os-vehicle">{os.vehicle}</div>
+                                {os.clientPhone && <div className="os-id">📞 {os.clientPhone}</div>}
+                                
+                                <div className="card-actions" style={{display: snapshot.isDragging ? 'none' : 'flex'}}>
+                                    {status !== 'ORCAMENTO' && <button className="btn-icon" title="Voltar Etapa" onClick={() => actions.onRegress(os.id)}>⬅️</button>} 
+                                    <div style={{display: 'flex', gap: 5}}>
+                                        <button className="btn-icon" title="Editar" onClick={() => actions.onEdit(os)}>✏️</button>
+                                        <button className="btn-icon check" title="Checklist" onClick={() => actions.onChecklist(os)}>📋</button>
+                                        <button className="btn-icon" title="Imprimir" onClick={() => actions.onPrint(os)}>🖨️</button>
+                                        <button className="btn-icon danger" title="Excluir" onClick={() => actions.onDelete(os)}>🗑️</button>
+                                    </div>
+                                    {status !== 'FINALIZADO' && <button className="btn-icon" title="Avançar Etapa" onClick={() => actions.onAdvance(os.id)}>➡️</button>}
+                                </div>
+                            </div>
+                        </div>
+                    );
+                  }}
+                </Draggable>
+              ))}
+>>>>>>> 8fe8d422cec7fe329c6c0ee3d4df2c90512e43ba
               {provided.placeholder}
             </div>
           )}
@@ -171,18 +188,27 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        {/* BARRA DE BUSCA E FILTRO */}
         <div className="kanban-filter-bar">
             <div className="search-wrapper">
                 <span className="search-icon">🔍</span>
-                <input type="text" className="form-input search-input" placeholder="Buscar Cliente, OS, Veículo..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-                {searchTerm && <button className="btn-clear-search" onClick={() => setSearchTerm('')}>✕</button>}
+                <input 
+                    type="text" 
+                    className="form-input search-input" 
+                    placeholder="Buscar por Cliente, OS, Veículo ou Placa..." 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                {searchTerm && (
+                    <button className="btn-clear-search" onClick={() => setSearchTerm('')}>
+                        ✕
+                    </button>
+                )}
             </div>
-            
-            <button className={`btn ${showArchived ? 'btn-secondary' : 'btn-ghost'}`} onClick={() => setShowArchived(!showArchived)} style={{ marginLeft: 10, display: 'flex', alignItems: 'center', gap: 6, border: showArchived ? '1px solid var(--border)' : 'none', background: showArchived ? 'var(--bg-input)' : 'transparent' }}>
-                {showArchived ? '🔙 Voltar ao Quadro' : '📂 Ver Arquivados'}
-            </button>
-
-            <div className="filter-stats"><strong>{filteredWorkOrders.length}</strong> ordens</div>
+            <div className="filter-stats">
+               Mostrando <strong>{filteredWorkOrders.length}</strong> de {workOrders.length} ordens
+            </div>
+>>>>>>> main
         </div>
 
         <DragDropContext onDragEnd={onDragEnd}>

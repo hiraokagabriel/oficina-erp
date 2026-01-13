@@ -1,164 +1,218 @@
-import React from 'react';
-import { WorkshopSettings } from '../types';
+import React, { useState } from 'react';
+import { Button, Card, Input, Select, Badge, Alert } from '../components/ui/PremiumComponents';
+import { AppConfig } from '../types';
 
 interface ConfigPageProps {
-  settings: WorkshopSettings;
-  setSettings: (s: WorkshopSettings) => void;
-  currentTheme: 'dark' | 'pastel';
-  setCurrentTheme: (t: 'dark' | 'pastel') => void;
-  onBackup: () => void;
-  onImportData: (content: string) => void;
-  isBackuping: boolean;
-  driveStatus: 'idle' | 'success' | 'error';
-  // NOVA PROP
-  onOpenDatabase: () => void;
+  config: AppConfig;
+  isLoading: boolean;
+  onSaveConfig: (config: AppConfig) => void;
+  onResetConfig: () => void;
+  theme: 'light' | 'dark';
+  onThemeChange: (theme: 'light' | 'dark') => void;
 }
 
 export const ConfigPage: React.FC<ConfigPageProps> = ({
-  settings, setSettings, currentTheme, setCurrentTheme, onBackup, onImportData, isBackuping, driveStatus, onOpenDatabase
+  config,
+  isLoading,
+  onSaveConfig,
+  onResetConfig,
+  theme,
+  onThemeChange,
 }) => {
+  const [localConfig, setLocalConfig] = useState<AppConfig>(config);
+  const [hasChanges, setHasChanges] = useState(false);
 
-  const handleChange = (field: keyof WorkshopSettings, value: string) => {
-    setSettings({ ...settings, [field]: value });
+  const handleChange = (field: keyof AppConfig, value: any) => {
+    setLocalConfig((prev) => ({ ...prev, [field]: value }));
+    setHasChanges(true);
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      if (content) {
-        onImportData(content);
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
+  const handleSave = () => {
+    onSaveConfig(localConfig);
+    setHasChanges(false);
   };
 
   return (
-    <div className="config-container" style={{ maxWidth: 1000, margin: '0 auto' }}>
-      
-      {/* SEÇÃO 0: GERENCIAMENTO DE CADASTROS (NOVO) */}
-      <div className="card" style={{ borderLeft: '4px solid var(--primary)', background: 'var(--bg-panel)' }}>
-        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+    <div>
+      {/* Header */}
+      <div className="header-area">
+        <div>
+          <h1 className="page-title">🎛️ Configurações</h1>
+          <p style={{ color: 'var(--text-secondary)', marginTop: 'var(--space-2)' }}>
+            Gerencie as configurações da aplicação
+          </p>
+        </div>
+      </div>
+
+      {hasChanges && (
+        <Alert
+          type="warning"
+          title="Alterações Não Salvas"
+          message="Você tem alterações não salvas. Não esqueça de clicar em 'Salvar'."
+        />
+      )}
+
+      {/* Theme Section */}
+      <Card style={{ marginBottom: 'var(--space-6)' }}>
+        <div style={{ padding: 'var(--space-6)' }}>
+          <h2 style={{ marginTop: 0, marginBottom: 'var(--space-4)' }}>🎨 Tema</h2>
+          <div style={{ display: 'flex', gap: 'var(--space-6)' }}>
+            {['light', 'dark'].map((t) => (
+              <div
+                key={t}
+                onClick={() => onThemeChange(t as 'light' | 'dark')}
+                style={{
+                  padding: 'var(--space-6)',
+                  border: `2px solid ${theme === t ? 'var(--color-primary)' : 'var(--border)'}`,
+                  borderRadius: 'var(--radius)',
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  transition: 'all 200ms',
+                  backgroundColor: theme === t ? 'var(--bg-secondary)' : 'transparent',
+                }}
+              >
+                <div style={{ fontSize: '2rem', marginBottom: 'var(--space-2)' }}>
+                  {t === 'light' ? '☀️' : '🌙'}
+                </div>
+                <div style={{ fontWeight: 500, textTransform: 'capitalize' }}>{t}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
+
+      {/* General Settings */}
+      <Card style={{ marginBottom: 'var(--space-6)' }}>
+        <div style={{ padding: 'var(--space-6)' }}>
+          <h2 style={{ marginTop: 0, marginBottom: 'var(--space-4)' }}>⚙️ Geral</h2>
+
+          <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
             <div>
-                <h3 style={{marginTop:0}}>🗂️ Banco de Dados e Cadastros</h3>
-                <p style={{marginBottom:0, color:'var(--text-muted)'}}>
-                    Gerencie manualmente seus clientes, veículos, peças e serviços.
-                </p>
+              <label style={{ display: 'block', marginBottom: 'var(--space-2)', fontWeight: 500 }}>
+                Nome da Empresa
+              </label>
+              <Input
+                value={localConfig.companyName || ''}
+                onChange={(e) => handleChange('companyName', e.target.value)}
+                placeholder="Digite o nome da empresa"
+              />
             </div>
-            <button className="btn" onClick={onOpenDatabase} style={{padding: '12px 24px', fontSize: '1rem'}}>
-                📂 Abrir Gerenciador
-            </button>
-        </div>
-      </div>
 
-      {/* SEÇÃO 1: DADOS DA OFICINA */}
-      <div className="card">
-        <h3>🏢 Identidade da Oficina</h3>
-        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: 20 }}>
-          Dados para cabeçalhos de relatórios e impressões.
-        </p>
+            <div>
+              <label style={{ display: 'block', marginBottom: 'var(--space-2)', fontWeight: 500 }}>
+                Email de Contato
+              </label>
+              <Input
+                type="email"
+                value={localConfig.contactEmail || ''}
+                onChange={(e) => handleChange('contactEmail', e.target.value)}
+                placeholder="contato@empresa.com"
+              />
+            </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-          <div className="form-group">
-            <label className="form-label">Nome Fantasia</label>
-            <input className="form-input" value={settings.name} onChange={(e) => handleChange('name', e.target.value)} />
+            <div>
+              <label style={{ display: 'block', marginBottom: 'var(--space-2)', fontWeight: 500 }}>
+                Telefone
+              </label>
+              <Input
+                value={localConfig.phone || ''}
+                onChange={(e) => handleChange('phone', e.target.value)}
+                placeholder="(11) 99999-9999"
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', marginBottom: 'var(--space-2)', fontWeight: 500 }}>
+                Endereço
+              </label>
+              <Input
+                value={localConfig.address || ''}
+                onChange={(e) => handleChange('address', e.target.value)}
+                placeholder="Rua, número, complemento"
+              />
+            </div>
           </div>
-          <div className="form-group">
-            <label className="form-label">CNPJ / CPF</label>
-            <input className="form-input" value={settings.cnpj} onChange={(e) => handleChange('cnpj', e.target.value)} />
+        </div>
+      </Card>
+
+      {/* Financial Settings */}
+      <Card style={{ marginBottom: 'var(--space-6)' }}>
+        <div style={{ padding: 'var(--space-6)' }}>
+          <h2 style={{ marginTop: 0, marginBottom: 'var(--space-4)' }}>💰 Financeiro</h2>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 'var(--space-4)' }}>
+            <div>
+              <label style={{ display: 'block', marginBottom: 'var(--space-2)', fontWeight: 500 }}>
+                Moeda Padrão
+              </label>
+              <Select
+                options={[
+                  { label: 'Real (R$)', value: 'BRL' },
+                  { label: 'Dólar (USD)', value: 'USD' },
+                  { label: 'Euro (€)', value: 'EUR' },
+                ]}
+                value={localConfig.currency || 'BRL'}
+                onChange={(value) => handleChange('currency', value)}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', marginBottom: 'var(--space-2)', fontWeight: 500 }}>
+                Margem de Lucro Padrão (%)
+              </label>
+              <Input
+                type="number"
+                value={localConfig.marginPercent || 0}
+                onChange={(e) => handleChange('marginPercent', parseFloat(e.target.value))}
+                placeholder="20"
+              />
+            </div>
           </div>
         </div>
+      </Card>
 
-        <div className="form-group">
-          <label className="form-label">Endereço</label>
-          <input className="form-input" value={settings.address} onChange={(e) => handleChange('address', e.target.value)} />
-        </div>
-        
-        <div className="form-group">
-          <label className="form-label">Técnico Responsável</label>
-          <input className="form-input" value={settings.technician} onChange={(e) => handleChange('technician', e.target.value)} />
-        </div>
-      </div>
+      {/* Advanced Settings */}
+      <Card style={{ marginBottom: 'var(--space-6)' }}>
+        <div style={{ padding: 'var(--space-6)' }}>
+          <h2 style={{ marginTop: 0, marginBottom: 'var(--space-4)' }}>🔧 Avançado</h2>
 
-      {/* SEÇÃO 2: APARÊNCIA */}
-      <div className="card">
-        <h3>🎨 Aparência e Tema</h3>
-        <div className="theme-selection-area">
-            {/* DARK AERO */}
-            <div className={`theme-card-visual ${currentTheme === 'dark' ? 'active' : ''}`} onClick={() => setCurrentTheme('dark')}>
-                <div className="theme-check-icon">✓</div>
-                <div className="theme-preview-palette">
-                    <div className="theme-color-swatch" style={{ background: '#1e1e2e' }}></div>
-                    <div className="theme-color-swatch" style={{ background: '#8257e6' }}></div>
-                    <div className="theme-color-swatch" style={{ background: '#2b2b3b' }}></div>
-                </div>
-                <div className="theme-info">
-                    <h4>Dark Aero</h4>
-                    <p>Contraste moderno para ambientes com pouca luz.</p>
-                </div>
-            </div>
-
-            {/* PASTEL ULTRAVIOLET */}
-            <div className={`theme-card-visual ${currentTheme === 'pastel' ? 'active' : ''}`} onClick={() => setCurrentTheme('pastel')}>
-                <div className="theme-check-icon">✓</div>
-                <div className="theme-preview-palette">
-                    <div className="theme-color-swatch" style={{ background: '#F8F5FA', border: '1px solid #E0D8F0' }}></div>
-                    <div className="theme-color-swatch" style={{ background: 'linear-gradient(90deg, #C7B8EA, #FFCBA4)' }}></div>
-                    <div className="theme-color-swatch" style={{ background: '#4A405A' }}></div>
-                </div>
-                <div className="theme-info">
-                    <h4>Ultraviolet Dawn</h4>
-                    <p>Futurismo suave e limpo.</p>
-                </div>
-            </div>
-        </div>
-      </div>
-
-      {/* SEÇÃO 3: DADOS E BACKUP */}
-      <div className="card">
-        <h3>💾 Gerenciamento de Dados</h3>
-        
-        {/* IMPORTAÇÃO MANUAL */}
-        <div style={{ marginBottom: 30, padding: 20, border: '1px dashed var(--border)', borderRadius: 12 }}>
-            <label className="form-label" style={{ marginBottom: 10, display: 'block' }}>Restaurar Backup Manual (Local)</label>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <input 
-                    type="file" 
-                    accept=".json,.bak" 
-                    className="form-input" 
-                    style={{ paddingTop: 8, height: 'auto' }} 
-                    onChange={handleFileSelect}
+          <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
+            <div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={localConfig.autoBackup || false}
+                  onChange={(e) => handleChange('autoBackup', e.target.checked)}
+                  style={{ width: '1.2rem', height: '1.2rem', cursor: 'pointer' }}
                 />
+                <span>Ativar Backup Automático</span>
+              </label>
             </div>
-            <small style={{ color: 'var(--text-muted)', marginTop: 5, display: 'block' }}>
-                Selecione um arquivo .json ou .bak para carregar os dados imediatamente. Isso substituirá os dados atuais.
-            </small>
-        </div>
 
-        {/* GOOGLE DRIVE */}
-        <div style={{ background: 'rgba(0,0,0,0.05)', padding: 20, borderRadius: 12, border: '1px solid var(--border)' }}>
-            <div className="form-group">
-                <label className="form-label">Google Drive Access Token</label>
-                <input 
-                    className="form-input" type="password" placeholder="Token..." 
-                    value={settings.googleDriveToken} onChange={(e) => handleChange('googleDriveToken', e.target.value)} 
+            <div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={localConfig.notifications || false}
+                  onChange={(e) => handleChange('notifications', e.target.checked)}
+                  style={{ width: '1.2rem', height: '1.2rem', cursor: 'pointer' }}
                 />
+                <span>Ativar Notificações</span>
+              </label>
             </div>
-            
-            <div style={{ display: 'flex', gap: 15, alignItems: 'center', marginTop: 20 }}>
-                <button className="btn" onClick={onBackup} disabled={isBackuping}>
-                   {isBackuping ? <><span className="spinner" style={{ marginRight: 8 }}></span> Enviando...</> : '☁️ Fazer Backup Nuvem'}
-                </button>
-                {driveStatus === 'success' && <span style={{ color: 'var(--success)' }}>✅ Sucesso!</span>}
-                {driveStatus === 'error' && <span style={{ color: 'var(--danger)' }}>❌ Erro.</span>}
-            </div>
+          </div>
         </div>
-      </div>
+      </Card>
 
+      {/* Action Buttons */}
+      <div style={{ display: 'flex', gap: 'var(--space-4)', justifyContent: 'flex-end' }}>
+        <Button variant="secondary" onClick={onResetConfig} disabled={!hasChanges || isLoading}>
+          ↩️ Descartar
+        </Button>
+        <Button variant="primary" onClick={handleSave} disabled={!hasChanges || isLoading}>
+          💾 Salvar Configurações
+        </Button>
+      </div>
     </div>
   );
 };

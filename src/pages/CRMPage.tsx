@@ -1,164 +1,153 @@
-import React, { useState, useMemo } from 'react';
-import { Client, WorkOrder, STATUS_LABELS } from '../types';
+import React, { useState } from 'react';
+import { Button, Card, Badge, Input, Select, EmptyState } from '../components/ui/PremiumComponents';
+import { Client } from '../types';
 
 interface CRMPageProps {
   clients: Client[];
-  workOrders: WorkOrder[];
   isLoading: boolean;
-  formatMoney: (val: number) => string;
+  onAddClient: () => void;
+  onEditClient: (client: Client) => void;
+  onDeleteClient: (id: string) => void;
+  onViewOrders: (clientId: string) => void;
 }
 
-export const CRMPage: React.FC<CRMPageProps> = ({ clients, workOrders, isLoading, formatMoney }) => {
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+export const CRMPage: React.FC<CRMPageProps> = ({
+  clients,
+  isLoading,
+  onAddClient,
+  onEditClient,
+  onDeleteClient,
+  onViewOrders,
+}) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'ATIVO' | 'INATIVO' | 'TODOS'>('TODOS');
+  const [sortBy, setSortBy] = useState<'name' | 'date'>('name');
 
-  // Histórico ordenado
-  const clientHistory = useMemo(() => {
-    if (!selectedClient) return [];
-    return workOrders
-      .filter(os => os.clientName === selectedClient.name)
-      .sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [selectedClient, workOrders]);
+  const filteredClients = clients
+    .filter((c) => (filterStatus === 'TODOS' ? true : c.status === filterStatus))
+    .filter((c) => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.phone.includes(searchTerm))
+    .sort((a, b) => (sortBy === 'name' ? a.name.localeCompare(b.name) : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
 
-  // Lembretes
-  const reminders = useMemo(() => {
-      if (!selectedClient) return [];
-      const result = [];
-      const now = new Date();
-      
-      const lastOil = clientHistory.find(os => 
-        os.status === 'FINALIZADO' && 
-        (os.parts.some(p => p.description.match(/óleo|oleo/i)) || os.services.some(s => s.description.match(/óleo|oleo/i)))
-      );
-
-      if (lastOil) {
-          const diffDays = Math.ceil(Math.abs(now.getTime() - new Date(lastOil.createdAt).getTime()) / (86400000)); 
-          if (diffDays > 180) result.push({ type: 'danger', text: 'Troca de Óleo Vencida (+6 meses)' });
-          else if (diffDays > 150) result.push({ type: 'warning', text: 'Troca de Óleo Próxima' });
-      } 
-      return result;
-  }, [clientHistory, selectedClient]);
-
-  const getWorkSummary = (os: WorkOrder) => {
-      const mainItem = os.services[0]?.description || os.parts[0]?.description;
-      if (!mainItem) return "Serviço inicial";
-      const count = (os.services.length + os.parts.length) - 1;
-      return count > 0 ? `${mainItem} (+${count} itens)` : mainItem;
-  };
-
-  const formatDate = (dateString: string) => {
-      const date = new Date(dateString);
-      return {
-          day: date.getDate().toString().padStart(2, '0'),
-          month: date.toLocaleDateString('pt-BR', { month: 'short' }).toUpperCase(),
-          year: date.getFullYear()
-      };
-  };
+  const activeClientsCount = clients.filter((c) => c.status === 'ATIVO').length;
+  const totalOrders = clients.reduce((sum, c) => sum + (c.totalOrders || 0), 0);
 
   return (
-    <>
-      <div className="header-area"><h1 className="page-title">CRM & Clientes</h1></div>
-      
-      <div className="crm-layout">
-          {/* LISTA DE CLIENTES */}
-          <div className="client-list">
-              {isLoading ? (
-                  Array.from({length:5}).map((_,i)=><div key={i} className="skeleton" style={{height: 60, marginBottom: 10}}/>) 
-              ) : (
-                  clients.map(c => (
-                    <div key={c.id} className={`client-list-item ${selectedClient?.id === c.id ? 'active' : ''}`} onClick={() => setSelectedClient(c)}>
-                        <div className="client-name">{c.name}</div>
-                        <div className="client-contact">{c.phone || '...'} • {c.vehicles.length} veículo(s)</div>
-                    </div>
-                  ))
-              )}
-              {!isLoading && clients.length === 0 && <div style={{padding:20, color:'var(--text-muted)'}}>Sem clientes.</div>}
-          </div>
-
-          {/* DETALHES */}
-          <div className="crm-details">
-              {selectedClient ? (
-                  <>
-                      <div className="crm-header">
-                          <h2 style={{margin:0, fontSize: '1.8rem'}}>{selectedClient.name}</h2>
-                          <div style={{color: 'var(--text-muted)', marginTop: 5}}>📞 {selectedClient.phone || "Sem telefone"}</div>
-                          <div className="crm-tags" style={{marginTop: 12, display: 'flex', gap: 8}}>
-                              {selectedClient.vehicles.map((v, i) => (
-                                  <span key={i} style={{background: 'var(--bg-input)', padding: '6px 12px', borderRadius: 12, fontSize: '0.8rem', border: '1px solid var(--border)'}}>
-                                      🚗 {v.model} <span style={{opacity: 0.6}}>{v.plate}</span>
-                                  </span>
-                              ))}
-                          </div>
-                      </div>
-
-                      <div className="crm-stats">
-                          <div className="crm-stat-box">
-                              <div className="crm-stat-label">Total Investido</div>
-                              <div className="crm-stat-value" style={{color: 'var(--success)'}}>{formatMoney(clientHistory.reduce((a, o) => a + (o.status==='FINALIZADO'?o.total:0), 0))}</div>
-                          </div>
-                          <div className="crm-stat-box">
-                              <div className="crm-stat-label">Serviços</div>
-                              <div className="crm-stat-value">{clientHistory.length}</div>
-                          </div>
-                      </div>
-
-                      {reminders.length > 0 && (
-                          <div style={{marginBottom: 30}}>
-                              <h3 style={{fontSize: '0.9rem', marginBottom: 10, color: 'var(--text-muted)'}}>ALERTA DE MANUTENÇÃO</h3>
-                              <div style={{display:'flex', gap: 10}}>
-                                  {reminders.map((r,i)=><div key={i} className={`reminder-badge ${r.type}`}>{r.text}</div>)}
-                              </div>
-                          </div>
-                      )}
-
-                      <h3 style={{fontSize: '1.1rem', marginBottom: 20, borderBottom: '1px solid var(--border)', paddingBottom: 10}}>Histórico do Cliente</h3>
-                      
-                      <div className="timeline-container">
-                        {clientHistory.length === 0 ? (
-                            <p style={{color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center', padding: 20}}>Nenhum serviço encontrado.</p>
-                        ) : (
-                            clientHistory.map(os => {
-                               const dateObj = formatDate(os.createdAt);
-                               return (
-                                   <div key={os.id} className="timeline-item">
-                                       {/* Coluna 1: Data */}
-                                       <div className="timeline-date-col">
-                                           <span className="tl-day">{dateObj.day}</span>
-                                           <span className="tl-month">{dateObj.month}</span>
-                                           <span className="tl-year">{dateObj.year}</span>
-                                       </div>
-
-                                       {/* Coluna 2: Linha */}
-                                       <div className="timeline-marker-col">
-                                           <div className={`tl-dot st-${os.status}`}></div>
-                                           <div className="tl-line"></div>
-                                       </div>
-
-                                       {/* Coluna 3: Card */}
-                                       <div className="timeline-content-card">
-                                           <div className="tl-card-header">
-                                               <span className="tl-vehicle">{os.vehicle}</span>
-                                               <span className={`status-badge st-${os.status}`} style={{fontSize: '0.65rem', padding: '2px 8px'}}>{STATUS_LABELS[os.status]}</span>
-                                           </div>
-                                           <div className="tl-card-body">{getWorkSummary(os)}</div>
-                                           <div className="tl-card-footer">
-                                               <span className="tl-os-number">OS #{os.osNumber}</span>
-                                               <span className="tl-price">{formatMoney(os.total)}</span>
-                                           </div>
-                                       </div>
-                                   </div>
-                               );
-                            })
-                        )}
-                      </div>
-                  </>
-              ) : (
-                  <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100%', color:'var(--text-muted)', opacity: 0.6}}>
-                      <div style={{fontSize: '4rem', marginBottom: 20}}>📁</div>
-                      <p>Selecione um cliente para ver o histórico.</p>
-                  </div>
-              )}
-          </div>
+    <div>
+      {/* Header */}
+      <div className="header-area">
+        <div>
+          <h1 className="page-title">👥 CRM - Clientes</h1>
+          <p style={{ color: 'var(--text-secondary)', marginTop: 'var(--space-2)' }}>
+            {activeClientsCount} ativos • {totalOrders} OS's
+          </p>
+        </div>
+        <Button variant="primary" size="lg" onClick={onAddClient}>
+          + Novo Cliente
+        </Button>
       </div>
-    </>
+
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--space-6)', marginBottom: 'var(--space-6)' }}>
+        <Card>
+          <div style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
+            <div style={{ fontSize: '2rem', marginBottom: 'var(--space-2)' }}>👥</div>
+            <div style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-1)' }}>Total de Clientes</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 600 }}>{clients.length}</div>
+          </div>
+        </Card>
+        <Card>
+          <div style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
+            <div style={{ fontSize: '2rem', marginBottom: 'var(--space-2)' }}>✅</div>
+            <div style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-1)' }}>Clientes Ativos</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--color-success)' }}>{activeClientsCount}</div>
+          </div>
+        </Card>
+        <Card>
+          <div style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
+            <div style={{ fontSize: '2rem', marginBottom: 'var(--space-2)' }}>📋</div>
+            <div style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-1)' }}>Total OS's</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 600 }}>{totalOrders}</div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: 'var(--space-4)', marginBottom: 'var(--space-6)', flexWrap: 'wrap' }}>
+        <Input
+          placeholder="Pesquisar por nome ou telefone..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          style={{ flex: 1, minWidth: '250px' }}
+        />
+        <Select
+          options={[{ label: 'Todos', value: 'TODOS' }, { label: 'Ativos', value: 'ATIVO' }, { label: 'Inativos', value: 'INATIVO' }]}
+          value={filterStatus}
+          onChange={(value) => setFilterStatus(value as any)}
+        />
+        <Select
+          options={[{ label: 'Por Nome', value: 'name' }, { label: 'Por Data', value: 'date' }]}
+          value={sortBy}
+          onChange={(value) => setSortBy(value as any)}
+        />
+      </div>
+
+      {/* Clients List */}
+      {isLoading ? (
+        <Card>Carregando clientes...</Card>
+      ) : filteredClients.length === 0 ? (
+        <EmptyState
+          icon="🔍"
+          title="Nenhum Cliente Encontrado"
+          message="Nenhum cliente corresponde aos seus filtros."
+          action={{ label: 'Criar Cliente', onClick: onAddClient }}
+        />
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--space-6)' }}>
+          {filteredClients.map((client) => (
+            <Card key={client.id} className="client-card">
+              <div style={{ padding: 'var(--space-6)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 'var(--space-4)' }}>
+                  <div>
+                    <h3 style={{ margin: 0, marginBottom: 'var(--space-1)' }}>{client.name}</h3>
+                    <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.875rem' }}>{client.email}</p>
+                  </div>
+                  <Badge variant={client.status === 'ATIVO' ? 'success' : 'info'}>
+                    {client.status === 'ATIVO' ? '✅' : '⏸️'} {client.status}
+                  </Badge>
+                </div>
+
+                <div style={{ marginBottom: 'var(--space-4)', paddingBottom: 'var(--space-4)', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ marginBottom: 'var(--space-2)' }}>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Telefone</span>
+                    <div style={{ fontWeight: 500 }}>{client.phone}</div>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>CPF/CNPJ</span>
+                    <div style={{ fontWeight: 500 }}>{client.cpfCnpj}</div>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 'var(--space-6)', paddingBottom: 'var(--space-4)', borderBottom: '1px solid var(--border)' }}>
+                  <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Total de OS's</span>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 600 }}>{client.totalOrders || 0}</div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+                  <Button variant="secondary" size="sm" onClick={() => onViewOrders(client.id)}>
+                    📋 Ver OS's
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => onEditClient(client)}>
+                    ✏️ Editar
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => onDeleteClient(client.id)} style={{ gridColumn: '1 / -1' }}>
+                    🗑️ Excluir
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
   );
 };

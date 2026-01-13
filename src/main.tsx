@@ -3,6 +3,8 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 // A IMPORTAÇÃO ABAIXO CARREGA O TEMA
 import "./styles.css";
+import './styles-overhaul.css';
+
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

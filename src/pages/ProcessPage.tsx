@@ -1,204 +1,158 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { WorkOrder, OSStatus, STATUS_LABELS } from '../types';
+import React, { useState } from 'react';
+import { Button, Card, Badge, Input, EmptyState, Progress } from '../components/ui/PremiumComponents';
+import { ProcessDefinition } from '../types';
 
 interface ProcessPageProps {
-  workOrders: WorkOrder[];
-  onOpenNew: () => void;
-  onUpdateStatus: (id: string, newStatus: OSStatus) => void;
+  processes: ProcessDefinition[];
+  isLoading: boolean;
+  onAddProcess: () => void;
+  onEditProcess: (process: ProcessDefinition) => void;
+  onDeleteProcess: (id: string) => void;
+  onToggleActive: (id: string, active: boolean) => void;
 }
 
-type SortKey = 'osNumber' | 'clientName' | 'createdAt';
-type SortDirection = 'asc' | 'desc';
+export const ProcessPage: React.FC<ProcessPageProps> = ({
+  processes,
+  isLoading,
+  onAddProcess,
+  onEditProcess,
+  onDeleteProcess,
+  onToggleActive,
+}) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'ATIVO' | 'INATIVO' | 'TODOS'>('TODOS');
 
-interface SortConfig {
-  key: SortKey;
-  direction: SortDirection;
-}
+  const filteredProcesses = processes
+    .filter((p) => (filterStatus === 'TODOS' ? true : p.active === (filterStatus === 'ATIVO')))
+    .filter((p) => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
-// Estado inicial: Cada grupo começa ordenado por data (mais recente primeiro)
-const INITIAL_SORT_STATE: Record<OSStatus, SortConfig> = {
-  ORCAMENTO: { key: 'createdAt', direction: 'desc' },
-  APROVADO: { key: 'createdAt', direction: 'desc' },
-  EM_SERVICO: { key: 'createdAt', direction: 'desc' },
-  FINALIZADO: { key: 'createdAt', direction: 'desc' }
-};
-
-export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew, onUpdateStatus }) => {
-  // Estado para ordenação independente por grupo
-  const [sortConfigs, setSortConfigs] = useState<Record<OSStatus, SortConfig>>(INITIAL_SORT_STATE);
-  
-  // Estado para controlar qual dropdown está aberto (ID da OS)
-  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
-  
-  // Referência para detectar cliques fora do menu
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Fecha o menu se clicar fora dele
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setOpenDropdownId(null);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Lógica de Ordenação
-  const handleSort = (status: OSStatus, key: SortKey) => {
-    setSortConfigs(prev => {
-      const current = prev[status];
-      const isSameKey = current.key === key;
-      return {
-        ...prev,
-        [status]: {
-          key,
-          direction: isSameKey && current.direction === 'desc' ? 'asc' : 'desc'
-        }
-      };
-    });
-  };
-
-  const sortData = (list: WorkOrder[], config: SortConfig) => {
-    return [...list].sort((a, b) => {
-      let valA: any = a[config.key];
-      let valB: any = b[config.key];
-
-      if (config.key === 'createdAt') {
-        valA = new Date(valA).getTime();
-        valB = new Date(valB).getTime();
-      } else if (typeof valA === 'string') {
-        valA = valA.toLowerCase();
-        valB = valB.toLowerCase();
-      }
-
-      if (valA < valB) return config.direction === 'asc' ? -1 : 1;
-      if (valA > valB) return config.direction === 'asc' ? 1 : -1;
-      return 0;
-    });
-  };
-
-  // Componente visual do ícone de ordenação
-  const SortIcon = ({ status, colKey }: { status: OSStatus, colKey: SortKey }) => {
-    const config = sortConfigs[status];
-    if (config.key !== colKey) return <span style={{ opacity: 0.3, marginLeft: 5 }}>↕</span>;
-    return <span style={{ marginLeft: 5 }}>{config.direction === 'asc' ? '⬆' : '⬇'}</span>;
-  };
-
-  const groups: OSStatus[] = ['ORCAMENTO', 'APROVADO', 'EM_SERVICO', 'FINALIZADO'];
-  const allStatuses: OSStatus[] = ['ORCAMENTO', 'APROVADO', 'EM_SERVICO', 'FINALIZADO'];
+  const activeProcesses = processes.filter((p) => p.active).length;
 
   return (
-    <>
+    <div>
+      {/* Header */}
       <div className="header-area">
-        <h1 className="page-title">Gestão de Processos</h1>
-        <button className="btn" onClick={onOpenNew}>+ Novo Processo</button>
+        <div>
+          <h1 className="page-title">⚙️ Processos</h1>
+          <p style={{ color: 'var(--text-secondary)', marginTop: 'var(--space-2)' }}>
+            {activeProcesses} ativos de {processes.length}
+          </p>
+        </div>
+        <Button variant="primary" size="lg" onClick={onAddProcess}>
+          + Novo Processo
+        </Button>
       </div>
 
-      <div className="process-view">
-        {groups.map(status => {
-          const filtered = workOrders.filter(os => os.status === status);
-          
-          // Opcional: Se quiser esconder grupos vazios, descomente a linha abaixo
-          // if (filtered.length === 0) return null;
-
-          const sortedList = sortData(filtered, sortConfigs[status]);
-
-          return (
-            <div key={status} className="process-group">
-               {/* Cabeçalho do Grupo (Aba Colorida) */}
-               <div className={`process-group-header status-${status}`}>
-                   <span>{STATUS_LABELS[status]}</span>
-                   <span className="count-badge">{filtered.length}</span>
-               </div>
-               
-               {/* Tabela do Grupo */}
-               <div className="card" style={{ padding: 0, overflow: 'visible', borderTopLeftRadius: 0, marginTop: -1 }}>
-                   <table className="process-table">
-                       <thead>
-                           <tr>
-                               <th style={{ width: '15%' }} onClick={() => handleSort(status, 'osNumber')} className="sortable-th"> 
-                                Nº OS <SortIcon status={status} colKey="osNumber" />
-                                </th>
-                               <th onClick={() => handleSort(status, 'clientName')} className="sortable-th">
-                                 Cliente / Veículo <SortIcon status={status} colKey="clientName"/>
-                               </th>
-                               <th style={{ width: '20%' }} onClick={() => handleSort(status, 'createdAt')} className="sortable-th">
-                                Data <SortIcon status={status} colKey="createdAt" />
-                                </th>
-                               <th style={{ width: '20%' }}>Status (Alterar)</th>
-                           </tr>
-                       </thead>
-                       <tbody>
-                           {sortedList.length === 0 ? (
-                               <tr>
-                                   <td colSpan={4} style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>
-                                       Nenhum item neste status.
-                                   </td>
-                               </tr>
-                           ) : (
-                               sortedList.map(os => (
-                                   <tr key={os.id} className="process-row">
-                                       <td>
-                                           <span className="os-number">#{os.osNumber}</span>
-                                       </td>
-                                       <td>
-                                           <div className="cell-primary">{os.clientName}</div>
-                                           <div className="cell-secondary">{os.vehicle}</div>
-                                       </td>
-                                       <td className="cell-secondary">
-                                           {new Date(os.createdAt).toLocaleDateString()}
-                                       </td>
-                                       
-                                       {/* Célula de Status com Dropdown */}
-                                       <td className="status-cell">
-                                           <span 
-                                              className={`status-badge st-${os.status} clickable`}
-                                              onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  // Abre ou fecha o menu deste item
-                                                  setOpenDropdownId(openDropdownId === os.id ? null : os.id);
-                                              }}
-                                           >
-                                               {STATUS_LABELS[os.status]} 
-                                               <span className="dropdown-arrow">▼</span>
-                                           </span>
-
-                                           {/* Menu Dropdown Condicional */}
-                                           {openDropdownId === os.id && (
-                                               <div className="status-dropdown-menu" ref={dropdownRef}>
-                                                   {allStatuses.map(optStatus => (
-                                                       <div 
-                                                          key={optStatus}
-                                                          className={`status-option ${optStatus === os.status ? 'selected' : ''}`}
-                                                          onClick={() => {
-                                                              onUpdateStatus(os.id, optStatus);
-                                                              setOpenDropdownId(null);
-                                                          }}
-                                                       >
-                                                           {optStatus === os.status && <span>✓</span>}
-                                                           {STATUS_LABELS[optStatus]}
-                                                       </div>
-                                                   ))}
-                                               </div>
-                                           )}
-                                       </td>
-                                   </tr>
-                               ))
-                           )}
-                       </tbody>
-                   </table>
-               </div>
+      {/* Stats */}
+      <div style={{ marginBottom: 'var(--space-6)' }}>
+        <Card>
+          <div style={{ padding: 'var(--space-6)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>Processos Ativos</span>
+              <strong>{activeProcesses}/{processes.length}</strong>
             </div>
-          );
-        })}
-
-        {workOrders.length === 0 && (
-            <div className="card" style={{textAlign: 'center', padding: 40, color: 'var(--text-muted)'}}>
-                Nenhum processo cadastrado no sistema.
-            </div>
-        )}
+            <Progress value={activeProcesses} max={processes.length} color="primary" />
+          </div>
+        </Card>
       </div>
-    </>
+
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: 'var(--space-4)', marginBottom: 'var(--space-6)', flexWrap: 'wrap' }}>
+        <Input
+          placeholder="Pesquisar processo..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          style={{ flex: 1, minWidth: '250px' }}
+        />
+        <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+          {['TODOS', 'ATIVO', 'INATIVO'].map((status) => (
+            <Button
+              key={status}
+              variant={filterStatus === status ? 'primary' : 'secondary'}
+              onClick={() => setFilterStatus(status as any)}
+              size="sm"
+            >
+              {status === 'TODOS' ? '📊 Todos' : status === 'ATIVO' ? '✅ Ativos' : '⏸️ Inativos'}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Processes List */}
+      {isLoading ? (
+        <Card>Carregando processos...</Card>
+      ) : filteredProcesses.length === 0 ? (
+        <EmptyState
+          icon="🔍"
+          title="Nenhum Processo Encontrado"
+          message="Nenhum processo corresponde aos seus filtros."
+          action={{ label: 'Criar Processo', onClick: onAddProcess }}
+        />
+      ) : (
+        <div className="table-responsive">
+          <table className="table-premium">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Descrição</th>
+                <th>Status</th>
+                <th>Etapas</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredProcesses.map((process) => (
+                <tr key={process.id}>
+                  <td style={{ fontWeight: 500 }}>{process.name}</td>
+                  <td style={{ color: 'var(--text-secondary)' }}>{process.description || '-'}</td>
+                  <td>
+                    <Badge variant={process.active ? 'success' : 'info'}>
+                      {process.active ? '✅ Ativo' : '⏸️ Inativo'}
+                    </Badge>
+                  </td>
+                  <td>
+                    <span style={{ 
+                      backgroundColor: 'var(--bg-secondary)', 
+                      padding: 'var(--space-2) var(--space-3)', 
+                      borderRadius: 'var(--radius)' 
+                    }}>
+                      {process.stages?.length || 0} etapas
+                    </span>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                      <Button 
+                        size="sm" 
+                        variant={process.active ? 'secondary' : 'ghost'}
+                        onClick={() => onToggleActive(process.id, !process.active)}
+                        title={process.active ? 'Desativar' : 'Ativar'}
+                      >
+                        {process.active ? '⏸️' : '▶️'}
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        onClick={() => onEditProcess(process)}
+                        title="Editar"
+                      >
+                        ✏️
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        onClick={() => onDeleteProcess(process.id)}
+                        title="Excluir"
+                      >
+                        🗑️
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 };

@@ -25,7 +25,8 @@ export const createEntry = (
   description: string,
   amount: number,
   type: 'CREDIT' | 'DEBIT',
-  dateString?: string
+  dateString?: string,
+  groupId?: string
 ): LedgerEntry => {
   return {
     id: generateId(),
@@ -34,7 +35,8 @@ export const createEntry = (
     type,
     effectiveDate: dateString ? new Date(dateString).toISOString() : new Date().toISOString(),
     createdAt: new Date().toISOString(),
-    history: []
+    history: [],
+    groupId
   };
 };
 
@@ -49,7 +51,7 @@ export const updateEntryAmount = (
   
   if (oldAmount === newAmount) return entry;
 
-  const newHistory = [...(entry.history || [])];
+  const newHistory = [...(entry.history || [])];  
   newHistory.push({
     timestamp: new Date().toISOString(),
     note: `Alterado de ${Money.format(oldAmount)} para ${Money.format(newAmount)} por ${user}. Motivo: ${reason}`

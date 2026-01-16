@@ -33,6 +33,7 @@ export const createEntry = (
     amount,
     type,
     effectiveDate: dateString ? new Date(dateString).toISOString() : new Date().toISOString(),
+    createdAt: new Date().toISOString(),
     history: []
   };
 };
@@ -48,16 +49,16 @@ export const updateEntryAmount = (
   
   if (oldAmount === newAmount) return entry;
 
+  const newHistory = [...(entry.history || [])];
+  newHistory.push({
+    timestamp: new Date().toISOString(),
+    note: `Alterado de ${Money.format(oldAmount)} para ${Money.format(newAmount)} por ${user}. Motivo: ${reason}`
+  });
+
   return {
     ...entry,
     amount: newAmount,
-    history: [
-      ...entry.history,
-      {
-        timestamp: new Date().toISOString(),
-        note: `Alterado de ${Money.format(oldAmount)} para ${Money.format(newAmount)} por ${user}. Motivo: ${reason}`
-      }
-    ]
+    history: newHistory
   };
 };
 
@@ -102,7 +103,6 @@ export const createWorkOrder = (
     services: orderServices,
     total: subParts + subServices,
     createdAt: finalDate,
-    // Removido updatedAt para corrigir erro de tipo
     checklist: undefined,
     financialId: undefined
   };
@@ -144,7 +144,6 @@ export const updateWorkOrderData = (
     services: orderServices,
     total: subParts + subServices,
     createdAt: finalDate
-    // Removido updatedAt para corrigir erro de tipo
   };
 };
 

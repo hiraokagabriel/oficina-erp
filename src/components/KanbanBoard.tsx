@@ -19,6 +19,7 @@ interface KanbanBoardProps {
     onQuickFinish?: (id: string) => void;
   };
   formatMoney: (val: number) => string;
+  showArchived?: boolean;
 }
 
 const EmptyState = ({ status }: { status: OSStatus }) => {

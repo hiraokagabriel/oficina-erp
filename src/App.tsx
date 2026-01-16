@@ -100,8 +100,9 @@ type PendingAction =
   | { type: 'IMPORT_DATA'; content: string }
   | null;
 
-function App() {
-  const [dbPath] = useState(() => localStorage.getItem("oficina_db_path") || DEFAULT_DB_PATH);
+function AppContent() {
+  const { dbPath } = useDatabase();
+  const finance = useFinance();
   
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
@@ -115,7 +116,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
-  
+
   // Modais
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
@@ -136,7 +137,7 @@ function App() {
 
   // Estados de Confirmação (UX)
   const [deleteModalInfo, setDeleteModalInfo] = useState<{ isOpen: boolean; entry: LedgerEntry | null }>({ isOpen: false, entry: null });
-  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
 
   const [isBackuping, setIsBackuping] = useState(false);
   const [driveStatus, setDriveStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -344,14 +345,13 @@ function App() {
     if (!os || os.status === newStatus) return;
 
     if (newStatus === 'FINALIZADO' && os.status !== 'FINALIZADO' && !os.financialId) {
-       setPendingAction({ type: 'FINISH_OS_FINANCIAL', data: os });
-       return;
-    } 
-    else if (os.status === 'FINALIZADO' && newStatus !== 'FINALIZADO' && os.financialId) {
-       setPendingAction({ type: 'RESTORE_FINANCIAL', data: os });
-       return;
+      setPendingAction({ type: 'FINISH_OS_FINANCIAL', data: os });
+      return;
+    } else if (os.status === 'FINALIZADO' && newStatus !== 'FINALIZADO' && os.financialId) {
+      setPendingAction({ type: 'RESTORE_FINANCIAL', data: os });
+      return;
     }
-    
+
     setWorkOrders(prev => prev.map(o => o.id === osId ? { ...o, status: newStatus } : o));
     SoundFX.pop();
   };
@@ -360,7 +360,7 @@ function App() {
     const duplicate = workOrders.find(o => o.osNumber === data.osNumber && o.id !== editingOS?.id);
     if (duplicate && !confirm(`OS #${data.osNumber} duplicada. Continuar?`)) return;
 
-    setClients(prev => learnClientData(prev, data.clientName, data.vehicleModelOnly, data.plate, data.clientPhone, data.clientNotes));
+    setClients(prev => learnClientData(prev, data.clientName, data.vehicle, data.plate || '', data.clientPhone, data.clientNotes || ''));
     setCatalogParts(prev => learnCatalogItems(prev, data.parts));
     setCatalogServices(prev => learnCatalogItems(prev, data.services));
 
@@ -424,51 +424,67 @@ function App() {
       setIsEntryModalOpen(false);
   };
 
-  const handleEditEntry = (id: string) => {
-      const linkedOS = workOrders.find(o => o.financialId === id);
-      if (linkedOS) {
-          if(confirm(`Este lançamento pertence à OS #${linkedOS.osNumber}.\nAbrir OS para edição?`)) { setEditingOS(linkedOS); setIsModalOpen(true); }
-      } else {
-          const entry = ledger.find(e => e.id === id);
-          if (entry) { setEditingEntry(entry); setIsEntryModalOpen(true); }
-      }
-  };
+    if (pendingAction.type === 'DELETE_OS') {
+      const os = pendingAction.data;
+      setWorkOrders(p => p.filter(i => i.id !== os.id));
+      if (os.financialId) setLedger(p => p.filter(e => e.id !== os.financialId));
+      addToast("OS excluída com sucesso.", "info");
+    }
 
   const handleRequestDeleteEntry = (entry: LedgerEntry) => setDeleteModalInfo({ isOpen: true, entry });
   const confirmDeleteSingle = () => { if (deleteModalInfo.entry) { finance.deleteEntry(deleteModalInfo.entry.id); addToast("Excluído.", "info"); } setDeleteModalInfo({ isOpen: false, entry: null }); };
   const confirmDeleteGroup = () => { setDeleteModalInfo({ isOpen: false, entry: null }); };
 
-  // --- ACTIONS (Cadastros & Backup) ---
-  const handleSaveClient = (updatedClient: Client) => {
-    const oldClient = clients.find(c => c.id === updatedClient.id);
-    setClients(prev => { const exists = prev.find(c => c.id === updatedClient.id); return exists ? prev.map(c => c.id === updatedClient.id ? updatedClient : c) : [...prev, updatedClient]; });
-    const { newWorkOrders, newLedger, hasChanges } = updateClientCascading(oldClient, updatedClient, workOrders, ledger);
-    if (hasChanges) { setWorkOrders(newWorkOrders); setLedger(newLedger); addToast("Atualizado em cascata!", "success"); } else { addToast("Salvo!", "success"); }
-  };
-
-  const handleSaveCatalogItem = (updatedItem: CatalogItem, type: 'part' | 'service') => {
-    let oldItem: CatalogItem | undefined;
-    if (type === 'part') {
-        oldItem = catalogParts.find(p => p.id === updatedItem.id);
-        setCatalogParts(prev => { const ex = prev.find(p => p.id === updatedItem.id); return ex ? prev.map(p => p.id === updatedItem.id ? updatedItem : p) : [...prev, updatedItem]; });
-    } else {
-        oldItem = catalogServices.find(s => s.id === updatedItem.id);
-        setCatalogServices(prev => { const ex = prev.find(s => s.id === updatedItem.id); return ex ? prev.map(s => s.id === updatedItem.id ? updatedItem : s) : [...prev, updatedItem]; });
+    if (pendingAction.type === 'FINISH_OS_FINANCIAL') {
+      const os = pendingAction.data;
+      const entry = createEntry(`Receita OS #${os.osNumber} - ${os.clientName}`, os.total, 'CREDIT', os.createdAt);
+      setLedger(prev => [entry, ...prev]);
+      setWorkOrders(prev => prev.map(o => o.id === os.id ? { ...o, status: 'FINALIZADO', financialId: entry.id } : o));
+      addToast("OS Finalizada e Receita lançada!", "success");
+      setShowConfetti(true);
     }
-    const { newWorkOrders, hasChanges } = updateCatalogItemCascading(oldItem, updatedItem, workOrders);
-    if (hasChanges) { setWorkOrders(newWorkOrders); addToast("Atualizado em cascata!", "success"); } else { addToast("Salvo!", "success"); }
-  };
+
+    if (pendingAction.type === 'RESTORE_FINANCIAL') {
+      const os = pendingAction.data;
+      setLedger(prev => prev.filter(e => e.id !== os.financialId));
+      setWorkOrders(prev => prev.map(o => o.id === os.id ? { ...o, status: 'EM_SERVICO', financialId: undefined } : o));
+      addToast("OS reaberta e financeiro estornado.", "info");
+    }
 
   const handleBackup = async () => {
     if (!settings.googleDriveToken) return addToast("Configure o Token.", "error");
     await handleGoogleDriveBackup();
   };
 
-  const handleImportData = (content: string) => {
-     setPendingAction({ type: 'IMPORT_DATA', content });
-  };
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', currentTheme);
+  }, [currentTheme]);
 
-  // --- RENDER ---
+  useEffect(() => {
+    if (showConfetti) setTimeout(() => setShowConfetti(false), 3000);
+  }, [showConfetti]);
+
+  useKeyboard('F2', () => {
+    if (activeTab === 'OFICINA') {
+      setEditingOS(null);
+      setIsModalOpen(true);
+    }
+    addToast("Nova OS (F2)", "info");
+  });
+
+  useKeyboard('Escape', () => {
+    if (isModalOpen) setIsModalOpen(false);
+    if (isEntryModalOpen) {
+      setIsEntryModalOpen(false);
+      setEditingEntry(null);
+    }
+    if (isExportModalOpen) setIsExportModalOpen(false);
+    if (isChecklistOpen) setIsChecklistOpen(false);
+    if (isDatabaseModalOpen) setIsDatabaseModalOpen(false);
+    if (deleteModalInfo.isOpen) setDeleteModalInfo({ isOpen: false, entry: null });
+    if (pendingAction) setPendingAction(null);
+  });
+
   return (
     <>
       {showConfetti && <Confetti />}
@@ -476,21 +492,21 @@ function App() {
 
       <div className="app-container">
         <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-        
-        <main className="main-content">
-          {activeTab === 'FINANCEIRO' && (
-            <FinancialPage 
-              isLoading={isLoading} kpiData={finance.kpiData} chartDataFluxo={finance.chartFluxo} chartDataPie={finance.chartPie} ledger={finance.filteredLedger} Money={Money}
-              onOpenExport={() => setIsExportModalOpen(true)} onOpenEntry={() => { setEditingEntry(null); setIsEntryModalOpen(true); }} onEditEntry={handleEditEntry} 
-              onDeleteEntry={handleRequestDeleteEntry} selectedMonth={finance.selectedMonth} onMonthChange={finance.setSelectedMonth} viewMode={finance.viewMode} setViewMode={finance.setViewMode} filterType={finance.filterType} setFilterType={finance.setFilterType}
-            />
-          )}
 
+        <main className="main-content">
           {activeTab === 'OFICINA' && (
-            <WorkshopPage 
-              workOrders={workOrders} isLoading={isLoading} formatMoney={Money.format}
-              onNewOS={() => { setEditingOS(null); setIsModalOpen(true); }}
-              onDragEnd={(res: DropResult) => { if (res.destination && res.destination.droppableId !== res.source.droppableId) handleUpdateStatus(res.draggableId, res.destination.droppableId as OSStatus); }}
+            <WorkshopPage
+              workOrders={workOrders}
+              isLoading={isLoading}
+              formatMoney={Money.format}
+              onNewOS={() => {
+                setEditingOS(null);
+                setIsModalOpen(true);
+              }}
+              onDragEnd={(res: DropResult) => {
+                if (res.destination && res.destination.droppableId !== res.source.droppableId)
+                  handleUpdateStatus(res.draggableId, res.destination.droppableId as OSStatus);
+              }}
               kanbanActions={{
                 onRegress: (id) => { const os = workOrders.find(o=>o.id===id); if(os) handleUpdateStatus(id, os.status==='FINALIZADO'?'EM_SERVICO':os.status==='EM_SERVICO'?'APROVADO':'ORCAMENTO'); },
                 onAdvance: (id) => { const os = workOrders.find(o=>o.id===id); if(os) handleUpdateStatus(id, os.status==='ORCAMENTO'?'APROVADO':os.status==='APROVADO'?'EM_SERVICO':'FINALIZADO'); },
@@ -526,21 +542,40 @@ function App() {
             />
           )}
 
-          {activeTab === 'PROCESSOS' && <ProcessPage workOrders={workOrders} onOpenNew={() => { setEditingOS(null); setIsModalOpen(true); }} onUpdateStatus={handleUpdateStatus} />}
-          {activeTab === 'CLIENTES' && <CRMPage clients={clients} workOrders={workOrders} isLoading={isLoading} formatMoney={Money.format} />}
-          
-          {activeTab === 'CONFIG' && (
-            <ConfigPage settings={settings} setSettings={setSettings} currentTheme={currentTheme} setCurrentTheme={setCurrentTheme} onBackup={handleBackup} isBackuping={isBackuping} driveStatus={driveStatus} onImportData={handleImportData} onOpenDatabase={() => setIsDatabaseModalOpen(true)} />
+          {activeTab === 'PROCESSOS' && (
+            <ProcessPage
+              workOrders={workOrders}
+              onOpenNew={() => {
+                setEditingOS(null);
+                setIsModalOpen(true);
+              }}
+              onUpdateStatus={handleUpdateStatus}
+            />
+          )}
+
+          {activeTab === 'CLIENTES' && (
+            <CRMPage
+              clients={clients}
+              workOrders={workOrders}
+              isLoading={isLoading}
+              formatMoney={Money.format}
+            />
           )}
         </main>
       </div>
 
-      <OSModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveOSModal} editingOS={editingOS} clients={clients} catalogParts={catalogParts} catalogServices={catalogServices} nextOSNumber={workOrders.length > 0 ? Math.max(...workOrders.map(o => o.osNumber)) + 1 : 1} isSaving={isSaving} formatMoney={Money.format} />
-      <EntryModal isOpen={isEntryModalOpen} onClose={() => { setIsEntryModalOpen(false); setEditingEntry(null); }} onSave={handleSaveEntryModal} initialData={editingEntry} />
-      <DatabaseModal isOpen={isDatabaseModalOpen} onClose={() => setIsDatabaseModalOpen(false)} clients={clients} catalogParts={catalogParts} catalogServices={catalogServices} onSaveClient={handleSaveClient} onDeleteClient={(id) => setClients(p => p.filter(c => c.id !== id))} onSaveCatalogItem={handleSaveCatalogItem} onDeleteCatalogItem={(id, type) => type === 'part' ? setCatalogParts(p=>p.filter(x=>x.id!==id)) : setCatalogServices(p=>p.filter(x=>x.id!==id))} formatMoney={Money.format} />
-      <ExportModal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} ledger={ledger} workOrders={workOrders} defaultPath={settings.exportPath} Money={Money} SoundFX={{ success: () => addToast("Sucesso!", "success"), error: () => addToast("Erro", "error") }} />
-      <ChecklistModal isOpen={isChecklistOpen} onClose={() => setIsChecklistOpen(false)} onSave={(data) => { if(checklistOS) setWorkOrders(p=>p.map(o=>o.id===checklistOS.id ? {...o, checklist:data} : o)); setIsChecklistOpen(false); }} os={checklistOS} />
-      <PrintableInvoice data={printingOS} settings={settings} formatMoney={Money.format} />
+      <OSModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleSaveOSModal}
+        editingOS={editingOS}
+        clients={clients}
+        catalogParts={catalogParts}
+        catalogServices={catalogServices}
+        nextOSNumber={workOrders.length > 0 ? Math.max(...workOrders.map(o => o.osNumber)) + 1 : 1}
+        isSaving={isSaving}
+        formatMoney={Money.format}
+      />
 
       <DeleteConfirmationModal 
         isOpen={deleteModalInfo.isOpen}
@@ -549,6 +584,8 @@ function App() {
         onConfirmGroup={confirmDeleteGroup}
         isGroup={false} 
       />
+
+      <PrintableInvoice data={printingOS} settings={settings} formatMoney={Money.format} />
 
       <ConfirmationModal
         isOpen={!!pendingAction}

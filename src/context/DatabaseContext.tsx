@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { LedgerEntry, WorkOrder, Client, CatalogItem, WorkshopSettings, DatabaseSchema } from '../types';
 
@@ -35,11 +35,17 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // NOVO: Referência para evitar saves desnecessários durante o load
+  const isInitialLoad = useRef(true);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load Inicial
   useEffect(() => {
     async function load() {
       setIsLoading(true);
+      isInitialLoad.current = true;
+      
       try {
         const data = await invoke<string>('load_database', { filepath: dbPath });
         if (data && data.trim()) {
@@ -55,27 +61,46 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         console.error("Erro ao carregar banco:", e);
       } finally {
         setIsLoading(false);
+        // Aguarda um pouco antes de permitir saves automáticos
+        setTimeout(() => {
+          isInitialLoad.current = false;
+        }, 500);
       }
     }
     load();
   }, [dbPath]);
 
-  // Auto-Save
+  // Auto-Save OTIMIZADO com debounce de 3 segundos
   useEffect(() => {
-    const t = setTimeout(async () => {
-      if (isLoading) return;
-      if (workOrders.length === 0 && clients.length === 0 && ledger.length === 0) return;
+    // Não salva durante o load inicial
+    if (isInitialLoad.current || isLoading) return;
+    
+    // Não salva se não houver dados
+    if (workOrders.length === 0 && clients.length === 0 && ledger.length === 0) return;
 
+    // Limpa timeout anterior
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    // NOVO DEBOUNCE: 3 segundos (ao invés de 1.5s)
+    saveTimeoutRef.current = setTimeout(async () => {
       setIsSaving(true);
       try {
         const fullDb: DatabaseSchema = { ledger, workOrders, clients, catalogParts, catalogServices, settings };
         await invoke('save_database_atomic', { filepath: dbPath, content: JSON.stringify(fullDb) });
       } catch (e) {
         console.error("Erro ao salvar:", e);
+      } finally {
+        setIsSaving(false);
       }
-      setIsSaving(false);
-    }, 1500);
-    return () => clearTimeout(t);
+    }, 3000); // Aumentado de 1500ms para 3000ms
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
   }, [ledger, workOrders, clients, catalogParts, catalogServices, settings, dbPath, isLoading]);
 
   return (

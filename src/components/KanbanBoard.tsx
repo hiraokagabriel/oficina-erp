@@ -1,8 +1,6 @@
-// REMOVIDO: import { open } from '@tauri-apps/plugin-opener'; 
 import React, { useState } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { WorkOrder, OSStatus, STATUS_LABELS } from '../types';
->>>>>>> main
 import { KanbanCard } from './KanbanCard';
 
 interface KanbanBoardProps {
@@ -18,10 +16,10 @@ interface KanbanBoardProps {
     onAdvance: (id: string) => void;
     onArchive?: (os: WorkOrder) => void;
     onRestore?: (os: WorkOrder) => void;
-    // ADICIONADO AQUI TAMBÉM
     onQuickFinish?: (id: string) => void;
   };
   formatMoney: (val: number) => string;
+  showArchived?: boolean;
 }
 
 const EmptyState = ({ status }: { status: OSStatus }) => {
@@ -47,9 +45,7 @@ const EmptyState = ({ status }: { status: OSStatus }) => {
   );
 };
 
-export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading, onDragEnd, actions, formatMoney }) => {
-    const list = columnsData[status];
-  
+export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading, onDragEnd, actions, formatMoney, showArchived = false }) => {
   // Estado local para a busca
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -70,7 +66,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
     // Usa a lista filtrada em vez da lista completa
     const list = filteredWorkOrders.filter(o => o.status === status).sort((a,b) => b.osNumber - a.osNumber);
     
->>>>>>> main
     const colColorMap: Record<string, string> = { 
         ORCAMENTO: 'var(--info)', APROVADO: 'var(--warning)', 
         EM_SERVICO: 'var(--primary)', FINALIZADO: 'var(--success)',
@@ -83,7 +78,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
           {STATUS_LABELS[status]} 
           <span style={{background: 'rgba(0,0,0,0.05)', padding: '2px 8px', borderRadius: 10}}>
             {list.length}
->>>>>>> main
           </span>
         </div>
         
@@ -99,29 +93,10 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
                   transition: 'background-color 0.2s ease', minHeight: 150, flex: 1
               }}
             >
+              {list.length === 0 ? (
                  <EmptyState status={status} />
               ) : (
-                 <>
-                    {visibleList.map((os, index) => (
-                        <KanbanCard 
-                            key={os.id} 
-                            os={os} 
-                            index={index} 
-                            formatMoney={formatMoney} 
-                            status={status}
-                            actions={actions}
-                            onWhatsApp={() => handleWhatsApp(os)}
-                        />
-                    ))}
-                    {hasMore && (
-                        <button onClick={() => handleShowMore(status)} className="btn-secondary" style={{ width: '100%', padding: '8px', fontSize: '0.85rem', marginTop: '10px', borderStyle: 'dashed' }}>
-                            ⬇ Carregar mais ({fullList.length - visibleCounts[status]})
-                        </button>
-                    )}
-                 </>
-              )}
-=======
-              {list.map((os, index) => (
+              list.map((os, index) => (
                 <Draggable key={os.id} draggableId={os.id} index={index}>
                   {(provided, snapshot) => {
                     
@@ -174,8 +149,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
                     );
                   }}
                 </Draggable>
-              ))}
->>>>>>> 8fe8d422cec7fe329c6c0ee3d4df2c90512e43ba
+              )))
+              }
               {provided.placeholder}
             </div>
           )}
@@ -208,7 +183,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
             <div className="filter-stats">
                Mostrando <strong>{filteredWorkOrders.length}</strong> de {workOrders.length} ordens
             </div>
->>>>>>> main
         </div>
 
         <DragDropContext onDragEnd={onDragEnd}>

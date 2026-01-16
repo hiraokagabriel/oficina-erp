@@ -20,7 +20,8 @@ const INITIAL_SORT_STATE: Record<OSStatus, SortConfig> = {
   ORCAMENTO: { key: 'createdAt', direction: 'desc' },
   APROVADO: { key: 'createdAt', direction: 'desc' },
   EM_SERVICO: { key: 'createdAt', direction: 'desc' },
-  FINALIZADO: { key: 'createdAt', direction: 'desc' }
+  FINALIZADO: { key: 'createdAt', direction: 'desc' },
+  ARQUIVADO: { key: 'createdAt', direction: 'desc' }
 };
 
 export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew, onUpdateStatus }) => {

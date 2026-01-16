@@ -797,8 +797,29 @@ function App() {
                 onAdvance: (id) => { const os = workOrders.find(o=>o.id===id); if(os) handleUpdateStatus(id, os.status==='ORCAMENTO'?'APROVADO':os.status==='APROVADO'?'EM_SERVICO':'FINALIZADO'); },
                 onEdit: (os) => { setEditingOS(os); setIsModalOpen(true); },
                 onChecklist: (os) => { setChecklistOS(os); setIsChecklistOpen(true); },
-                onPrint: (os) => { setPrintingOS(os); setTimeout(() => window.print(), 100); },
-                onDelete: (os) => setPendingAction({ type: 'DELETE_OS', data: os }),
+                onPrint: (os) => { 
+                        setPrintingOS(os); 
+                        const originalTitle = document.title;
+                        
+                        // 1. Monta o nome bruto: "OS_123_Joao_Silva_Honda Civic - ABC-1234"
+                        const rawName = `OS_${os.osNumber}_${os.clientName}_${os.vehicle}`;
+                        
+                        // 2. Limpa para virar nome de arquivo seguro:
+                        // - Troca espaços por underline (_)
+                        // - Remove caracteres especiais (mantém apenas letras, números, _ e -)
+                        const safeName = rawName
+                            .replace(/\s+/g, '_')          // Espaços viram _
+                            .replace(/[^a-zA-Z0-9_\-]/g, '') // Remove acentos ou símbolos inválidos
+                            .toUpperCase();                // Opcional: Tudo maiúsculo para padronizar
+
+                        // Ex final: OS_123_JOAO_SILVA_HONDA_CIVIC_-_ABC-1234
+                        document.title = safeName;
+                        
+                        setTimeout(() => { 
+                            window.print(); 
+                            document.title = originalTitle;
+                        }, 100); 
+                    },                onDelete: (os) => setPendingAction({ type: 'DELETE_OS', data: os }),
                 onArchive: (os) => setPendingAction({ type: 'ARCHIVE_OS', data: os }),
                 onRestore: (os) => handleUpdateStatus(os.id, 'ORCAMENTO'),
                 onQuickFinish: (id) => handleUpdateStatus(id, 'FINALIZADO')

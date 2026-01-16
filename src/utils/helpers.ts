@@ -88,10 +88,28 @@ export const createWorkOrder = (
 
   const subParts = parts.reduce((a, b) => a + b.price, 0);
   const subServices = services.reduce((a, b) => a + b.price, 0);
+  const totalRevenue = subParts + subServices;
+  
+  // NOVO: Calcular custos e lucro
+  const totalCost = parts.reduce((a, b) => a + (b.cost || 0), 0) + 
+                    services.reduce((a, b) => a + (b.cost || 0), 0);
+  const profit = totalRevenue - totalCost;
+  const profitMargin = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
 
-  // Mapeia CatalogItem para OrderItem adicionando ID
-  const orderParts: OrderItem[] = parts.map(p => ({ ...p, id: generateId() }));
-  const orderServices: OrderItem[] = services.map(s => ({ ...s, id: generateId() }));
+  // Mapeia CatalogItem para OrderItem adicionando ID e cost
+  const orderParts: OrderItem[] = parts.map(p => ({ 
+    id: generateId(),
+    description: p.description,
+    price: p.price,
+    cost: p.cost || 0 
+  }));
+  
+  const orderServices: OrderItem[] = services.map(s => ({ 
+    id: generateId(),
+    description: s.description,
+    price: s.price,
+    cost: s.cost || 0 
+  }));
 
   return {
     id: generateId(),
@@ -103,7 +121,10 @@ export const createWorkOrder = (
     status: 'ORCAMENTO',
     parts: orderParts,
     services: orderServices,
-    total: subParts + subServices,
+    total: totalRevenue,
+    totalCost,
+    profit,
+    profitMargin,
     createdAt: finalDate,
     checklist: undefined,
     financialId: undefined
@@ -123,6 +144,13 @@ export const updateWorkOrderData = (
 ): WorkOrder => {
   const subParts = parts.reduce((a, b) => a + b.price, 0);
   const subServices = services.reduce((a, b) => a + b.price, 0);
+  const totalRevenue = subParts + subServices;
+  
+  // NOVO: Calcular custos e lucro
+  const totalCost = parts.reduce((a, b) => a + (b.cost || 0), 0) + 
+                    services.reduce((a, b) => a + (b.cost || 0), 0);
+  const profit = totalRevenue - totalCost;
+  const profitMargin = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
   
   let finalDate = original.createdAt;
   if (dateString) {
@@ -131,9 +159,20 @@ export const updateWorkOrderData = (
       finalDate = d.toISOString();
   }
 
-  // Mapeia CatalogItem para OrderItem adicionando ID
-  const orderParts: OrderItem[] = parts.map(p => ({ ...p, id: generateId() }));
-  const orderServices: OrderItem[] = services.map(s => ({ ...s, id: generateId() }));
+  // Mapeia CatalogItem para OrderItem adicionando ID e cost
+  const orderParts: OrderItem[] = parts.map(p => ({ 
+    id: generateId(),
+    description: p.description,
+    price: p.price,
+    cost: p.cost || 0 
+  }));
+  
+  const orderServices: OrderItem[] = services.map(s => ({ 
+    id: generateId(),
+    description: s.description,
+    price: s.price,
+    cost: s.cost || 0 
+  }));
 
   return {
     ...original,
@@ -144,7 +183,10 @@ export const updateWorkOrderData = (
     mileage: Number(mileage) || 0,
     parts: orderParts,
     services: orderServices,
-    total: subParts + subServices,
+    total: totalRevenue,
+    totalCost,
+    profit,
+    profitMargin,
     createdAt: finalDate
   };
 };

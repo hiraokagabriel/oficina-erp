@@ -86,8 +86,8 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
     return <span style={{ marginLeft: 5 }}>{config.direction === 'asc' ? '⬆' : '⬇'}</span>;
   };
 
-  const groups: OSStatus[] = ['ORCAMENTO', 'APROVADO', 'EM_SERVICO', 'FINALIZADO'];
-  const allStatuses: OSStatus[] = ['ORCAMENTO', 'APROVADO', 'EM_SERVICO', 'FINALIZADO'];
+  const groups: OSStatus[] = ['ORCAMENTO', 'APROVADO', 'EM_SERVICO', 'FINALIZADO', 'ARQUIVADO'];
+  const allStatuses: OSStatus[] = ['ORCAMENTO', 'APROVADO', 'EM_SERVICO', 'FINALIZADO', 'ARQUIVADO'];
 
   return (
     <>
@@ -107,97 +107,97 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
 
           return (
             <div key={status} className="process-group">
-               {/* Cabeçalho do Grupo (Aba Colorida) */}
-               <div className={`process-group-header status-${status}`}>
-                   <span>{STATUS_LABELS[status]}</span>
-                   <span className="count-badge">{filtered.length}</span>
-               </div>
-               
-               {/* Tabela do Grupo */}
-               <div className="card" style={{ padding: 0, overflow: 'visible', borderTopLeftRadius: 0, marginTop: -1 }}>
-                   <table className="process-table">
-                       <thead>
-                           <tr>
-                               <th style={{ width: '15%' }} onClick={() => handleSort(status, 'osNumber')} className="sortable-th"> 
-                                Nº OS <SortIcon status={status} colKey="osNumber" />
-                                </th>
-                               <th onClick={() => handleSort(status, 'clientName')} className="sortable-th">
-                                 Cliente / Veículo <SortIcon status={status} colKey="clientName"/>
-                               </th>
-                               <th style={{ width: '20%' }} onClick={() => handleSort(status, 'createdAt')} className="sortable-th">
-                                Data <SortIcon status={status} colKey="createdAt" />
-                                </th>
-                               <th style={{ width: '20%' }}>Status (Alterar)</th>
-                           </tr>
-                       </thead>
-                       <tbody>
-                           {sortedList.length === 0 ? (
-                               <tr>
-                                   <td colSpan={4} style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>
-                                       Nenhum item neste status.
-                                   </td>
-                               </tr>
-                           ) : (
-                               sortedList.map(os => (
-                                   <tr key={os.id} className="process-row">
-                                       <td>
-                                           <span className="os-number">#{os.osNumber}</span>
-                                       </td>
-                                       <td>
-                                           <div className="cell-primary">{os.clientName}</div>
-                                           <div className="cell-secondary">{os.vehicle}</div>
-                                       </td>
-                                       <td className="cell-secondary">
-                                           {new Date(os.createdAt).toLocaleDateString()}
-                                       </td>
-                                       
-                                       {/* Célula de Status com Dropdown */}
-                                       <td className="status-cell">
-                                           <span 
-                                              className={`status-badge st-${os.status} clickable`}
-                                              onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  // Abre ou fecha o menu deste item
-                                                  setOpenDropdownId(openDropdownId === os.id ? null : os.id);
-                                              }}
-                                           >
-                                               {STATUS_LABELS[os.status]} 
-                                               <span className="dropdown-arrow">▼</span>
-                                           </span>
+              {/* Cabeçalho do Grupo (Aba Colorida) */}
+              <div className={`process-group-header status-${status}`}>
+                <span>{STATUS_LABELS[status]}</span>
+                <span className="count-badge">{filtered.length}</span>
+              </div>
+              
+              {/* Tabela do Grupo */}
+              <div className="card" style={{ padding: 0, overflow: 'visible', borderTopLeftRadius: 0, marginTop: -1 }}>
+                <table className="process-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '15%' }} onClick={() => handleSort(status, 'osNumber')} className="sortable-th"> 
+                        Nº OS <SortIcon status={status} colKey="osNumber" />
+                      </th>
+                      <th onClick={() => handleSort(status, 'clientName')} className="sortable-th">
+                        Cliente / Veículo <SortIcon status={status} colKey="clientName"/>
+                      </th>
+                      <th style={{ width: '20%' }} onClick={() => handleSort(status, 'createdAt')} className="sortable-th">
+                        Data <SortIcon status={status} colKey="createdAt" />
+                      </th>
+                      <th style={{ width: '20%' }}>Status (Alterar)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedList.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>
+                          Nenhum item neste status.
+                        </td>
+                      </tr>
+                    ) : (
+                      sortedList.map(os => (
+                        <tr key={os.id} className="process-row">
+                          <td>
+                            <span className="os-number">#{os.osNumber}</span>
+                          </td>
+                          <td>
+                            <div className="cell-primary">{os.clientName}</div>
+                            <div className="cell-secondary">{os.vehicle}</div>
+                          </td>
+                          <td className="cell-secondary">
+                            {new Date(os.createdAt).toLocaleDateString()}
+                          </td>
+                          
+                          {/* Célula de Status com Dropdown */}
+                          <td className="status-cell">
+                            <span 
+                              className={`status-badge st-${os.status} clickable`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                // Abre ou fecha o menu deste item
+                                setOpenDropdownId(openDropdownId === os.id ? null : os.id);
+                              }}
+                            >
+                              {STATUS_LABELS[os.status]} 
+                              <span className="dropdown-arrow">▼</span>
+                            </span>
 
-                                           {/* Menu Dropdown Condicional */}
-                                           {openDropdownId === os.id && (
-                                               <div className="status-dropdown-menu" ref={dropdownRef}>
-                                                   {allStatuses.map(optStatus => (
-                                                       <div 
-                                                          key={optStatus}
-                                                          className={`status-option ${optStatus === os.status ? 'selected' : ''}`}
-                                                          onClick={() => {
-                                                              onUpdateStatus(os.id, optStatus);
-                                                              setOpenDropdownId(null);
-                                                          }}
-                                                       >
-                                                           {optStatus === os.status && <span>✓</span>}
-                                                           {STATUS_LABELS[optStatus]}
-                                                       </div>
-                                                   ))}
-                                               </div>
-                                           )}
-                                       </td>
-                                   </tr>
-                               ))
-                           )}
-                       </tbody>
-                   </table>
-               </div>
+                            {/* Menu Dropdown Condicional */}
+                            {openDropdownId === os.id && (
+                              <div className="status-dropdown-menu" ref={dropdownRef}>
+                                {allStatuses.map(optStatus => (
+                                  <div 
+                                    key={optStatus}
+                                    className={`status-option ${optStatus === os.status ? 'selected' : ''}`}
+                                    onClick={() => {
+                                      onUpdateStatus(os.id, optStatus);
+                                      setOpenDropdownId(null);
+                                    }}
+                                  >
+                                    {optStatus === os.status && <span>✓</span>}
+                                    {STATUS_LABELS[optStatus]}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           );
         })}
 
         {workOrders.length === 0 && (
-            <div className="card" style={{textAlign: 'center', padding: 40, color: 'var(--text-muted)'}}>
-                Nenhum processo cadastrado no sistema.
-            </div>
+          <div className="card" style={{textAlign: 'center', padding: 40, color: 'var(--text-muted)'}}>
+            Nenhum processo cadastrado no sistema.
+          </div>
         )}
       </div>
     </>

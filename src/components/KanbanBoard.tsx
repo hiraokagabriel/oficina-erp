@@ -45,31 +45,31 @@ const EmptyState = ({ status }: { status: OSStatus }) => {
   );
 };
 
-export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading, onDragEnd, actions, formatMoney, showArchived = false }) => {
-  // Estado local para a busca
+export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading, onDragEnd, actions, formatMoney }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
 
-  // Lógica de Filtro
   const filteredWorkOrders = workOrders.filter(os => {
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     
     return (
-      os.clientName.toLowerCase().includes(term) || // Busca por Nome
-      os.vehicle.toLowerCase().includes(term) ||    // Busca por Veículo
-      os.osNumber.toString().includes(term) ||      // Busca por Número da OS
-      (os.clientPhone && os.clientPhone.includes(term)) // Busca por Telefone
+      os.clientName.toLowerCase().includes(term) ||
+      os.vehicle.toLowerCase().includes(term) ||
+      os.osNumber.toString().includes(term) ||
+      (os.clientPhone && os.clientPhone.includes(term))
     );
   });
 
   const renderColumn = (status: OSStatus) => {
-    // Usa a lista filtrada em vez da lista completa
-    const list = filteredWorkOrders.filter(o => o.status === status).sort((a,b) => b.osNumber - a.osNumber);
+    const list = filteredWorkOrders.filter(o => o.status === status).sort((a, b) => b.osNumber - a.osNumber);
     
     const colColorMap: Record<string, string> = { 
-        ORCAMENTO: 'var(--info)', APROVADO: 'var(--warning)', 
-        EM_SERVICO: 'var(--primary)', FINALIZADO: 'var(--success)',
-        ARQUIVADO: 'var(--text-muted)'
+      ORCAMENTO: 'var(--info)', 
+      APROVADO: 'var(--warning)', 
+      EM_SERVICO: 'var(--primary)', 
+      FINALIZADO: 'var(--success)',
+      ARQUIVADO: 'var(--text-muted)'
     };
 
     return (
@@ -88,69 +88,71 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
               ref={provided.innerRef}
               {...provided.droppableProps}
               style={{ 
-                  display: 'flex', flexDirection: 'column', gap: '12px', padding: '8px', 
-                  background: snapshot.isDraggingOver ? 'rgba(0,0,0,0.02)' : 'transparent',
-                  transition: 'background-color 0.2s ease', minHeight: 150, flex: 1
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: '12px', 
+                padding: '8px', 
+                background: snapshot.isDraggingOver ? 'rgba(0,0,0,0.02)' : 'transparent',
+                transition: 'background-color 0.2s ease', 
+                minHeight: 150, 
+                flex: 1
               }}
             >
               {list.length === 0 ? (
-                 <EmptyState status={status} />
+                <EmptyState status={status} />
               ) : (
-              list.map((os, index) => (
-                <Draggable key={os.id} draggableId={os.id} index={index}>
-                  {(provided, snapshot) => {
-                    
-                    const anchorStyle = {
+                list.map((os, index) => (
+                  <Draggable key={os.id} draggableId={os.id} index={index}>
+                    {(provided, snapshot) => {
+                      const anchorStyle = {
                         ...provided.draggableProps.style,
                         zIndex: snapshot.isDragging ? 10000 : 'auto',
                         cursor: snapshot.isDragging ? 'grabbing' : 'grab',
                         margin: 0,
-                        left: (provided.draggableProps.style as React.CSSProperties)?.left,
-                        top: (provided.draggableProps.style as React.CSSProperties)?.top,
-                    };
+                      };
 
-                    return (
+                      return (
                         <div 
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            {...provided.dragHandleProps}
-                            style={anchorStyle}
+                          ref={provided.innerRef}
+                          {...provided.draggableProps}
+                          {...provided.dragHandleProps}
+                          style={anchorStyle}
                         >
-                            <div 
-                                className={`kanban-card ${snapshot.isDragging ? 'is-dragging' : ''}`}
-                                style={{
-                                    transform: snapshot.isDragging ? 'rotate(3deg) scale(1.02)' : 'none',
-                                    transition: snapshot.isDragging ? 'none' : 'all 0.2s ease',
-                                    boxShadow: snapshot.isDragging ? '0 25px 50px rgba(0,0,0,0.5)' : '0 4px 6px rgba(0,0,0,0.1)',
-                                    opacity: snapshot.isDragging ? 1 : 1,
-                                    border: snapshot.isDragging ? '1px solid var(--primary)' : '1px solid var(--border)'
-                                }}
-                            >
-                                <div className="os-header">
-                                    <span className="os-number">#{os.osNumber}</span> 
-                                    <span className="os-price">{formatMoney(os.total)}</span>
-                                </div>
-                                <div className="os-client">{os.clientName}</div>
-                                <div className="os-vehicle">{os.vehicle}</div>
-                                {os.clientPhone && <div className="os-id">📞 {os.clientPhone}</div>}
-                                
-                                <div className="card-actions" style={{display: snapshot.isDragging ? 'none' : 'flex'}}>
-                                    {status !== 'ORCAMENTO' && <button className="btn-icon" title="Voltar Etapa" onClick={() => actions.onRegress(os.id)}>⬅️</button>} 
-                                    <div style={{display: 'flex', gap: 5}}>
-                                        <button className="btn-icon" title="Editar" onClick={() => actions.onEdit(os)}>✏️</button>
-                                        <button className="btn-icon check" title="Checklist" onClick={() => actions.onChecklist(os)}>📋</button>
-                                        <button className="btn-icon" title="Imprimir" onClick={() => actions.onPrint(os)}>🖨️</button>
-                                        <button className="btn-icon danger" title="Excluir" onClick={() => actions.onDelete(os)}>🗑️</button>
-                                    </div>
-                                    {status !== 'FINALIZADO' && <button className="btn-icon" title="Avançar Etapa" onClick={() => actions.onAdvance(os.id)}>➡️</button>}
-                                </div>
+                          <div 
+                            className={`kanban-card ${snapshot.isDragging ? 'is-dragging' : ''}`}
+                            style={{
+                              transform: snapshot.isDragging ? 'rotate(3deg) scale(1.02)' : 'none',
+                              transition: snapshot.isDragging ? 'none' : 'all 0.2s ease',
+                              boxShadow: snapshot.isDragging ? '0 25px 50px rgba(0,0,0,0.5)' : '0 4px 6px rgba(0,0,0,0.1)',
+                              opacity: snapshot.isDragging ? 1 : 1,
+                              border: snapshot.isDragging ? '1px solid var(--primary)' : '1px solid var(--border)'
+                            }}
+                          >
+                            <div className="os-header">
+                              <span className="os-number">#{os.osNumber}</span> 
+                              <span className="os-price">{formatMoney(os.total)}</span>
                             </div>
+                            <div className="os-client">{os.clientName}</div>
+                            <div className="os-vehicle">{os.vehicle}</div>
+                            {os.clientPhone && <div className="os-id">📞 {os.clientPhone}</div>}
+                            
+                            <div className="card-actions" style={{display: snapshot.isDragging ? 'none' : 'flex'}}>
+                              {status !== 'ORCAMENTO' && <button className="btn-icon" title="Voltar Etapa" onClick={() => actions.onRegress(os.id)}>⬅️</button>} 
+                              <div style={{display: 'flex', gap: 5}}>
+                                <button className="btn-icon" title="Editar" onClick={() => actions.onEdit(os)}>✏️</button>
+                                <button className="btn-icon check" title="Checklist" onClick={() => actions.onChecklist(os)}>📋</button>
+                                <button className="btn-icon" title="Imprimir" onClick={() => actions.onPrint(os)}>🖨️</button>
+                                <button className="btn-icon danger" title="Excluir" onClick={() => actions.onDelete(os)}>🗑️</button>
+                              </div>
+                              {status !== 'FINALIZADO' && <button className="btn-icon" title="Avançar Etapa" onClick={() => actions.onAdvance(os.id)}>➡️</button>}
+                            </div>
+                          </div>
                         </div>
-                    );
-                  }}
-                </Draggable>
-              )))
-              }
+                      );
+                    }}
+                  </Draggable>
+                ))
+              )}
               {provided.placeholder}
             </div>
           )}
@@ -163,33 +165,32 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        {/* BARRA DE BUSCA E FILTRO */}
-        <div className="kanban-filter-bar">
-            <div className="search-wrapper">
-                <span className="search-icon">🔍</span>
-                <input 
-                    type="text" 
-                    className="form-input search-input" 
-                    placeholder="Buscar por Cliente, OS, Veículo ou Placa..." 
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
-                {searchTerm && (
-                    <button className="btn-clear-search" onClick={() => setSearchTerm('')}>
-                        ✕
-                    </button>
-                )}
-            </div>
-            <div className="filter-stats">
-               Mostrando <strong>{filteredWorkOrders.length}</strong> de {workOrders.length} ordens
-            </div>
+      <div className="kanban-filter-bar">
+        <div className="search-wrapper">
+          <span className="search-icon">🔍</span>
+          <input 
+            type="text" 
+            className="form-input search-input" 
+            placeholder="Buscar por Cliente, OS, Veículo ou Placa..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          {searchTerm && (
+            <button className="btn-clear-search" onClick={() => setSearchTerm('')}>
+              ✕
+            </button>
+          )}
         </div>
+        <div className="filter-stats">
+          Mostrando <strong>{filteredWorkOrders.length}</strong> de {workOrders.length} ordens
+        </div>
+      </div>
 
-        <DragDropContext onDragEnd={onDragEnd}>
-            <div className="kanban-board" style={{ gridTemplateColumns: showArchived ? '1fr' : 'repeat(4, 1fr)' }}>
-                {showArchived ? renderColumn('ARQUIVADO') : <>{renderColumn('ORCAMENTO')}{renderColumn('APROVADO')}{renderColumn('EM_SERVICO')}{renderColumn('FINALIZADO')}</>}
-            </div>
-        </DragDropContext>
+      <DragDropContext onDragEnd={onDragEnd}>
+        <div className="kanban-board" style={{ gridTemplateColumns: showArchived ? '1fr' : 'repeat(4, 1fr)' }}>
+          {showArchived ? renderColumn('ARQUIVADO') : <>{renderColumn('ORCAMENTO')}{renderColumn('APROVADO')}{renderColumn('EM_SERVICO')}{renderColumn('FINALIZADO')}</>}
+        </div>
+      </DragDropContext>
     </div>
   );
 };

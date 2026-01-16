@@ -28,7 +28,7 @@ export const OSModal: React.FC<OSModalProps> = ({
   const [clientName, setClientName] = useState("");
   const [contact, setContact] = useState("");
   const [notes, setNotes] = useState(""); // Obs. Interna (Cliente)
-  const [publicNotes, setPublicNotes] = useState(""); // NOVO: Obs. da OS (Impressão)
+  const [publicNotes, setPublicNotes] = useState(""); // Obs. da OS (Impressão)
   const [vehicle, setVehicle] = useState("");
   const [plate, setPlate] = useState("");
   const [mileage, setMileage] = useState("");
@@ -36,9 +36,12 @@ export const OSModal: React.FC<OSModalProps> = ({
   const [parts, setParts] = useState<OrderItem[]>([]);
   const [services, setServices] = useState<OrderItem[]>([]);
 
+  // NOVO: Estado para controle de visualização de custo
+  const [showCostColumn, setShowCostColumn] = useState(false);
+
   // --- ESTADOS TEMPORÁRIOS (SPEED ENTRY) ---
-  const [tempPart, setTempPart] = useState({ description: '', price: '' });
-  const [tempService, setTempService] = useState({ description: '', price: '' });
+  const [tempPart, setTempPart] = useState({ description: '', price: '', cost: '' });
+  const [tempService, setTempService] = useState({ description: '', price: '', cost: '' });
 
   // --- PERFORMANCE FIX: LISTAS OTIMIZADAS ---
   const suggestedParts = useMemo(() => {
@@ -70,7 +73,7 @@ export const OSModal: React.FC<OSModalProps> = ({
         const client = clients.find(c => c.name.toLowerCase() === editingOS.clientName.trim().toLowerCase());
         setContact(editingOS.clientPhone || client?.phone || "");
         setNotes(client?.notes || "");
-        setPublicNotes(editingOS.publicNotes || ""); // Carrega nota pública
+        setPublicNotes(editingOS.publicNotes || "");
         
         const sep = editingOS.vehicle.lastIndexOf(" - ");
         if (sep > 0) {
@@ -89,7 +92,7 @@ export const OSModal: React.FC<OSModalProps> = ({
         setClientName("");
         setContact("");
         setNotes("");
-        setPublicNotes(""); // Limpa nota pública
+        setPublicNotes("");
         setVehicle("");
         setPlate("");
         setMileage("");
@@ -124,16 +127,44 @@ export const OSModal: React.FC<OSModalProps> = ({
     }
   }, [vehicle, suggestedVehicles]);
 
+  // NOVO: Funções de cálculo financeiro
   const toFloat = (val: number) => val / 100;
   const fromFloat = (val: number) => Math.round(val * 100);
   const calcTotal = (items: OrderItem[]) => items.reduce((acc, i) => acc + i.price, 0);
+  const calcTotalCost = (items: OrderItem[]) => items.reduce((acc, i) => acc + (i.cost || 0), 0);
+  const calcProfit = () => {
+    const revenue = calcTotal(parts) + calcTotal(services);
+    const cost = calcTotalCost(parts) + calcTotalCost(services);
+    return revenue - cost;
+  };
+  const calcProfitMargin = () => {
+    const revenue = calcTotal(parts) + calcTotal(services);
+    if (revenue === 0) return 0;
+    return (calcProfit() / revenue) * 100;
+  };
+  const calcROI = () => {
+    const cost = calcTotalCost(parts) + calcTotalCost(services);
+    if (cost === 0) return 0;
+    return (calcProfit() / cost) * 100;
+  };
 
-  const updateItem = (list: OrderItem[], setList: any, index: number, field: keyof OrderItem, value: any, catalog: CatalogItem[]) => {
+  const updateItem = (
+    list: OrderItem[], 
+    setList: any, 
+    index: number, 
+    field: keyof OrderItem, 
+    value: any, 
+    catalog: CatalogItem[]
+  ) => {
     const newList = [...list];
     newList[index] = { ...newList[index], [field]: value };
+    
     if (field === 'description') {
         const match = catalog.find(c => c.description.toLowerCase() === (value as string).toLowerCase());
-        if (match) newList[index].price = match.price;
+        if (match) {
+          newList[index].price = match.price;
+          newList[index].cost = match.cost || 0;
+        }
     }
     setList(newList);
   };
@@ -144,9 +175,15 @@ export const OSModal: React.FC<OSModalProps> = ({
       e.preventDefault();
       if (!tempPart.description) return;
       const priceVal = parseFloat(tempPart.price.replace(',', '.')) || 0;
-      const newItem: OrderItem = { id: crypto.randomUUID(), description: tempPart.description, price: fromFloat(priceVal) };
+      const costVal = parseFloat(tempPart.cost.replace(',', '.')) || 0;
+      const newItem: OrderItem = { 
+        id: crypto.randomUUID(), 
+        description: tempPart.description, 
+        price: fromFloat(priceVal),
+        cost: fromFloat(costVal)
+      };
       setParts(prev => [...prev, newItem]);
-      setTempPart({ description: '', price: '' });
+      setTempPart({ description: '', price: '', cost: '' });
       if (e.shiftKey) serviceInputRef.current?.focus(); else partInputRef.current?.focus();
     }
   };
@@ -156,21 +193,35 @@ export const OSModal: React.FC<OSModalProps> = ({
       e.preventDefault();
       if (!tempService.description) return;
       const priceVal = parseFloat(tempService.price.replace(',', '.')) || 0;
-      const newItem: OrderItem = { id: crypto.randomUUID(), description: tempService.description, price: fromFloat(priceVal) };
+      const costVal = parseFloat(tempService.cost.replace(',', '.')) || 0;
+      const newItem: OrderItem = { 
+        id: crypto.randomUUID(), 
+        description: tempService.description, 
+        price: fromFloat(priceVal),
+        cost: fromFloat(costVal)
+      };
       setServices(prev => [...prev, newItem]);
-      setTempService({ description: '', price: '' });
+      setTempService({ description: '', price: '', cost: '' });
       if (e.shiftKey) partInputRef.current?.focus(); else serviceInputRef.current?.focus();
     }
   };
 
   const handleTempPartChange = (val: string) => {
       const match = catalogParts.find(c => c.description.toLowerCase() === val.toLowerCase());
-      setTempPart({ description: val, price: match ? (match.price / 100).toString() : tempPart.price });
+      setTempPart({ 
+        description: val, 
+        price: match ? (match.price / 100).toString() : tempPart.price,
+        cost: match ? ((match.cost || 0) / 100).toString() : tempPart.cost
+      });
   };
 
   const handleTempServiceChange = (val: string) => {
       const match = catalogServices.find(c => c.description.toLowerCase() === val.toLowerCase());
-      setTempService({ description: val, price: match ? (match.price / 100).toString() : tempService.price });
+      setTempService({ 
+        description: val, 
+        price: match ? (match.price / 100).toString() : tempService.price,
+        cost: match ? ((match.cost || 0) / 100).toString() : tempService.cost
+      });
   };
 
   const handleConfirm = () => {
@@ -191,7 +242,7 @@ export const OSModal: React.FC<OSModalProps> = ({
         mileage: parseInt(mileage) || 0,
         parts: parts.filter(p => p.description.trim() !== ""),
         services: services.filter(s => s.description.trim() !== ""),
-        publicNotes // Salva a nota
+        publicNotes
     });
   };
 
@@ -268,20 +319,99 @@ export const OSModal: React.FC<OSModalProps> = ({
             
             {/* PEÇAS */}
             <div className="items-list-container" style={{ flex: 1, backgroundColor: 'rgba(0, 188, 212, 0.03)', border: '1px solid rgba(0, 188, 212, 0.2)' }}>
-                <div className="items-header" style={{ color: 'var(--info)', display: 'flex', justifyContent: 'space-between' }}>
-                    <span>🔧 Peças</span> <span>{formatMoney(calcTotal(parts))}</span>
+                <div className="items-header" style={{ color: 'var(--info)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>🔧 Peças</span>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <label style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                            <input 
+                                type="checkbox" 
+                                checked={showCostColumn} 
+                                onChange={e => setShowCostColumn(e.target.checked)}
+                                style={{ cursor: 'pointer' }}
+                            />
+                            Custo
+                        </label>
+                        <span>{formatMoney(calcTotal(parts))}</span>
+                    </div>
                 </div>
+                
                 <div className="item-row" style={{ borderBottom: '2px dashed var(--info)', paddingBottom: 10, marginBottom: 10 }}>
-                    <input ref={partInputRef} className="form-input" list="cat-parts" value={tempPart.description} onChange={e => handleTempPartChange(e.target.value)} onKeyDown={handlePartKeyDown} style={{ flex: 2 }} placeholder="Nova peça (Enter)..." />
-                    <datalist id="cat-parts">{suggestedParts.map((cp, idx) => <option key={idx} value={cp.description}>{formatMoney(cp.price)}</option>)}</datalist>
-                    <input className="form-input" type="number" value={tempPart.price} onChange={e => setTempPart({...tempPart, price: e.target.value})} onKeyDown={handlePartKeyDown} style={{ flex: 1 }} placeholder="0.00" />
+                    <input 
+                        ref={partInputRef} 
+                        className="form-input" 
+                        list="cat-parts" 
+                        value={tempPart.description} 
+                        onChange={e => handleTempPartChange(e.target.value)} 
+                        onKeyDown={handlePartKeyDown} 
+                        style={{ flex: 2 }} 
+                        placeholder="Nova peça (Enter)..." 
+                    />
+                    <datalist id="cat-parts">
+                        {suggestedParts.map((cp, idx) => (
+                            <option key={idx} value={cp.description}>{formatMoney(cp.price)}</option>
+                        ))}
+                    </datalist>
+                    
+                    {showCostColumn && (
+                        <input 
+                            className="form-input" 
+                            type="number" 
+                            value={tempPart.cost}
+                            onChange={e => setTempPart({...tempPart, cost: e.target.value})}
+                            onKeyDown={handlePartKeyDown}
+                            placeholder="Custo" 
+                            style={{ flex: 0.8, fontSize: '0.85rem' }} 
+                        />
+                    )}
+                    
+                    <input 
+                        className="form-input" 
+                        type="number" 
+                        value={tempPart.price} 
+                        onChange={e => setTempPart({...tempPart, price: e.target.value})} 
+                        onKeyDown={handlePartKeyDown} 
+                        style={{ flex: 1 }} 
+                        placeholder="Preço" 
+                    />
                 </div>
+                
                 <div style={{maxHeight: 250, overflowY: 'auto'}}>
                     {parts.map((p, i) => (
                         <div key={p.id} className="item-row">
-                            <input className="form-input" value={p.description} onChange={e => updateItem(parts, setParts, i, 'description', e.target.value, catalogParts)} style={{ flex: 2 }} />
-                            <input className="form-input" type="number" value={toFloat(p.price)} onChange={e => updateItem(parts, setParts, i, 'price', fromFloat(parseFloat(e.target.value) || 0), catalogParts)} style={{ flex: 1 }} />
-                            <button className="btn-icon danger" onClick={() => setParts(parts.filter((_, idx) => idx !== i))} tabIndex={-1}>x</button>
+                            <input 
+                                className="form-input" 
+                                value={p.description} 
+                                onChange={e => updateItem(parts, setParts, i, 'description', e.target.value, catalogParts)} 
+                                style={{ flex: 2 }} 
+                            />
+                            
+                            {showCostColumn && (
+                                <input 
+                                    className="form-input" 
+                                    type="number" 
+                                    value={toFloat(p.cost || 0)} 
+                                    onChange={e => updateItem(parts, setParts, i, 'cost', fromFloat(parseFloat(e.target.value) || 0), catalogParts)} 
+                                    style={{ flex: 0.8, fontSize: '0.85rem', backgroundColor: 'rgba(255,152,0,0.1)' }} 
+                                    placeholder="Custo"
+                                    title="Custo interno de aquisição"
+                                />
+                            )}
+                            
+                            <input 
+                                className="form-input" 
+                                type="number" 
+                                value={toFloat(p.price)} 
+                                onChange={e => updateItem(parts, setParts, i, 'price', fromFloat(parseFloat(e.target.value) || 0), catalogParts)} 
+                                style={{ flex: 1 }} 
+                            />
+                            
+                            <button 
+                                className="btn-icon danger" 
+                                onClick={() => setParts(parts.filter((_, idx) => idx !== i))} 
+                                tabIndex={-1}
+                            >
+                                x
+                            </button>
                         </div>
                     ))}
                 </div>
@@ -289,25 +419,159 @@ export const OSModal: React.FC<OSModalProps> = ({
 
             {/* SERVIÇOS */}
             <div className="items-list-container" style={{ flex: 1, backgroundColor: 'rgba(130, 87, 230, 0.03)', border: '1px solid rgba(130, 87, 230, 0.2)' }}>
-                <div className="items-header" style={{ color: 'var(--primary)', display: 'flex', justifyContent: 'space-between' }}>
-                    <span>🛠️ Serviços</span> <span>{formatMoney(calcTotal(services))}</span>
+                <div className="items-header" style={{ color: 'var(--primary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>🛠️ Serviços</span>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <label style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                            <input 
+                                type="checkbox" 
+                                checked={showCostColumn} 
+                                onChange={e => setShowCostColumn(e.target.checked)}
+                                style={{ cursor: 'pointer' }}
+                            />
+                            Custo
+                        </label>
+                        <span>{formatMoney(calcTotal(services))}</span>
+                    </div>
                 </div>
+                 
                  <div className="item-row" style={{ borderBottom: '2px dashed var(--primary)', paddingBottom: 10, marginBottom: 10 }}>
-                    <input ref={serviceInputRef} className="form-input" list="cat-serv" value={tempService.description} onChange={e => handleTempServiceChange(e.target.value)} onKeyDown={handleServiceKeyDown} style={{ flex: 2 }} placeholder="Novo serviço (Enter)..." />
-                    <datalist id="cat-serv">{suggestedServices.map((cs, idx) => <option key={idx} value={cs.description}>{formatMoney(cs.price)}</option>)}</datalist>
-                    <input className="form-input" type="number" value={tempService.price} onChange={e => setTempService({...tempService, price: e.target.value})} onKeyDown={handleServiceKeyDown} style={{ flex: 1 }} placeholder="0.00" />
+                    <input 
+                        ref={serviceInputRef} 
+                        className="form-input" 
+                        list="cat-serv" 
+                        value={tempService.description} 
+                        onChange={e => handleTempServiceChange(e.target.value)} 
+                        onKeyDown={handleServiceKeyDown} 
+                        style={{ flex: 2 }} 
+                        placeholder="Novo serviço (Enter)..." 
+                    />
+                    <datalist id="cat-serv">
+                        {suggestedServices.map((cs, idx) => (
+                            <option key={idx} value={cs.description}>{formatMoney(cs.price)}</option>
+                        ))}
+                    </datalist>
+                    
+                    {showCostColumn && (
+                        <input 
+                            className="form-input" 
+                            type="number" 
+                            value={tempService.cost}
+                            onChange={e => setTempService({...tempService, cost: e.target.value})}
+                            onKeyDown={handleServiceKeyDown}
+                            placeholder="Custo" 
+                            style={{ flex: 0.8, fontSize: '0.85rem' }} 
+                        />
+                    )}
+                    
+                    <input 
+                        className="form-input" 
+                        type="number" 
+                        value={tempService.price} 
+                        onChange={e => setTempService({...tempService, price: e.target.value})} 
+                        onKeyDown={handleServiceKeyDown} 
+                        style={{ flex: 1 }} 
+                        placeholder="Preço" 
+                    />
                 </div>
+                
                 <div style={{maxHeight: 250, overflowY: 'auto'}}>
                     {services.map((s, i) => (
                         <div key={s.id} className="item-row">
-                            <input className="form-input" value={s.description} onChange={e => updateItem(services, setServices, i, 'description', e.target.value, catalogServices)} style={{ flex: 2 }} />
-                            <input className="form-input" type="number" value={toFloat(s.price)} onChange={e => updateItem(services, setServices, i, 'price', fromFloat(parseFloat(e.target.value) || 0), catalogServices)} style={{ flex: 1 }} />
-                            <button className="btn-icon danger" onClick={() => setServices(services.filter((_, idx) => idx !== i))} tabIndex={-1}>x</button>
+                            <input 
+                                className="form-input" 
+                                value={s.description} 
+                                onChange={e => updateItem(services, setServices, i, 'description', e.target.value, catalogServices)} 
+                                style={{ flex: 2 }} 
+                            />
+                            
+                            {showCostColumn && (
+                                <input 
+                                    className="form-input" 
+                                    type="number" 
+                                    value={toFloat(s.cost || 0)} 
+                                    onChange={e => updateItem(services, setServices, i, 'cost', fromFloat(parseFloat(e.target.value) || 0), catalogServices)} 
+                                    style={{ flex: 0.8, fontSize: '0.85rem', backgroundColor: 'rgba(255,152,0,0.1)' }} 
+                                    placeholder="Custo"
+                                    title="Custo interno de aquisição"
+                                />
+                            )}
+                            
+                            <input 
+                                className="form-input" 
+                                type="number" 
+                                value={toFloat(s.price)} 
+                                onChange={e => updateItem(services, setServices, i, 'price', fromFloat(parseFloat(e.target.value) || 0), catalogServices)} 
+                                style={{ flex: 1 }} 
+                            />
+                            
+                            <button 
+                                className="btn-icon danger" 
+                                onClick={() => setServices(services.filter((_, idx) => idx !== i))} 
+                                tabIndex={-1}
+                            >
+                                x
+                            </button>
                         </div>
                     ))}
                 </div>
             </div>
         </div>
+
+        {/* ANÁLISE FINANCEIRA */}
+        {showCostColumn && (
+            <div style={{ 
+                marginTop: 20, 
+                padding: 16, 
+                backgroundColor: 'rgba(130, 87, 230, 0.05)', 
+                borderRadius: 8,
+                border: '1px solid var(--border)'
+            }}>
+                <h4 style={{ margin: '0 0 12px 0', color: 'var(--primary)' }}>📊 Análise Financeira</h4>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+                    <div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Receita Total</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--success)' }}>
+                            {formatMoney(calcTotal(parts) + calcTotal(services))}
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Custo Total</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--warning)' }}>
+                            {formatMoney(calcTotalCost(parts) + calcTotalCost(services))}
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Lucro Bruto</div>
+                        <div style={{ 
+                            fontSize: '1.1rem', 
+                            fontWeight: 'bold', 
+                            color: calcProfit() >= 0 ? 'var(--success)' : 'var(--danger)' 
+                        }}>
+                            {formatMoney(calcProfit())}
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ROI</div>
+                        <div style={{ 
+                            fontSize: '1.1rem', 
+                            fontWeight: 'bold', 
+                            color: calcROI() >= 0 ? 'var(--success)' : 'var(--danger)' 
+                        }}>
+                            {calcROI().toFixed(1)}%
+                        </div>
+                    </div>
+                </div>
+                
+                <div style={{ marginTop: 12, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                    Margem de Lucro: <strong style={{ color: 'var(--primary)' }}>{calcProfitMargin().toFixed(1)}%</strong>
+                </div>
+            </div>
+        )}
 
         {/* NOVA ÁREA DE OBSERVAÇÕES PARA IMPRESSÃO */}
         <div className="form-group" style={{ marginTop: 24 }}>

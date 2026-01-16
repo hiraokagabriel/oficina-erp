@@ -65,8 +65,29 @@ export const KanbanCard = React.memo(({ os, index, formatMoney, status, actions,
             >
               <div className="os-header">
                 <span className="os-number">#{os.osNumber}</span>
-                <span className="os-price">{formatMoney(os.total)}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span className="os-price">{formatMoney(os.total)}</span>
+                  
+                  {/* NOVO: Indicador de margem de lucro */}
+                  {os.profitMargin !== undefined && os.profitMargin > 0 && (
+                    <span 
+                      style={{ 
+                        fontSize: '0.7rem', 
+                        color: os.profitMargin >= 30 ? 'var(--success)' : os.profitMargin >= 15 ? 'var(--warning)' : 'var(--danger)',
+                        fontWeight: 'bold',
+                        marginLeft: 2,
+                        padding: '2px 4px',
+                        borderRadius: 4,
+                        backgroundColor: os.profitMargin >= 30 ? 'rgba(4, 211, 97, 0.1)' : os.profitMargin >= 15 ? 'rgba(255, 152, 0, 0.1)' : 'rgba(229, 76, 76, 0.1)'
+                      }}
+                      title={`Lucro: ${formatMoney(os.profit || 0)} | ROI: ${os.totalCost && os.totalCost > 0 ? ((os.profit || 0) / os.totalCost * 100).toFixed(0) : '0'}%`}
+                    >
+                      +{os.profitMargin.toFixed(0)}%
+                    </span>
+                  )}
+                </div>
               </div>
+              
               <div className="os-client">{os.clientName}</div>
               <div className="os-vehicle">{os.vehicle}</div>
               
@@ -93,13 +114,13 @@ export const KanbanCard = React.memo(({ os, index, formatMoney, status, actions,
 
               <div className="card-actions" style={{ display: snapshot.isDragging ? 'none' : 'flex' }}>
                 {status !== 'ARQUIVADO' && status !== 'ORCAMENTO' && (
-                  <button className="btn-icon" title="Voltar" onClick={(e) => {e.stopPropagation(); actions.onRegress(os.id)}}>⬅️</button>
+                  <button className="btn-icon" title="Voltar" onClick={(e) => {e.stopPropagation(); actions.onRegress(os.id)}}⬅️</button>
                 )}
 
                 <div style={{ display: 'flex', gap: 5 }}>
-                  <button className="btn-icon" title="Editar" onClick={(e) => {e.stopPropagation(); actions.onEdit(os)}}>✏️</button>
-                  <button className="btn-icon check" title="Checklist" onClick={(e) => {e.stopPropagation(); actions.onChecklist(os)}}>📋</button>
-                  <button className="btn-icon" title="Imprimir" onClick={(e) => {e.stopPropagation(); actions.onPrint(os)}}>🖨️</button>
+                  <button className="btn-icon" title="Editar" onClick={(e) => {e.stopPropagation(); actions.onEdit(os)}}✏️</button>
+                  <button className="btn-icon check" title="Checklist" onClick={(e) => {e.stopPropagation(); actions.onChecklist(os)}}📋</button>
+                  <button className="btn-icon" title="Imprimir" onClick={(e) => {e.stopPropagation(); actions.onPrint(os)}}🖨️</button>
                   
                   {status === 'ARQUIVADO' ? (
                       <button className="btn-icon" title="Restaurar OS" onClick={(e) => {e.stopPropagation(); actions.onRestore && actions.onRestore(os)}} style={{color: 'var(--success)'}}>
@@ -111,11 +132,11 @@ export const KanbanCard = React.memo(({ os, index, formatMoney, status, actions,
                       </button>
                   )}
                   
-                  <button className="btn-icon danger" title="Excluir" onClick={(e) => {e.stopPropagation(); actions.onDelete(os)}}>🗑️</button>
+                  <button className="btn-icon danger" title="Excluir" onClick={(e) => {e.stopPropagation(); actions.onDelete(os)}}🗑️</button>
                 </div>
 
                 {status !== 'ARQUIVADO' && status !== 'FINALIZADO' && (
-                  <button className="btn-icon" title="Avançar" onClick={(e) => {e.stopPropagation(); actions.onAdvance(os.id)}}>➡️</button>
+                  <button className="btn-icon" title="Avançar" onClick={(e) => {e.stopPropagation(); actions.onAdvance(os.id)}}➡️</button>
                 )}
               </div>
             </div>

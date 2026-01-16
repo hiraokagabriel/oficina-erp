@@ -23,6 +23,9 @@ export interface WorkOrder {
   parts: OrderItem[];
   services: OrderItem[];
   total: number;
+  totalCost?: number; // NOVO: custo total interno
+  profit?: number; // NOVO: lucro bruto
+  profitMargin?: number; // NOVO: margem de lucro em %
   createdAt: string;
   financialId?: string;
   checklist?: ChecklistSchema;
@@ -64,6 +67,7 @@ export interface OrderItem {
   id: string;
   description: string;
   price: number;
+  cost?: number; // NOVO: custo de aquisição/interno
 }
 
 export interface WorkshopSettings {

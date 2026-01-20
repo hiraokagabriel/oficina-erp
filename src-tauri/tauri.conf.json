@@ -20,8 +20,15 @@
       }
     ],
     "security": {
-      "csp": null
-    }
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": {
+          "allow": ["**"]
+        }
+      }
+    },
+    "withGlobalTauri": false
   },
   "bundle": {
     "active": true,
@@ -34,6 +41,10 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "resources": [],
+    "externalBin": [],
+    "copyright": "",
+    "licenseFile": null
   }
 }

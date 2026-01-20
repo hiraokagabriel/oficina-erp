@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+import React, { useState, useMemo } from 'react';
+import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
 import { WorkOrder, OSStatus, STATUS_LABELS } from '../types';
 import { KanbanCard } from './KanbanCard';
 
@@ -22,7 +22,7 @@ interface KanbanBoardProps {
   showArchived?: boolean;
 }
 
-const EmptyState = ({ status }: { status: OSStatus }) => {
+const EmptyState = React.memo(({ status }: { status: OSStatus }) => {
   const messages: Record<string, { icon: string, text: string }> = {
     ORCAMENTO: { icon: '📝', text: 'Sem orçamentos pendentes' },
     APROVADO: { icon: '✅', text: 'Nada aprovado aguardando' },
@@ -43,125 +43,116 @@ const EmptyState = ({ status }: { status: OSStatus }) => {
       <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 500 }}>{info.text}</div>
     </div>
   );
-};
+});
 
-export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading, onDragEnd, actions, formatMoney }) => {
+const KanbanColumn = React.memo(({ 
+  status, 
+  workOrders, 
+  actions, 
+  formatMoney 
+}: { 
+  status: OSStatus; 
+  workOrders: WorkOrder[]; 
+  actions: KanbanBoardProps['actions']; 
+  formatMoney: (val: number) => string;
+}) => {
+  // Memoiza a lista filtrada e ordenada
+  const sortedList = useMemo(() => {
+    return workOrders
+      .filter(o => o.status === status)
+      .sort((a, b) => b.osNumber - a.osNumber);
+  }, [workOrders, status]);
+  
+  const colColorMap: Record<string, string> = { 
+    ORCAMENTO: 'var(--info)', 
+    APROVADO: 'var(--warning)', 
+    EM_SERVICO: 'var(--primary)', 
+    FINALIZADO: 'var(--success)',
+    ARQUIVADO: 'var(--text-muted)'
+  };
+
+  return (
+    <div className="kanban-column" style={{borderTop: `4px solid ${colColorMap[status]}`}}>
+      <div className="kanban-header">
+        {STATUS_LABELS[status]} 
+        <span style={{background: 'rgba(0,0,0,0.05)', padding: '2px 8px', borderRadius: 10}}>
+          {sortedList.length}
+        </span>
+      </div>
+      
+      <Droppable droppableId={status}>
+        {(provided, snapshot) => (
+          <div 
+            className="kanban-list-scroll"
+            ref={provided.innerRef}
+            {...provided.droppableProps}
+            style={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              gap: '12px', 
+              padding: '8px', 
+              background: snapshot.isDraggingOver ? 'rgba(0,0,0,0.02)' : 'transparent',
+              transition: 'background-color 0.2s ease', 
+              minHeight: 150, 
+              flex: 1
+            }}
+          >
+            {sortedList.length === 0 ? (
+              <EmptyState status={status} />
+            ) : (
+              sortedList.map((os, index) => (
+                <KanbanCard 
+                  key={os.id}
+                  os={os}
+                  index={index}
+                  formatMoney={formatMoney}
+                  status={status}
+                  actions={actions}
+                />
+              ))
+            )}
+            {provided.placeholder}
+          </div>
+        )}
+      </Droppable>
+    </div>
+  ); 
+});
+
+export const KanbanBoard = React.memo<KanbanBoardProps>(({ 
+  workOrders, 
+  isLoading, 
+  onDragEnd, 
+  actions, 
+  formatMoney 
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [showArchived, setShowArchived] = useState(false);
+  const showArchived = false; // TODO: Implementar toggle de arquivados
 
-  const filteredWorkOrders = workOrders.filter(os => {
-    if (!searchTerm) return true;
-    const term = searchTerm.toLowerCase();
+  // Memoiza a filtragem de busca
+  const filteredWorkOrders = useMemo(() => {
+    if (!searchTerm) return workOrders;
     
-    return (
+    const term = searchTerm.toLowerCase();
+    return workOrders.filter(os => 
       os.clientName.toLowerCase().includes(term) ||
       os.vehicle.toLowerCase().includes(term) ||
       os.osNumber.toString().includes(term) ||
       (os.clientPhone && os.clientPhone.includes(term))
     );
-  });
+  }, [workOrders, searchTerm]);
 
-  const renderColumn = (status: OSStatus) => {
-    const list = filteredWorkOrders.filter(o => o.status === status).sort((a, b) => b.osNumber - a.osNumber);
-    
-    const colColorMap: Record<string, string> = { 
-      ORCAMENTO: 'var(--info)', 
-      APROVADO: 'var(--warning)', 
-      EM_SERVICO: 'var(--primary)', 
-      FINALIZADO: 'var(--success)',
-      ARQUIVADO: 'var(--text-muted)'
-    };
-
+  if (isLoading) {
     return (
-      <div className={`kanban-column`} style={{borderTop: `4px solid ${colColorMap[status]}`}}>
-        <div className="kanban-header">
-          {STATUS_LABELS[status]} 
-          <span style={{background: 'rgba(0,0,0,0.05)', padding: '2px 8px', borderRadius: 10}}>
-            {list.length}
-          </span>
-        </div>
-        
-        <Droppable droppableId={status}>
-          {(provided, snapshot) => (
-            <div 
-              className="kanban-list-scroll"
-              ref={provided.innerRef}
-              {...provided.droppableProps}
-              style={{ 
-                display: 'flex', 
-                flexDirection: 'column', 
-                gap: '12px', 
-                padding: '8px', 
-                background: snapshot.isDraggingOver ? 'rgba(0,0,0,0.02)' : 'transparent',
-                transition: 'background-color 0.2s ease', 
-                minHeight: 150, 
-                flex: 1
-              }}
-            >
-              {list.length === 0 ? (
-                <EmptyState status={status} />
-              ) : (
-                list.map((os, index) => (
-                  <Draggable key={os.id} draggableId={os.id} index={index}>
-                    {(provided, snapshot) => {
-                      const anchorStyle = {
-                        ...provided.draggableProps.style,
-                        zIndex: snapshot.isDragging ? 10000 : 'auto',
-                        cursor: snapshot.isDragging ? 'grabbing' : 'grab',
-                        margin: 0,
-                      };
-
-                      return (
-                        <div 
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          {...provided.dragHandleProps}
-                          style={anchorStyle}
-                        >
-                          <div 
-                            className={`kanban-card ${snapshot.isDragging ? 'is-dragging' : ''}`}
-                            style={{
-                              transform: snapshot.isDragging ? 'rotate(3deg) scale(1.02)' : 'none',
-                              transition: snapshot.isDragging ? 'none' : 'all 0.2s ease',
-                              boxShadow: snapshot.isDragging ? '0 25px 50px rgba(0,0,0,0.5)' : '0 4px 6px rgba(0,0,0,0.1)',
-                              opacity: snapshot.isDragging ? 1 : 1,
-                              border: snapshot.isDragging ? '1px solid var(--primary)' : '1px solid var(--border)'
-                            }}
-                          >
-                            <div className="os-header">
-                              <span className="os-number">#{os.osNumber}</span> 
-                              <span className="os-price">{formatMoney(os.total)}</span>
-                            </div>
-                            <div className="os-client">{os.clientName}</div>
-                            <div className="os-vehicle">{os.vehicle}</div>
-                            {os.clientPhone && <div className="os-id">📞 {os.clientPhone}</div>}
-                            
-                            <div className="card-actions" style={{display: snapshot.isDragging ? 'none' : 'flex'}}>
-                              {status !== 'ORCAMENTO' && <button className="btn-icon" title="Voltar Etapa" onClick={() => actions.onRegress(os.id)}>⬅️</button>} 
-                              <div style={{display: 'flex', gap: 5}}>
-                                <button className="btn-icon" title="Editar" onClick={() => actions.onEdit(os)}>✏️</button>
-                                <button className="btn-icon check" title="Checklist" onClick={() => actions.onChecklist(os)}>📋</button>
-                                <button className="btn-icon" title="Imprimir" onClick={() => actions.onPrint(os)}>🖨️</button>
-                                <button className="btn-icon danger" title="Excluir" onClick={() => actions.onDelete(os)}>🗑️</button>
-                              </div>
-                              {status !== 'FINALIZADO' && <button className="btn-icon" title="Avançar Etapa" onClick={() => actions.onAdvance(os.id)}>➡️</button>}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    }}
-                  </Draggable>
-                ))
-              )}
-              {provided.placeholder}
-            </div>
-          )}
-        </Droppable>
+      <div className="kanban-board">
+        {[1,2,3,4].map(i => (
+          <div key={i} className="kanban-column">
+            <div className="skeleton skeleton-block"/>
+          </div>
+        ))}
       </div>
-    ); 
-  };
-
-  if (isLoading) return <div className="kanban-board">{[1,2,3,4].map(i => <div key={i} className="kanban-column"><div className="skeleton skeleton-block"/></div>)}</div>;
+    );
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -188,9 +179,23 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ workOrders, isLoading,
 
       <DragDropContext onDragEnd={onDragEnd}>
         <div className="kanban-board" style={{ gridTemplateColumns: showArchived ? '1fr' : 'repeat(4, 1fr)' }}>
-          {showArchived ? renderColumn('ARQUIVADO') : <>{renderColumn('ORCAMENTO')}{renderColumn('APROVADO')}{renderColumn('EM_SERVICO')}{renderColumn('FINALIZADO')}</>}
+          {showArchived ? (
+            <KanbanColumn 
+              status="ARQUIVADO" 
+              workOrders={filteredWorkOrders} 
+              actions={actions} 
+              formatMoney={formatMoney}
+            />
+          ) : (
+            <>
+              <KanbanColumn status="ORCAMENTO" workOrders={filteredWorkOrders} actions={actions} formatMoney={formatMoney} />
+              <KanbanColumn status="APROVADO" workOrders={filteredWorkOrders} actions={actions} formatMoney={formatMoney} />
+              <KanbanColumn status="EM_SERVICO" workOrders={filteredWorkOrders} actions={actions} formatMoney={formatMoney} />
+              <KanbanColumn status="FINALIZADO" workOrders={filteredWorkOrders} actions={actions} formatMoney={formatMoney} />
+            </>
+          )}
         </div>
       </DragDropContext>
     </div>
   );
-};
+});

@@ -1,12 +1,45 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import viteImagemin from "vite-plugin-imagemin";
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
+const isProd = process.env.NODE_ENV === 'production';
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react()],
+  plugins: [
+    react(),
+    // Optimize images in production
+    isProd && viteImagemin({
+      gifsicle: {
+        optimizationLevel: 7,
+        interlaced: false,
+      },
+      optipng: {
+        optimizationLevel: 7,
+      },
+      mozjpeg: {
+        quality: 80,
+      },
+      pngquant: {
+        quality: [0.8, 0.9],
+        speed: 4,
+      },
+      svgo: {
+        plugins: [
+          {
+            name: 'removeViewBox',
+            active: false,
+          },
+          {
+            name: 'removeEmptyAttrs',
+            active: false,
+          },
+        ],
+      },
+    }),
+  ].filter(Boolean),
 
   // Build optimizations
   build: {
@@ -14,7 +47,7 @@ export default defineConfig(async () => ({
     minify: 'esbuild',
     // Enable CSS code splitting for better caching
     cssCodeSplit: true,
-    // Enable source maps for production debugging (remove if not needed)
+    // Disable source maps for production (smaller bundle)
     sourcemap: false,
     // Optimize chunk size
     rollupOptions: {
@@ -31,14 +64,18 @@ export default defineConfig(async () => ({
     target: 'esnext',
     // Report compressed size
     reportCompressedSize: true,
+    // Chunk size warning limit
+    chunkSizeWarningLimit: 1000,
   },
 
   // Enable esbuild optimizations
   esbuild: {
     // Remove console.logs and debugger statements in production
-    drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [],
+    drop: isProd ? ['console', 'debugger'] : [],
     // Enable tree-shaking
     treeShaking: true,
+    // Legal comments: none = remove all comments
+    legalComments: 'none',
   },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`

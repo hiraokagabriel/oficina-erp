@@ -127,7 +127,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(({
   formatMoney 
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [showArchived, setShowArchived] = useState(false);
+  const showArchived = false; // TODO: Implementar toggle de arquivados
 
   // Memoiza a filtragem de busca
   const filteredWorkOrders = useMemo(() => {

@@ -81,10 +81,12 @@ export const KanbanCard = React.memo(({
                 border: snapshot.isDragging 
                   ? '2px solid var(--primary)' 
                   : '1px solid var(--border)',
-                // FIX: Background durante drag
+                // ✅ FIX TEMA: Usa variável CSS que responde ao tema
                 background: snapshot.isDragging 
                   ? 'var(--bg-panel)' 
-                  : 'white',
+                  : 'var(--bg-card, var(--bg-panel))',
+                // ✅ FIX TEMA: Cor do texto também responde ao tema
+                color: 'var(--text)',
                 // Performance boost
                 willChange: 'transform, box-shadow, opacity',
               }}

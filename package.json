@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "NODE_ENV=production tsc && vite build",
-    "build:analyze": "NODE_ENV=production tsc && vite build --mode analyze",
+    "build": "tsc && vite build",
+    "build:analyze": "vite build --mode analyze",
     "preview": "vite preview",
     "tauri": "tauri"
   },

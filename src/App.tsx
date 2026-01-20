@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { DropResult } from '@hello-pangea/dnd';
 
 // --- CONTEXT & HOOKS ---
@@ -10,27 +10,28 @@ import { useKeyboard } from './hooks/useKeyboard';
 import { updateClientCascading, updateCatalogItemCascading } from './services/cascadeService';
 import { uploadToDrive } from './services/googleDrive';
 
-// --- COMPONENTES VISUAIS ---
+// --- COMPONENTES VISUAIS (carregamento imediato) ---
 import { Sidebar } from './components/Sidebar';
 import { Confetti } from './components/ui/Confetti';
 import { PrintableInvoice } from './components/PrintableInvoice';
 import { ToastContainer, ToastMessage, ToastType } from './components/ui/ToastContainer';
+import { LoadingSkeleton } from './components/ui/LoadingSkeleton';
 
-// --- PÁGINAS ---
-import { FinancialPage } from './pages/FinancialPage';
-import { WorkshopPage } from './pages/WorkshopPage';
-import { CRMPage } from './pages/CRMPage';
-import { ProcessPage } from './pages/ProcessPage';
-import { ConfigPage } from './pages/ConfigPage';
+// --- PÁGINAS (lazy loading) ---
+const FinancialPage = lazy(() => import('./pages/FinancialPage').then(m => ({ default: m.FinancialPage })));
+const WorkshopPage = lazy(() => import('./pages/WorkshopPage').then(m => ({ default: m.WorkshopPage })));
+const CRMPage = lazy(() => import('./pages/CRMPage').then(m => ({ default: m.CRMPage })));
+const ProcessPage = lazy(() => import('./pages/ProcessPage').then(m => ({ default: m.ProcessPage })));
+const ConfigPage = lazy(() => import('./pages/ConfigPage').then(m => ({ default: m.ConfigPage })));
 
-// --- MODAIS ---
-import { OSModal } from './modals/OSModal';
-import { EntryModal } from './modals/EntryModal';
-import { ExportModal } from './modals/ExportModal';
-import { ChecklistModal } from './modals/ChecklistModal';
-import { DatabaseModal } from './modals/DatabaseModal';
-import { DeleteConfirmationModal } from './modals/DeleteConfirmationModal';
-import { ConfirmationModal } from './modals/ConfirmationModal';
+// --- MODAIS (lazy loading) ---
+const OSModal = lazy(() => import('./modals/OSModal').then(m => ({ default: m.OSModal })));
+const EntryModal = lazy(() => import('./modals/EntryModal').then(m => ({ default: m.EntryModal })));
+const ExportModal = lazy(() => import('./modals/ExportModal').then(m => ({ default: m.ExportModal })));
+const ChecklistModal = lazy(() => import('./modals/ChecklistModal').then(m => ({ default: m.ChecklistModal })));
+const DatabaseModal = lazy(() => import('./modals/DatabaseModal').then(m => ({ default: m.DatabaseModal })));
+const DeleteConfirmationModal = lazy(() => import('./modals/DeleteConfirmationModal').then(m => ({ default: m.DeleteConfirmationModal })));
+const ConfirmationModal = lazy(() => import('./modals/ConfirmationModal').then(m => ({ default: m.ConfirmationModal })));
 
 // --- UTILS ---
 import { SoundFX } from './utils/audio';
@@ -380,193 +381,213 @@ function AppContent() {
         <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
 
         <main className="main-content">
-          {activeTab === 'FINANCEIRO' && (
-            <FinancialPage
-              isLoading={isLoading}
-              kpiData={finance.kpiData}
-              chartDataFluxo={finance.chartFluxo}
-              chartDataPie={finance.chartPie}
-              ledger={finance.filteredLedger}
-              Money={Money}
-              onOpenExport={() => setIsExportModalOpen(true)}
-              onOpenEntry={() => { setEditingEntry(null); setIsEntryModalOpen(true); }}
-              onEditEntry={handleEditEntry}
-              onDeleteEntry={handleRequestDeleteEntry}
-              selectedMonth={finance.selectedMonth}
-              onMonthChange={finance.setSelectedMonth}
-              viewMode={finance.viewMode}
-              setViewMode={finance.setViewMode}
-              filterType={finance.filterType}
-              setFilterType={finance.setFilterType}
-            />
-          )}
+          {/* Suspense boundary para cada página */}
+          <Suspense fallback={<LoadingSkeleton type="page" />}>
+            {activeTab === 'FINANCEIRO' && (
+              <FinancialPage
+                isLoading={isLoading}
+                kpiData={finance.kpiData}
+                chartDataFluxo={finance.chartFluxo}
+                chartDataPie={finance.chartPie}
+                ledger={finance.filteredLedger}
+                Money={Money}
+                onOpenExport={() => setIsExportModalOpen(true)}
+                onOpenEntry={() => { setEditingEntry(null); setIsEntryModalOpen(true); }}
+                onEditEntry={handleEditEntry}
+                onDeleteEntry={handleRequestDeleteEntry}
+                selectedMonth={finance.selectedMonth}
+                onMonthChange={finance.setSelectedMonth}
+                viewMode={finance.viewMode}
+                setViewMode={finance.setViewMode}
+                filterType={finance.filterType}
+                setFilterType={finance.setFilterType}
+              />
+            )}
 
-          {activeTab === 'OFICINA' && (
-            <WorkshopPage
-              workOrders={workOrders}
-              isLoading={isLoading}
-              formatMoney={Money.format}
-              onNewOS={() => { setEditingOS(null); setIsModalOpen(true); }}
-              onDragEnd={(res: DropResult) => {
-                if (res.destination && res.destination.droppableId !== res.source.droppableId)
-                  handleUpdateStatus(res.draggableId, res.destination.droppableId as OSStatus);
-              }}
-              kanbanActions={{
-                onRegress: (id) => {
-                  const os = workOrders.find(o => o.id === id);
-                  if (os) {
-                    const newStatus = os.status === 'FINALIZADO' ? 'EM_SERVICO' : os.status === 'EM_SERVICO' ? 'APROVADO' : 'ORCAMENTO';
-                    handleUpdateStatus(id, newStatus);
-                  }
-                },
-                onAdvance: (id) => {
-                  const os = workOrders.find(o => o.id === id);
-                  if (os) {
-                    const newStatus = os.status === 'ORCAMENTO' ? 'APROVADO' : os.status === 'APROVADO' ? 'EM_SERVICO' : 'FINALIZADO';
-                    handleUpdateStatus(id, newStatus);
-                  }
-                },
-                onEdit: (os) => { setEditingOS(os); setIsModalOpen(true); },
-                onChecklist: (os) => { setChecklistOS(os); setIsChecklistOpen(true); },
-                onPrint: (os) => { setPrintingOS(os); setTimeout(() => window.print(), 100); },
-                onDelete: (os) => setPendingAction({ type: 'DELETE_OS', data: os }),
-                onArchive: (os) => setPendingAction({ type: 'ARCHIVE_OS', data: os }),
-                onRestore: (os) => handleUpdateStatus(os.id, 'ORCAMENTO'),
-                onQuickFinish: (id) => handleUpdateStatus(id, 'FINALIZADO')
-              }}
-            />
-          )}
+            {activeTab === 'OFICINA' && (
+              <WorkshopPage
+                workOrders={workOrders}
+                isLoading={isLoading}
+                formatMoney={Money.format}
+                onNewOS={() => { setEditingOS(null); setIsModalOpen(true); }}
+                onDragEnd={(res: DropResult) => {
+                  if (res.destination && res.destination.droppableId !== res.source.droppableId)
+                    handleUpdateStatus(res.draggableId, res.destination.droppableId as OSStatus);
+                }}
+                kanbanActions={{
+                  onRegress: (id) => {
+                    const os = workOrders.find(o => o.id === id);
+                    if (os) {
+                      const newStatus = os.status === 'FINALIZADO' ? 'EM_SERVICO' : os.status === 'EM_SERVICO' ? 'APROVADO' : 'ORCAMENTO';
+                      handleUpdateStatus(id, newStatus);
+                    }
+                  },
+                  onAdvance: (id) => {
+                    const os = workOrders.find(o => o.id === id);
+                    if (os) {
+                      const newStatus = os.status === 'ORCAMENTO' ? 'APROVADO' : os.status === 'APROVADO' ? 'EM_SERVICO' : 'FINALIZADO';
+                      handleUpdateStatus(id, newStatus);
+                    }
+                  },
+                  onEdit: (os) => { setEditingOS(os); setIsModalOpen(true); },
+                  onChecklist: (os) => { setChecklistOS(os); setIsChecklistOpen(true); },
+                  onPrint: (os) => { setPrintingOS(os); setTimeout(() => window.print(), 100); },
+                  onDelete: (os) => setPendingAction({ type: 'DELETE_OS', data: os }),
+                  onArchive: (os) => setPendingAction({ type: 'ARCHIVE_OS', data: os }),
+                  onRestore: (os) => handleUpdateStatus(os.id, 'ORCAMENTO'),
+                  onQuickFinish: (id) => handleUpdateStatus(id, 'FINALIZADO')
+                }}
+              />
+            )}
 
-          {activeTab === 'PROCESSOS' && (
-            <ProcessPage
-              workOrders={workOrders}
-              onOpenNew={() => { setEditingOS(null); setIsModalOpen(true); }}
-              onUpdateStatus={handleUpdateStatus}
-            />
-          )}
+            {activeTab === 'PROCESSOS' && (
+              <ProcessPage
+                workOrders={workOrders}
+                onOpenNew={() => { setEditingOS(null); setIsModalOpen(true); }}
+                onUpdateStatus={handleUpdateStatus}
+              />
+            )}
 
-          {activeTab === 'CLIENTES' && (
-            <CRMPage
-              clients={clients}
-              workOrders={workOrders}
-              isLoading={isLoading}
-              formatMoney={Money.format}
-            />
-          )}
+            {activeTab === 'CLIENTES' && (
+              <CRMPage
+                clients={clients}
+                workOrders={workOrders}
+                isLoading={isLoading}
+                formatMoney={Money.format}
+              />
+            )}
 
-          {activeTab === 'CONFIG' && (
-            <ConfigPage
-              settings={settings}
-              setSettings={setSettings}
-              currentTheme={currentTheme}
-              setCurrentTheme={setCurrentTheme}
-              onBackup={handleGoogleDriveBackup}
-              isBackuping={isBackuping}
-              driveStatus={driveStatus}
-              onImportData={handleImportData}
-              onOpenDatabase={() => setIsDatabaseModalOpen(true)}
-            />
-          )}
+            {activeTab === 'CONFIG' && (
+              <ConfigPage
+                settings={settings}
+                setSettings={setSettings}
+                currentTheme={currentTheme}
+                setCurrentTheme={setCurrentTheme}
+                onBackup={handleGoogleDriveBackup}
+                isBackuping={isBackuping}
+                driveStatus={driveStatus}
+                onImportData={handleImportData}
+                onOpenDatabase={() => setIsDatabaseModalOpen(true)}
+              />
+            )}
+          </Suspense>
         </main>
       </div>
 
-      <OSModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSave={handleSaveOSModal}
-        editingOS={editingOS}
-        clients={clients}
-        catalogParts={catalogParts}
-        catalogServices={catalogServices}
-        nextOSNumber={workOrders.length > 0 ? Math.max(...workOrders.map(o => o.osNumber)) + 1 : 1}
-        isSaving={isSaving}
-        formatMoney={Money.format}
-      />
+      {/* Suspense boundary para modais */}
+      <Suspense fallback={null}>
+        {isModalOpen && (
+          <OSModal
+            isOpen={isModalOpen}
+            onClose={() => setIsModalOpen(false)}
+            onSave={handleSaveOSModal}
+            editingOS={editingOS}
+            clients={clients}
+            catalogParts={catalogParts}
+            catalogServices={catalogServices}
+            nextOSNumber={workOrders.length > 0 ? Math.max(...workOrders.map(o => o.osNumber)) + 1 : 1}
+            isSaving={isSaving}
+            formatMoney={Money.format}
+          />
+        )}
 
-      <EntryModal
-        isOpen={isEntryModalOpen}
-        onClose={() => { setIsEntryModalOpen(false); setEditingEntry(null); }}
-        onSave={handleSaveEntryModal}
-        initialData={editingEntry}
-      />
+        {isEntryModalOpen && (
+          <EntryModal
+            isOpen={isEntryModalOpen}
+            onClose={() => { setIsEntryModalOpen(false); setEditingEntry(null); }}
+            onSave={handleSaveEntryModal}
+            initialData={editingEntry}
+          />
+        )}
 
-      <DatabaseModal
-        isOpen={isDatabaseModalOpen}
-        onClose={() => setIsDatabaseModalOpen(false)}
-        clients={clients}
-        catalogParts={catalogParts}
-        catalogServices={catalogServices}
-        onSaveClient={handleSaveClient}
-        onDeleteClient={(id) => setClients(p => p.filter(c => c.id !== id))}
-        onSaveCatalogItem={handleSaveCatalogItem}
-        onDeleteCatalogItem={(id, type) =>
-          type === 'part'
-            ? setCatalogParts(p => p.filter(x => x.id !== id))
-            : setCatalogServices(p => p.filter(x => x.id !== id))
-        }
-        formatMoney={Money.format}
-      />
+        {isDatabaseModalOpen && (
+          <DatabaseModal
+            isOpen={isDatabaseModalOpen}
+            onClose={() => setIsDatabaseModalOpen(false)}
+            clients={clients}
+            catalogParts={catalogParts}
+            catalogServices={catalogServices}
+            onSaveClient={handleSaveClient}
+            onDeleteClient={(id) => setClients(p => p.filter(c => c.id !== id))}
+            onSaveCatalogItem={handleSaveCatalogItem}
+            onDeleteCatalogItem={(id, type) =>
+              type === 'part'
+                ? setCatalogParts(p => p.filter(x => x.id !== id))
+                : setCatalogServices(p => p.filter(x => x.id !== id))
+            }
+            formatMoney={Money.format}
+          />
+        )}
 
-      <ExportModal
-        isOpen={isExportModalOpen}
-        onClose={() => setIsExportModalOpen(false)}
-        ledger={ledger}
-        workOrders={workOrders}
-        defaultPath={settings.exportPath}
-        Money={Money}
-        SoundFX={{
-          success: () => addToast("Sucesso!", "success"),
-          error: () => addToast("Erro", "error")
-        }}
-      />
+        {isExportModalOpen && (
+          <ExportModal
+            isOpen={isExportModalOpen}
+            onClose={() => setIsExportModalOpen(false)}
+            ledger={ledger}
+            workOrders={workOrders}
+            defaultPath={settings.exportPath}
+            Money={Money}
+            SoundFX={{
+              success: () => addToast("Sucesso!", "success"),
+              error: () => addToast("Erro", "error")
+            }}
+          />
+        )}
 
-      <ChecklistModal
-        isOpen={isChecklistOpen}
-        onClose={() => setIsChecklistOpen(false)}
-        onSave={(data) => {
-          if (checklistOS)
-            setWorkOrders(p => p.map(o => o.id === checklistOS.id ? { ...o, checklist: data } : o));
-          setIsChecklistOpen(false);
-        }}
-        os={checklistOS}
-      />
+        {isChecklistOpen && (
+          <ChecklistModal
+            isOpen={isChecklistOpen}
+            onClose={() => setIsChecklistOpen(false)}
+            onSave={(data) => {
+              if (checklistOS)
+                setWorkOrders(p => p.map(o => o.id === checklistOS.id ? { ...o, checklist: data } : o));
+              setIsChecklistOpen(false);
+            }}
+            os={checklistOS}
+          />
+        )}
 
-      <PrintableInvoice data={printingOS} settings={settings} formatMoney={Money.format} />
+        <PrintableInvoice data={printingOS} settings={settings} formatMoney={Money.format} />
 
-      <DeleteConfirmationModal
-        isOpen={deleteModalInfo.isOpen}
-        onClose={() => setDeleteModalInfo({ isOpen: false, entry: null })}
-        onConfirmSingle={confirmDeleteSingle}
-        onConfirmGroup={confirmDeleteGroup}
-        isGroup={!!deleteModalInfo.entry?.groupId}
-      />
+        {deleteModalInfo.isOpen && (
+          <DeleteConfirmationModal
+            isOpen={deleteModalInfo.isOpen}
+            onClose={() => setDeleteModalInfo({ isOpen: false, entry: null })}
+            onConfirmSingle={confirmDeleteSingle}
+            onConfirmGroup={confirmDeleteGroup}
+            isGroup={!!deleteModalInfo.entry?.groupId}
+          />
+        )}
 
-      <ConfirmationModal
-        isOpen={!!pendingAction}
-        onClose={() => setPendingAction(null)}
-        onConfirm={executePendingAction}
-        title={
-          pendingAction?.type === 'DELETE_OS' ? 'Excluir Ordem de Serviço?' :
-          pendingAction?.type === 'ARCHIVE_OS' ? 'Arquivar Ordem de Serviço?' :
-          pendingAction?.type === 'FINISH_OS_FINANCIAL' ? 'OS Finalizada' :
-          pendingAction?.type === 'RESTORE_FINANCIAL' ? 'Reabrir OS?' :
-          pendingAction?.type === 'IMPORT_DATA' ? 'Importar Backup?' : 'Confirmar'
-        }
-        message={
-          pendingAction?.type === 'DELETE_OS' ? 'Esta ação removerá a OS e qualquer lançamento financeiro vinculado. Não pode ser desfeito.' :
-          pendingAction?.type === 'ARCHIVE_OS' ? 'A OS sairá do quadro Kanban mas ficará salva no histórico.' :
-          pendingAction?.type === 'FINISH_OS_FINANCIAL' ? `Deseja lançar o valor de ${Money.format(pendingAction.data?.total || 0)} nas Receitas?` :
-          pendingAction?.type === 'RESTORE_FINANCIAL' ? 'Isso removerá o lançamento financeiro vinculado e voltará a OS para "Em Serviço".' :
-          pendingAction?.type === 'IMPORT_DATA' ? 'ATENÇÃO: Isso substituirá todos os dados atuais pelos do backup. Continuar?' : 'Tem certeza?'
-        }
-        confirmText={
-          pendingAction?.type === 'DELETE_OS' ? 'Excluir' :
-          pendingAction?.type === 'IMPORT_DATA' ? 'Substituir Tudo' : 'Confirmar'
-        }
-        confirmColor={
-          pendingAction?.type === 'DELETE_OS' || pendingAction?.type === 'RESTORE_FINANCIAL' ? 'danger' : 'primary'
-        }
-      />
+        {pendingAction && (
+          <ConfirmationModal
+            isOpen={!!pendingAction}
+            onClose={() => setPendingAction(null)}
+            onConfirm={executePendingAction}
+            title={
+              pendingAction?.type === 'DELETE_OS' ? 'Excluir Ordem de Serviço?' :
+              pendingAction?.type === 'ARCHIVE_OS' ? 'Arquivar Ordem de Serviço?' :
+              pendingAction?.type === 'FINISH_OS_FINANCIAL' ? 'OS Finalizada' :
+              pendingAction?.type === 'RESTORE_FINANCIAL' ? 'Reabrir OS?' :
+              pendingAction?.type === 'IMPORT_DATA' ? 'Importar Backup?' : 'Confirmar'
+            }
+            message={
+              pendingAction?.type === 'DELETE_OS' ? 'Esta ação removerá a OS e qualquer lançamento financeiro vinculado. Não pode ser desfeito.' :
+              pendingAction?.type === 'ARCHIVE_OS' ? 'A OS sairá do quadro Kanban mas ficará salva no histórico.' :
+              pendingAction?.type === 'FINISH_OS_FINANCIAL' ? `Deseja lançar o valor de ${Money.format(pendingAction.data?.total || 0)} nas Receitas?` :
+              pendingAction?.type === 'RESTORE_FINANCIAL' ? 'Isso removerá o lançamento financeiro vinculado e voltará a OS para "Em Serviço".' :
+              pendingAction?.type === 'IMPORT_DATA' ? 'ATENÇÃO: Isso substituirá todos os dados atuais pelos do backup. Continuar?' : 'Tem certeza?'
+            }
+            confirmText={
+              pendingAction?.type === 'DELETE_OS' ? 'Excluir' :
+              pendingAction?.type === 'IMPORT_DATA' ? 'Substituir Tudo' : 'Confirmar'
+            }
+            confirmColor={
+              pendingAction?.type === 'DELETE_OS' || pendingAction?.type === 'RESTORE_FINANCIAL' ? 'danger' : 'primary'
+            }
+          />
+        )}
+      </Suspense>
     </>
   );
 }

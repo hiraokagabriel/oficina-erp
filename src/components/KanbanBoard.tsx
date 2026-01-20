@@ -2,6 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
 import { WorkOrder, OSStatus, STATUS_LABELS } from '../types';
 import { KanbanCard } from './KanbanCard';
+import { usePagination } from '../hooks/usePagination';
+import { InfiniteScroll } from './InfiniteScroll';
 
 interface KanbanBoardProps {
   workOrders: WorkOrder[];
@@ -56,12 +58,24 @@ const KanbanColumn = React.memo(({
   actions: KanbanBoardProps['actions']; 
   formatMoney: (val: number) => string;
 }) => {
-  // Memoiza a lista filtrada e ordenada
+  // Filtra e ordena primeiro
   const sortedList = useMemo(() => {
     return workOrders
       .filter(o => o.status === status)
       .sort((a, b) => b.osNumber - a.osNumber);
   }, [workOrders, status]);
+  
+  // Aplica paginação
+  const {
+    paginatedItems,
+    loadMore,
+    hasMore,
+    loadedItems,
+    totalItems
+  } = usePagination({ 
+    items: sortedList, 
+    itemsPerPage: 50 
+  });
   
   const colColorMap: Record<string, string> = { 
     ORCAMENTO: 'var(--info)', 
@@ -76,7 +90,7 @@ const KanbanColumn = React.memo(({
       <div className="kanban-header">
         {STATUS_LABELS[status]} 
         <span style={{background: 'rgba(0,0,0,0.05)', padding: '2px 8px', borderRadius: 10}}>
-          {sortedList.length}
+          {loadedItems}/{totalItems}
         </span>
       </div>
       
@@ -90,26 +104,39 @@ const KanbanColumn = React.memo(({
               display: 'flex', 
               flexDirection: 'column', 
               gap: '12px', 
-              padding: '8px', 
-              background: snapshot.isDraggingOver ? 'rgba(0,0,0,0.02)' : 'transparent',
-              transition: 'background-color 0.2s ease', 
+              padding: '8px',
+              background: snapshot.isDraggingOver 
+                ? 'linear-gradient(180deg, rgba(130, 87, 230, 0.05) 0%, rgba(130, 87, 230, 0.02) 100%)' 
+                : 'transparent',
+              border: snapshot.isDraggingOver 
+                ? '2px dashed var(--primary)' 
+                : '2px solid transparent',
+              borderRadius: '12px',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', 
               minHeight: 150, 
-              flex: 1
+              flex: 1,
+              overflowY: 'auto',
+              willChange: 'background, border'
             }}
           >
-            {sortedList.length === 0 ? (
+            {paginatedItems.length === 0 ? (
               <EmptyState status={status} />
             ) : (
-              sortedList.map((os, index) => (
-                <KanbanCard 
-                  key={os.id}
-                  os={os}
-                  index={index}
-                  formatMoney={formatMoney}
-                  status={status}
-                  actions={actions}
-                />
-              ))
+              <InfiniteScroll 
+                hasMore={hasMore} 
+                loadMore={loadMore}
+              >
+                {paginatedItems.map((os, index) => (
+                  <KanbanCard 
+                    key={os.id}
+                    os={os}
+                    index={index}
+                    formatMoney={formatMoney}
+                    status={status}
+                    actions={actions}
+                  />
+                ))}
+              </InfiniteScroll>
             )}
             {provided.placeholder}
           </div>

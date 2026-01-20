@@ -24,14 +24,14 @@ interface KanbanBoardProps {
 
 const EmptyState = React.memo(({ status }: { status: OSStatus }) => {
   const messages: Record<string, { icon: string, text: string }> = {
-    ORCAMENTO: { icon: '📝', text: 'Sem orçamentos pendentes' },
-    APROVADO: { icon: '✅', text: 'Nada aprovado aguardando' },
-    EM_SERVICO: { icon: '🔧', text: 'Nenhum veículo no elevador' },
-    FINALIZADO: { icon: '🏁', text: 'Nenhuma OS finalizada hoje' },
-    ARQUIVADO: { icon: '📦', text: 'Lixeira vazia. Nenhuma OS arquivada.' },
+    ORCAMENTO: { icon: String.fromCharCode(128221), text: 'Sem or\u00e7amentos pendentes' },
+    APROVADO: { icon: String.fromCharCode(9989), text: 'Nada aprovado aguardando' },
+    EM_SERVICO: { icon: String.fromCharCode(128295), text: 'Nenhum ve\u00edculo no elevador' },
+    FINALIZADO: { icon: String.fromCharCode(127937), text: 'Nenhuma OS finalizada hoje' },
+    ARQUIVADO: { icon: String.fromCharCode(128230), text: 'Lixeira vazia. Nenhuma OS arquivada.' },
   };
 
-  const info = messages[status] || { icon: '📂', text: 'Lista vazia' };
+  const info = messages[status] || { icon: String.fromCharCode(128194), text: 'Lista vazia' };
 
   return (
     <div style={{
@@ -158,17 +158,17 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(({
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="kanban-filter-bar">
         <div className="search-wrapper">
-          <span className="search-icon">🔍</span>
+          <span className="search-icon">{String.fromCharCode(128269)}</span>
           <input 
             type="text" 
             className="form-input search-input" 
-            placeholder="Buscar por Cliente, OS, Veículo ou Placa..." 
+            placeholder="Buscar por Cliente, OS, Ve\u00edculo ou Placa..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
           {searchTerm && (
             <button className="btn-clear-search" onClick={() => setSearchTerm('')}>
-              ✕
+              {String.fromCharCode(10005)}
             </button>
           )}
         </div>

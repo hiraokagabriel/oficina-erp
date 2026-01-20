@@ -66,7 +66,7 @@ function AppContent() {
   
   const finance = useFinance();
   
-  const [currentTheme, setCurrentTheme] = useState<'dark' | 'vintage'>('dark');
+  const [currentTheme, setCurrentTheme] = useState<'dark' | 'pastel'>('dark');
   const [activeTab, setActiveTab] = useState<'FINANCEIRO' | 'OFICINA' | 'PROCESSOS' | 'CLIENTES' | 'CONFIG'>('OFICINA');
   const [showConfetti, setShowConfetti] = useState(false);
 

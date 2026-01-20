@@ -85,5 +85,13 @@ export interface DatabaseSchema {
 }
 
 export interface ChecklistSchema {
-  [key: string]: boolean | string | undefined;
+  fuelLevel: number;
+  tires: {
+    fl: boolean;
+    fr: boolean;
+    bl: boolean;
+    br: boolean;
+  };
+  notes: string;
+  [key: string]: boolean | string | number | object | undefined;
 }

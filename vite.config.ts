@@ -1,17 +1,26 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import viteImagemin from "vite-plugin-imagemin";
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 const isProd = process.env.NODE_ENV === 'production';
 
+// Lazy load imagemin plugin only when needed
+let viteImagemin: any = null;
+if (isProd) {
+  try {
+    viteImagemin = (await import('vite-plugin-imagemin')).default;
+  } catch (e) {
+    console.warn('vite-plugin-imagemin not installed. Image optimization disabled.');
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [
     react(),
-    // Optimize images in production
-    isProd && viteImagemin({
+    // Optimize images in production (only if plugin is available)
+    isProd && viteImagemin && viteImagemin({
       gifsicle: {
         optimizationLevel: 7,
         interlaced: false,

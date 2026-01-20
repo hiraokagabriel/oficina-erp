@@ -1,10 +1,93 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OficinaPRO</title>
+    <meta name="description" content="Sistema de Gestão para Oficinas Mecânicas - Controle de OS, Financeiro e Clientes" />
+    <meta name="theme-color" content="#1e1e2e" />
+    
+    <!-- Preconnect para fontes (se estiver usando Google Fonts ou CDN) -->
+    <!-- <link rel="preconnect" href="https://fonts.googleapis.com"> -->
+    <!-- <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin> -->
+    
+    <!-- Preload de recursos críticos (Vite irá gerar isso automaticamente) -->
+    <!-- Os chunks lazy-loaded serão carregados sob demanda -->
+    
+    <title>OficinaPRO - Gestão de Oficinas</title>
+    
+    <style>
+      /* Estilo inline crítico para evitar FOUC (Flash of Unstyled Content) */
+      html {
+        background-color: #1e1e2e;
+        color: #cdd6f4;
+      }
+      
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+          Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      
+      #root {
+        min-height: 100vh;
+      }
+      
+      /* Skeleton loading animation */
+      @keyframes shimmer {
+        0% {
+          background-position: -200% 0;
+        }
+        100% {
+          background-position: 200% 0;
+        }
+      }
+      
+      .skeleton {
+        background: linear-gradient(
+          90deg,
+          #313244 0%,
+          #45475a 50%,
+          #313244 100%
+        );
+        background-size: 200% 100%;
+        animation: shimmer 1.5s ease-in-out infinite;
+        border-radius: 4px;
+      }
+      
+      .skeleton-block {
+        width: 100%;
+        height: 100px;
+      }
+      
+      /* Spinner */
+      .spinner {
+        border: 3px solid rgba(205, 214, 244, 0.1);
+        border-top: 3px solid #89b4fa;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      
+      /* Card styling for loading states */
+      .card {
+        background: #181825;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      }
+    </style>
   </head>
 
   <body>

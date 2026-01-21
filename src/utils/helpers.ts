@@ -1,4 +1,4 @@
-import { LedgerEntry } from '../types';
+import { LedgerEntry, Client, CatalogItem, OrderItem, WorkOrder } from '../types';
 
 export const Money = {
   format: (centavos: number): string => {
@@ -9,11 +9,9 @@ export const Money = {
     const num = parseFloat(valor.replace(/[^\d,-]/g, '').replace(',', '.'));
     return isNaN(num) ? 0 : Math.round(num * 100);
   },
-  // ✅ ADICIONADO: Converte float para centavos
   fromFloat: (reais: number): number => {
     return Math.round(reais * 100);
   },
-  // ✅ ADICIONADO: Converte centavos para float
   toFloat: (centavos: number): number => {
     return centavos / 100;
   }
@@ -69,15 +67,18 @@ export function createLedgerEntry(
   };
 }
 
-// ✅ ADICIONADO: Alias para createLedgerEntry (compatibilidade com useFinance)
 export function createEntry(
   description: string,
   amount: number,
   type: 'CREDIT' | 'DEBIT',
   effectiveDate: string,
-  groupId?: string
+  groupId?: string,
+  paymentDate?: string
 ): LedgerEntry {
-  return createLedgerEntry(description, amount, type, effectiveDate, { groupId });
+  return createLedgerEntry(description, amount, type, effectiveDate, { 
+    groupId,
+    paymentDate 
+  });
 }
 
 export function updateLedgerEntry(
@@ -97,5 +98,112 @@ export function updateLedgerEntry(
     ...entry,
     ...updates,
     history: newHistory
+  };
+}
+
+// ✅ ADICIONADO: Função para aprender dados de clientes
+export function learnClientData(
+  clients: Client[],
+  clientName: string,
+  vehicle: string,
+  plate: string,
+  phone: string,
+  notes: string
+): Client[] {
+  const existing = clients.find(c => c.name === clientName);
+  
+  if (existing) {
+    // Atualiza cliente existente
+    const hasVehicle = existing.vehicles.some(v => v.model === vehicle);
+    const updatedVehicles = hasVehicle 
+      ? existing.vehicles 
+      : [...existing.vehicles, { model: vehicle, plate: plate || '' }];
+    
+    return clients.map(c => 
+      c.id === existing.id 
+        ? { 
+            ...c, 
+            phone: phone || c.phone,
+            notes: notes || c.notes,
+            vehicles: updatedVehicles 
+          }
+        : c
+    );
+  } else {
+    // Cria novo cliente
+    const newClient: Client = {
+      id: generateUniqueId(),
+      name: clientName,
+      phone: phone || '',
+      notes: notes || '',
+      vehicles: [{ model: vehicle, plate: plate || '' }]
+    };
+    return [...clients, newClient];
+  }
+}
+
+// ✅ ADICIONADO: Função para aprender itens do catálogo
+export function learnCatalogItems(
+  catalog: CatalogItem[],
+  items: OrderItem[]
+): CatalogItem[] {
+  let updatedCatalog = [...catalog];
+  
+  items.forEach(item => {
+    const exists = updatedCatalog.some(c => c.description === item.description);
+    if (!exists) {
+      updatedCatalog.push({
+        id: generateUniqueId(),
+        description: item.description,
+        price: item.price,
+        cost: item.cost
+      });
+    }
+  });
+  
+  return updatedCatalog;
+}
+
+// ✅ ADICIONADO: Função para atualizar dados de uma OS
+export function updateWorkOrderData(
+  os: WorkOrder,
+  osNumber: number,
+  vehicle: string,
+  clientName: string,
+  clientPhone: string,
+  mileage: number,
+  parts: OrderItem[],
+  services: OrderItem[],
+  createdAt: string,
+  publicNotes?: string
+): WorkOrder {
+  const totalCost = [
+    ...parts.map(p => p.cost || 0),
+    ...services.map(s => s.cost || 0)
+  ].reduce((sum, cost) => sum + cost, 0);
+  
+  const total = [
+    ...parts.map(p => p.price),
+    ...services.map(s => s.price)
+  ].reduce((sum, price) => sum + price, 0);
+  
+  const profit = total - totalCost;
+  const profitMargin = totalCost > 0 ? (profit / totalCost) * 100 : 0;
+  
+  return {
+    ...os,
+    osNumber,
+    vehicle,
+    clientName,
+    clientPhone,
+    mileage,
+    parts,
+    services,
+    total,
+    totalCost,
+    profit,
+    profitMargin,
+    createdAt,
+    publicNotes: publicNotes || os.publicNotes
   };
 }

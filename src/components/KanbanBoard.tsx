@@ -189,8 +189,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
       const { active, over } = event;
       setActiveId(null);
 
-      // ✅ FIX CRÍTICO: Se drop for inválido (over = null), NÃO FAZ NADA
-      // Card permanece na posição original - NUNCA APAGA!
+      // ✅ FIX 1: Se drop for inválido (over = null), NÃO FAZ NADA
       if (!over) {
         console.log('❌ Drop inválido - card mantido na posição original');
         return;
@@ -199,11 +198,23 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
       const orderId = active.id as string;
       const newStatus = over.id as OSStatus;
 
+      // ✅ FIX 2: Buscar a workOrder e verificar se existe
       const workOrder = workOrders.find((wo) => wo.id === orderId);
-      if (workOrder && workOrder.status !== newStatus) {
-        console.log(`✅ Movendo OS #${workOrder.osNumber}: ${workOrder.status} → ${newStatus}`);
-        onStatusChange(orderId, newStatus);
+      
+      if (!workOrder) {
+        console.error('❌ WorkOrder não encontrada:', orderId);
+        return;
       }
+
+      // ✅ FIX 3: CRÍTICO - Só atualiza se o status MUDOU de fato!
+      if (workOrder.status === newStatus) {
+        console.log(`ℹ️ Card solto no mesmo lugar (${newStatus}) - ignorando`);
+        return; // ✅ EVITA SUMIR!
+      }
+
+      // ✅ Se chegou aqui, é uma mudança válida de status
+      console.log(`✅ Movendo OS #${workOrder.osNumber}: ${workOrder.status} → ${newStatus}`);
+      onStatusChange(orderId, newStatus);
     };
 
     const handleDragCancel = () => {

@@ -30,7 +30,13 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [catalogParts, setCatalogParts] = useState<CatalogItem[]>([]);
   const [catalogServices, setCatalogServices] = useState<CatalogItem[]>([]);
   const [settings, setSettings] = useState<WorkshopSettings>({ 
-    name: "OFICINA", cnpj: "", address: "", technician: "", exportPath: "", googleDriveToken: "" 
+    name: "OFICINA", 
+    cnpj: "", 
+    address: "", 
+    technician: "", 
+    exportPath: "", 
+    googleDriveToken: "",
+    googleApiKey: "" // 🆕 ADICIONADO
   });
 
   const [isLoading, setIsLoading] = useState(true);

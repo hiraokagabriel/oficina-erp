@@ -30,8 +30,6 @@ import { SoundFX } from './utils/audio';
 import { Money, createEntry, updateWorkOrderData, learnClientData, learnCatalogItems } from './utils/helpers';
 import { LedgerEntry, WorkOrder, Client, CatalogItem, OSStatus } from './types';
 
-const GOOGLE_API_KEY = "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";
-
 interface PendingAction {
   type: 'DELETE_OS' | 'ARCHIVE_OS' | 'FINISH_OS_FINANCIAL' | 'RESTORE_FINANCIAL' | 'IMPORT_DATA';
   data?: any;
@@ -131,8 +129,15 @@ function AppContent() {
 
   const handleGoogleDriveBackup = async () => {
     if (isBackuping) return;
+    
+    // 🆕 NOVA VALIDAÇÃO: Verifica se API Key e Token estão configurados
+    if (!settings.googleApiKey || settings.googleApiKey.trim() === "") {
+      addToast("⚠️ Configure a Google API Key nas configurações.", "error");
+      return;
+    }
+    
     if (!settings.googleDriveToken || settings.googleDriveToken.trim() === "") {
-      alert("É necessário configurar o Token de Acesso do Google Drive.");
+      addToast("⚠️ Configure o Token de Acesso do Google Drive.", "error");
       return;
     }
 
@@ -147,7 +152,8 @@ function AppContent() {
       const timestamp = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}-${String(now.getMinutes()).padStart(2,'0')}`;
       const filename = `backup_oficina_${timestamp}.json`;
 
-      await uploadToDrive(filename, content, settings.googleDriveToken, GOOGLE_API_KEY);
+      // 🆕 AGORA USA settings.googleApiKey
+      await uploadToDrive(filename, content, settings.googleDriveToken, settings.googleApiKey);
       setDriveStatus('success');
       addToast("Backup salvo!", "success");
     } catch (e: any) {

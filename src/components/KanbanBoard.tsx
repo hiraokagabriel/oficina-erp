@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
 import { WorkOrder, OSStatus, STATUS_LABELS } from '../types';
 import { KanbanCard } from './KanbanCard';
@@ -52,20 +52,24 @@ const KanbanColumn = React.memo(({
   workOrders, 
   actions, 
   formatMoney,
-  updateTrigger // ✅ FIX: Prop para forçar re-render
 }: { 
   status: OSStatus; 
   workOrders: WorkOrder[]; 
   actions: KanbanBoardProps['actions']; 
   formatMoney: (val: number) => string;
-  updateTrigger: number; // ✅ FIX: Contador para forçar re-render
 }) => {
-  // Filtra e ordena primeiro
+  // ✅ FIX: Usar key única baseada em workOrders para forçar re-render
+  const listKey = useMemo(() => {
+    const statusOrders = workOrders.filter(o => o.status === status);
+    return statusOrders.map(o => `${o.id}-${o.status}`).join(',');
+  }, [workOrders, status]);
+
+  // Filtra e ordena
   const sortedList = useMemo(() => {
     return workOrders
       .filter(o => o.status === status)
       .sort((a, b) => b.osNumber - a.osNumber);
-  }, [workOrders, status, updateTrigger]); // ✅ FIX: Incluir updateTrigger nas dependências
+  }, [workOrders, status]);
   
   // Aplica paginação
   const {
@@ -96,7 +100,7 @@ const KanbanColumn = React.memo(({
         </span>
       </div>
       
-      <Droppable droppableId={status}>
+      <Droppable droppableId={status} key={`${status}-${listKey}`}>
         {(provided, snapshot) => (
           <div 
             className="kanban-list-scroll"
@@ -130,7 +134,7 @@ const KanbanColumn = React.memo(({
               >
                 {paginatedItems.map((os, index) => (
                   <KanbanCard 
-                    key={os.id}
+                    key={`${os.id}-${os.status}-${index}`}
                     os={os}
                     index={index}
                     formatMoney={formatMoney}
@@ -156,16 +160,25 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(({
   formatMoney 
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [updateTrigger, setUpdateTrigger] = useState(0); // ✅ FIX: Estado para forçar re-render
-  const showArchived = false; // TODO: Implementar toggle de arquivados
+  const [dragVersion, setDragVersion] = useState(0); // ✅ FIX: Versão para forçar re-render
+  const showArchived = false;
 
-  // ✅ FIX: Wrapper do onDragEnd que força atualização
+  // ✅ FIX: useEffect que detecta mudanças após drag
+  useEffect(() => {
+    // Incrementa versão sempre que workOrders muda
+    setDragVersion(prev => prev + 1);
+  }, [workOrders]);
+
+  // ✅ FIX: Wrapper melhorado do onDragEnd
   const handleDragEnd = useCallback((result: DropResult) => {
+    if (!result.destination) return;
+    
     onDragEnd(result);
-    // Força re-render após 100ms para garantir que o estado foi atualizado
-    setTimeout(() => {
-      setUpdateTrigger(prev => prev + 1);
-    }, 100);
+    
+    // Força re-render imediato usando requestAnimationFrame
+    requestAnimationFrame(() => {
+      setDragVersion(prev => prev + 1);
+    });
   }, [onDragEnd]);
 
   // Memoiza a filtragem de busca
@@ -216,7 +229,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(({
         </div>
       </div>
 
-      <DragDropContext onDragEnd={handleDragEnd}>
+      <DragDropContext onDragEnd={handleDragEnd} key={dragVersion}>
         <div className="kanban-board" style={{ gridTemplateColumns: showArchived ? '1fr' : 'repeat(4, 1fr)' }}>
           {showArchived ? (
             <KanbanColumn 
@@ -224,7 +237,6 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(({
               workOrders={filteredWorkOrders} 
               actions={actions} 
               formatMoney={formatMoney}
-              updateTrigger={updateTrigger}
             />
           ) : (
             <>
@@ -233,28 +245,24 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(({
                 workOrders={filteredWorkOrders} 
                 actions={actions} 
                 formatMoney={formatMoney}
-                updateTrigger={updateTrigger}
               />
               <KanbanColumn 
                 status="APROVADO" 
                 workOrders={filteredWorkOrders} 
                 actions={actions} 
                 formatMoney={formatMoney}
-                updateTrigger={updateTrigger}
               />
               <KanbanColumn 
                 status="EM_SERVICO" 
                 workOrders={filteredWorkOrders} 
                 actions={actions} 
                 formatMoney={formatMoney}
-                updateTrigger={updateTrigger}
               />
               <KanbanColumn 
                 status="FINALIZADO" 
                 workOrders={filteredWorkOrders} 
                 actions={actions} 
                 formatMoney={formatMoney}
-                updateTrigger={updateTrigger}
               />
             </>
           )}

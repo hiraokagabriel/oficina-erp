@@ -5,7 +5,7 @@ import { Money } from '../utils/helpers';
 interface InstallmentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  totalAmount: number;
+  totalAmount: number; // Já em centavos!
   description: string;
   onConfirm: (config: InstallmentConfig) => void;
 }
@@ -22,31 +22,33 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
     new Date().toISOString().split('T')[0]
   );
 
-  // ✅ FIX CRÍTICO: Arredondamento perfeito de parcelas
-  // Exemplo: R$ 100 (10000 centavos) ÷ 3 parcelas
-  // = 2x R$ 33,33 (3333 centavos) + 1x R$ 33,34 (3334 centavos)
-  const calculateInstallments = (total: number, count: number) => {
-    // Valor base por parcela (arredondado para baixo)
-    const baseValueInCents = Math.floor(total / count);
+  // ✅ FIX: Cálculo DIRETO em centavos - sem conversão!
+  const calculateInstallments = (totalInCents: number, count: number) => {
+    console.log(`📊 Calculando ${totalInCents} centavos em ${count} parcelas`);
     
-    // Calcular o resto que sobra
-    const remainder = total - (baseValueInCents * count);
+    // Valor base por parcela (arredondado para baixo em centavos)
+    const baseValueInCents = Math.floor(totalInCents / count);
     
-    // Última parcela = base + resto
+    // Resto em centavos
+    const remainder = totalInCents - (baseValueInCents * count);
+    
+    // Última parcela absorve o resto
     const lastInstallmentAmount = baseValueInCents + remainder;
     
-    // Validação: (count-1) * base + lastInstallment deve ser = total
-    const calculatedTotal = (baseValueInCents * (count - 1)) + lastInstallmentAmount;
+    // Validação
+    const total = (baseValueInCents * (count - 1)) + lastInstallmentAmount;
+    const isValid = total === totalInCents;
     
-    if (calculatedTotal !== total) {
-      console.error('Erro de arredondamento!', { total, calculatedTotal, diff: total - calculatedTotal });
-    }
+    console.log(`  Base: ${baseValueInCents}¢ (${Money.format(baseValueInCents)})`);
+    console.log(`  Resto: ${remainder}¢`);
+    console.log(`  Última: ${lastInstallmentAmount}¢ (${Money.format(lastInstallmentAmount)})`);
+    console.log(`  Soma: ${total}¢ | Original: ${totalInCents}¢ | Válido: ${isValid ? '✅' : '❌'}`);
     
     return {
       normalInstallmentAmount: baseValueInCents,
       lastInstallmentAmount: lastInstallmentAmount,
       installmentsCount: count,
-      isValid: calculatedTotal === total
+      isValid: isValid
     };
   };
 
@@ -60,6 +62,13 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
   }, [isOpen]);
 
   const handleConfirm = () => {
+    console.log('🚀 Confirmando parcelamento:', {
+      totalAmount,
+      installments,
+      normalValue: installmentCalc.normalInstallmentAmount,
+      lastValue: installmentCalc.lastInstallmentAmount
+    });
+    
     const config: InstallmentConfig = {
       totalAmount,
       installments,
@@ -187,7 +196,6 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
               📄 Preview das Parcelas
             </div>
             {installmentDates.map((date, index) => {
-              // ✅ Última parcela usa valor ajustado
               const isLast = index === installments - 1;
               const amount = isLast 
                 ? installmentCalc.lastInstallmentAmount 
@@ -231,14 +239,18 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
                       </div>
                     </div>
                   </div>
-                  <div style={{ fontWeight: 'bold', color: isLast ? 'var(--success)' : 'var(--primary)', fontSize: '1.1rem' }}>
+                  <div style={{ 
+                    fontWeight: 'bold', 
+                    color: isLast ? 'var(--success)' : 'var(--primary)', 
+                    fontSize: '1.1rem'
+                  }}>
                     {Money.format(amount)}
+                    {isLast && <div style={{ fontSize: '0.65rem', opacity: 0.7 }}>ajustada</div>}
                   </div>
                 </div>
               );
             })}
             
-            {/* ✅ Validação da soma */}
             <div style={{
               marginTop: '12px',
               padding: '12px',
@@ -252,8 +264,8 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
             }}>
               {installmentCalc.isValid ? '✅' : '⚠️'}
               <div>
-                <strong>Soma das parcelas:</strong> {Money.format(totalAmount)}
-                {!installmentCalc.isValid && <div style={{ fontSize: '0.75rem', marginTop: '4px' }}>Erro de arredondamento detectado!</div>}
+                <strong>Soma exata:</strong> {Money.format(totalAmount)}
+                {!installmentCalc.isValid && <div style={{ fontSize: '0.75rem', marginTop: '4px' }}>Erro de arredondamento!</div>}
               </div>
             </div>
           </div>

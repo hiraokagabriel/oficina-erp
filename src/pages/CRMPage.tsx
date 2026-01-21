@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Client, WorkOrder, STATUS_LABELS } from '../types';
+import { CRMDashboard } from '../components/CRMDashboard';
 
 interface CRMPageProps {
   clients: Client[];
@@ -10,6 +11,7 @@ interface CRMPageProps {
 
 export const CRMPage: React.FC<CRMPageProps> = ({ clients, workOrders, isLoading, formatMoney }) => {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [showDashboard, setShowDashboard] = useState(true); // ✅ Toggle para mostrar/esconder dashboard
 
   // Histórico ordenado
   const clientHistory = useMemo(() => {
@@ -56,7 +58,31 @@ export const CRMPage: React.FC<CRMPageProps> = ({ clients, workOrders, isLoading
 
   return (
     <>
-      <div className="header-area"><h1 className="page-title">CRM & Clientes</h1></div>
+      <div className="header-area" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h1 className="page-title">CRM & Clientes</h1>
+        {/* ✅ Botão para toggle dashboard */}
+        <button 
+          className="btn btn-secondary"
+          onClick={() => setShowDashboard(!showDashboard)}
+          style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+        >
+          {showDashboard ? '💁 Ocultar Dashboard' : '📊 Mostrar Dashboard'}
+        </button>
+      </div>
+
+      {/* ✅ DASHBOARD CRM (quando ativado) */}
+      {showDashboard && (
+        <div style={{ marginBottom: '24px' }}>
+          <CRMDashboard
+            clients={clients}
+            workOrders={workOrders}
+            onClientSelect={(client) => {
+              setSelectedClient(client);
+              setShowDashboard(false); // Oculta dashboard ao selecionar cliente
+            }}
+          />
+        </div>
+      )}
       
       <div className="crm-layout">
           {/* LISTA DE CLIENTES */}

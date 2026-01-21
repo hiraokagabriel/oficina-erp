@@ -1,12 +1,12 @@
 import React from 'react';
-import { Draggable } from '@hello-pangea/dnd';
-import { WorkOrder } from '../types';
+import { useDraggable } from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
+import { WorkOrder, OSStatus } from '../types';
 
 interface KanbanCardProps {
   os: WorkOrder;
-  index: number;
   formatMoney: (val: number) => string;
-  status: string;
+  status: OSStatus;
   actions: {
     onRegress: (id: string) => void;
     onEdit: (os: WorkOrder) => void;
@@ -18,224 +18,174 @@ interface KanbanCardProps {
     onRestore?: (os: WorkOrder) => void;
     onQuickFinish?: (id: string) => void;
   };
-  onWhatsApp?: () => void;
+  isDragging?: boolean;
 }
 
-export const KanbanCard = React.memo(({ 
-  os, 
-  index, 
-  formatMoney, 
-  status, 
-  actions, 
-  onWhatsApp 
-}: KanbanCardProps) => {
+export const KanbanCard: React.FC<KanbanCardProps> = ({
+  os,
+  formatMoney,
+  status,
+  actions,
+  isDragging = false,
+}) => {
+  // ✅ Hook do @dnd-kit para tornar o card dragg able
+  const { attributes, listeners, setNodeRef, transform, isDragging: isCardDragging } = useDraggable({
+    id: os.id,
+  });
+
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    opacity: isCardDragging && !isDragging ? 0.5 : 1,
+    cursor: isDragging ? 'grabbing' : 'grab',
+  };
+
+  const handleDoubleClick = () => {
+    actions.onEdit(os);
+  };
+
+  const handleCtrlClick = (e: React.MouseEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (actions.onQuickFinish) {
+        actions.onQuickFinish(os.id);
+      }
+    }
+  };
+
   return (
-    <Draggable draggableId={os.id} index={index}>
-      {(provided, snapshot) => {
-        // 🎯 FIX: Estilo dinâmico correto
-        const cardStyle: React.CSSProperties = {
-          ...provided.draggableProps.style,
-          // FIX: Garante z-index correto
-          zIndex: snapshot.isDragging ? 9999 : 'auto',
-          // FIX: Transform aplicado corretamente
-          transform: snapshot.isDragging 
-            ? `${provided.draggableProps.style?.transform || ''} rotate(2deg) scale(1.03)`
-            : provided.draggableProps.style?.transform,
-          // FIX: Cursor feedback
-          cursor: snapshot.isDragging ? 'grabbing' : 'grab',
-          // FIX: Transição suave
-          transition: snapshot.isDragging 
-            ? 'box-shadow 0.2s ease' 
-            : 'all 0.2s cubic-bezier(0.2, 0, 0, 1)',
-          // FIX: Box shadow dramático
-          boxShadow: snapshot.isDragging 
-            ? '0 20px 40px rgba(0, 0, 0, 0.3), 0 0 0 2px var(--primary)'
-            : '0 2px 8px rgba(0, 0, 0, 0.1)',
-          // FIX: Garantir posicionamento
-          position: 'relative',
-          userSelect: 'none',
-          WebkitUserSelect: 'none',
-        };
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...listeners}
+      {...attributes}
+      className="kanban-card"
+      onDoubleClick={handleDoubleClick}
+      onClick={handleCtrlClick}
+    >
+      <div className="card-header">
+        <span className="os-number">OS #{os.osNumber}</span>
+        <span className="card-date">
+          {new Date(os.createdAt).toLocaleDateString('pt-BR')}
+        </span>
+      </div>
 
-        return (
-          <div
-            ref={provided.innerRef}
-            {...provided.draggableProps}
-            {...provided.dragHandleProps}
-            style={cardStyle}
+      <div className="card-body">
+        <div className="client-info">
+          <div className="client-name">👤 {os.clientName}</div>
+          {os.clientPhone && (
+            <div className="client-phone">📞 {os.clientPhone}</div>
+          )}
+        </div>
+
+        <div className="vehicle-info">
+          <div>🚗 {os.vehicle}</div>
+          {os.mileage > 0 && (
+            <div className="mileage">📊 {os.mileage.toLocaleString()} km</div>
+          )}
+        </div>
+
+        <div className="card-total">
+          <strong>{formatMoney(os.total)}</strong>
+        </div>
+
+        {os.checklist && (
+          <div className="checklist-badge">✅ Checklist</div>
+        )}
+
+        {os.financialId && (
+          <div className="financial-badge">💰 Lançado</div>
+        )}
+      </div>
+
+      <div className="card-actions">
+        {status !== 'ORCAMENTO' && status !== 'ARQUIVADO' && (
+          <button
+            className="btn-icon"
+            onClick={(e) => {
+              e.stopPropagation();
+              actions.onRegress(os.id);
+            }}
+            title="Retroceder"
           >
-            <div
-              className={`kanban-card ${snapshot.isDragging ? 'is-dragging' : ''}`}
-              title="💡 Dica: Ctrl + Clique para finalizar imediatamente"
-              onClick={(e) => {
-                if (e.ctrlKey && status !== 'FINALIZADO' && actions.onQuickFinish) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  actions.onQuickFinish(os.id);
-                }
-              }}
-              style={{
-                // FIX: Opacidade durante drag
-                opacity: snapshot.isDragging ? 0.9 : status === 'ARQUIVADO' ? 0.7 : 1,
-                // FIX: Borda highlight
-                border: snapshot.isDragging 
-                  ? '2px solid var(--primary)' 
-                  : '1px solid var(--border)',
-                // ✅ FIX TEMA: Usa variável CSS que responde ao tema
-                background: snapshot.isDragging 
-                  ? 'var(--bg-panel)' 
-                  : 'var(--bg-card, var(--bg-panel))',
-                // ✅ FIX TEMA: Cor do texto também responde ao tema
-                color: 'var(--text)',
-                // Performance boost
-                willChange: 'transform, box-shadow, opacity',
-              }}
-            >
-              <div className="os-header">
-                <span className="os-number">#{os.osNumber}</span>
-                <span className="os-price">{formatMoney(os.total)}</span>
-              </div>
-              <div className="os-client">{os.clientName}</div>
-              <div className="os-vehicle">{os.vehicle}</div>
-              
-              {os.clientPhone && (
-                <div className="os-id" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span>📞 {os.clientPhone}</span>
-                  {onWhatsApp && (
-                    <button 
-                        className="btn-icon" 
-                        title="Enviar mensagem no WhatsApp"
-                        onClick={(e) => { e.stopPropagation(); onWhatsApp(); }}
-                        style={{
-                            background: '#25D366', 
-                            color: '#fff', 
-                            border: 'none', 
-                            borderRadius: '50%',
-                            width: '22px', 
-                            height: '22px', 
-                            display: 'flex', 
-                            alignItems: 'center',
-                            justifyContent: 'center', 
-                            cursor: 'pointer', 
-                            fontSize: '0.8rem',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                        }}
-                    >
-                        💬
-                    </button>
-                  )}
-                </div>
-              )}
+            ⬅️
+          </button>
+        )}
 
-              {/* FIX: Esconde actions durante drag para melhor performance */}
-              <div 
-                className="card-actions" 
-                style={{ 
-                  display: snapshot.isDragging ? 'none' : 'flex',
-                  opacity: snapshot.isDragging ? 0 : 1,
-                  transition: 'opacity 0.2s ease'
-                }}
-              >
-                {status !== 'ARQUIVADO' && status !== 'ORCAMENTO' && (
-                  <button 
-                    className="btn-icon" 
-                    title="Voltar" 
-                    onClick={(e) => {
-                      e.stopPropagation(); 
-                      actions.onRegress(os.id);
-                    }}
-                  >
-                    ⬅️
-                  </button>
-                )}
+        <button
+          className="btn-icon"
+          onClick={(e) => {
+            e.stopPropagation();
+            actions.onEdit(os);
+          }}
+          title="Editar (Duplo clique)"
+        >
+          ✏️
+        </button>
 
-                <div style={{ display: 'flex', gap: 5 }}>
-                  <button 
-                    className="btn-icon" 
-                    title="Editar" 
-                    onClick={(e) => {
-                      e.stopPropagation(); 
-                      actions.onEdit(os);
-                    }}
-                  >
-                    ✏️
-                  </button>
-                  <button 
-                    className="btn-icon check" 
-                    title="Checklist" 
-                    onClick={(e) => {
-                      e.stopPropagation(); 
-                      actions.onChecklist(os);
-                    }}
-                  >
-                    📋
-                  </button>
-                  <button 
-                    className="btn-icon" 
-                    title="Imprimir" 
-                    onClick={(e) => {
-                      e.stopPropagation(); 
-                      actions.onPrint(os);
-                    }}
-                  >
-                    🖨️
-                  </button>
-                  
-                  {status === 'ARQUIVADO' ? (
-                      <button 
-                        className="btn-icon" 
-                        title="Restaurar OS" 
-                        onClick={(e) => {
-                          e.stopPropagation(); 
-                          actions.onRestore && actions.onRestore(os);
-                        }} 
-                        style={{color: 'var(--success)'}}
-                      >
-                          ↩️
-                      </button>
-                  ) : (
-                      <button 
-                        className="btn-icon" 
-                        title="Arquivar OS" 
-                        onClick={(e) => {
-                          e.stopPropagation(); 
-                          actions.onArchive && actions.onArchive(os);
-                        }} 
-                        style={{color: 'var(--text-muted)'}}
-                      >
-                          📦
-                      </button>
-                  )}
-                  
-                  <button 
-                    className="btn-icon danger" 
-                    title="Excluir" 
-                    onClick={(e) => {
-                      e.stopPropagation(); 
-                      actions.onDelete(os);
-                    }}
-                  >
-                    🗑️
-                  </button>
-                </div>
+        <button
+          className="btn-icon"
+          onClick={(e) => {
+            e.stopPropagation();
+            actions.onChecklist(os);
+          }}
+          title="Checklist"
+        >
+          📋
+        </button>
 
-                {status !== 'ARQUIVADO' && status !== 'FINALIZADO' && (
-                  <button 
-                    className="btn-icon" 
-                    title="Avançar" 
-                    onClick={(e) => {
-                      e.stopPropagation(); 
-                      actions.onAdvance(os.id);
-                    }}
-                  >
-                    ➡️
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      }}
-    </Draggable>
+        <button
+          className="btn-icon"
+          onClick={(e) => {
+            e.stopPropagation();
+            actions.onPrint(os);
+          }}
+          title="Imprimir"
+        >
+          🖨️
+        </button>
+
+        {status === 'ARQUIVADO' ? (
+          <button
+            className="btn-icon"
+            onClick={(e) => {
+              e.stopPropagation();
+              actions.onRestore?.(os);
+            }}
+            title="Restaurar"
+          >
+            ♻️
+          </button>
+        ) : (
+          <button
+            className="btn-icon btn-danger"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (status === 'FINALIZADO' && actions.onArchive) {
+                actions.onArchive(os);
+              } else {
+                actions.onDelete(os);
+              }
+            }}
+            title={status === 'FINALIZADO' ? 'Arquivar' : 'Excluir'}
+          >
+            {status === 'FINALIZADO' ? '📦' : '🗑️'}
+          </button>
+        )}
+
+        {status !== 'FINALIZADO' && status !== 'ARQUIVADO' && (
+          <button
+            className="btn-icon btn-success"
+            onClick={(e) => {
+              e.stopPropagation();
+              actions.onAdvance(os.id);
+            }}
+            title="Avançar (Ctrl + Click para Finalizar)"
+          >
+            ➡️
+          </button>
+        )}
+      </div>
+    </div>
   );
-});
+};

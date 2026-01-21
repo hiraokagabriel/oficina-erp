@@ -265,7 +265,6 @@ function AppContent() {
     console.log(`✅ ${newEntries.length} entradas criadas`);
     setLedger(prev => [...newEntries, ...prev]);
     
-    // ✅ FIX CRÍTICO: Marcar OS como FINALIZADO
     if (installmentOS) {
       console.log(`🔄 Atualizando OS #${installmentOS.osNumber} (ID: ${installmentOS.id})`);
       console.log(`  Status atual: ${installmentOS.status}`);
@@ -341,9 +340,55 @@ function AppContent() {
 
     if (pendingAction.type === 'RESTORE_FINANCIAL') {
       const os = pendingAction.data;
-      setLedger(prev => prev.filter(e => e.id !== os.financialId));
-      setWorkOrders(prev => prev.map(o => o.id === os.id ? { ...o, status: 'EM_SERVICO', financialId: undefined } : o));
-      addToast("OS reaberta.", "info");
+      console.log('🔙 RESTORE_FINANCIAL:', os);
+      
+      // ✅ FIX: Buscar o lançamento financeiro para pegar o groupId
+      const financialEntry = ledger.find(e => e.id === os.financialId);
+      
+      if (financialEntry) {
+        // Se tem groupId (parcelamento) ou installmentGroupId, remove TODAS as parcelas
+        const groupToDelete = financialEntry.groupId || financialEntry.installmentGroupId;
+        
+        if (groupToDelete) {
+          console.log(`🗑️ Removendo TODAS as parcelas do grupo: ${groupToDelete}`);
+          const parcelsToRemove = ledger.filter(e => 
+            e.groupId === groupToDelete || e.installmentGroupId === groupToDelete
+          );
+          console.log(`  Total de parcelas a remover: ${parcelsToRemove.length}`);
+          parcelsToRemove.forEach(p => {
+            console.log(`    - ${p.description}: ${Money.format(p.amount)}`);
+          });
+          
+          // Remove TODAS as parcelas do grupo
+          setLedger(prev => prev.filter(e => 
+            e.groupId !== groupToDelete && e.installmentGroupId !== groupToDelete
+          ));
+          
+          addToast(`${parcelsToRemove.length} parcelas removidas.`, "info");
+        } else {
+          // Pagamento único, remove apenas o lançamento
+          console.log('💵 Removendo pagamento único');
+          setLedger(prev => prev.filter(e => e.id !== os.financialId));
+          addToast("Lançamento removido.", "info");
+        }
+      } else {
+        console.warn('⚠️ FinancialId não encontrado no ledger');
+      }
+      
+      // Limpa os dados financeiros da OS
+      setWorkOrders(prev => prev.map(o => 
+        o.id === os.id 
+          ? { 
+              ...o, 
+              status: 'EM_SERVICO', 
+              financialId: undefined,
+              paymentMethod: undefined,
+              installmentConfig: undefined
+            } 
+          : o
+      ));
+      
+      addToast("OS reaberta.", "success");
     }
 
     if (pendingAction.type === 'IMPORT_DATA') {

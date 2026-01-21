@@ -83,11 +83,42 @@ export const CRMPage: React.FC<CRMPageProps> = ({
       };
   };
 
-  // ✅ NOVO: Abrir WhatsApp
+  // ✅ CORRIGIDO: Abrir WhatsApp com logs detalhados
   const openWhatsApp = (phone: string, clientName: string) => {
-    const cleanPhone = phone.replace(/\D/g, ''); // Remove tudo que não é número
-    const message = encodeURIComponent(`Olá ${clientName}, tudo bem? \n\nEstamos entrando em contato da oficina sobre o seu veículo.`);
-    window.open(`https://wa.me/55${cleanPhone}?text=${message}`, '_blank');
+    console.log('📱 ===== ABERTURA WHATSAPP =====');
+    console.log('Telefone original:', phone);
+    console.log('Nome do cliente:', clientName);
+    
+    // Remove TUDO que não é número
+    let cleanPhone = phone.replace(/\D/g, '');
+    console.log('Telefone limpo (só números):', cleanPhone);
+    
+    // Remove +55 se já estiver no início
+    if (cleanPhone.startsWith('55')) {
+      cleanPhone = cleanPhone.substring(2);
+      console.log('Removeu 55 do início:', cleanPhone);
+    }
+    
+    // Valida se tem pelo menos 10 dígitos (DDD + número)
+    if (cleanPhone.length < 10) {
+      alert(`Telefone inválido: ${phone}\n\nPrecisa ter pelo menos 10 dígitos (DDD + número)`);
+      console.error('❌ Telefone muito curto:', cleanPhone);
+      return;
+    }
+    
+    // Formata a mensagem
+    const message = encodeURIComponent(
+      `Olá ${clientName}, tudo bem?\n\nEstamos entrando em contato da oficina sobre o seu veículo.`
+    );
+    
+    // Monta a URL final
+    const whatsappUrl = `https://wa.me/55${cleanPhone}?text=${message}`;
+    console.log('URL final:', whatsappUrl);
+    console.log('Telefone com código do país: +55' + cleanPhone);
+    console.log('✅ Abrindo WhatsApp...');
+    
+    // Abre em nova aba
+    window.open(whatsappUrl, '_blank');
   };
 
   // ✅ NOVO: Salvar edição do cliente

@@ -106,15 +106,36 @@ function AppContent() {
     const os = workOrders.find(o => o.id === osId);
     if (!os || os.status === newStatus) return;
 
-    if (newStatus === 'FINALIZADO' && os.status !== 'FINALIZADO' && !os.financialId) {
+    // 📅 LÓGICA DE PAYMENTDATE
+    const isBecomingFinalized = newStatus === 'FINALIZADO' && os.status !== 'FINALIZADO';
+    const isLeavingFinalized = os.status === 'FINALIZADO' && newStatus !== 'FINALIZADO';
+
+    if (isBecomingFinalized && !os.financialId) {
       setPendingAction({ type: 'FINISH_OS_FINANCIAL', data: os });
       return;
-    } else if (os.status === 'FINALIZADO' && newStatus !== 'FINALIZADO' && os.financialId) {
+    } else if (isLeavingFinalized && os.financialId) {
       setPendingAction({ type: 'RESTORE_FINANCIAL', data: os });
       return;
     }
 
-    setWorkOrders(prev => prev.map(o => o.id === osId ? { ...o, status: newStatus } : o));
+    setWorkOrders(prev => prev.map(o => {
+      if (o.id !== osId) return o;
+      
+      const updates: Partial<WorkOrder> = { status: newStatus };
+      
+      // 🆕 Setar paymentDate ao finalizar
+      if (isBecomingFinalized) {
+        updates.paymentDate = new Date().toISOString();
+      }
+      
+      // ❌ Limpar paymentDate ao sair de finalizado
+      if (isLeavingFinalized) {
+        updates.paymentDate = undefined;
+      }
+      
+      return { ...o, ...updates };
+    }));
+    
     SoundFX.pop();
   };
 
@@ -270,6 +291,7 @@ function AppContent() {
       console.log(`  Status atual: ${installmentOS.status}`);
       console.log(`  Novo status: FINALIZADO`);
       console.log(`  FinancialId: ${newEntries[0].id}`);
+      console.log(`  📅 PaymentDate: ${new Date().toISOString()}`);
       
       setWorkOrders(prev => {
         const updated = prev.map(o => 
@@ -279,7 +301,8 @@ function AppContent() {
                 status: 'FINALIZADO',
                 financialId: newEntries[0].id, 
                 paymentMethod: 'INSTALLMENT', 
-                installmentConfig: config 
+                installmentConfig: config,
+                paymentDate: new Date().toISOString() // 🆕 SETAR DATA DE PAGAMENTO
               } 
             : o
         );
@@ -340,7 +363,16 @@ function AppContent() {
       console.log('❌ Usuário escolheu NÃO parcelar - pagamento único');
       const entry = createEntry(`Receita OS #${os.osNumber} - ${os.clientName}`, os.total, 'CREDIT', os.createdAt);
       setLedger(prev => [entry, ...prev]);
-      setWorkOrders(prev => prev.map(o => o.id === os.id ? { ...o, status: 'FINALIZADO', financialId: entry.id } : o));
+      setWorkOrders(prev => prev.map(o => 
+        o.id === os.id 
+          ? { 
+              ...o, 
+              status: 'FINALIZADO', 
+              financialId: entry.id,
+              paymentDate: new Date().toISOString() // 🆕 SETAR DATA DE PAGAMENTO
+            } 
+          : o
+      ));
       addToast("OS Finalizada!", "success");
       setShowConfetti(true);
     }
@@ -385,7 +417,8 @@ function AppContent() {
               status: 'EM_SERVICO', 
               financialId: undefined,
               paymentMethod: undefined,
-              installmentConfig: undefined
+              installmentConfig: undefined,
+              paymentDate: undefined // ❌ LIMPAR DATA DE PAGAMENTO
             } 
           : o
       ));

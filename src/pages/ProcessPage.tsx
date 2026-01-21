@@ -148,7 +148,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
 
   return (
     <>
-      {/* 🎨 HEADER MODERNIZADO - FIXO NO TOPO */}
+      {/* 🎨 HEADER MODERNIZADO - PROTEÇÃO MÁXIMA CONTRA SOBREPOSIÇÃO */}
       <div style={{
         background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
         borderRadius: 'var(--radius-card)',
@@ -158,7 +158,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
         position: 'relative',
         overflow: 'hidden',
         boxShadow: '0 10px 40px rgba(130, 87, 230, 0.3)',
-        zIndex: 50
+        zIndex: 999
       }}>
         <div style={{
           position: 'absolute',
@@ -168,7 +168,8 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
           height: '300px',
           background: 'rgba(255,255,255,0.1)',
           borderRadius: '50%',
-          filter: 'blur(60px)'
+          filter: 'blur(60px)',
+          pointerEvents: 'none'
         }}/>
         
         <div style={{ position: 'relative', zIndex: 1 }}>
@@ -297,7 +298,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
       </div>
 
       {/* 🔍 FILTROS AVANÇADOS */}
-      <div className="card" style={{ marginBottom: '24px', position: 'relative', zIndex: 40 }}>
+      <div className="card" style={{ marginBottom: '24px', position: 'relative', zIndex: 998 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', alignItems: 'end' }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">🔍 Buscar</label>
@@ -519,7 +520,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                                 <span className="dropdown-arrow">▼</span>
                               </span>
 
-                              {/* Menu Dropdown - Z-INDEX ALTO */}
+                              {/* Menu Dropdown - Z-INDEX MÁXIMO */}
                               {selectedOS === os.id && (
                                 <div 
                                   className="status-dropdown-menu" 
@@ -532,7 +533,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                                     border: '1px solid var(--border)',
                                     borderRadius: '8px',
                                     boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                                    zIndex: 100,
+                                    zIndex: 1000,
                                     minWidth: '180px',
                                     overflow: 'hidden',
                                     animation: 'fadeIn 0.2s ease-out'

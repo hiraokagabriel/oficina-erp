@@ -57,6 +57,13 @@ export const KanbanCard = React.memo(({
     forcedDragging && 'is-overlay'
   ].filter(Boolean).join(' ');
 
+  // 🆕 LÓGICA DE CORES DA MARGEM DE LUCRO
+  const getProfitMarginColor = (margin: number) => {
+    if (margin >= 70) return { color: 'var(--success)', bg: 'rgba(4, 211, 97, 0.1)' };
+    if (margin >= 16) return { color: 'var(--warning)', bg: 'rgba(255, 152, 0, 0.1)' };
+    return { color: 'var(--danger)', bg: 'rgba(229, 76, 76, 0.1)' };
+  };
+
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
       <div
@@ -85,7 +92,27 @@ export const KanbanCard = React.memo(({
       >
         <div className="os-header">
           <span className="os-number">#{os.osNumber}</span>
-          <span className="os-price">{formatMoney(os.total)}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span className="os-price">{formatMoney(os.total)}</span>
+            
+            {/* 🆕 INDICADOR DE MARGEM DE LUCRO */}
+            {os.profitMargin !== undefined && os.profitMargin > 0 && (
+              <span 
+                style={{ 
+                  fontSize: '0.7rem', 
+                  color: getProfitMarginColor(os.profitMargin).color,
+                  fontWeight: 'bold',
+                  marginLeft: 2,
+                  padding: '2px 4px',
+                  borderRadius: 4,
+                  backgroundColor: getProfitMarginColor(os.profitMargin).bg
+                }}
+                title={`Lucro: ${formatMoney(os.profit || 0)} | ROI: ${os.totalCost && os.totalCost > 0 ? ((os.profit || 0) / os.totalCost * 100).toFixed(0) : '0'}%`}
+              >
+                +{os.profitMargin.toFixed(0)}%
+              </span>
+            )}
+          </div>
         </div>
         <div className="os-client">{os.clientName}</div>
         <div className="os-vehicle">{os.vehicle}</div>

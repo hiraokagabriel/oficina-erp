@@ -67,7 +67,7 @@ export default defineConfig(async ({ mode }) => {
           manualChunks: {
             'react-vendor': ['react', 'react-dom'],
             'charts': ['recharts'],
-            'dnd': ['@hello-pangea/dnd'],
+            'dnd': ['@dnd-kit/core', '@dnd-kit/sortable', '@dnd-kit/utilities'],
           },
         },
       },

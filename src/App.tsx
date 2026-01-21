@@ -229,6 +229,10 @@ function AppContent() {
   };
 
   const handleInstallmentConfirm = (config: any) => {
+    console.log('🚀 ===== INÍCIO PARCELAMENTO =====');
+    console.log('installmentOS:', installmentOS);
+    console.log('config:', config);
+    
     const newEntries: LedgerEntry[] = [];
     const baseDate = new Date(config.firstPaymentDate);
     const groupId = config.groupId;
@@ -237,9 +241,10 @@ function AppContent() {
       const dueDate = new Date(baseDate);
       dueDate.setMonth(dueDate.getMonth() + i);
       
-      // ✅ FIX: Última parcela usa o valor ajustado para absorver diferença de centavos
       const isLastInstallment = i === config.installments - 1;
       const amount = isLastInstallment ? config.lastInstallmentAmount : config.installmentAmount;
+      
+      console.log(`  Parcela ${i + 1}/${config.installments}: ${Money.format(amount)} (${isLastInstallment ? 'Última' : 'Normal'})`);
       
       newEntries.push({
         id: crypto.randomUUID(),
@@ -257,29 +262,46 @@ function AppContent() {
       });
     }
     
+    console.log(`✅ ${newEntries.length} entradas criadas`);
     setLedger(prev => [...newEntries, ...prev]);
     
-    // ✅ FIX CRÍTICO: Marcar OS como FINALIZADO e vincular primeira parcela
+    // ✅ FIX CRÍTICO: Marcar OS como FINALIZADO
     if (installmentOS) {
-      setWorkOrders(prev => prev.map(o => 
-        o.id === installmentOS.id 
-          ? { 
-              ...o, 
-              status: 'FINALIZADO',  // ✅ FINALIZA A OS!
-              financialId: newEntries[0].id, 
-              paymentMethod: 'INSTALLMENT', 
-              installmentConfig: config 
-            } 
-          : o
-      ));
+      console.log(`🔄 Atualizando OS #${installmentOS.osNumber} (ID: ${installmentOS.id})`);
+      console.log(`  Status atual: ${installmentOS.status}`);
+      console.log(`  Novo status: FINALIZADO`);
+      console.log(`  FinancialId: ${newEntries[0].id}`);
+      
+      setWorkOrders(prev => {
+        const updated = prev.map(o => 
+          o.id === installmentOS.id 
+            ? { 
+                ...o, 
+                status: 'FINALIZADO',
+                financialId: newEntries[0].id, 
+                paymentMethod: 'INSTALLMENT', 
+                installmentConfig: config 
+              } 
+            : o
+        );
+        
+        const updatedOS = updated.find(o => o.id === installmentOS.id);
+        console.log('✅ OS após atualização:', updatedOS);
+        
+        return updated;
+      });
       
       addToast(`OS #${installmentOS.osNumber} finalizada!`, "success");
       setShowConfetti(true);
+    } else {
+      console.error('❌ installmentOS é NULL!');
     }
     
     addToast(`Parcelamento criado! ${config.installments}x`, "success");
     setIsInstallmentModalOpen(false);
     setInstallmentOS(null);
+    
+    console.log('🏁 ===== FIM PARCELAMENTO =====');
   };
 
   const executePendingAction = () => {
@@ -299,12 +321,17 @@ function AppContent() {
 
     if (pendingAction.type === 'FINISH_OS_FINANCIAL') {
       const os = pendingAction.data;
+      console.log('💰 FINISH_OS_FINANCIAL:', os);
+      
       if (confirm(`Deseja parcelar ${Money.format(os.total)}?`)) {
+        console.log('✅ Usuário escolheu PARCELAR');
         setInstallmentOS(os);
         setIsInstallmentModalOpen(true);
         setPendingAction(null);
         return;
       }
+      
+      console.log('❌ Usuário escolheu NÃO parcelar - pagamento único');
       const entry = createEntry(`Receita OS #${os.osNumber} - ${os.clientName}`, os.total, 'CREDIT', os.createdAt);
       setLedger(prev => [entry, ...prev]);
       setWorkOrders(prev => prev.map(o => o.id === os.id ? { ...o, status: 'FINALIZADO', financialId: entry.id } : o));

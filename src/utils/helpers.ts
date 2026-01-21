@@ -7,6 +7,19 @@ export const generateId = (): string => {
     : Math.random().toString(36).substring(2) + Date.now().toString(36);
 };
 
+// --- DATE HELPER ---
+/**
+ * Retorna a data atual do computador no formato YYYY-MM-DD (padrão para input type="date")
+ * Usa o fuso horário local, não UTC, garantindo que a data seja sempre a mesma do sistema do usuário
+ */
+export const getLocalDateString = (): string => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 // --- MONEY HELPER ---
 export const Money = {
   fromFloat: (amount: number): number => Math.round(amount * 100),

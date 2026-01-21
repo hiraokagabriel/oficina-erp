@@ -197,11 +197,24 @@ export const CRMDashboard: React.FC<CRMDashboardProps> = ({
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   padding: '16px',
-                  background: 'white',
+                  // 🎨 TEMA: Fundo adaptativo ao tema
+                  background: 'var(--bg-secondary)',
                   border: '1px solid var(--border)',
                   borderRadius: '12px',
                   cursor: onClientSelect ? 'pointer' : 'default',
                   transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                  if (onClientSelect) {
+                    e.currentTarget.style.background = 'var(--bg-hover)';
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(130, 87, 230, 0.2)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'var(--bg-secondary)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'none';
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -220,7 +233,8 @@ export const CRMDashboard: React.FC<CRMDashboardProps> = ({
                     {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
                   </div>
                   <div>
-                    <div style={{ fontWeight: 'bold', fontSize: '1.1rem', color: 'var(--text)' }}>
+                    {/* 🎨 TEMA: Texto adaptativo */}
+                    <div style={{ fontWeight: 'bold', fontSize: '1.1rem', color: 'var(--text-main)' }}>
                       {item.client.name}
                       {item.client.vipStatus && (
                         <span style={{ marginLeft: '8px', fontSize: '1rem' }}>🌟</span>

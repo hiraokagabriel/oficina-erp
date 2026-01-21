@@ -14,37 +14,34 @@ interface FinancialPageProps {
   kpiData: { saldo: number; receitas: number; despesas: number; ticketMedio: number; };
   chartDataFluxo: any[];
   chartDataPie: any[];
-  ledger: LedgerEntry[]; // Essa lista já vem filtrada por Data e Tipo do App.tsx
+  ledger: LedgerEntry[];
   Money: { format: (val: number) => string; toFloat: (val: number) => number; };
   onOpenExport: () => void;
   onOpenEntry: () => void;
   onEditEntry: (id: string) => void;
   onDeleteEntry: (entry: LedgerEntry) => void;
+  onTogglePayment: (id: string) => void; // 🆕 NOVA PROP
   selectedMonth: string;
   onMonthChange: (val: string) => void;
   viewMode: 'MONTH' | 'YEAR';
   setViewMode: (mode: 'MONTH' | 'YEAR') => void;
-  // NOVAS PROPS
   filterType: 'ALL' | 'CREDIT' | 'DEBIT';
   setFilterType: (type: 'ALL' | 'CREDIT' | 'DEBIT') => void;
 }
 
 export const FinancialPage: React.FC<FinancialPageProps> = ({ 
   isLoading, kpiData, chartDataFluxo, chartDataPie, ledger, Money, 
-  onOpenExport, onOpenEntry, onEditEntry, onDeleteEntry,
+  onOpenExport, onOpenEntry, onEditEntry, onDeleteEntry, onTogglePayment,
   selectedMonth, onMonthChange, viewMode, setViewMode,
   filterType, setFilterType
 }) => {
   
-  // Estado local para paginação
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Reseta para página 1 se o filtro mudar ou os dados mudarem
   useEffect(() => {
     setCurrentPage(1);
   }, [ledger.length, filterType, viewMode, selectedMonth]);
 
-  // Lógica de Paginação
   const totalPages = Math.ceil(ledger.length / ITEMS_PER_PAGE);
   const paginatedLedger = ledger.slice(
       (currentPage - 1) * ITEMS_PER_PAGE, 
@@ -161,7 +158,6 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 15}}>
               <h3 style={{margin:0}}>Lançamentos</h3>
               
-              {/* FILTRO DE TIPO (RECEITAS / DESPESAS) */}
               <div className="toggle-group" style={{display: 'flex', gap: 5}}>
                   <button 
                     className="btn-sm" 
@@ -196,22 +192,18 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                    </td></tr>
                 ) : (
                     paginatedLedger.map(e => {
-                        // 🔧 CORREÇÃO: Para receitas (OS), prioriza data de pagamento
                         let displayDate: string;
                         let isPaymentDate = false;
                         
                         if (e.type === 'CREDIT') {
-                            // Para receitas (vindas de OS), mostra data de pagamento se existir
                             if (e.paymentDate) {
                                 displayDate = new Date(e.paymentDate).toLocaleDateString('pt-BR');
                                 isPaymentDate = true;
                             } else {
-                                // Se não tem data de pagamento, mostra a data de criação com indicador
                                 displayDate = new Date(e.effectiveDate).toLocaleDateString('pt-BR');
                                 isPaymentDate = false;
                             }
                         } else {
-                            // Para despesas, sempre mostra a data efetiva
                             displayDate = new Date(e.effectiveDate).toLocaleDateString('pt-BR');
                         }
                         
@@ -251,6 +243,21 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                                     )}
                                 </td>
                                 <td>
+                                    {/* 🆕 BOTÃO DE CHECK DE PAGAMENTO */}
+                                    {e.type === 'CREDIT' && (
+                                        <button 
+                                            className="btn-sm" 
+                                            onClick={() => onTogglePayment(e.id)}
+                                            style={{
+                                                background: isPaymentDate ? 'rgba(4, 211, 97, 0.2)' : 'rgba(255, 152, 0, 0.2)',
+                                                color: isPaymentDate ? 'var(--success)' : 'var(--warning)',
+                                                border: 'none',
+                                                marginRight: '4px'
+                                            }}
+                                        >
+                                            {isPaymentDate ? '✅' : '⏳'}
+                                        </button>
+                                    )}
                                     <button className="btn-sm" onClick={() => onEditEntry(e.id)}>Edit</button> 
                                     <button className="btn-sm" onClick={() => onDeleteEntry(e)}>Del</button>
                                 </td>
@@ -261,7 +268,6 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
             </tbody>
           </table>
 
-          {/* RODAPÉ DE PAGINAÇÃO */}
           {totalPages > 1 && (
              <div style={{display:'flex', justifyContent:'center', alignItems:'center', gap: 15, marginTop: 20}}>
                  <button 

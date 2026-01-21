@@ -61,6 +61,62 @@ function AppContent() {
   const [driveStatus, setDriveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
+  // 🆕 MIGRAÇÃO: Atualiza OSs finalizadas antigas com paymentDate
+  useEffect(() => {
+    const migrateOldWorkOrders = () => {
+      let updated = false;
+      const newWorkOrders = workOrders.map(os => {
+        // Se a OS está finalizada mas não tem paymentDate, seta como createdAt
+        if (os.status === 'FINALIZADO' && !os.paymentDate) {
+          console.log(`🔄 Migrando OS #${os.osNumber}: paymentDate = createdAt`);
+          updated = true;
+          return { ...os, paymentDate: os.createdAt };
+        }
+        return os;
+      });
+      
+      if (updated) {
+        console.log('✅ Migração de OSs antigas concluída!');
+        setWorkOrders(newWorkOrders);
+        addToast('OSs antigas atualizadas!', 'success');
+      }
+    };
+
+    // Executa migração após carregar dados
+    if (!isLoading && workOrders.length > 0) {
+      migrateOldWorkOrders();
+    }
+  }, [isLoading]); // Só executa quando o loading terminar
+
+  // 🔧 MIGRAÇÃO: Atualiza lançamentos de receitas sem paymentDate
+  useEffect(() => {
+    const migrateLedgerEntries = () => {
+      let updated = false;
+      const newLedger = ledger.map(entry => {
+        // Se é receita (CREDIT) e não tem paymentDate, verifica se tem OS vinculada
+        if (entry.type === 'CREDIT' && !entry.paymentDate) {
+          const linkedOS = workOrders.find(os => os.financialId === entry.id);
+          if (linkedOS && linkedOS.paymentDate) {
+            console.log(`💵 Migrando lançamento ${entry.description}: paymentDate da OS`);
+            updated = true;
+            return { ...entry, paymentDate: linkedOS.paymentDate };
+          }
+        }
+        return entry;
+      });
+      
+      if (updated) {
+        console.log('✅ Migração de lançamentos concluída!');
+        setLedger(newLedger);
+      }
+    };
+
+    // Executa após migração de OSs
+    if (!isLoading && ledger.length > 0 && workOrders.length > 0) {
+      migrateLedgerEntries();
+    }
+  }, [isLoading, workOrders]);
+
   const addToast = (message: string, type: ToastType = 'info') => {
     const id = crypto.randomUUID();
     setToasts(prev => [...prev, { id, message, type }]);
@@ -204,6 +260,35 @@ function AppContent() {
     }
   };
 
+  // 🆕 NOVA FUNÇÃO: Marcar/desmarcar pagamento
+  const handleTogglePayment = (entryId: string) => {
+    const entry = ledger.find(e => e.id === entryId);
+    if (!entry || entry.type !== 'CREDIT') return;
+
+    const now = new Date().toISOString();
+    const newPaymentDate = entry.paymentDate ? undefined : now;
+
+    // Atualiza o ledger
+    setLedger(prev => prev.map(e => 
+      e.id === entryId 
+        ? { ...e, paymentDate: newPaymentDate }
+        : e
+    ));
+
+    // Se tem OS vinculada, atualiza também
+    const linkedOS = workOrders.find(os => os.financialId === entryId);
+    if (linkedOS) {
+      setWorkOrders(prev => prev.map(os => 
+        os.id === linkedOS.id 
+          ? { ...os, paymentDate: newPaymentDate }
+          : os
+      ));
+    }
+
+    addToast(newPaymentDate ? '💵 Marcado como pago!' : '⏳ Marcado como pendente', 'info');
+    SoundFX.pop();
+  };
+
   const handleRequestDeleteEntry = (entry: LedgerEntry) => setDeleteModalInfo({ isOpen: true, entry });
   
   const confirmDeleteSingle = () => {
@@ -302,7 +387,7 @@ function AppContent() {
                 financialId: newEntries[0].id, 
                 paymentMethod: 'INSTALLMENT', 
                 installmentConfig: config,
-                paymentDate: new Date().toISOString() // 🆕 SETAR DATA DE PAGAMENTO
+                paymentDate: new Date().toISOString()
               } 
             : o
         );
@@ -326,11 +411,10 @@ function AppContent() {
     console.log('🏁 ===== FIM PARCELAMENTO =====');
   };
 
-  // ✅ NOVO: Handler para abrir OS do histórico do CRM
   const handleOpenOSFromCRM = (os: WorkOrder) => {
     setEditingOS(os);
     setIsModalOpen(true);
-    setActiveTab('OFICINA'); // Opcional: mudar para aba OFICINA
+    setActiveTab('OFICINA');
   };
 
   const executePendingAction = () => {
@@ -361,7 +445,15 @@ function AppContent() {
       }
       
       console.log('❌ Usuário escolheu NÃO parcelar - pagamento único');
-      const entry = createEntry(`Receita OS #${os.osNumber} - ${os.clientName}`, os.total, 'CREDIT', os.createdAt);
+      const paymentDate = new Date().toISOString();
+      const entry = createEntry(
+        `Receita OS #${os.osNumber} - ${os.clientName}`, 
+        os.total, 
+        'CREDIT', 
+        os.createdAt,
+        undefined, // groupId
+        paymentDate // 🔧 PASSA DATA DE PAGAMENTO
+      );
       setLedger(prev => [entry, ...prev]);
       setWorkOrders(prev => prev.map(o => 
         o.id === os.id 
@@ -369,7 +461,7 @@ function AppContent() {
               ...o, 
               status: 'FINALIZADO', 
               financialId: entry.id,
-              paymentDate: new Date().toISOString() // 🆕 SETAR DATA DE PAGAMENTO
+              paymentDate: paymentDate // 🆕 SETAR DATA DE PAGAMENTO
             } 
           : o
       ));
@@ -418,7 +510,7 @@ function AppContent() {
               financialId: undefined,
               paymentMethod: undefined,
               installmentConfig: undefined,
-              paymentDate: undefined // ❌ LIMPAR DATA DE PAGAMENTO
+              paymentDate: undefined
             } 
           : o
       ));
@@ -472,7 +564,7 @@ function AppContent() {
 
         <main className="main-content">
           <Suspense fallback={<LoadingSkeleton type="page" />}>
-            {activeTab === 'FINANCEIRO' && <FinancialPage isLoading={isLoading} kpiData={finance.kpiData} chartDataFluxo={finance.chartFluxo} chartDataPie={finance.chartPie} ledger={finance.filteredLedger} Money={Money} onOpenExport={() => setIsExportModalOpen(true)} onOpenEntry={() => { setEditingEntry(null); setIsEntryModalOpen(true); }} onEditEntry={handleEditEntry} onDeleteEntry={handleRequestDeleteEntry} selectedMonth={finance.selectedMonth} onMonthChange={finance.setSelectedMonth} viewMode={finance.viewMode} setViewMode={finance.setViewMode} filterType={finance.filterType} setFilterType={finance.setFilterType} />}
+            {activeTab === 'FINANCEIRO' && <FinancialPage isLoading={isLoading} kpiData={finance.kpiData} chartDataFluxo={finance.chartFluxo} chartDataPie={finance.chartPie} ledger={finance.filteredLedger} Money={Money} onOpenExport={() => setIsExportModalOpen(true)} onOpenEntry={() => { setEditingEntry(null); setIsEntryModalOpen(true); }} onEditEntry={handleEditEntry} onDeleteEntry={handleRequestDeleteEntry} onTogglePayment={handleTogglePayment} selectedMonth={finance.selectedMonth} onMonthChange={finance.setSelectedMonth} viewMode={finance.viewMode} setViewMode={finance.setViewMode} filterType={finance.filterType} setFilterType={finance.setFilterType} />}
             {activeTab === 'OFICINA' && <WorkshopPage workOrders={workOrders} isLoading={isLoading} formatMoney={Money.format} onNewOS={() => { setEditingOS(null); setIsModalOpen(true); }} onStatusChange={handleUpdateStatus} kanbanActions={{ onRegress: (id) => { const os = workOrders.find(o => o.id === id); if (os) handleUpdateStatus(id, os.status === 'FINALIZADO' ? 'EM_SERVICO' : os.status === 'EM_SERVICO' ? 'APROVADO' : 'ORCAMENTO'); }, onAdvance: (id) => { const os = workOrders.find(o => o.id === id); if (os) handleUpdateStatus(id, os.status === 'ORCAMENTO' ? 'APROVADO' : os.status === 'APROVADO' ? 'EM_SERVICO' : 'FINALIZADO'); }, onEdit: (os) => { setEditingOS(os); setIsModalOpen(true); }, onChecklist: (os) => { setChecklistOS(os); setIsChecklistOpen(true); }, onPrint: (os) => { setPrintingOS(os); setTimeout(() => window.print(), 100); }, onDelete: (os) => setPendingAction({ type: 'DELETE_OS', data: os }), onArchive: (os) => setPendingAction({ type: 'ARCHIVE_OS', data: os }), onRestore: (os) => handleUpdateStatus(os.id, 'ORCAMENTO'), onQuickFinish: (id) => handleUpdateStatus(id, 'FINALIZADO') }} />}
             {activeTab === 'PROCESSOS' && <ProcessPage workOrders={workOrders} onOpenNew={() => { setEditingOS(null); setIsModalOpen(true); }} onUpdateStatus={handleUpdateStatus} />}
             {activeTab === 'CLIENTES' && <CRMPage clients={clients} workOrders={workOrders} isLoading={isLoading} formatMoney={Money.format} onSaveClient={handleSaveClient} onOpenOS={handleOpenOSFromCRM} />}

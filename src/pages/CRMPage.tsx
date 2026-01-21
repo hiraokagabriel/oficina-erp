@@ -212,7 +212,7 @@ export const CRMPage: React.FC<CRMPageProps> = ({
                           
                           <div className="crm-tags" style={{marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap'}}>
                               {selectedClient.vehicles.map((v, i) => (
-                                  <span key={i} style={{background: 'var(--bg-input)', padding: '6px 12px', borderRadius: 12, fontSize: '0.8rem', border: '1px solid var(--border)'}}>>
+                                  <span key={i} style={{background: 'var(--bg-input)', padding: '6px 12px', borderRadius: 12, fontSize: '0.8rem', border: '1px solid var(--border)'}}>
                                       🚗 {v.model} <span style={{opacity: 0.6}}>{v.plate}</span>
                                   </span>
                               ))}

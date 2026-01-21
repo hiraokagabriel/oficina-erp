@@ -303,6 +303,13 @@ function AppContent() {
     console.log('🏁 ===== FIM PARCELAMENTO =====');
   };
 
+  // ✅ NOVO: Handler para abrir OS do histórico do CRM
+  const handleOpenOSFromCRM = (os: WorkOrder) => {
+    setEditingOS(os);
+    setIsModalOpen(true);
+    setActiveTab('OFICINA'); // Opcional: mudar para aba OFICINA
+  };
+
   const executePendingAction = () => {
     if (!pendingAction) return;
 
@@ -342,11 +349,9 @@ function AppContent() {
       const os = pendingAction.data;
       console.log('🔙 RESTORE_FINANCIAL:', os);
       
-      // ✅ FIX: Buscar o lançamento financeiro para pegar o groupId
       const financialEntry = ledger.find(e => e.id === os.financialId);
       
       if (financialEntry) {
-        // Se tem groupId (parcelamento) ou installmentGroupId, remove TODAS as parcelas
         const groupToDelete = financialEntry.groupId || financialEntry.installmentGroupId;
         
         if (groupToDelete) {
@@ -359,14 +364,12 @@ function AppContent() {
             console.log(`    - ${p.description}: ${Money.format(p.amount)}`);
           });
           
-          // Remove TODAS as parcelas do grupo
           setLedger(prev => prev.filter(e => 
             e.groupId !== groupToDelete && e.installmentGroupId !== groupToDelete
           ));
           
           addToast(`${parcelsToRemove.length} parcelas removidas.`, "info");
         } else {
-          // Pagamento único, remove apenas o lançamento
           console.log('💵 Removendo pagamento único');
           setLedger(prev => prev.filter(e => e.id !== os.financialId));
           addToast("Lançamento removido.", "info");
@@ -375,7 +378,6 @@ function AppContent() {
         console.warn('⚠️ FinancialId não encontrado no ledger');
       }
       
-      // Limpa os dados financeiros da OS
       setWorkOrders(prev => prev.map(o => 
         o.id === os.id 
           ? { 
@@ -440,7 +442,7 @@ function AppContent() {
             {activeTab === 'FINANCEIRO' && <FinancialPage isLoading={isLoading} kpiData={finance.kpiData} chartDataFluxo={finance.chartFluxo} chartDataPie={finance.chartPie} ledger={finance.filteredLedger} Money={Money} onOpenExport={() => setIsExportModalOpen(true)} onOpenEntry={() => { setEditingEntry(null); setIsEntryModalOpen(true); }} onEditEntry={handleEditEntry} onDeleteEntry={handleRequestDeleteEntry} selectedMonth={finance.selectedMonth} onMonthChange={finance.setSelectedMonth} viewMode={finance.viewMode} setViewMode={finance.setViewMode} filterType={finance.filterType} setFilterType={finance.setFilterType} />}
             {activeTab === 'OFICINA' && <WorkshopPage workOrders={workOrders} isLoading={isLoading} formatMoney={Money.format} onNewOS={() => { setEditingOS(null); setIsModalOpen(true); }} onStatusChange={handleUpdateStatus} kanbanActions={{ onRegress: (id) => { const os = workOrders.find(o => o.id === id); if (os) handleUpdateStatus(id, os.status === 'FINALIZADO' ? 'EM_SERVICO' : os.status === 'EM_SERVICO' ? 'APROVADO' : 'ORCAMENTO'); }, onAdvance: (id) => { const os = workOrders.find(o => o.id === id); if (os) handleUpdateStatus(id, os.status === 'ORCAMENTO' ? 'APROVADO' : os.status === 'APROVADO' ? 'EM_SERVICO' : 'FINALIZADO'); }, onEdit: (os) => { setEditingOS(os); setIsModalOpen(true); }, onChecklist: (os) => { setChecklistOS(os); setIsChecklistOpen(true); }, onPrint: (os) => { setPrintingOS(os); setTimeout(() => window.print(), 100); }, onDelete: (os) => setPendingAction({ type: 'DELETE_OS', data: os }), onArchive: (os) => setPendingAction({ type: 'ARCHIVE_OS', data: os }), onRestore: (os) => handleUpdateStatus(os.id, 'ORCAMENTO'), onQuickFinish: (id) => handleUpdateStatus(id, 'FINALIZADO') }} />}
             {activeTab === 'PROCESSOS' && <ProcessPage workOrders={workOrders} onOpenNew={() => { setEditingOS(null); setIsModalOpen(true); }} onUpdateStatus={handleUpdateStatus} />}
-            {activeTab === 'CLIENTES' && <CRMPage clients={clients} workOrders={workOrders} isLoading={isLoading} formatMoney={Money.format} />}
+            {activeTab === 'CLIENTES' && <CRMPage clients={clients} workOrders={workOrders} isLoading={isLoading} formatMoney={Money.format} onSaveClient={handleSaveClient} onOpenOS={handleOpenOSFromCRM} />}
             {activeTab === 'CONFIG' && <ConfigPage settings={settings} setSettings={setSettings} currentTheme={currentTheme} setCurrentTheme={setCurrentTheme} onBackup={handleGoogleDriveBackup} isBackuping={isBackuping} driveStatus={driveStatus} onImportData={handleImportData} onOpenDatabase={() => setIsDatabaseModalOpen(true)} />}
           </Suspense>
         </main>

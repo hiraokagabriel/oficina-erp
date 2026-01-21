@@ -79,6 +79,43 @@ export const updateEntryAmount = (
   };
 };
 
+// --- 🆕 NOVO: CÁLCULOS DE ROI ---
+
+/**
+ * Calcula o custo total, lucro bruto, margem de lucro e ROI de uma OS
+ */
+export const calculateFinancials = (
+  parts: OrderItem[],
+  services: OrderItem[]
+): {
+  totalRevenue: number;
+  totalCost: number;
+  profit: number;
+  profitMargin: number;
+  roi: number;
+} => {
+  // Soma receita (preços de venda)
+  const partsRevenue = parts.reduce((acc, p) => acc + p.price, 0);
+  const servicesRevenue = services.reduce((acc, s) => acc + s.price, 0);
+  const totalRevenue = partsRevenue + servicesRevenue;
+
+  // Soma custos internos
+  const partsCost = parts.reduce((acc, p) => acc + (p.cost || 0), 0);
+  const servicesCost = services.reduce((acc, s) => acc + (s.cost || 0), 0);
+  const totalCost = partsCost + servicesCost;
+
+  // Lucro bruto
+  const profit = totalRevenue - totalCost;
+
+  // Margem de lucro (%)
+  const profitMargin = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
+
+  // ROI (%)
+  const roi = totalCost > 0 ? (profit / totalCost) * 100 : 0;
+
+  return { totalRevenue, totalCost, profit, profitMargin, roi };
+};
+
 // --- WORK ORDER (OS) ---
 
 export const createWorkOrder = (
@@ -108,6 +145,9 @@ export const createWorkOrder = (
   const orderParts: OrderItem[] = parts.map(p => ({ ...p, id: generateId() }));
   const orderServices: OrderItem[] = services.map(s => ({ ...s, id: generateId() }));
 
+  // 🆕 Calcula financeiros
+  const financials = calculateFinancials(orderParts, orderServices);
+
   return {
     id: generateId(),
     osNumber,
@@ -119,6 +159,9 @@ export const createWorkOrder = (
     parts: orderParts,
     services: orderServices,
     total: subParts + subServices,
+    totalCost: financials.totalCost,
+    profit: financials.profit,
+    profitMargin: financials.profitMargin,
     createdAt: finalDate,
     checklist: undefined,
     financialId: undefined
@@ -150,6 +193,9 @@ export const updateWorkOrderData = (
   const orderParts: OrderItem[] = parts.map(p => ({ ...p, id: generateId() }));
   const orderServices: OrderItem[] = services.map(s => ({ ...s, id: generateId() }));
 
+  // 🆕 Calcula financeiros
+  const financials = calculateFinancials(orderParts, orderServices);
+
   return {
     ...original,
     osNumber,
@@ -160,6 +206,9 @@ export const updateWorkOrderData = (
     parts: orderParts,
     services: orderServices,
     total: subParts + subServices,
+    totalCost: financials.totalCost,
+    profit: financials.profit,
+    profitMargin: financials.profitMargin,
     createdAt: finalDate
   };
 };

@@ -195,21 +195,41 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                        {ledger.length === 0 ? "Nenhum lançamento encontrado." : "Página vazia."}
                    </td></tr>
                 ) : (
-                    paginatedLedger.map(e => (
-                        <tr key={e.id}>
-                            <td>{e.description}</td>
-                            <td style={{fontWeight:'bold', color: e.type === 'DEBIT' ? 'var(--danger)' : 'var(--success)'}}>
-                                {e.type === 'DEBIT' ? '- ' : '+ '}{Money.format(e.amount)}
-                            </td>
-                            <td style={{fontSize: '0.8rem', color: 'var(--text-muted)'}}>
-                                {new Date(e.effectiveDate).toLocaleDateString()}
-                            </td>
-                            <td>
-                                <button className="btn-sm" onClick={() => onEditEntry(e.id)}>Edit</button> 
-                                <button className="btn-sm" onClick={() => onDeleteEntry(e)}>Del</button>
-                            </td>
-                        </tr>
-                    ))
+                    paginatedLedger.map(e => {
+                        // 🆕 Determinar qual data exibir: paymentDate para receitas, effectiveDate para demais
+                        const displayDate = (e.type === 'CREDIT' && e.paymentDate) 
+                            ? new Date(e.paymentDate).toLocaleDateString('pt-BR')
+                            : new Date(e.effectiveDate).toLocaleDateString('pt-BR');
+                        
+                        return (
+                            <tr key={e.id}>
+                                <td>{e.description}</td>
+                                <td style={{fontWeight:'bold', color: e.type === 'DEBIT' ? 'var(--danger)' : 'var(--success)'}}>
+                                    {e.type === 'DEBIT' ? '- ' : '+ '}{Money.format(e.amount)}
+                                </td>
+                                <td style={{fontSize: '0.8rem', color: 'var(--text-muted)'}}>
+                                    {displayDate}
+                                    {e.type === 'CREDIT' && e.paymentDate && (
+                                        <span style={{
+                                            marginLeft: '6px',
+                                            fontSize: '0.7rem',
+                                            padding: '2px 6px',
+                                            background: 'rgba(4, 211, 97, 0.15)',
+                                            color: 'var(--success)',
+                                            borderRadius: '4px',
+                                            fontWeight: 600
+                                        }}>
+                                            💵
+                                        </span>
+                                    )}
+                                </td>
+                                <td>
+                                    <button className="btn-sm" onClick={() => onEditEntry(e.id)}>Edit</button> 
+                                    <button className="btn-sm" onClick={() => onDeleteEntry(e)}>Del</button>
+                                </td>
+                            </tr>
+                        );
+                    })
                 )}
             </tbody>
           </table>

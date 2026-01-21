@@ -1,0 +1,167 @@
+/* ==========================================================================
+   SCROLLBAR PERSONALIZADA - SEGUINDO PADRÕES VISUAIS DO APP
+   ========================================================================== */
+
+/* Chrome, Safari, Edge, Opera (WebKit) */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-input);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--primary) 0%, var(--primary-hover) 100%);
+  border-radius: 10px;
+  border: 2px solid var(--bg-input);
+  transition: background 0.3s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-hover);
+  box-shadow: 0 0 10px var(--primary);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary) var(--bg-input);
+}
+
+/* Adaptação para Tema Pastel */
+[data-theme="pastel"] ::-webkit-scrollbar-track {
+  background: #F3F0F8;
+}
+
+[data-theme="pastel"] ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #8B5CF6 0%, #A78BFA 100%);
+  border-color: #F3F0F8;
+}
+
+[data-theme="pastel"] ::-webkit-scrollbar-thumb:hover {
+  background: #7C3AED;
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+}
+
+[data-theme="pastel"] * {
+  scrollbar-color: #8B5CF6 #F3F0F8;
+}
+
+/* ==========================================================================
+   CORREÇÃO DO DROPDOWN FLUTUANTE (PROCESSOS)
+   ========================================================================== */
+
+.status-cell {
+  position: relative; /* Contexto de posicionamento para o dropdown */
+}
+
+.status-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px); /* 8px abaixo do badge */
+  left: 0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  z-index: 1000; /* Garante que fique acima de outros elementos */
+  min-width: 200px;
+  overflow: hidden;
+  animation: dropdownSlideIn 0.2s ease-out;
+}
+
+[data-theme="pastel"] .status-dropdown-menu {
+  background: #FFFFFF;
+  border-color: #E2D9F3;
+  box-shadow: 0 10px 40px -10px rgba(60, 40, 90, 0.2);
+}
+
+@keyframes dropdownSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.status-option {
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: var(--text-main);
+  border-bottom: 1px solid var(--border);
+}
+
+.status-option:last-child {
+  border-bottom: none;
+}
+
+.status-option:hover {
+  background-color: var(--bg-card-hover);
+}
+
+.status-option.selected {
+  background-color: var(--bg-card-hover);
+  font-weight: 600;
+  color: var(--primary);
+}
+
+[data-theme="pastel"] .status-option:hover {
+  background-color: #F9F6FC;
+}
+
+[data-theme="pastel"] .status-option.selected {
+  background-color: #F5F3FF;
+  color: #7C3AED;
+}
+
+/* Indicador visual do dropdown */
+.dropdown-arrow {
+  font-size: 0.7rem;
+  transition: transform 0.2s ease;
+  display: inline-block;
+}
+
+.status-badge.clickable:hover .dropdown-arrow {
+  transform: translateY(2px);
+}
+
+/* Garantir que a tabela não esconda o dropdown */
+.process-table {
+  overflow: visible !important;
+}
+
+.process-table tbody {
+  overflow: visible !important;
+}
+
+.process-table tr {
+  overflow: visible !important;
+}
+
+.process-table td {
+  overflow: visible !important;
+}
+
+/* Card que contém a tabela */
+.card {
+  overflow: visible !important;
+}
+
+/* Grupo de processos */
+.process-group {
+  overflow: visible !important;
+}

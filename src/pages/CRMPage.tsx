@@ -3,13 +3,29 @@ import { Client, WorkOrder, STATUS_LABELS } from '../types';
 import { CRMDashboard } from '../components/CRMDashboard';
 import { ClientEditModal } from '../modals/ClientEditModal';
 
+// ✅ Declarações globais para Electron/Tauri
+declare global {
+  interface Window {
+    electron?: {
+      shell: {
+        openExternal: (url: string) => Promise<void>;
+      };
+    };
+    __TAURI__?: {
+      shell: {
+        open: (url: string) => Promise<void>;
+      };
+    };
+  }
+}
+
 interface CRMPageProps {
   clients: Client[];
   workOrders: WorkOrder[];
   isLoading: boolean;
   formatMoney: (val: number) => string;
-  onSaveClient?: (client: Client) => void; // ✅ Para salvar edições
-  onOpenOS?: (os: WorkOrder) => void; // ✅ Para abrir OS do histórico
+  onSaveClient?: (client: Client) => void;
+  onOpenOS?: (os: WorkOrder) => void;
 }
 
 export const CRMPage: React.FC<CRMPageProps> = ({ 
@@ -22,10 +38,9 @@ export const CRMPage: React.FC<CRMPageProps> = ({
 }) => {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [showDashboard, setShowDashboard] = useState(true);
-  const [searchTerm, setSearchTerm] = useState(''); // ✅ NOVO: Busca
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false); // ✅ NOVO: Modal de edição
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  // ✅ NOVO: Filtrar clientes por busca
   const filteredClients = useMemo(() => {
     if (!searchTerm) return clients;
     
@@ -40,7 +55,6 @@ export const CRMPage: React.FC<CRMPageProps> = ({
     );
   }, [clients, searchTerm]);
 
-  // Histórico ordenado
   const clientHistory = useMemo(() => {
     if (!selectedClient) return [];
     return workOrders
@@ -48,7 +62,6 @@ export const CRMPage: React.FC<CRMPageProps> = ({
       .sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [selectedClient, workOrders]);
 
-  // Lembretes
   const reminders = useMemo(() => {
       if (!selectedClient) return [];
       const result = [];
@@ -83,8 +96,8 @@ export const CRMPage: React.FC<CRMPageProps> = ({
       };
   };
 
-  // ✅ CORRIGIDO: Abrir WhatsApp com múltiplos fallbacks
-  const openWhatsApp = (phone: string, clientName: string) => {
+  // ✅ OTIMIZADO PARA .EXE: Abrir WhatsApp com suporte Electron/Tauri
+  const openWhatsApp = async (phone: string, clientName: string) => {
     console.log('📱 ===== ABERTURA WHATSAPP =====');
     console.log('Telefone original:', phone);
     console.log('Nome do cliente:', clientName);
@@ -116,23 +129,46 @@ export const CRMPage: React.FC<CRMPageProps> = ({
     console.log('URL final:', whatsappUrl);
     console.log('Telefone com código do país: +55' + cleanPhone);
     
-    // ✅ MÉTODO 1: Tenta window.open() (nova aba)
-    console.log('✅ Método 1: Tentando window.open()...');
-    const newWindow = window.open(whatsappUrl, '_blank');
+    // ✅ DETECTA O AMBIENTE E USA A API APROPRIADA
     
-    // Se não conseguiu abrir (bloqueado)
+    // MÉTODO 1: Electron (aplicativo .exe Windows/Mac/Linux)
+    if (window.electron?.shell?.openExternal) {
+      console.log('🚀 Ambiente detectado: ELECTRON (.exe)');
+      console.log('✅ Usando electron.shell.openExternal()...');
+      try {
+        await window.electron.shell.openExternal(whatsappUrl);
+        console.log('✅ WhatsApp aberto via Electron!');
+        return;
+      } catch (error) {
+        console.error('❌ Erro no Electron:', error);
+        // Continua para próximo método
+      }
+    }
+    
+    // MÉTODO 2: Tauri (aplicativo .exe moderno Rust)
+    if (window.__TAURI__?.shell?.open) {
+      console.log('🚀 Ambiente detectado: TAURI (.exe)');
+      console.log('✅ Usando Tauri shell.open()...');
+      try {
+        await window.__TAURI__.shell.open(whatsappUrl);
+        console.log('✅ WhatsApp aberto via Tauri!');
+        return;
+      } catch (error) {
+        console.error('❌ Erro no Tauri:', error);
+        // Continua para próximo método
+      }
+    }
+    
+    // MÉTODO 3: Navegador web (desenvolvimento ou PWA)
+    console.log('🌐 Ambiente detectado: NAVEGADOR WEB');
+    console.log('✅ Usando window.open() padrão...');
+    const newWindow = window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+    
     if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
       console.warn('⚠️ window.open() bloqueado!');
       
-      // ✅ MÉTODO 2: Tenta redirecionar na mesma aba
-      console.log('✅ Método 2: Tentando window.location.href...');
-      if (confirm(`O bloqueador de pop-ups impediu a abertura.\n\nDeseja abrir o WhatsApp na mesma aba?\n(Você perderá a página atual)`)) {
-        window.location.href = whatsappUrl;
-        return;
-      }
-      
-      // ✅ MÉTODO 3: Cria link cllicável e dispara click
-      console.log('✅ Método 3: Criando link <a> e disparando click...');
+      // MÉTODO 4: Link <a> com click programático
+      console.log('✅ Tentando método alternativo: link <a>...');
       try {
         const link = document.createElement('a');
         link.href = whatsappUrl;
@@ -144,30 +180,28 @@ export const CRMPage: React.FC<CRMPageProps> = ({
         console.log('✅ Link criado e clicado!');
         return;
       } catch (error) {
-        console.error('❌ Método 3 falhou:', error);
+        console.error('❌ Método <a> falhou:', error);
       }
       
-      // ✅ MÉTODO 4 (Último recurso): Copia URL para área de transferência
-      console.log('✅ Método 4: Copiando URL para área de transferência...');
+      // MÉTODO 5: Último recurso - copia URL
+      console.log('✅ Último recurso: copiando URL...');
       try {
-        navigator.clipboard.writeText(whatsappUrl);
+        await navigator.clipboard.writeText(whatsappUrl);
         alert(`Não foi possível abrir o WhatsApp automaticamente.\n\nO link foi COPIADO para sua área de transferência!\n\nCole (Ctrl+V) no navegador:\n${whatsappUrl}`);
         console.log('✅ URL copiada com sucesso!');
       } catch (clipboardError) {
-        console.error('❌ Clipboard também falhou:', clipboardError);
-        // Mostra a URL em um prompt para copiar manualmente
+        console.error('❌ Clipboard falhou:', clipboardError);
         prompt('Copie este link e cole no navegador:', whatsappUrl);
       }
     } else {
-      console.log('✅ WhatsApp aberto com sucesso via window.open()!');
+      console.log('✅ WhatsApp aberto via window.open()!');
     }
   };
 
-  // ✅ NOVO: Salvar edição do cliente
   const handleSaveClient = (updatedClient: Client) => {
     if (onSaveClient) {
       onSaveClient(updatedClient);
-      setSelectedClient(updatedClient); // Atualiza o cliente selecionado
+      setSelectedClient(updatedClient);
     }
     setIsEditModalOpen(false);
   };
@@ -185,7 +219,6 @@ export const CRMPage: React.FC<CRMPageProps> = ({
         </button>
       </div>
 
-      {/* DASHBOARD CRM */}
       {showDashboard && (
         <div style={{ marginBottom: '24px' }}>
           <CRMDashboard
@@ -200,9 +233,7 @@ export const CRMPage: React.FC<CRMPageProps> = ({
       )}
       
       <div className="crm-layout">
-          {/* LISTA DE CLIENTES */}
           <div className="client-list">
-              {/* ✅ NOVO: Campo de Busca */}
               <div style={{ padding: '12px', borderBottom: '1px solid var(--border)' }}>
                 <div className="search-wrapper" style={{ margin: 0 }}>
                   <span className="search-icon">🔍</span>
@@ -226,7 +257,6 @@ export const CRMPage: React.FC<CRMPageProps> = ({
                 </div>
               </div>
 
-              {/* Lista de Clientes Filtrados */}
               {isLoading ? (
                   Array.from({length:5}).map((_,i)=><div key={i} className="skeleton" style={{height: 60, marginBottom: 10}}/>) 
               ) : (
@@ -248,7 +278,6 @@ export const CRMPage: React.FC<CRMPageProps> = ({
               )}
           </div>
 
-          {/* DETALHES */}
           <div className="crm-details">
               {selectedClient ? (
                   <>
@@ -261,7 +290,6 @@ export const CRMPage: React.FC<CRMPageProps> = ({
                               </div>
                             </div>
                             
-                            {/* ✅ NOVO: Botões de Ação */}
                             <div style={{ display: 'flex', gap: '8px' }}>
                               {selectedClient.phone && (
                                 <button 
@@ -291,7 +319,6 @@ export const CRMPage: React.FC<CRMPageProps> = ({
                               ))}
                           </div>
                           
-                          {/* Notas do Cliente */}
                           {selectedClient.notes && (
                             <div style={{ 
                               marginTop: 16, 
@@ -338,7 +365,7 @@ export const CRMPage: React.FC<CRMPageProps> = ({
                                    <div 
                                      key={os.id} 
                                      className="timeline-item"
-                                     onClick={() => onOpenOS?.(os)} // ✅ NOVO: Clicável!
+                                     onClick={() => onOpenOS?.(os)}
                                      style={{ 
                                        cursor: onOpenOS ? 'pointer' : 'default',
                                        transition: 'all 0.2s ease'
@@ -354,20 +381,17 @@ export const CRMPage: React.FC<CRMPageProps> = ({
                                        e.currentTarget.querySelector('.timeline-content-card').style.boxShadow = 'none';
                                      }}
                                    >
-                                       {/* Coluna 1: Data */}
                                        <div className="timeline-date-col">
                                            <span className="tl-day">{dateObj.day}</span>
                                            <span className="tl-month">{dateObj.month}</span>
                                            <span className="tl-year">{dateObj.year}</span>
                                        </div>
 
-                                       {/* Coluna 2: Linha */}
                                        <div className="timeline-marker-col">
                                            <div className={`tl-dot st-${os.status}`}></div>
                                            <div className="tl-line"></div>
                                        </div>
 
-                                       {/* Coluna 3: Card */}
                                        <div className="timeline-content-card">
                                            <div className="tl-card-header">
                                                <span className="tl-vehicle">{os.vehicle}</span>
@@ -378,7 +402,6 @@ export const CRMPage: React.FC<CRMPageProps> = ({
                                                <span className="tl-os-number">OS #{os.osNumber}</span>
                                                <span className="tl-price">{formatMoney(os.total)}</span>
                                            </div>
-                                           {/* ✅ NOVO: Hint de clique */}
                                            {onOpenOS && (
                                              <div style={{ 
                                                fontSize: '0.7rem', 
@@ -405,7 +428,6 @@ export const CRMPage: React.FC<CRMPageProps> = ({
           </div>
       </div>
 
-      {/* ✅ NOVO: Modal de Edição */}
       {isEditModalOpen && selectedClient && (
         <ClientEditModal
           isOpen={isEditModalOpen}

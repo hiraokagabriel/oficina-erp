@@ -7,7 +7,7 @@ interface ProcessPageProps {
   onUpdateStatus: (id: string, newStatus: OSStatus) => void;
 }
 
-type SortKey = 'osNumber' | 'clientName' | 'createdAt' | 'total';
+type SortKey = 'osNumber' | 'clientName' | 'createdAt' | 'total' | 'paymentDate'; // 🆕 Adicionar paymentDate
 
 export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew, onUpdateStatus }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -63,7 +63,15 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
       let valA: any = a[sortBy];
       let valB: any = b[sortBy];
 
-      if (sortBy === 'createdAt') {
+      // 🆕 TRATAMENTO ESPECIAL PARA PAYMENTDATE
+      if (sortBy === 'paymentDate') {
+        // Coloca vazios no final
+        if (!valA && !valB) return 0;
+        if (!valA) return sortDirection === 'asc' ? 1 : -1;
+        if (!valB) return sortDirection === 'asc' ? -1 : 1;
+        valA = new Date(valA).getTime();
+        valB = new Date(valB).getTime();
+      } else if (sortBy === 'createdAt') {
         valA = new Date(valA).getTime();
         valB = new Date(valB).getTime();
       } else if (typeof valA === 'string') {
@@ -409,7 +417,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                       <thead>
                         <tr>
                           <th 
-                            style={{ width: '12%', cursor: 'pointer' }} 
+                            style={{ width: '10%', cursor: 'pointer' }} 
                             onClick={() => handleSort('osNumber')}
                             className="sortable-th"
                           > 
@@ -423,20 +431,28 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                             Cliente / Veículo <SortIcon column="clientName"/>
                           </th>
                           <th 
-                            style={{ width: '15%', cursor: 'pointer' }} 
+                            style={{ width: '12%', cursor: 'pointer' }} 
                             onClick={() => handleSort('createdAt')}
                             className="sortable-th"
                           >
                             Data <SortIcon column="createdAt" />
                           </th>
+                          {/* 🆕 NOVA COLUNA: DATA DE PAGAMENTO */}
                           <th 
-                            style={{ width: '15%', cursor: 'pointer' }}
+                            style={{ width: '13%', cursor: 'pointer' }}
+                            onClick={() => handleSort('paymentDate')}
+                            className="sortable-th"
+                          >
+                            💵 Pagamento <SortIcon column="paymentDate" />
+                          </th>
+                          <th 
+                            style={{ width: '12%', cursor: 'pointer' }}
                             onClick={() => handleSort('total')}
                             className="sortable-th"
                           >
                             Valor <SortIcon column="total" />
                           </th>
-                          <th style={{ width: '18%' }}>Status (Alterar)</th>
+                          <th style={{ width: '15%' }}>Status (Alterar)</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -466,6 +482,31 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                             </td>
                             <td className="cell-secondary">
                               📅 {formatDate(os.createdAt)}
+                            </td>
+                            {/* 🆕 COLUNA DE DATA DE PAGAMENTO */}
+                            <td>
+                              {os.paymentDate ? (
+                                <span style={{
+                                  display: 'inline-block',
+                                  padding: '4px 10px',
+                                  background: 'rgba(4, 211, 97, 0.15)',
+                                  border: '1px solid rgba(4, 211, 97, 0.4)',
+                                  borderRadius: '6px',
+                                  color: 'var(--success)',
+                                  fontWeight: 600,
+                                  fontSize: '0.85rem'
+                                }}>
+                                  ✅ {formatDate(os.paymentDate)}
+                                </span>
+                              ) : (
+                                <span style={{
+                                  color: 'var(--text-muted)',
+                                  fontSize: '0.85rem',
+                                  fontStyle: 'italic'
+                                }}>
+                                  Pendente
+                                </span>
+                              )}
                             </td>
                             <td>
                               <span style={{

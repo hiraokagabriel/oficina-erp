@@ -16,7 +16,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   onClose,
   ledger,
   workOrders,
-  defaultPath,
+  defaultPath: _defaultPath, // ✅ Prefixo com _ indica parâmetro não utilizado
   Money,
   SoundFX
 }) => {

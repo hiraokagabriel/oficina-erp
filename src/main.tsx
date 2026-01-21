@@ -5,6 +5,8 @@ import App from "./App";
 import "./styles.css";
 // DRAG AND DROP OVERHAUL CSS
 import "./styles-dragdrop-overhaul.css";
+// CRM TIMELINE CSS
+import "./styles-crm-timeline.css";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

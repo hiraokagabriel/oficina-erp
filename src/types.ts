@@ -16,7 +16,7 @@ export interface LedgerEntry {
     date: string;
     action: string;
     user?: string;
-    timestamp?: string; // ✅ ADICIONADO para compatibilidade
+    timestamp?: string;
   }>;
 }
 
@@ -64,7 +64,6 @@ export interface Client {
   phone: string;
   notes?: string;
   vehicles: { model: string; plate: string }[];
-  // ✅ ADICIONADO: Props dinâmicas calculadas pelo CRM
   totalSpent?: number;
   serviceCount?: number;
   lastServiceDate?: string;
@@ -117,24 +116,27 @@ export interface ChecklistSchema {
   [key: string]: any;
 }
 
-// ✅ CORRIGIDO: InstallmentConfig com totalAmount
+// ✅ CORRIGIDO: InstallmentConfig com todos os campos usados
 export interface InstallmentConfig {
   installments: number;
-  firstDueDate: string;
-  interval: 'DAILY' | 'WEEKLY' | 'MONTHLY';
-  totalAmount: number; // ✅ ADICIONADO
+  firstPaymentDate: string;
+  totalAmount: number;
+  installmentAmount: number; // ✅ ADICIONADO (valor normal das parcelas)
+  lastInstallmentAmount: number; // ✅ ADICIONADO (valor da última parcela ajustada)
+  groupId: string; // ✅ ADICIONADO
+  description: string; // ✅ ADICIONADO
+  interval?: 'DAILY' | 'WEEKLY' | 'MONTHLY';
   amounts?: number[];
 }
 
-// ✅ CORRIGIDO: CRMStats com estrutura real usada no componente
 export interface CRMStats {
   totalClients: number;
-  vipClients: Client[]; // ✅ Array de clientes, não number
-  monthlyRevenue: number; // ✅ ADICIONADO
-  pendingServices: number; // ✅ ADICIONADO
+  vipClients: Client[];
+  monthlyRevenue: number;
+  pendingServices: number;
   averageTicket: number;
   topClients: Array<{
-    client: Client; // ✅ Objeto client completo, não só name
+    client: Client;
     totalSpent: number;
     serviceCount: number;
   }>;

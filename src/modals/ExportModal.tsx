@@ -1,6 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { LedgerEntry, WorkOrder, MONTH_NAMES } from '../types'; // Importando direto de 'types'
+import React, { useState } from 'react';
+import { LedgerEntry, WorkOrder } from '../types';
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -8,146 +7,152 @@ interface ExportModalProps {
   ledger: LedgerEntry[];
   workOrders: WorkOrder[];
   defaultPath: string;
-  Money: { toFloat: (val: number) => number };
+  Money: { format: (val: number) => string };
   SoundFX: { success: () => void; error: () => void };
 }
 
-export const ExportModal: React.FC<ExportModalProps> = ({ 
-  isOpen, onClose, ledger, workOrders, defaultPath, Money, SoundFX 
+export const ExportModal: React.FC<ExportModalProps> = ({
+  isOpen,
+  onClose,
+  ledger,
+  workOrders,
+  defaultPath,
+  Money,
+  SoundFX
 }) => {
-  const [targetMonth, setTargetMonth] = useState("");
-  const [exportPath, setExportPath] = useState(defaultPath);
-  const [isExporting, setIsExporting] = useState(false);
-
-  // Calcula os meses disponíveis baseado no histórico
-  const availableMonths = useMemo(() => {
-    const dates = new Set<string>();
-    ledger.forEach(e => {
-        const d = new Date(e.effectiveDate);
-        if (!isNaN(d.getTime())) {
-           dates.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-        }
-    });
-    if (dates.size === 0) {
-        const now = new Date();
-        dates.add(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
-    }
-    return Array.from(dates).sort().reverse();
-  }, [ledger]);
-
-  // Define o mês padrão ao abrir
-  useEffect(() => {
-     if (isOpen && availableMonths.length > 0 && !targetMonth) {
-         setTargetMonth(availableMonths[0]);
-     }
-  }, [isOpen, availableMonths, targetMonth]);
-
-  const handleExport = async () => {
-    if (!targetMonth) return;
-    setIsExporting(true);
-
-    const [yearStr, monthStr] = targetMonth.split('-');
-    const targetYear = parseInt(yearStr);
-    const mIndex = parseInt(monthStr);
-
-    // Filtra dados do mês selecionado
-    const filteredLedger = ledger.filter(e => {
-        const d = new Date(e.effectiveDate);
-        return d.getFullYear() === targetYear && (d.getMonth() + 1) === mIndex;
-    });
-
-    if (filteredLedger.length === 0) { 
-        alert("Sem dados neste mês."); 
-        setIsExporting(false); 
-        return; 
-    }
-
-    // Gera o conteúdo do CSV
-    const headers = ["ID", "Data", "Data Registro", "Data Pagamento", "Nº OS", "Cliente", "Descricao", "Valor", "Tipo", "Auditado"];
-    const rows = filteredLedger.map(entry => {
-      // CORREÇÃO AQUI: Garante que 'history' seja um array, mesmo que undefined
-      const safeHistory = entry.history || [];
-      
-      const valor = Money.toFloat(entry.amount).toFixed(2).replace('.', ',');
-      const audit = safeHistory.length > 0 ? "SIM" : "NAO";
-      const desc = entry.description.replace(/;/g, " - ");
-      
-      const dataCompetencia = new Date(entry.effectiveDate).toLocaleDateString();
-      // Pega a data do primeiro registro do histórico ou usa a competência se não houver
-      const dataRegistro = safeHistory.length > 0 
-          ? new Date(safeHistory[0].timestamp).toLocaleDateString() 
-          : dataCompetencia;
-      
-      // Cruza com dados da OS (se houver vínculo)
-      const relatedOS = workOrders.find(w => w.financialId === entry.id);
-      const osNum = relatedOS ? relatedOS.osNumber.toString() : "";
-      const client = relatedOS ? relatedOS.clientName.replace(/;/g, " ") : ""; 
-      
-      // 🆕 NOVA COLUNA: Data de Pagamento
-      const dataPagamento = relatedOS?.paymentDate 
-        ? new Date(relatedOS.paymentDate).toLocaleDateString() 
-        : "";
-      
-      return `${entry.id.slice(0,8)};${dataCompetencia};${dataRegistro};${dataPagamento};${osNum};${client};${desc};${valor};${entry.type};${audit}`;
-    });
-    
-    const csvContent = [headers.join(";"), ...rows].join("\n");
-    const filename = `Fluxo_${MONTH_NAMES[mIndex - 1]}_${targetYear}_${Date.now()}.csv`;
-
-    try {
-      // Chama o comando Rust para salvar o arquivo
-      const res = await invoke<{success: boolean, message: string}>('export_report', { 
-        targetFolder: exportPath, 
-        filename, 
-        content: csvContent 
-      });
-      
-      if (res && res.success) {
-        SoundFX.success();
-        alert(`Sucesso!\n${res.message}`);
-        onClose();
-      } else {
-        throw new Error(res?.message);
-      }
-    } catch (e: any) { 
-        SoundFX.error();
-        alert("Erro ao exportar: " + e.toString()); 
-    } finally {
-        setIsExporting(false);
-    }
-  };
+  const [selectedType, setSelectedType] = useState<'LEDGER' | 'WORK_ORDERS'>('LEDGER');
+  const [startDate, setStartDate] = useState<string>(
+    new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
+  );
+  const [endDate, setEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   if (!isOpen) return null;
 
+  const handleExport = () => {
+    try {
+      let data: any[] = [];
+      let headers: string[] = [];
+      let filename = '';
+
+      if (selectedType === 'LEDGER') {
+        const filtered = ledger.filter(e => {
+          const date = new Date(e.effectiveDate);
+          return date >= new Date(startDate) && date <= new Date(endDate);
+        });
+
+        headers = ['Data', 'Descrição', 'Tipo', 'Valor', 'Criado Em', 'Parcela', 'Total Parcelas', 'Última Modificação'];
+        data = filtered.map(e => {
+          const safeHistory = e.history || [];
+          return {
+            'Data': new Date(e.effectiveDate).toLocaleDateString('pt-BR'),
+            'Descrição': e.description,
+            'Tipo': e.type === 'CREDIT' ? 'Receita' : 'Despesa',
+            'Valor': Money.format(e.amount),
+            'Criado Em': new Date(e.createdAt).toLocaleDateString('pt-BR'),
+            'Parcela': e.installmentNumber ? `${e.installmentNumber}/${e.totalInstallments}` : '-',
+            'Total Parcelas': e.totalInstallments || '-',
+            'Última Modificação': safeHistory.length > 0 && safeHistory[0].timestamp
+              ? new Date(safeHistory[0].timestamp).toLocaleDateString()
+              : '-'
+          };
+        });
+        filename = `lancamentos_${startDate}_${endDate}.csv`;
+      } else {
+        const filtered = workOrders.filter(w => {
+          const date = new Date(w.createdAt);
+          return date >= new Date(startDate) && date <= new Date(endDate);
+        });
+
+        headers = ['OS', 'Cliente', 'Veículo', 'Status', 'Total', 'Criado Em'];
+        data = filtered.map(w => ({
+          'OS': `#${w.osNumber}`,
+          'Cliente': w.clientName,
+          'Veículo': w.vehicle,
+          'Status': w.status,
+          'Total': Money.format(w.total),
+          'Criado Em': new Date(w.createdAt).toLocaleDateString('pt-BR')
+        }));
+        filename = `ordens_servico_${startDate}_${endDate}.csv`;
+      }
+
+      const csvContent = [
+        headers.join(';'),
+        ...data.map(row => headers.map(h => row[h]).join(';'))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      link.click();
+
+      SoundFX.success();
+      onClose();
+    } catch (error) {
+      console.error('Erro ao exportar:', error);
+      SoundFX.error();
+    }
+  };
+
   return (
-    <div className="modal-overlay">
-        <div className="modal-content" style={{width: 500}}>
-            <h2 className="modal-title">Exportar Financeiro</h2>
-            
-            <div className="form-group">
-                <label className="form-label">Mês de Referência</label>
-                <select className="form-input" value={targetMonth} onChange={e => setTargetMonth(e.target.value)}>
-                    {availableMonths.map(dateStr => { 
-                        const [y, m] = dateStr.split('-'); 
-                        // Uso do MONTH_NAMES importado dos types
-                        const monthName = MONTH_NAMES[parseInt(m)-1] || "Mês Inválido";
-                        return (<option key={dateStr} value={dateStr}>{monthName} / {y}</option>); 
-                    })}
-                </select>
-            </div>
-
-            <div className="form-group">
-                <label className="form-label">Pasta de Destino</label>
-                <input className="form-input" value={exportPath} onChange={e => setExportPath(e.target.value)}/>
-            </div>
-
-            <div className="modal-actions">
-                <button className="btn-secondary" onClick={onClose}>Cancelar</button>
-                <button className="btn" onClick={handleExport} disabled={isExporting}>
-                    {isExporting ? <span className="spinner"></span> : 'Exportar CSV'}
-                </button>
-            </div>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+        <div className="modal-header">
+          <h2>📊 Exportar Dados</h2>
+          <button className="btn-icon" onClick={onClose}>✕</button>
         </div>
+
+        <div className="modal-body" style={{ padding: '24px' }}>
+          <div style={{ marginBottom: '24px' }}>
+            <label className="form-label">Tipo de Exportação</label>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                className={`btn ${selectedType === 'LEDGER' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setSelectedType('LEDGER')}
+                style={{ flex: 1 }}
+              >
+                💰 Lançamentos
+              </button>
+              <button
+                className={`btn ${selectedType === 'WORK_ORDERS' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setSelectedType('WORK_ORDERS')}
+                style={{ flex: 1 }}
+              >
+                🔧 Ordens de Serviço
+              </button>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label className="form-label">Data Inicial</label>
+            <input
+              type="date"
+              className="form-input"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <label className="form-label">Data Final</label>
+            <input
+              type="date"
+              className="form-input"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={onClose}>
+            Cancelar
+          </button>
+          <button className="btn btn-primary" onClick={handleExport}>
+            💾 Exportar CSV
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

@@ -48,6 +48,14 @@ export function fromDateInputValue(dateStr: string): Date {
   return new Date(year, month - 1, day);
 }
 
+// ✅ ADICIONADO: Retorna data local no formato YYYY-MM-DD para inputs
+export function getLocalDateString(): string {
+  const now = new Date();
+  const offset = now.getTimezoneOffset();
+  const adjusted = new Date(now.getTime() - offset * 60 * 1000);
+  return adjusted.toISOString().split('T')[0];
+}
+
 export function createLedgerEntry(
   description: string,
   amount: number,
@@ -101,7 +109,6 @@ export function updateLedgerEntry(
   };
 }
 
-// ✅ ADICIONADO: Função para aprender dados de clientes
 export function learnClientData(
   clients: Client[],
   clientName: string,
@@ -113,7 +120,6 @@ export function learnClientData(
   const existing = clients.find(c => c.name === clientName);
   
   if (existing) {
-    // Atualiza cliente existente
     const hasVehicle = existing.vehicles.some(v => v.model === vehicle);
     const updatedVehicles = hasVehicle 
       ? existing.vehicles 
@@ -130,7 +136,6 @@ export function learnClientData(
         : c
     );
   } else {
-    // Cria novo cliente
     const newClient: Client = {
       id: generateUniqueId(),
       name: clientName,
@@ -142,7 +147,6 @@ export function learnClientData(
   }
 }
 
-// ✅ ADICIONADO: Função para aprender itens do catálogo
 export function learnCatalogItems(
   catalog: CatalogItem[],
   items: OrderItem[]
@@ -164,7 +168,6 @@ export function learnCatalogItems(
   return updatedCatalog;
 }
 
-// ✅ ADICIONADO: Função para atualizar dados de uma OS
 export function updateWorkOrderData(
   os: WorkOrder,
   osNumber: number,

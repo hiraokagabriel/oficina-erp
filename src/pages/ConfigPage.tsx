@@ -141,21 +141,61 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
 
         {/* GOOGLE DRIVE */}
         <div style={{ background: 'rgba(0,0,0,0.05)', padding: 20, borderRadius: 12, border: '1px solid var(--border)' }}>
+            <h4 style={{ marginTop: 0, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+              ☁️ Integração Google Drive
+            </h4>
+            
             <div className="form-group">
-                <label className="form-label">Google Drive Access Token</label>
+                <label className="form-label">🔑 Google API Key</label>
                 <input 
-                    className="form-input" type="password" placeholder="Token..." 
-                    value={settings.googleDriveToken} onChange={(e) => handleChange('googleDriveToken', e.target.value)} 
+                    className="form-input" 
+                    type="password" 
+                    placeholder="Sua API key do Google Cloud..." 
+                    value={settings.googleApiKey || ''} 
+                    onChange={(e) => handleChange('googleApiKey', e.target.value)} 
+                />
+                <small style={{ color: 'var(--text-muted)', marginTop: 5, display: 'block' }}>
+                  Obtém em: <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" style={{color: 'var(--primary)'}}>Google Cloud Console</a>
+                </small>
+            </div>
+
+            <div className="form-group">
+                <label className="form-label">🎫 Access Token</label>
+                <input 
+                    className="form-input" 
+                    type="password" 
+                    placeholder="Token de acesso..." 
+                    value={settings.googleDriveToken} 
+                    onChange={(e) => handleChange('googleDriveToken', e.target.value)} 
                 />
             </div>
             
             <div style={{ display: 'flex', gap: 15, alignItems: 'center', marginTop: 20 }}>
-                <button className="btn" onClick={onBackup} disabled={isBackuping}>
+                <button 
+                  className="btn" 
+                  onClick={onBackup} 
+                  disabled={isBackuping || !settings.googleApiKey || !settings.googleDriveToken}
+                  style={{ opacity: (!settings.googleApiKey || !settings.googleDriveToken) ? 0.5 : 1 }}
+                >
                    {isBackuping ? <><span className="spinner" style={{ marginRight: 8 }}></span> Enviando...</> : '☁️ Fazer Backup Nuvem'}
                 </button>
                 {driveStatus === 'success' && <span style={{ color: 'var(--success)' }}>✅ Sucesso!</span>}
                 {driveStatus === 'error' && <span style={{ color: 'var(--danger)' }}>❌ Erro.</span>}
             </div>
+            
+            {(!settings.googleApiKey || !settings.googleDriveToken) && (
+              <div style={{ 
+                marginTop: 16, 
+                padding: 12, 
+                background: 'rgba(251, 169, 76, 0.1)', 
+                border: '1px solid var(--warning)', 
+                borderRadius: 8,
+                fontSize: '0.9rem',
+                color: 'var(--warning)'
+              }}>
+                ⚠️ Configure ambos os campos acima para habilitar o backup na nuvem.
+              </div>
+            )}
         </div>
       </div>
 

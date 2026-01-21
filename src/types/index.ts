@@ -98,6 +98,7 @@ export interface WorkshopSettings {
   technician: string;
   exportPath: string;
   googleDriveToken: string;
+  googleApiKey: string; // 🆕 NOVO CAMPO
 }
 
 export interface DatabaseSchema {

@@ -102,36 +102,29 @@ export const CRMPage: React.FC<CRMPageProps> = ({
     console.log('Telefone original:', phone);
     console.log('Nome do cliente:', clientName);
     
-    // Remove TUDO que não é número
     let cleanPhone = phone.replace(/\D/g, '');
     console.log('Telefone limpo (só números):', cleanPhone);
     
-    // Remove +55 se já estiver no início
     if (cleanPhone.startsWith('55')) {
       cleanPhone = cleanPhone.substring(2);
       console.log('Removeu 55 do início:', cleanPhone);
     }
     
-    // Valida se tem pelo menos 10 dígitos (DDD + número)
     if (cleanPhone.length < 10) {
       alert(`Telefone inválido: ${phone}\n\nPrecisa ter pelo menos 10 dígitos (DDD + número)`);
       console.error('❌ Telefone muito curto:', cleanPhone);
       return;
     }
     
-    // Formata a mensagem
     const message = encodeURIComponent(
       `Olá ${clientName}, tudo bem?\n\nEstamos entrando em contato da oficina sobre o seu veículo.`
     );
     
-    // Monta a URL final
     const whatsappUrl = `https://wa.me/55${cleanPhone}?text=${message}`;
     console.log('URL final:', whatsappUrl);
     console.log('Telefone com código do país: +55' + cleanPhone);
     
-    // ✅ DETECTA O AMBIENTE E USA A API APROPRIADA
-    
-    // MÉTODO 1: Electron (aplicativo .exe Windows/Mac/Linux)
+    // MÉTODO 1: Electron
     if (window.electron?.shell?.openExternal) {
       console.log('🚀 Ambiente detectado: ELECTRON (.exe)');
       console.log('✅ Usando electron.shell.openExternal()...');
@@ -141,11 +134,10 @@ export const CRMPage: React.FC<CRMPageProps> = ({
         return;
       } catch (error) {
         console.error('❌ Erro no Electron:', error);
-        // Continua para próximo método
       }
     }
     
-    // MÉTODO 2: Tauri (aplicativo .exe moderno Rust)
+    // MÉTODO 2: Tauri
     if (window.__TAURI__?.shell?.open) {
       console.log('🚀 Ambiente detectado: TAURI (.exe)');
       console.log('✅ Usando Tauri shell.open()...');
@@ -155,11 +147,10 @@ export const CRMPage: React.FC<CRMPageProps> = ({
         return;
       } catch (error) {
         console.error('❌ Erro no Tauri:', error);
-        // Continua para próximo método
       }
     }
     
-    // MÉTODO 3: Navegador web (desenvolvimento ou PWA)
+    // MÉTODO 3: Navegador web
     console.log('🌐 Ambiente detectado: NAVEGADOR WEB');
     console.log('✅ Usando window.open() padrão...');
     const newWindow = window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
@@ -167,7 +158,6 @@ export const CRMPage: React.FC<CRMPageProps> = ({
     if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
       console.warn('⚠️ window.open() bloqueado!');
       
-      // MÉTODO 4: Link <a> com click programático
       console.log('✅ Tentando método alternativo: link <a>...');
       try {
         const link = document.createElement('a');
@@ -183,7 +173,6 @@ export const CRMPage: React.FC<CRMPageProps> = ({
         console.error('❌ Método <a> falhou:', error);
       }
       
-      // MÉTODO 5: Último recurso - copia URL
       console.log('✅ Último recurso: copiando URL...');
       try {
         await navigator.clipboard.writeText(whatsappUrl);
@@ -215,7 +204,7 @@ export const CRMPage: React.FC<CRMPageProps> = ({
           onClick={() => setShowDashboard(!showDashboard)}
           style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
         >
-          {showDashboard ? '💁 Ocultar Dashboard' : '📊 Mostrar Dashboard'}
+          {showDashboard ? '🙁 Ocultar Dashboard' : '📊 Mostrar Dashboard'}
         </button>
       </div>
 
@@ -233,6 +222,7 @@ export const CRMPage: React.FC<CRMPageProps> = ({
       )}
       
       <div className="crm-layout">
+          {/* LISTA DE CLIENTES */}
           <div className="client-list">
               <div style={{ padding: '12px', borderBottom: '1px solid var(--border)' }}>
                 <div className="search-wrapper" style={{ margin: 0 }}>
@@ -278,87 +268,256 @@ export const CRMPage: React.FC<CRMPageProps> = ({
               )}
           </div>
 
+          {/* ✨ PAINEL DE DETALHES REFORMULADO */}
           <div className="crm-details">
               {selectedClient ? (
                   <>
-                      <div className="crm-header">
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      {/* 🎨 HEADER MODERNIZADO COM GRADIENTE */}
+                      <div style={{
+                        background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
+                        borderRadius: 'var(--radius-card)',
+                        padding: '32px',
+                        marginBottom: '24px',
+                        color: '#fff',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        boxShadow: '0 10px 40px rgba(130, 87, 230, 0.3)'
+                      }}>
+                        {/* Decoração de fundo */}
+                        <div style={{
+                          position: 'absolute',
+                          top: '-50px',
+                          right: '-50px',
+                          width: '200px',
+                          height: '200px',
+                          background: 'rgba(255,255,255,0.1)',
+                          borderRadius: '50%',
+                          filter: 'blur(40px)'
+                        }}/>
+                        
+                        <div style={{ position: 'relative', zIndex: 1 }}>
+                          {/* Nome e ações */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
                             <div>
-                              <h2 style={{margin:0, fontSize: '1.8rem'}}>{selectedClient.name}</h2>
-                              <div style={{color: 'var(--text-muted)', marginTop: 5}}>
-                                📞 {selectedClient.phone || "Sem telefone"}
+                              <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '2px', opacity: 0.9, marginBottom: '8px' }}>
+                                Cliente
                               </div>
+                              <h2 style={{ margin: 0, fontSize: '2.2rem', fontWeight: 800, lineHeight: 1.2 }}>
+                                {selectedClient.name}
+                              </h2>
                             </div>
                             
-                            <div style={{ display: 'flex', gap: '8px' }}>
+                            {/* Botões de ação */}
+                            <div style={{ display: 'flex', gap: '12px' }}>
                               {selectedClient.phone && (
                                 <button 
                                   className="btn btn-success"
                                   onClick={() => openWhatsApp(selectedClient.phone!, selectedClient.name)}
-                                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                                  style={{ 
+                                    background: '#10b981',
+                                    border: 'none',
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: '8px',
+                                    boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)'
+                                  }}
                                 >
                                   <span style={{ fontSize: '1.2rem' }}>💬</span>
                                   WhatsApp
                                 </button>
                               )}
                               <button 
-                                className="btn btn-primary"
+                                className="btn"
                                 onClick={() => setIsEditModalOpen(true)}
-                                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                                style={{ 
+                                  background: 'rgba(255,255,255,0.2)',
+                                  backdropFilter: 'blur(10px)',
+                                  border: '1px solid rgba(255,255,255,0.3)',
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  gap: '8px'
+                                }}
                               >
                                 ✏️ Editar
                               </button>
                             </div>
                           </div>
-                          
-                          <div className="crm-tags" style={{marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap'}}>
-                              {selectedClient.vehicles.map((v, i) => (
-                                  <span key={i} style={{background: 'var(--bg-input)', padding: '6px 12px', borderRadius: 12, fontSize: '0.8rem', border: '1px solid var(--border)'}}>
-                                      🚗 {v.model} <span style={{opacity: 0.6}}>{v.plate}</span>
-                                  </span>
-                              ))}
+
+                          {/* Telefone */}
+                          <div style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '8px',
+                            fontSize: '1.1rem',
+                            opacity: 0.95,
+                            marginBottom: '16px'
+                          }}>
+                            <span>📞</span>
+                            <span style={{ fontWeight: 500 }}>{selectedClient.phone || "Sem telefone"}</span>
                           </div>
-                          
-                          {selectedClient.notes && (
-                            <div style={{ 
-                              marginTop: 16, 
-                              padding: '12px', 
-                              background: 'rgba(130, 87, 230, 0.1)', 
-                              border: '1px solid rgba(130, 87, 230, 0.3)',
-                              borderRadius: '8px',
-                              fontSize: '0.9rem'
-                            }}>
-                              📝 <strong>Notas:</strong> {selectedClient.notes}
-                            </div>
-                          )}
+
+                          {/* Tags de veículos */}
+                          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                            {selectedClient.vehicles.map((v, i) => (
+                              <span 
+                                key={i} 
+                                style={{
+                                  background: 'rgba(255,255,255,0.25)',
+                                  backdropFilter: 'blur(10px)',
+                                  padding: '10px 16px',
+                                  borderRadius: '12px',
+                                  fontSize: '0.9rem',
+                                  border: '1px solid rgba(255,255,255,0.3)',
+                                  fontWeight: 600,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px'
+                                }}
+                              >
+                                <span>🚗</span>
+                                {v.model}
+                                {v.plate && <span style={{ opacity: 0.8, fontWeight: 400 }}>• {v.plate}</span>}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
                       </div>
 
-                      <div className="crm-stats">
-                          <div className="crm-stat-box">
-                              <div className="crm-stat-label">Total Investido</div>
-                              <div className="crm-stat-value" style={{color: 'var(--success)'}}>{formatMoney(clientHistory.reduce((a, o) => a + (o.status==='FINALIZADO'?o.total:0), 0))}</div>
+                      {/* 📝 NOTAS DO CLIENTE */}
+                      {selectedClient.notes && (
+                        <div style={{ 
+                          marginBottom: '24px',
+                          padding: '20px',
+                          background: 'rgba(130, 87, 230, 0.08)',
+                          border: '2px solid rgba(130, 87, 230, 0.2)',
+                          borderRadius: 'var(--radius-card)',
+                          borderLeft: '4px solid var(--primary)'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                            <span style={{ fontSize: '1.2rem' }}>📝</span>
+                            <strong style={{ color: 'var(--primary)' }}>Notas Importantes</strong>
                           </div>
-                          <div className="crm-stat-box">
-                              <div className="crm-stat-label">Serviços</div>
-                              <div className="crm-stat-value">{clientHistory.length}</div>
-                          </div>
-                      </div>
-
-                      {reminders.length > 0 && (
-                          <div style={{marginBottom: 30}}>
-                              <h3 style={{fontSize: '0.9rem', marginBottom: 10, color: 'var(--text-muted)'}}>ALERTA DE MANUTENÇÃO</h3>
-                              <div style={{display:'flex', gap: 10, flexWrap: 'wrap'}}>
-                                  {reminders.map((r,i)=><div key={i} className={`reminder-badge ${r.type}`}>{r.text}</div>)}
-                              </div>
-                          </div>
+                          <p style={{ margin: 0, lineHeight: 1.6 }}>{selectedClient.notes}</p>
+                        </div>
                       )}
 
-                      <h3 style={{fontSize: '1.1rem', marginBottom: 20, borderBottom: '1px solid var(--border)', paddingBottom: 10}}>Histórico do Cliente</h3>
-                      
-                      <div className="timeline-container">
-                        {clientHistory.length === 0 ? (
-                            <p style={{color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center', padding: 20}}>Nenhum serviço encontrado.</p>
-                        ) : (
+                      {/* 📊 CARDS DE ESTATÍSTICAS ESTILIZADOS */}
+                      <div style={{ 
+                        display: 'grid', 
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+                        gap: '20px',
+                        marginBottom: '32px'
+                      }}>
+                        {/* Total Investido */}
+                        <div className="stat-card" style={{
+                          background: 'linear-gradient(135deg, rgba(4, 211, 97, 0.1) 0%, rgba(4, 211, 97, 0.05) 100%)',
+                          borderLeft: '4px solid var(--success)',
+                          padding: '24px',
+                          borderRadius: 'var(--radius-card)',
+                          border: '1px solid rgba(4, 211, 97, 0.2)'
+                        }}>
+                          <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 700 }}>
+                            💰 Total Investido
+                          </div>
+                          <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--success)' }}>
+                            {formatMoney(clientHistory.reduce((a, o) => a + (o.status==='FINALIZADO'?o.total:0), 0))}
+                          </div>
+                        </div>
+
+                        {/* Serviços Realizados */}
+                        <div className="stat-card" style={{
+                          background: 'linear-gradient(135deg, rgba(130, 87, 230, 0.1) 0%, rgba(130, 87, 230, 0.05) 100%)',
+                          borderLeft: '4px solid var(--primary)',
+                          padding: '24px',
+                          borderRadius: 'var(--radius-card)',
+                          border: '1px solid rgba(130, 87, 230, 0.2)'
+                        }}>
+                          <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 700 }}>
+                            🔧 Serviços
+                          </div>
+                          <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--primary)' }}>
+                            {clientHistory.length}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                            {clientHistory.filter(o => o.status === 'FINALIZADO').length} finalizados
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* ⚠️ ALERTAS DE MANUTENÇÃO */}
+                      {reminders.length > 0 && (
+                        <div style={{ marginBottom: '32px' }}>
+                          <h3 style={{ 
+                            fontSize: '0.9rem', 
+                            marginBottom: '12px', 
+                            color: 'var(--text-muted)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '1px',
+                            fontWeight: 700
+                          }}>
+                            ⚠️ ALERTAS DE MANUTENÇÃO
+                          </h3>
+                          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                            {reminders.map((r, i) => (
+                              <div 
+                                key={i} 
+                                className={`reminder-badge ${r.type}`}
+                                style={{
+                                  padding: '12px 20px',
+                                  borderRadius: '12px',
+                                  fontSize: '0.9rem',
+                                  fontWeight: 600,
+                                  border: '2px solid',
+                                  borderColor: r.type === 'danger' ? 'var(--danger)' : 'var(--warning)',
+                                  background: r.type === 'danger' ? 'rgba(247, 90, 104, 0.1)' : 'rgba(251, 169, 76, 0.1)',
+                                  color: r.type === 'danger' ? 'var(--danger)' : 'var(--warning)'
+                                }}
+                              >
+                                {r.type === 'danger' ? '🔴' : '🟡'} {r.text}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 📜 HISTÓRICO DO CLIENTE */}
+                      <div style={{
+                        background: 'var(--bg-panel)',
+                        borderRadius: 'var(--radius-card)',
+                        border: '1px solid var(--border)',
+                        padding: '24px'
+                      }}>
+                        <h3 style={{ 
+                          fontSize: '1.1rem', 
+                          marginBottom: '24px', 
+                          borderBottom: '2px solid var(--border)', 
+                          paddingBottom: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          fontWeight: 700
+                        }}>
+                          <span style={{ fontSize: '1.3rem' }}>📜</span>
+                          Histórico do Cliente
+                        </h3>
+                        
+                        <div className="timeline-container">
+                          {clientHistory.length === 0 ? (
+                            {/* Estado vazio elegante */}
+                            <div style={{
+                              textAlign: 'center',
+                              padding: '60px 20px',
+                              color: 'var(--text-muted)'
+                            }}>
+                              <div style={{ fontSize: '4rem', marginBottom: '16px', opacity: 0.3 }}>📋</div>
+                              <p style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '8px' }}>
+                                Nenhum serviço registrado
+                              </p>
+                              <p style={{ fontSize: '0.9rem', opacity: 0.7 }}>
+                                O histórico aparecerá aqui quando houver ordens de serviço
+                              </p>
+                            </div>
+                          ) : (
                             clientHistory.map(os => {
                                const dateObj = formatDate(os.createdAt);
                                return (
@@ -368,30 +527,36 @@ export const CRMPage: React.FC<CRMPageProps> = ({
                                      onClick={() => onOpenOS?.(os)}
                                      style={{ 
                                        cursor: onOpenOS ? 'pointer' : 'default',
-                                       transition: 'all 0.2s ease'
+                                       transition: 'all 0.2s ease',
+                                       marginBottom: '16px'
                                      }}
                                      onMouseEnter={(e) => {
                                        if (onOpenOS) {
                                          e.currentTarget.style.transform = 'translateX(4px)';
-                                         e.currentTarget.querySelector('.timeline-content-card').style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                                         const card = e.currentTarget.querySelector('.timeline-content-card') as HTMLElement;
+                                         if (card) card.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
                                        }
                                      }}
                                      onMouseLeave={(e) => {
                                        e.currentTarget.style.transform = 'translateX(0)';
-                                       e.currentTarget.querySelector('.timeline-content-card').style.boxShadow = 'none';
+                                       const card = e.currentTarget.querySelector('.timeline-content-card') as HTMLElement;
+                                       if (card) card.style.boxShadow = 'none';
                                      }}
                                    >
+                                       {/* Coluna 1: Data */}
                                        <div className="timeline-date-col">
                                            <span className="tl-day">{dateObj.day}</span>
                                            <span className="tl-month">{dateObj.month}</span>
                                            <span className="tl-year">{dateObj.year}</span>
                                        </div>
 
+                                       {/* Coluna 2: Linha */}
                                        <div className="timeline-marker-col">
                                            <div className={`tl-dot st-${os.status}`}></div>
                                            <div className="tl-line"></div>
                                        </div>
 
+                                       {/* Coluna 3: Card */}
                                        <div className="timeline-content-card">
                                            <div className="tl-card-header">
                                                <span className="tl-vehicle">{os.vehicle}</span>
@@ -416,18 +581,47 @@ export const CRMPage: React.FC<CRMPageProps> = ({
                                    </div>
                                );
                             })
-                        )}
+                          )}
+                        </div>
                       </div>
                   </>
               ) : (
-                  <div style={{display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100%', color:'var(--text-muted)', opacity: 0.6}}>
-                      <div style={{fontSize: '4rem', marginBottom: 20}}>📁</div>
-                      <p>Selecione um cliente para ver o histórico.</p>
+                  {/* Estado inicial sem cliente selecionado */}
+                  <div style={{
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    height: '100%', 
+                    color: 'var(--text-muted)',
+                    textAlign: 'center',
+                    padding: '40px'
+                  }}>
+                      <div style={{ 
+                        fontSize: '5rem', 
+                        marginBottom: '24px',
+                        opacity: 0.3,
+                        animation: 'float 3s ease-in-out infinite'
+                      }}>
+                        👥
+                      </div>
+                      <h3 style={{ 
+                        fontSize: '1.5rem', 
+                        fontWeight: 700, 
+                        marginBottom: '12px',
+                        color: 'var(--text-main)'
+                      }}>
+                        Selecione um Cliente
+                      </h3>
+                      <p style={{ fontSize: '1rem', opacity: 0.7, maxWidth: '400px' }}>
+                        Escolha um cliente na lista ao lado para visualizar o histórico completo de serviços e informações detalhadas
+                      </p>
                   </div>
               )}
           </div>
       </div>
 
+      {/* Modal de Edição */}
       {isEditModalOpen && selectedClient && (
         <ClientEditModal
           isOpen={isEditModalOpen}
@@ -436,6 +630,14 @@ export const CRMPage: React.FC<CRMPageProps> = ({
           onSave={handleSaveClient}
         />
       )}
+
+      {/* Animação flutuante para o ícone */}
+      <style>{`
+        @keyframes float {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-20px); }
+        }
+      `}</style>
     </>
   );
 };

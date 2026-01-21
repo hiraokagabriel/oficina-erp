@@ -463,7 +463,6 @@ function AppContent() {
                 isLoading={isLoading}
                 formatMoney={Money.format}
                 onNewOS={() => { setEditingOS(null); setIsModalOpen(true); }}
-                {/* ✅ NOVA API: Passar onStatusChange ao invés de onDragEnd */}
                 onStatusChange={handleUpdateStatus}
                 kanbanActions={{
                   onRegress: (id) => {

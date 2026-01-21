@@ -33,6 +33,9 @@ const DatabaseModal = lazy(() => import('./modals/DatabaseModal').then(m => ({ d
 const DeleteConfirmationModal = lazy(() => import('./modals/DeleteConfirmationModal').then(m => ({ default: m.DeleteConfirmationModal })));
 const ConfirmationModal = lazy(() => import('./modals/ConfirmationModal').then(m => ({ default: m.ConfirmationModal })));
 
+// ✅ NOVO: Modal de Pagamento Parcelado
+const InstallmentModal = lazy(() => import('./modals/InstallmentModal').then(m => ({ default: m.InstallmentModal })));
+
 // --- UTILS ---
 import { SoundFX } from './utils/audio';
 import { 
@@ -77,6 +80,9 @@ function AppContent() {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isChecklistOpen, setIsChecklistOpen] = useState(false);
   const [isDatabaseModalOpen, setIsDatabaseModalOpen] = useState(false);
+  // ✅ NOVO: Estado do modal de parcelamento
+  const [isInstallmentModalOpen, setIsInstallmentModalOpen] = useState(false);
+  const [installmentOS, setInstallmentOS] = useState<WorkOrder | null>(null);
 
   // Estados de Edição
   const [editingOS, setEditingOS] = useState<WorkOrder | null>(null);
@@ -91,6 +97,9 @@ function AppContent() {
   const [isBackuping, setIsBackuping] = useState(false);
   const [driveStatus, setDriveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  // ✅ FIX DEFINITIVO: Força re-render após drag
+  const [dragUpdateKey, setDragUpdateKey] = useState(0);
 
   const addToast = (message: string, type: ToastType = 'info') => {
     const id = crypto.randomUUID();
@@ -152,7 +161,14 @@ function AppContent() {
       return;
     }
 
+    // ✅ FIX: Atualizar imediatamente e forçar re-render
     setWorkOrders(prev => prev.map(o => o.id === osId ? { ...o, status: newStatus } : o));
+    
+    // ✅ FIX: Força atualização do KanbanBoard
+    requestAnimationFrame(() => {
+      setDragUpdateKey(k => k + 1);
+    });
+    
     SoundFX.pop();
   };
 
@@ -300,6 +316,49 @@ function AppContent() {
     }
   };
 
+  // ✅ NOVO: Handler para pagamento parcelado
+  const handleInstallmentConfirm = (config: any) => {
+    // Criar lançamentos financeiros para cada parcela
+    const newEntries: LedgerEntry[] = [];
+    const baseDate = new Date(config.firstPaymentDate);
+    
+    for (let i = 0; i < config.installments; i++) {
+      const dueDate = new Date(baseDate);
+      dueDate.setMonth(dueDate.getMonth() + i);
+      
+      const entry: LedgerEntry = {
+        id: crypto.randomUUID(),
+        description: `${config.description} - Parcela ${i + 1}/${config.installments}`,
+        amount: Money.fromFloat(config.installmentAmount),
+        type: 'CREDIT',
+        effectiveDate: dueDate.toISOString(),
+        createdAt: new Date().toISOString(),
+        groupId: config.groupId,
+        installmentNumber: i + 1,
+        totalInstallments: config.installments,
+        installmentGroupId: config.groupId,
+        isPaid: false,
+        dueDate: dueDate.toISOString()
+      };
+      newEntries.push(entry);
+    }
+    
+    setLedger(prev => [...newEntries, ...prev]);
+    
+    // Se veio de uma OS, vincular ao primeiro lançamento
+    if (installmentOS) {
+      setWorkOrders(prev => prev.map(o => 
+        o.id === installmentOS.id 
+          ? { ...o, financialId: newEntries[0].id, paymentMethod: 'INSTALLMENT', installmentConfig: config } 
+          : o
+      ));
+    }
+    
+    addToast(`Parcelamento criado! ${config.installments}x de ${Money.format(config.installmentAmount)}`, "success");
+    setIsInstallmentModalOpen(false);
+    setInstallmentOS(null);
+  };
+
   const executePendingAction = () => {
     if (!pendingAction) return;
 
@@ -318,6 +377,16 @@ function AppContent() {
 
     if (pendingAction.type === 'FINISH_OS_FINANCIAL') {
       const os = pendingAction.data;
+      
+      // ✅ EXEMPLO: Perguntar se quer parcelar
+      if (confirm(`Deseja parcelar o pagamento de ${Money.format(os.total)}?`)) {
+        setInstallmentOS(os);
+        setIsInstallmentModalOpen(true);
+        setPendingAction(null);
+        return;
+      }
+      
+      // Pagamento à vista normal
       const entry = createEntry(`Receita OS #${os.osNumber} - ${os.clientName}`, os.total, 'CREDIT', os.createdAt);
       setLedger(prev => [entry, ...prev]);
       setWorkOrders(prev => prev.map(o => o.id === os.id ? { ...o, status: 'FINALIZADO', financialId: entry.id } : o));
@@ -368,6 +437,7 @@ function AppContent() {
     if (isExportModalOpen) setIsExportModalOpen(false);
     if (isChecklistOpen) setIsChecklistOpen(false);
     if (isDatabaseModalOpen) setIsDatabaseModalOpen(false);
+    if (isInstallmentModalOpen) { setIsInstallmentModalOpen(false); setInstallmentOS(null); }
     if (deleteModalInfo.isOpen) setDeleteModalInfo({ isOpen: false, entry: null });
     if (pendingAction) setPendingAction(null);
   });
@@ -406,6 +476,7 @@ function AppContent() {
 
             {activeTab === 'OFICINA' && (
               <WorkshopPage
+                key={dragUpdateKey}
                 workOrders={workOrders}
                 isLoading={isLoading}
                 formatMoney={Money.format}
@@ -497,6 +568,17 @@ function AppContent() {
             onClose={() => { setIsEntryModalOpen(false); setEditingEntry(null); }}
             onSave={handleSaveEntryModal}
             initialData={editingEntry}
+          />
+        )}
+
+        {/* ✅ NOVO: Modal de Pagamento Parcelado */}
+        {isInstallmentModalOpen && installmentOS && (
+          <InstallmentModal
+            isOpen={isInstallmentModalOpen}
+            onClose={() => { setIsInstallmentModalOpen(false); setInstallmentOS(null); }}
+            totalAmount={installmentOS.total}
+            description={`OS #${installmentOS.osNumber} - ${installmentOS.clientName}`}
+            onConfirm={handleInstallmentConfirm}
           />
         )}
 

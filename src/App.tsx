@@ -306,6 +306,39 @@ function AppContent() {
     setDeleteModalInfo({ isOpen: false, entry: null });
   };
 
+  // 👥 SALVAR CLIENTE (CRM)
+  const handleSaveClient = (updatedClient: Client) => {
+    const oldClient = clients.find(c => c.id === updatedClient.id);
+    setClients(prev => prev.find(c => c.id === updatedClient.id) ? prev.map(c => c.id === updatedClient.id ? updatedClient : c) : [...prev, updatedClient]);
+    const { newWorkOrders, newLedger, hasChanges } = updateClientCascading(oldClient, updatedClient, workOrders, ledger);
+    if (hasChanges) {
+      setWorkOrders(newWorkOrders);
+      setLedger(newLedger);
+      addToast("Atualizado em cascata!", "success");
+    } else {
+      addToast("Salvo!", "success");
+    }
+  };
+
+  // 🛠️ SALVAR ITEM DO CATÁLOGO (PEÇAS/SERVIÇOS)
+  const handleSaveCatalogItem = (updatedItem: CatalogItem, type: 'part' | 'service') => {
+    let oldItem: CatalogItem | undefined;
+    if (type === 'part') {
+      oldItem = catalogParts.find(p => p.id === updatedItem.id);
+      setCatalogParts(prev => prev.find(p => p.id === updatedItem.id) ? prev.map(p => p.id === updatedItem.id ? updatedItem : p) : [...prev, updatedItem]);
+    } else {
+      oldItem = catalogServices.find(s => s.id === updatedItem.id);
+      setCatalogServices(prev => prev.find(s => s.id === updatedItem.id) ? prev.map(s => s.id === updatedItem.id ? updatedItem : s) : [...prev, updatedItem]);
+    }
+    const { newWorkOrders, hasChanges } = updateCatalogItemCascading(oldItem, updatedItem, workOrders);
+    if (hasChanges) {
+      setWorkOrders(newWorkOrders);
+      addToast("Atualizado em cascata!", "success");
+    } else {
+      addToast("Salvo!", "success");
+    }
+  };
+
   const handleInstallmentConfirm = (config: any) => {
     console.log('🚀 ===== INÍCIO PARCELAMENTO =====');
     console.log('installmentOS:', installmentOS);

@@ -72,7 +72,7 @@ export const ClientEditModal: React.FC<ClientEditModalProps> = ({
     const updatedClient: Client = {
       ...client,
       name: formData.name.trim(),
-      phone: formData.phone.trim() || undefined,
+      phone: formData.phone.trim() || '',
       notes: formData.notes.trim() || undefined,
       vehicles: validVehicles
     };

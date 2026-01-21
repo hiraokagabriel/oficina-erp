@@ -378,25 +378,18 @@ function AppContent() {
       console.log(`  FinancialId: ${newEntries[0].id}`);
       console.log(`  📅 PaymentDate: ${new Date().toISOString()}`);
       
-      setWorkOrders(prev => {
-        const updated = prev.map(o => 
-          o.id === installmentOS.id 
-            ? { 
-                ...o, 
-                status: 'FINALIZADO',
-                financialId: newEntries[0].id, 
-                paymentMethod: 'INSTALLMENT', 
-                installmentConfig: config,
-                paymentDate: new Date().toISOString()
-              } 
-            : o
-        );
-        
-        const updatedOS = updated.find(o => o.id === installmentOS.id);
-        console.log('✅ OS após atualização:', updatedOS);
-        
-        return updated;
-      });
+      setWorkOrders(prev => prev.map(o => 
+        o.id === installmentOS.id 
+          ? { 
+              ...o, 
+              status: 'FINALIZADO' as OSStatus,
+              financialId: newEntries[0].id, 
+              paymentMethod: 'INSTALLMENT', 
+              installmentConfig: config,
+              paymentDate: new Date().toISOString()
+            } 
+          : o
+      ));
       
       addToast(`OS #${installmentOS.osNumber} finalizada!`, "success");
       setShowConfetti(true);
@@ -452,28 +445,16 @@ function AppContent() {
         'CREDIT', 
         os.createdAt,
         undefined, // groupId
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
         paymentDate // 🔧 PASSA DATA DE PAGAMENTO
       );
-=======
-        paymentDate // 🔧 Passa a data de pagamento
-      );
-
->>>>>>> Stashed changes
-=======
-        paymentDate // 🔧 Passa a data de pagamento
-      );
-
->>>>>>> Stashed changes
       setLedger(prev => [entry, ...prev]);
       setWorkOrders(prev => prev.map(o => 
         o.id === os.id 
           ? { 
               ...o, 
-              status: 'FINALIZADO', 
+              status: 'FINALIZADO' as OSStatus, 
               financialId: entry.id,
-              paymentDate: paymentDate // 🆕 SETAR DATA DE PAGAMENTO
+              paymentDate: paymentDate
             } 
           : o
       ));
@@ -518,7 +499,7 @@ function AppContent() {
         o.id === os.id 
           ? { 
               ...o, 
-              status: 'EM_SERVICO', 
+              status: 'EM_SERVICO' as OSStatus, 
               financialId: undefined,
               paymentMethod: undefined,
               installmentConfig: undefined,

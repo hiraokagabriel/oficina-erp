@@ -7,7 +7,7 @@ interface ProcessPageProps {
   onUpdateStatus: (id: string, newStatus: OSStatus) => void;
 }
 
-type SortKey = 'osNumber' | 'clientName' | 'createdAt' | 'total' | 'paymentDate'; // 🆕 Adicionar paymentDate
+type SortKey = 'osNumber' | 'clientName' | 'createdAt' | 'total' | 'paymentDate';
 
 export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew, onUpdateStatus }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -63,9 +63,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
       let valA: any = a[sortBy];
       let valB: any = b[sortBy];
 
-      // 🆕 TRATAMENTO ESPECIAL PARA PAYMENTDATE
       if (sortBy === 'paymentDate') {
-        // Coloca vazios no final
         if (!valA && !valB) return 0;
         if (!valA) return sortDirection === 'asc' ? 1 : -1;
         if (!valB) return sortDirection === 'asc' ? -1 : 1;
@@ -86,7 +84,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
     return result;
   }, [workOrders, searchTerm, selectedStatus, dateFilter, sortBy, sortDirection]);
 
-  // 📊 ESTATÍSTICAS POR STATUS
+  // 📋 ESTATÍSTICAS POR STATUS
   const groupStats = useMemo(() => {
     const groups: Record<OSStatus, { count: number; total: number }> = {
       ORCAMENTO: { count: 0, total: 0 },
@@ -151,7 +149,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
 
   return (
     <div>
-      {/* 🏝️ ILHA FLUTUANTE - ELEMENTO NORMAL DO FLUXO */}
+      {/* 🏝️ ILHA FLUTUANTE */}
       <div style={{
         background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
         borderRadius: '24px',
@@ -306,7 +304,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
           </div>
 
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">📊 Status</label>
+            <label className="form-label">📋 Status</label>
             <select 
               className="form-input" 
               value={selectedStatus}
@@ -437,7 +435,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                           >
                             Data <SortIcon column="createdAt" />
                           </th>
-                          {/* 🆕 NOVA COLUNA: DATA DE PAGAMENTO */}
                           <th 
                             style={{ width: '13%', cursor: 'pointer' }}
                             onClick={() => handleSort('paymentDate')}
@@ -483,7 +480,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                             <td className="cell-secondary">
                               📅 {formatDate(os.createdAt)}
                             </td>
-                            {/* 🆕 COLUNA DE DATA DE PAGAMENTO */}
                             <td>
                               {os.paymentDate ? (
                                 <span style={{
@@ -519,7 +515,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                               </span>
                             </td>
                             
-                            <td className="status-cell" style={{ position: 'relative' }}>
+                            <td className="status-cell">
                               <span 
                                 className={`status-badge st-${os.status} clickable`}
                                 onClick={(e) => {
@@ -539,23 +535,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                               </span>
 
                               {selectedOS === os.id && (
-                                <div 
-                                  className="status-dropdown-menu" 
-                                  style={{
-                                    position: 'absolute',
-                                    top: '100%',
-                                    left: 0,
-                                    marginTop: '8px',
-                                    background: 'var(--bg-panel)',
-                                    border: '1px solid var(--border)',
-                                    borderRadius: '8px',
-                                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                                    zIndex: 10,
-                                    minWidth: '180px',
-                                    overflow: 'hidden',
-                                    animation: 'fadeIn 0.2s ease-out'
-                                  }}
-                                >
+                                <div className="status-dropdown-menu">
                                   {allStatuses.map(optStatus => (
                                     <div 
                                       key={optStatus}
@@ -564,22 +544,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                                         e.stopPropagation();
                                         onUpdateStatus(os.id, optStatus);
                                         setSelectedOS(null);
-                                      }}
-                                      style={{
-                                        padding: '12px 16px',
-                                        cursor: 'pointer',
-                                        background: optStatus === os.status ? 'var(--bg-card-hover)' : 'transparent',
-                                        borderBottom: '1px solid var(--border)',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        transition: 'background 0.2s'
-                                      }}
-                                      onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-card-hover)'}
-                                      onMouseLeave={(e) => {
-                                        if (optStatus !== os.status) {
-                                          e.currentTarget.style.background = 'transparent';
-                                        }
                                       }}
                                     >
                                       {optStatus === os.status && <span>✔️</span>}

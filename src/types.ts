@@ -11,7 +11,8 @@ export interface LedgerEntry {
   installmentGroupId?: string;
   isPaid?: boolean;
   dueDate?: string;
-  paymentDate?: string; // Data efetiva do pagamento
+  paymentDate?: string;
+  history?: Array<{ date: string; action: string; user?: string }>; // ✅ ADICIONADO
 }
 
 export interface WorkOrder {
@@ -25,16 +26,16 @@ export interface WorkOrder {
   parts: OrderItem[];
   services: OrderItem[];
   total: number;
-  totalCost?: number; // NOVO: custo total interno
-  profit?: number; // NOVO: lucro bruto
-  profitMargin?: number; // NOVO: margem de lucro em %
+  totalCost?: number;
+  profit?: number;
+  profitMargin?: number;
   createdAt: string;
   financialId?: string;
   checklist?: ChecklistSchema;
   publicNotes?: string;
-  paymentDate?: string; // Data do pagamento
+  paymentDate?: string;
   paymentMethod?: 'SINGLE' | 'INSTALLMENT';
-  installmentConfig?: any;
+  installmentConfig?: InstallmentConfig; // ✅ TIPADO
 }
 
 export type OSStatus = 'ORCAMENTO' | 'APROVADO' | 'EM_SERVICO' | 'FINALIZADO' | 'ARQUIVADO';
@@ -64,14 +65,14 @@ export interface CatalogItem {
   id: string;
   description: string;
   price: number;
-  cost?: number; // NOVO: custo de aquisição
+  cost?: number;
 }
 
 export interface OrderItem {
   id: string;
   description: string;
   price: number;
-  cost?: number; // NOVO: custo de aquisição/interno
+  cost?: number;
 }
 
 export interface WorkshopSettings {
@@ -81,6 +82,7 @@ export interface WorkshopSettings {
   technician: string;
   exportPath: string;
   googleDriveToken: string;
+  googleApiKey: string; // ✅ ADICIONADO
 }
 
 export interface DatabaseSchema {
@@ -92,6 +94,40 @@ export interface DatabaseSchema {
   settings: WorkshopSettings;
 }
 
+// ✅ Checklist com tipos específicos
 export interface ChecklistSchema {
-  [key: string]: boolean | string | undefined;
+  fuelLevel: number;
+  tires: {
+    fl: boolean;
+    fr: boolean;
+    bl: boolean;
+    br: boolean;
+  };
+  notes: string;
+  [key: string]: any; // Permite campos customizados
+}
+
+// ✅ ADICIONADO: InstallmentConfig
+export interface InstallmentConfig {
+  installments: number;
+  firstDueDate: string;
+  interval: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+  amounts?: number[]; // Valores customizados por parcela
+}
+
+// ✅ ADICIONADO: CRMStats
+export interface CRMStats {
+  totalClients: number;
+  activeClients: number;
+  totalRevenue: number;
+  averageTicket: number;
+  topClients: Array<{
+    name: string;
+    totalSpent: number;
+    serviceCount: number;
+  }>;
+  revenueByMonth: Array<{
+    month: string;
+    revenue: number;
+  }>;
 }

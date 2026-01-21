@@ -10,6 +10,13 @@ export interface LedgerEntry {
   updatedAt?: string;
   groupId?: string;
   history?: { timestamp: string; note: string }[];
+  // ✅ NOVO: Campos para pagamento parcelado
+  installmentNumber?: number; // Número da parcela (1, 2, 3...)
+  totalInstallments?: number; // Total de parcelas (2, 3, 6, 12)
+  installmentGroupId?: string; // ID do grupo de parcelas
+  isPaid?: boolean; // Se a parcela foi paga
+  paidAt?: string; // Data do pagamento
+  dueDate?: string; // Data de vencimento
 }
 
 export interface WorkOrder {
@@ -27,6 +34,19 @@ export interface WorkOrder {
   financialId?: string;
   checklist?: ChecklistSchema;
   publicNotes?: string;
+  // ✅ NOVO: Campos para controle de pagamento
+  paymentMethod?: 'CASH' | 'CARD' | 'PIX' | 'INSTALLMENT';
+  installmentConfig?: InstallmentConfig;
+}
+
+// ✅ NOVO: Configuração de parcelamento
+export interface InstallmentConfig {
+  totalAmount: number;
+  installments: number; // 2-12x
+  installmentAmount: number; // Valor de cada parcela
+  firstPaymentDate: string; // Data do primeiro pagamento
+  groupId: string; // ID para agrupar parcelas
+  description: string; // Descrição (ex: "OS #123 - Cliente X")
 }
 
 export type OSStatus = 'ORCAMENTO' | 'APROVADO' | 'EM_SERVICO' | 'FINALIZADO' | 'ARQUIVADO';
@@ -51,6 +71,12 @@ export interface Client {
   phone: string;
   notes?: string;
   vehicles: { model: string; plate: string }[];
+  // ✅ NOVO: Campos para CRM
+  totalSpent?: number; // Total gasto pelo cliente
+  lastServiceDate?: string; // Último serviço realizado
+  serviceCount?: number; // Quantidade de serviços
+  averageTicket?: number; // Ticket médio
+  vipStatus?: boolean; // Cliente VIP
 }
 
 export interface CatalogItem {
@@ -94,4 +120,18 @@ export interface ChecklistSchema {
   };
   notes: string;
   [key: string]: boolean | string | number | object | undefined;
+}
+
+// ✅ NOVO: Interface para estatísticas do CRM
+export interface CRMStats {
+  totalClients: number;
+  vipClients: Client[];
+  monthlyRevenue: number;
+  pendingServices: number;
+  averageTicket: number;
+  topClients: Array<{
+    client: Client;
+    totalSpent: number;
+    serviceCount: number;
+  }>;
 }

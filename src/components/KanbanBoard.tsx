@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { DragDropContext, Droppable, DropResult } from '@hello-pangea/dnd';
 import { WorkOrder, OSStatus, STATUS_LABELS } from '../types';
 import { KanbanCard } from './KanbanCard';
@@ -51,19 +51,21 @@ const KanbanColumn = React.memo(({
   status, 
   workOrders, 
   actions, 
-  formatMoney 
+  formatMoney,
+  updateTrigger // ✅ FIX: Prop para forçar re-render
 }: { 
   status: OSStatus; 
   workOrders: WorkOrder[]; 
   actions: KanbanBoardProps['actions']; 
   formatMoney: (val: number) => string;
+  updateTrigger: number; // ✅ FIX: Contador para forçar re-render
 }) => {
   // Filtra e ordena primeiro
   const sortedList = useMemo(() => {
     return workOrders
       .filter(o => o.status === status)
       .sort((a, b) => b.osNumber - a.osNumber);
-  }, [workOrders, status]);
+  }, [workOrders, status, updateTrigger]); // ✅ FIX: Incluir updateTrigger nas dependências
   
   // Aplica paginação
   const {
@@ -154,7 +156,17 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(({
   formatMoney 
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [updateTrigger, setUpdateTrigger] = useState(0); // ✅ FIX: Estado para forçar re-render
   const showArchived = false; // TODO: Implementar toggle de arquivados
+
+  // ✅ FIX: Wrapper do onDragEnd que força atualização
+  const handleDragEnd = useCallback((result: DropResult) => {
+    onDragEnd(result);
+    // Força re-render após 100ms para garantir que o estado foi atualizado
+    setTimeout(() => {
+      setUpdateTrigger(prev => prev + 1);
+    }, 100);
+  }, [onDragEnd]);
 
   // Memoiza a filtragem de busca
   const filteredWorkOrders = useMemo(() => {
@@ -204,7 +216,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(({
         </div>
       </div>
 
-      <DragDropContext onDragEnd={onDragEnd}>
+      <DragDropContext onDragEnd={handleDragEnd}>
         <div className="kanban-board" style={{ gridTemplateColumns: showArchived ? '1fr' : 'repeat(4, 1fr)' }}>
           {showArchived ? (
             <KanbanColumn 
@@ -212,13 +224,38 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(({
               workOrders={filteredWorkOrders} 
               actions={actions} 
               formatMoney={formatMoney}
+              updateTrigger={updateTrigger}
             />
           ) : (
             <>
-              <KanbanColumn status="ORCAMENTO" workOrders={filteredWorkOrders} actions={actions} formatMoney={formatMoney} />
-              <KanbanColumn status="APROVADO" workOrders={filteredWorkOrders} actions={actions} formatMoney={formatMoney} />
-              <KanbanColumn status="EM_SERVICO" workOrders={filteredWorkOrders} actions={actions} formatMoney={formatMoney} />
-              <KanbanColumn status="FINALIZADO" workOrders={filteredWorkOrders} actions={actions} formatMoney={formatMoney} />
+              <KanbanColumn 
+                status="ORCAMENTO" 
+                workOrders={filteredWorkOrders} 
+                actions={actions} 
+                formatMoney={formatMoney}
+                updateTrigger={updateTrigger}
+              />
+              <KanbanColumn 
+                status="APROVADO" 
+                workOrders={filteredWorkOrders} 
+                actions={actions} 
+                formatMoney={formatMoney}
+                updateTrigger={updateTrigger}
+              />
+              <KanbanColumn 
+                status="EM_SERVICO" 
+                workOrders={filteredWorkOrders} 
+                actions={actions} 
+                formatMoney={formatMoney}
+                updateTrigger={updateTrigger}
+              />
+              <KanbanColumn 
+                status="FINALIZADO" 
+                workOrders={filteredWorkOrders} 
+                actions={actions} 
+                formatMoney={formatMoney}
+                updateTrigger={updateTrigger}
+              />
             </>
           )}
         </div>

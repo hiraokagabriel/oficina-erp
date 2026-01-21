@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { InstallmentConfig } from '../types';
-import { v4 as uuidv4 } from 'uuid';
 
 interface InstallmentModalProps {
   isOpen: boolean;
@@ -37,7 +36,7 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
       installments,
       installmentAmount,
       firstPaymentDate,
-      groupId: uuidv4(),
+      groupId: crypto.randomUUID(), // ✅ Usando crypto.randomUUID() nativo do navegador
       description
     };
     onConfirm(config);

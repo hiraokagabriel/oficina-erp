@@ -29,10 +29,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
       if (e.key === 'Escape') onClose();
     };
 
+    // ✅ FIX: Delay maior para não fechar imediatamente no clique direito
     setTimeout(() => {
       document.addEventListener('mousedown', handleClickOutside);
       document.addEventListener('keydown', handleEscape);
-    }, 10);
+    }, 100);
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
@@ -66,6 +67,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
 
   return (
     <>
+      {/* ✅ Overlay com pointer-events para garantir que capture cliques */}
       <div 
         style={{
           position: 'fixed',
@@ -74,8 +76,9 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
           right: 0,
           bottom: 0,
           zIndex: 9998,
-          background: 'transparent'
+          background: 'rgba(0, 0, 0, 0.01)' // Quase transparente mas captura eventos
         }}
+        onClick={onClose}
       />
       
       <div
@@ -86,6 +89,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
           left: x,
           top: y,
           minWidth: 220,
+          maxWidth: 280,
           background: 'var(--bg-panel)',
           border: '1px solid var(--border)',
           borderRadius: 12,
@@ -96,9 +100,10 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
           animation: 'contextMenuFadeIn 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
           transformOrigin: 'top left'
         }}
+        // ✅ Impede que cliques no menu fechem ele
+        onClick={(e) => e.stopPropagation()}
       >
         {items.map((item, index) => {
-          // ✅ FIX: Pula itens vazios, renderiza apenas dividers válidos
           if (item.divider && !item.label) {
             return (
               <div 
@@ -112,7 +117,6 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
             );
           }
           
-          // Pula items completamente vazios
           if (!item.label) return null;
 
           return (
@@ -120,6 +124,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
               key={index}
               onClick={(e) => {
                 e.stopPropagation();
+                console.log('✅ Menu item clicado:', item.label);
                 item.onClick();
                 onClose();
               }}

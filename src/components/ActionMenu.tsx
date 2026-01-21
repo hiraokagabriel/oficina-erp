@@ -32,10 +32,11 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ items, buttonSize = 32 }
       if (e.key === 'Escape') setIsOpen(false);
     };
 
+    // ✅ FIX: Delay maior para estabilizar
     setTimeout(() => {
       document.addEventListener('mousedown', handleClickOutside);
       document.addEventListener('keydown', handleEscape);
-    }, 10);
+    }, 100);
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
@@ -61,9 +62,9 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ items, buttonSize = 32 }
       style={{ 
         position: 'relative', 
         display: 'inline-block',
-        // ✅ FIX: Impede que o menu interfira no drag
         pointerEvents: 'auto'
       }}
+      // ✅ FIX: Impede propagação para não interferir no card
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
     >
@@ -71,6 +72,7 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ items, buttonSize = 32 }
         ref={buttonRef}
         onClick={(e) => {
           e.stopPropagation();
+          console.log('✅ Toggle menu:', !isOpen);
           setIsOpen(!isOpen);
         }}
         title="Mais ações"
@@ -108,85 +110,106 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ items, buttonSize = 32 }
       </button>
 
       {isOpen && (
-        <div
-          ref={menuRef}
-          className="action-dropdown"
-          style={{
-            position: 'absolute',
-            top: '100%',
-            right: 0,
-            marginTop: 8,
-            minWidth: 200,
-            background: 'var(--bg-panel)',
-            border: '1px solid var(--border)',
-            borderRadius: 12,
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255,255,255,0.1)',
-            backdropFilter: 'blur(20px)',
-            padding: '8px',
-            zIndex: 10000,
-            animation: 'dropdownFadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-            transformOrigin: 'top right'
-          }}
-        >
-          {items.map((item, index) => {
-            // ✅ FIX: Renderiza dividers corretamente
-            if (item.divider && !item.label) {
-              return (
-                <div 
-                  key={`divider-${index}`}
-                  style={{
-                    height: 1,
-                    background: 'var(--border)',
-                    margin: '8px 4px'
-                  }} 
-                />
-              );
-            }
-            
-            // Pula items vazios
-            if (!item.label) return null;
+        <>
+          {/* ✅ FIX: Overlay para fechar ao clicar fora */}
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 9998,
+              background: 'transparent'
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsOpen(false);
+            }}
+          />
 
-            return (
-              <button
-                key={index}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  item.onClick();
-                  setIsOpen(false);
-                }}
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: '10px 12px',
-                  background: 'transparent',
-                  border: 'none',
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  fontSize: '0.85rem',
-                  fontWeight: 500,
-                  color: getVariantStyles(item.variant).color,
-                  transition: 'all 0.15s ease',
-                  textAlign: 'left'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = getVariantStyles(item.variant).hoverBg;
-                  e.currentTarget.style.transform = 'translateX(4px)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.transform = 'translateX(0)';
-                }}
-              >
-                <span style={{ fontSize: '1rem', width: 18, textAlign: 'center' }}>
-                  {item.icon}
-                </span>
-                <span style={{ flex: 1 }}>{item.label}</span>
-              </button>
-            );
-          })}
-        </div>
+          <div
+            ref={menuRef}
+            className="action-dropdown"
+            style={{
+              position: 'absolute',
+              top: '100%',
+              right: 0,
+              marginTop: 8,
+              minWidth: 200,
+              maxWidth: 280,
+              background: 'var(--bg-panel)',
+              border: '1px solid var(--border)',
+              borderRadius: 12,
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255,255,255,0.1)',
+              backdropFilter: 'blur(20px)',
+              padding: '8px',
+              zIndex: 9999,
+              animation: 'dropdownFadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+              transformOrigin: 'top right'
+            }}
+            // ✅ FIX: Impede que cliques no dropdown fechem ele
+            onClick={(e) => e.stopPropagation()}
+          >
+            {items.map((item, index) => {
+              if (item.divider && !item.label) {
+                return (
+                  <div 
+                    key={`divider-${index}`}
+                    style={{
+                      height: 1,
+                      background: 'var(--border)',
+                      margin: '8px 4px'
+                    }} 
+                  />
+                );
+              }
+              
+              if (!item.label) return null;
+
+              return (
+                <button
+                  key={index}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    console.log('✅ Action menu item clicado:', item.label);
+                    item.onClick();
+                    setIsOpen(false);
+                  }}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '10px 12px',
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    fontSize: '0.85rem',
+                    fontWeight: 500,
+                    color: getVariantStyles(item.variant).color,
+                    transition: 'all 0.15s ease',
+                    textAlign: 'left'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = getVariantStyles(item.variant).hoverBg;
+                    e.currentTarget.style.transform = 'translateX(4px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.transform = 'translateX(0)';
+                  }}
+                >
+                  <span style={{ fontSize: '1rem', width: 18, textAlign: 'center' }}>
+                    {item.icon}
+                  </span>
+                  <span style={{ flex: 1 }}>{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </>
       )}
 
       <style>{`

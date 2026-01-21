@@ -16,6 +16,7 @@ export interface LedgerEntry {
   isPaid?: boolean;
   paidAt?: string;
   dueDate?: string;
+  paymentDate?: string; // 🔧 NOVO: Data de pagamento (usada para receitas vindas de OS)
 }
 
 export interface WorkOrder {

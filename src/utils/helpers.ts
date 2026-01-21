@@ -39,7 +39,8 @@ export const createEntry = (
   amount: number,
   type: 'CREDIT' | 'DEBIT',
   dateString?: string,
-  groupId?: string
+  groupId?: string,
+  paymentDate?: string // 🔧 NOVO PARÂMETRO: Data de pagamento
 ): LedgerEntry => {
   return {
     id: generateId(),
@@ -49,7 +50,8 @@ export const createEntry = (
     effectiveDate: dateString ? new Date(dateString).toISOString() : new Date().toISOString(),
     createdAt: new Date().toISOString(),
     history: [],
-    groupId
+    groupId,
+    paymentDate: paymentDate ? new Date(paymentDate).toISOString() : undefined // 🔧 Inclui paymentDate
   };
 };
 

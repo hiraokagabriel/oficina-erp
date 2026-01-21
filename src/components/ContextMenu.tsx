@@ -29,7 +29,6 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
       if (e.key === 'Escape') onClose();
     };
 
-    // Adiciona listeners após um pequeno delay para não fechar imediatamente
     setTimeout(() => {
       document.addEventListener('mousedown', handleClickOutside);
       document.addEventListener('keydown', handleEscape);
@@ -41,7 +40,6 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
     };
   }, [onClose]);
 
-  // Ajusta posição se menu sair da tela
   useEffect(() => {
     if (menuRef.current) {
       const rect = menuRef.current.getBoundingClientRect();
@@ -68,7 +66,6 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
 
   return (
     <>
-      {/* Overlay para capturar cliques */}
       <div 
         style={{
           position: 'fixed',
@@ -81,7 +78,6 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
         }}
       />
       
-      {/* Menu */}
       <div
         ref={menuRef}
         className="context-menu"
@@ -101,16 +97,27 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
           transformOrigin: 'top left'
         }}
       >
-        {items.map((item, index) => (
-          <React.Fragment key={index}>
-            {item.divider && (
-              <div style={{
-                height: 1,
-                background: 'var(--border)',
-                margin: '8px 4px'
-              }} />
-            )}
+        {items.map((item, index) => {
+          // ✅ FIX: Pula itens vazios, renderiza apenas dividers válidos
+          if (item.divider && !item.label) {
+            return (
+              <div 
+                key={`divider-${index}`}
+                style={{
+                  height: 1,
+                  background: 'var(--border)',
+                  margin: '8px 4px'
+                }} 
+              />
+            );
+          }
+          
+          // Pula items completamente vazios
+          if (!item.label) return null;
+
+          return (
             <button
+              key={index}
               onClick={(e) => {
                 e.stopPropagation();
                 item.onClick();
@@ -146,8 +153,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
               </span>
               <span style={{ flex: 1 }}>{item.label}</span>
             </button>
-          </React.Fragment>
-        ))}
+          );
+        })}
       </div>
 
       <style>{`

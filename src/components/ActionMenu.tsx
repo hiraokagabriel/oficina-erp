@@ -57,8 +57,16 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ items, buttonSize = 32 }
   };
 
   return (
-    <div style={{ position: 'relative', display: 'inline-block' }}>
-      {/* Botão de Kebab Menu (três pontinhos) */}
+    <div 
+      style={{ 
+        position: 'relative', 
+        display: 'inline-block',
+        // ✅ FIX: Impede que o menu interfira no drag
+        pointerEvents: 'auto'
+      }}
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
       <button
         ref={buttonRef}
         onClick={(e) => {
@@ -79,8 +87,9 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ items, buttonSize = 32 }
           justifyContent: 'center',
           transition: 'all 0.2s ease',
           color: isOpen ? '#fff' : 'var(--text-muted)',
-          fontSize: '1rem',
-          fontWeight: 'bold'
+          fontSize: '1.1rem',
+          fontWeight: 'bold',
+          lineHeight: 1
         }}
         onMouseEnter={(e) => {
           if (!isOpen) {
@@ -98,7 +107,6 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ items, buttonSize = 32 }
         ⋮
       </button>
 
-      {/* Dropdown Menu */}
       {isOpen && (
         <div
           ref={menuRef}
@@ -115,21 +123,32 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ items, buttonSize = 32 }
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255,255,255,0.1)',
             backdropFilter: 'blur(20px)',
             padding: '8px',
-            zIndex: 1000,
+            zIndex: 10000,
             animation: 'dropdownFadeIn 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
             transformOrigin: 'top right'
           }}
         >
-          {items.map((item, index) => (
-            <React.Fragment key={index}>
-              {item.divider && (
-                <div style={{
-                  height: 1,
-                  background: 'var(--border)',
-                  margin: '8px 4px'
-                }} />
-              )}
+          {items.map((item, index) => {
+            // ✅ FIX: Renderiza dividers corretamente
+            if (item.divider && !item.label) {
+              return (
+                <div 
+                  key={`divider-${index}`}
+                  style={{
+                    height: 1,
+                    background: 'var(--border)',
+                    margin: '8px 4px'
+                  }} 
+                />
+              );
+            }
+            
+            // Pula items vazios
+            if (!item.label) return null;
+
+            return (
               <button
+                key={index}
                 onClick={(e) => {
                   e.stopPropagation();
                   item.onClick();
@@ -165,8 +184,8 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ items, buttonSize = 32 }
                 </span>
                 <span style={{ flex: 1 }}>{item.label}</span>
               </button>
-            </React.Fragment>
-          ))}
+            );
+          })}
         </div>
       )}
 

@@ -5,7 +5,6 @@ import { WorkOrder, OSStatus } from '../types';
 import { ContextMenu } from './ContextMenu';
 import { ActionMenu } from './ActionMenu';
 
-// 🆕 DECLARAÇÕES GLOBAIS PARA ELECTRON/TAURI
 declare global {
   interface Window {
     electron?: {
@@ -81,7 +80,6 @@ export const KanbanCard = React.memo(({
     return { color: 'var(--danger)', bg: 'rgba(229, 76, 76, 0.1)' };
   };
 
-  // 🆕 FUNÇÃO WHATSAPP DO CRM - OTIMIZADA PARA .EXE
   const openWhatsApp = async () => {
     if (!os.clientPhone) return;
     
@@ -120,14 +118,14 @@ export const KanbanCard = React.memo(({
     }
   };
 
-  // 🆕 ITENS DO MENU (Compartilhado entre Context Menu e Action Menu)
+  // ✅ FIX: Menu items com dividers corretamente estruturados
   const menuItems = useMemo(() => {
-    const items = [
+    const items: any[] = [
       {
         icon: '✏️',
         label: 'Editar OS',
         onClick: () => actions.onEdit(os),
-        variant: 'primary' as const
+        variant: 'primary'
       },
       {
         icon: '📋',
@@ -141,20 +139,18 @@ export const KanbanCard = React.memo(({
       }
     ];
 
-    // Adiciona WhatsApp se tiver telefone
     if (os.clientPhone) {
       items.push({
         icon: '💬',
         label: 'WhatsApp',
         onClick: openWhatsApp,
-        variant: 'success' as const
+        variant: 'success'
       });
     }
 
-    // Divider antes das ações de navegação
-    items.push({ icon: '', label: '', onClick: () => {}, divider: true });
+    // ✅ Divider antes de navegação
+    items.push({ divider: true });
 
-    // Navegação
     if (status !== 'ARQUIVADO' && status !== 'ORCAMENTO') {
       items.push({
         icon: '⬅️',
@@ -171,16 +167,15 @@ export const KanbanCard = React.memo(({
       });
     }
 
-    // Divider antes das ações destrutivas
-    items.push({ icon: '', label: '', onClick: () => {}, divider: true });
+    // ✅ Divider antes de ações destrutivas
+    items.push({ divider: true });
 
-    // Arquivar/Restaurar
     if (status === 'ARQUIVADO') {
       items.push({
         icon: '↩️',
         label: 'Restaurar OS',
         onClick: () => actions.onRestore?.(os),
-        variant: 'success' as const
+        variant: 'success'
       });
     } else {
       items.push({
@@ -190,12 +185,11 @@ export const KanbanCard = React.memo(({
       });
     }
 
-    // Excluir
     items.push({
       icon: '🗑️',
       label: 'Excluir Permanentemente',
       onClick: () => actions.onDelete(os),
-      variant: 'danger' as const
+      variant: 'danger'
     });
 
     return items;
@@ -207,6 +201,9 @@ export const KanbanCard = React.memo(({
     setContextMenu({ x: e.clientX, y: e.clientY });
   };
 
+  // ✅ FIX: Desabilita hover durante drag
+  const shouldShowHoverEffects = isHovered && !isDragging && !forcedDragging;
+
   return (
     <>
       <div 
@@ -214,12 +211,12 @@ export const KanbanCard = React.memo(({
         style={style} 
         {...attributes} 
         {...listeners}
-        onMouseEnter={() => setIsHovered(true)}
+        onMouseEnter={() => !isDragging && setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
         <div
           className={cardClassName}
-          title="💡 Clique direito para mais opções | Ctrl+Clique para finalizar"
+          title="💡 Clique direito: mais opções | Ctrl+Clique: finalizar rápido"
           onClick={(e) => {
             if (e.ctrlKey && status !== 'FINALIZADO' && actions.onQuickFinish) {
               e.preventDefault();
@@ -238,15 +235,15 @@ export const KanbanCard = React.memo(({
             color: 'var(--text)',
             boxShadow: isDragging || forcedDragging
               ? '0 20px 40px rgba(0, 0, 0, 0.3), 0 0 0 2px var(--primary)'
-              : isHovered 
+              : shouldShowHoverEffects
                 ? '0 8px 24px rgba(0, 0, 0, 0.15)'
                 : '0 2px 8px rgba(0, 0, 0, 0.1)',
             willChange: 'transform, box-shadow, opacity',
             transition: 'box-shadow 0.2s ease'
           }}
         >
-          {/* 👑 HEADER: Número, Valor e Action Menu */}
-          <div className="os-header" style={{ position: 'relative' }}>
+          {/* HEADER */}
+          <div className="os-header" style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span className="os-number">#{os.osNumber}</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span className="os-price">{formatMoney(os.total)}</span>
@@ -257,7 +254,6 @@ export const KanbanCard = React.memo(({
                     fontSize: '0.7rem', 
                     color: getProfitMarginColor(os.profitMargin).color,
                     fontWeight: 'bold',
-                    marginLeft: 2,
                     padding: '2px 4px',
                     borderRadius: 4,
                     backgroundColor: getProfitMarginColor(os.profitMargin).bg
@@ -267,28 +263,24 @@ export const KanbanCard = React.memo(({
                   +{os.profitMargin.toFixed(0)}%
                 </span>
               )}
-            </div>
 
-            {/* 🆕 ACTION MENU (Kebab) - Aparece no hover */}
-            <div 
-              style={{
-                position: 'absolute',
-                top: -4,
-                right: -4,
-                opacity: isHovered ? 1 : 0,
-                transition: 'opacity 0.2s ease',
-                pointerEvents: isHovered ? 'auto' : 'none'
-              }}
-            >
-              <ActionMenu items={menuItems} buttonSize={28} />
+              {/* ✅ ACTION MENU - Só aparece no hover, não durante drag */}
+              {shouldShowHoverEffects && (
+                <div style={{
+                  animation: 'fadeInScale 0.2s ease',
+                  marginLeft: 4
+                }}>
+                  <ActionMenu items={menuItems} buttonSize={28} />
+                </div>
+              )}
             </div>
           </div>
 
-          {/* 👤 INFO: Cliente e Veículo */}
+          {/* INFO */}
           <div className="os-client" style={{ marginBottom: 4, marginTop: 8 }}>{os.clientName}</div>
           <div className="os-vehicle" style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{os.vehicle}</div>
           
-          {/* 📞 TELEFONE - Minimalista */}
+          {/* TELEFONE */}
           {os.clientPhone && (
             <div 
               style={{ 
@@ -306,73 +298,32 @@ export const KanbanCard = React.memo(({
             </div>
           )}
 
-          {/* 🆕 AÇÕES PRINCIPAIS - MINIMALISTA (Aparecem no Hover) */}
-          <div 
-            className="card-quick-actions" 
-            style={{ 
-              display: isDragging || forcedDragging ? 'none' : 'flex',
-              opacity: isHovered ? 1 : 0,
-              transform: isHovered ? 'translateY(0)' : 'translateY(-5px)',
-              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-              gap: 6,
-              marginTop: 12,
-              paddingTop: 12,
-              borderTop: '1px solid var(--border)',
-              pointerEvents: isHovered ? 'auto' : 'none'
-            }}
-          >
-            {/* Botão Editar - Primário */}
-            <button 
-              className="btn-quick-edit" 
-              title="Editar OS (Principal)" 
-              onClick={(e) => {
-                e.stopPropagation(); 
-                actions.onEdit(os);
-              }}
-              style={{
-                flex: 1,
-                padding: '8px 12px',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                background: 'var(--primary)',
-                color: '#fff',
-                border: 'none',
-                borderRadius: 8,
-                cursor: 'pointer',
+          {/* ✅ AÇÕES HOVER - Só aparecem quando não está arrastando */}
+          {shouldShowHoverEffects && (
+            <div 
+              className="card-quick-actions" 
+              style={{ 
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
                 gap: 6,
-                transition: 'all 0.2s ease',
-                boxShadow: '0 2px 8px rgba(130, 87, 230, 0.3)'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(130, 87, 230, 0.4)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 2px 8px rgba(130, 87, 230, 0.3)';
+                marginTop: 12,
+                paddingTop: 12,
+                borderTop: '1px solid var(--border)',
+                animation: 'slideUpFade 0.25s cubic-bezier(0.4, 0, 0.2, 1)'
               }}
             >
-              ✏️ Editar
-            </button>
-
-            {/* Botão WhatsApp - Secundário (Se tiver telefone) */}
-            {os.clientPhone && (
               <button 
-                className="btn-quick-whatsapp" 
-                title="WhatsApp Rápido" 
+                className="btn-quick-edit" 
+                title="Editar OS" 
                 onClick={(e) => {
                   e.stopPropagation(); 
-                  openWhatsApp();
+                  actions.onEdit(os);
                 }}
                 style={{
                   flex: 1,
                   padding: '8px 12px',
                   fontSize: '0.8rem',
                   fontWeight: 600,
-                  background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
+                  background: 'var(--primary)',
                   color: '#fff',
                   border: 'none',
                   borderRadius: 8,
@@ -382,25 +333,62 @@ export const KanbanCard = React.memo(({
                   justifyContent: 'center',
                   gap: 6,
                   transition: 'all 0.2s ease',
-                  boxShadow: '0 2px 8px rgba(37, 211, 102, 0.3)'
+                  boxShadow: '0 2px 8px rgba(130, 87, 230, 0.3)'
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(37, 211, 102, 0.4)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(130, 87, 230, 0.4)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(37, 211, 102, 0.3)';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(130, 87, 230, 0.3)';
                 }}
               >
-                💬 WhatsApp
+                ✏️ Editar
               </button>
-            )}
-          </div>
+
+              {os.clientPhone && (
+                <button 
+                  className="btn-quick-whatsapp" 
+                  title="WhatsApp Rápido" 
+                  onClick={(e) => {
+                    e.stopPropagation(); 
+                    openWhatsApp();
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    transition: 'all 0.2s ease',
+                    boxShadow: '0 2px 8px rgba(37, 211, 102, 0.3)'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(37, 211, 102, 0.4)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(37, 211, 102, 0.3)';
+                  }}
+                >
+                  💬 WhatsApp
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Menu de Contexto (Clique Direito) */}
       {contextMenu && (
         <ContextMenu
           x={contextMenu.x}
@@ -409,6 +397,30 @@ export const KanbanCard = React.memo(({
           onClose={() => setContextMenu(null)}
         />
       )}
+
+      <style>{`
+        @keyframes fadeInScale {
+          from {
+            opacity: 0;
+            transform: scale(0.8);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+
+        @keyframes slideUpFade {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </>
   );
 });

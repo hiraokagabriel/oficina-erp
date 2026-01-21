@@ -86,14 +86,12 @@ const KanbanColumn = React.memo(
     actions: KanbanBoardProps['actions'];
     formatMoney: (val: number) => string;
   }) => {
-    // Filtra e ordena
     const sortedList = useMemo(() => {
       return workOrders
         .filter((o) => o.status === status)
         .sort((a, b) => b.osNumber - a.osNumber);
     }, [workOrders, status]);
 
-    // Aplica paginação
     const { paginatedItems, loadMore, hasMore, loadedItems, totalItems } = usePagination({
       items: sortedList,
       itemsPerPage: 50,
@@ -107,7 +105,6 @@ const KanbanColumn = React.memo(
       ARQUIVADO: 'var(--text-muted)',
     };
 
-    // IDs para o SortableContext
     const itemIds = paginatedItems.map((os) => os.id);
 
     return (
@@ -157,17 +154,15 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
     const [searchTerm, setSearchTerm] = useState('');
     const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
 
-    // ✅ Sensores otimizados - suporte a touch, mouse e teclado
     const sensors = useSensors(
       useSensor(PointerSensor, {
         activationConstraint: {
-          distance: 8, // Previne cliques acidentais
+          distance: 8,
         },
       }),
       useSensor(KeyboardSensor)
     );
 
-    // Filtragem por busca
     const filteredWorkOrders = useMemo(() => {
       if (!searchTerm) return workOrders;
 
@@ -181,35 +176,38 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
       );
     }, [workOrders, searchTerm]);
 
-    // Encontra a OS sendo arrastada
     const activeWorkOrder = useMemo(
       () => workOrders.find((os) => os.id === activeId),
       [activeId, workOrders]
     );
 
-    // Handlers
     const handleDragStart = (event: DragStartEvent) => {
       setActiveId(event.active.id);
     };
 
     const handleDragEnd = (event: DragEndEvent) => {
       const { active, over } = event;
-
       setActiveId(null);
 
-      if (!over) return;
+      // ✅ FIX CRÍTICO: Se drop for inválido (over = null), NÃO FAZ NADA
+      // Card permanece na posição original - NUNCA APAGA!
+      if (!over) {
+        console.log('❌ Drop inválido - card mantido na posição original');
+        return;
+      }
 
       const orderId = active.id as string;
       const newStatus = over.id as OSStatus;
 
-      // Verifica se mudou de coluna
       const workOrder = workOrders.find((wo) => wo.id === orderId);
       if (workOrder && workOrder.status !== newStatus) {
+        console.log(`✅ Movendo OS #${workOrder.osNumber}: ${workOrder.status} → ${newStatus}`);
         onStatusChange(orderId, newStatus);
       }
     };
 
     const handleDragCancel = () => {
+      console.log('⚠️ Drag cancelado - card volta para origem');
       setActiveId(null);
     };
 
@@ -227,7 +225,6 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        {/* Barra de busca */}
         <div className="kanban-filter-bar">
           <div className="search-wrapper">
             <span className="search-icon">🔍</span>
@@ -249,7 +246,6 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
           </div>
         </div>
 
-        {/* Drag and Drop Context */}
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -300,7 +296,6 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
             )}
           </div>
 
-          {/* Overlay visual durante o drag */}
           <DragOverlay>
             {activeWorkOrder && (
               <div

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import {
   DndContext,
-  closestCenter,
+  closestCorners,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -183,80 +183,51 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
 
     const handleDragStart = (event: DragStartEvent) => {
       setActiveId(event.active.id);
-      console.log('🎯 DragStart:', {
-        activeId: event.active.id,
-        activeData: event.active.data.current,
-      });
     };
 
     const handleDragEnd = (event: DragEndEvent) => {
       const { active, over } = event;
-      
-      console.log('🏁 DragEnd - Evento completo:', {
-        active: {
-          id: active.id,
-          data: active.data.current,
-        },
-        over: over ? {
-          id: over.id,
-          data: over.data.current,
-        } : null,
-      });
 
       setActiveId(null);
 
-      // ✅ VERIFICAÇÃO 1: Drop válido?
       if (!over) {
-        console.log('❌ Drop inválido (over = null) - card mantido na posição original');
         return;
       }
 
       const orderId = active.id as string;
       const overId = over.id as string;
-      
-      console.log('🔍 Analisando IDs:', {
-        orderId,
-        overId,
-        'overId é status?': ['ORCAMENTO', 'APROVADO', 'EM_SERVICO', 'FINALIZADO', 'ARQUIVADO'].includes(overId),
-      });
 
-      // ✅ VERIFICAÇÃO 2: over.id é uma coluna (status) válida?
       const validStatuses: OSStatus[] = ['ORCAMENTO', 'APROVADO', 'EM_SERVICO', 'FINALIZADO', 'ARQUIVADO'];
-      if (!validStatuses.includes(overId as OSStatus)) {
-        console.warn('⚠️ over.id não é um status válido:', overId);
-        console.log('ℹ️ Provavelmente soltou em cima de outro card - ignorando');
-        return; // ✅ IGNORA se não for coluna!
+      
+      let newStatus: OSStatus | null = null;
+
+      if (validStatuses.includes(overId as OSStatus)) {
+        newStatus = overId as OSStatus;
+      } else {
+        const overWorkOrder = workOrders.find((wo) => wo.id === overId);
+        if (overWorkOrder) {
+          newStatus = overWorkOrder.status;
+        }
       }
 
-      const newStatus = overId as OSStatus;
+      if (!newStatus) {
+        return;
+      }
 
-      // ✅ VERIFICAÇÃO 3: WorkOrder existe?
       const workOrder = workOrders.find((wo) => wo.id === orderId);
       
       if (!workOrder) {
-        console.error('❌ WorkOrder não encontrada:', orderId);
         return;
       }
 
-      console.log('📋 WorkOrder encontrada:', {
-        osNumber: workOrder.osNumber,
-        currentStatus: workOrder.status,
-        newStatus,
-      });
-
-      // ✅ VERIFICAÇÃO 4: Status mudou?
       if (workOrder.status === newStatus) {
-        console.log(`ℹ️ Card solto no mesmo lugar (${newStatus}) - ignorando`);
         return;
       }
 
-      // ✅ Tudo OK - pode atualizar!
-      console.log(`✅ Movendo OS #${workOrder.osNumber}: ${workOrder.status} → ${newStatus}`);
       onStatusChange(orderId, newStatus);
     };
 
     const handleDragCancel = () => {
-      console.log('⚠️ Drag cancelado - card volta para origem');
       setActiveId(null);
     };
 
@@ -297,7 +268,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
 
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCenter}
+          collisionDetection={closestCorners}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
           onDragCancel={handleDragCancel}

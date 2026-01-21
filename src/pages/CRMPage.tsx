@@ -204,7 +204,7 @@ export const CRMPage: React.FC<CRMPageProps> = ({
           onClick={() => setShowDashboard(!showDashboard)}
           style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
         >
-          {showDashboard ? '🙁 Ocultar Dashboard' : '📊 Mostrar Dashboard'}
+          {showDashboard ? '👁 Ocultar Dashboard' : '📊 Mostrar Dashboard'}
         </button>
       </div>
 
@@ -503,7 +503,6 @@ export const CRMPage: React.FC<CRMPageProps> = ({
                         
                         <div className="timeline-container">
                           {clientHistory.length === 0 ? (
-                            {/* Estado vazio elegante */}
                             <div style={{
                               textAlign: 'center',
                               padding: '60px 20px',
@@ -586,7 +585,6 @@ export const CRMPage: React.FC<CRMPageProps> = ({
                       </div>
                   </>
               ) : (
-                  {/* Estado inicial sem cliente selecionado */}
                   <div style={{
                     display: 'flex', 
                     flexDirection: 'column', 

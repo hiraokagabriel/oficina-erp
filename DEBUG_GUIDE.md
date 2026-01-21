@@ -200,7 +200,31 @@ Error: Cannot find module './modals/InstallmentModal'
 - Verifique se o export é `export const InstallmentModal`
 - Verifique se o caminho está correto (`.` vs `..`)
 
-**2. Erros de Tipo:**
+**2. Erro: "Failed to resolve import 'uuid'"**
+
+```
+Failed to resolve import "uuid" from "src/modals/InstallmentModal.tsx"
+```
+
+**Solução:**
+✅ **CORRIGIDO!** Use `crypto.randomUUID()` em vez de importar `uuid`:
+
+```typescript
+// ❌ Errado (requer instalar pacote)
+import { v4 as uuidv4 } from 'uuid';
+const id = uuidv4();
+
+// ✅ Correto (nativo do navegador)
+const id = crypto.randomUUID();
+```
+
+**Por que usar `crypto.randomUUID()`?**
+- ✅ Nativo do navegador (sem instalar nada)
+- ✅ Suportado em todos os navegadores modernos
+- ✅ Mesmo formato UUID v4
+- ✅ Sem dependências externas
+
+**3. Erros de Tipo:**
 
 ```
 Type '{ installments: number; }' is missing 'installmentAmount'
@@ -210,7 +234,7 @@ Type '{ installments: number; }' is missing 'installmentAmount'
 - Verifique a interface em `src/types/index.ts`
 - Adicione o campo faltando ou torne-o opcional (`?`)
 
-**3. Erros de Props:**
+**4. Erros de Props:**
 
 ```
 Property 'onClientSelect' does not exist on type 'CRMDashboardProps'
@@ -378,6 +402,34 @@ setCount(prev => {
   console.log(newCount);
   return newCount;
 });
+```
+
+### Problema: Pacote não encontrado
+
+**Sintomas:**
+```
+Cannot find package 'uuid'
+Failed to resolve import "some-package"
+```
+
+**Solução:**
+
+**Opção 1: Usar alternativa nativa (recomendado)**
+```typescript
+// Em vez de uuid
+const id = crypto.randomUUID();
+
+// Em vez de lodash
+const unique = [...new Set(array)];
+```
+
+**Opção 2: Instalar o pacote**
+```bash
+npm install uuid
+# ou
+pnpm add uuid
+# ou
+yarn add uuid
 ```
 
 ---

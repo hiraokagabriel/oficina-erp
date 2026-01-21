@@ -162,7 +162,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
         overflow: 'hidden',
         boxShadow: '0 10px 40px rgba(130, 87, 230, 0.3)'
       }}>
-        {/* Decoração de fundo */}
         <div style={{
           position: 'absolute',
           top: '-100px',
@@ -175,7 +174,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
         }}/>
         
         <div style={{ position: 'relative', zIndex: 1 }}>
-          {/* Título e Ações */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
             <div>
               <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '2px', opacity: 0.9, marginBottom: '8px' }}>
@@ -202,13 +200,11 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
             </button>
           </div>
 
-          {/* 📊 ESTATÍSTICAS */}
           <div style={{ 
             display: 'grid', 
             gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
             gap: '16px'
           }}>
-            {/* Total de Processos */}
             <div style={{
               background: 'rgba(255,255,255,0.15)',
               backdropFilter: 'blur(10px)',
@@ -227,7 +223,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
               </div>
             </div>
 
-            {/* Valor Total */}
             <div style={{
               background: 'rgba(255,255,255,0.15)',
               backdropFilter: 'blur(10px)',
@@ -246,7 +241,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
               </div>
             </div>
 
-            {/* Média */}
             <div style={{
               background: 'rgba(255,255,255,0.15)',
               backdropFilter: 'blur(10px)',
@@ -265,7 +259,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
               </div>
             </div>
 
-            {/* Finalizados */}
             <div style={{
               background: 'rgba(255,255,255,0.15)',
               backdropFilter: 'blur(10px)',
@@ -284,7 +277,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
               </div>
             </div>
 
-            {/* Pendentes */}
             <div style={{
               background: 'rgba(255,255,255,0.15)',
               backdropFilter: 'blur(10px)',
@@ -309,7 +301,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
       {/* 🔍 FILTROS AVANÇADOS */}
       <div className="card" style={{ marginBottom: '24px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', alignItems: 'end' }}>
-          {/* Busca Global */}
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">🔍 Buscar</label>
             <input
@@ -321,7 +312,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
             />
           </div>
 
-          {/* Filtro de Status */}
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">📊 Status</label>
             <select 
@@ -337,7 +327,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
             </select>
           </div>
 
-          {/* Filtro de Período */}
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">📅 Período</label>
             <select 
@@ -353,7 +342,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
             </select>
           </div>
 
-          {/* Ordenação */}
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">🔢 Ordenar por</label>
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -379,7 +367,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
           </div>
         </div>
 
-        {/* Limpar Filtros */}
         {(searchTerm || selectedStatus !== 'ALL' || dateFilter !== 'all') && (
           <div style={{ marginTop: '16px', textAlign: 'right' }}>
             <button 
@@ -396,9 +383,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
         )}
       </div>
 
-      {/* 📋 LISTAGEM AGRUPADA */}
       {filteredOrders.length === 0 ? (
-        {/* Estado Vazio */}
         <div className="card" style={{
           textAlign: 'center',
           padding: '60px 20px',
@@ -425,7 +410,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
 
             return (
               <div key={status} className="process-group-modern" style={{ animation: 'fadeIn 0.3s ease-out' }}>
-                {/* Cabeçalho do Grupo */}
                 <div 
                   onClick={() => toggleGroup(status)}
                   style={{
@@ -475,7 +459,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                   </div>
                 </div>
 
-                {/* Lista de Cards */}
                 {isExpanded && (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '16px' }}>
                     {groupOrders.map((os, index) => {
@@ -506,7 +489,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                             e.currentTarget.style.boxShadow = 'none';
                           }}
                         >
-                          {/* Barra lateral colorida */}
                           <div style={{
                             position: 'absolute',
                             left: 0,
@@ -516,7 +498,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                             background: colors.border
                           }}/>
 
-                          {/* Header do Card */}
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
                             <div style={{
                               background: colors.bg,
@@ -530,7 +511,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                               OS #{os.osNumber}
                             </div>
 
-                            {/* Dropdown de Status */}
                             <div style={{ position: 'relative' }}>
                               <button
                                 className="btn-sm"
@@ -595,7 +575,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                             </div>
                           </div>
 
-                          {/* Cliente */}
                           <div style={{ marginBottom: '12px' }}>
                             <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '4px' }}>
                               {os.clientName}
@@ -605,7 +584,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                             </div>
                           </div>
 
-                          {/* Data e Valor */}
                           <div style={{ 
                             display: 'flex', 
                             justifyContent: 'space-between', 
@@ -636,7 +614,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
         </div>
       )}
 
-      {/* Animações CSS */}
       <style>{`
         @keyframes slideInUp {
           from {

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { InstallmentConfig } from '../types';
+import { Money } from '../utils/helpers';
 
 interface InstallmentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  totalAmount: number;
+  totalAmount: number; // ⚠️ JÁ VEM EM CENTAVOS!
   description: string;
   onConfirm: (config: InstallmentConfig) => void;
 }
@@ -12,7 +13,7 @@ interface InstallmentModalProps {
 export const InstallmentModal: React.FC<InstallmentModalProps> = ({
   isOpen,
   onClose,
-  totalAmount,
+  totalAmount, // JÁ É EM CENTAVOS (ex: 10000 = R$ 100,00)
   description,
   onConfirm
 }) => {
@@ -21,7 +22,9 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
     new Date().toISOString().split('T')[0]
   );
 
-  const installmentAmount = totalAmount / installments;
+  // ✅ FIX: Calcular o valor da parcela em CENTAVOS diretamente
+  // totalAmount já é centavos, então dividir por installments dá centavos/parcela
+  const installmentAmountCents = Math.round(totalAmount / installments);
 
   useEffect(() => {
     if (isOpen) {
@@ -32,11 +35,11 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
 
   const handleConfirm = () => {
     const config: InstallmentConfig = {
-      totalAmount,
+      totalAmount, // Mantém em centavos
       installments,
-      installmentAmount,
+      installmentAmount: installmentAmountCents, // ✅ JÁ ESTÁ EM CENTAVOS!
       firstPaymentDate,
-      groupId: crypto.randomUUID(), // ✅ Usando crypto.randomUUID() nativo do navegador
+      groupId: crypto.randomUUID(),
       description
     };
     onConfirm(config);
@@ -82,7 +85,8 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
               Valor Total
             </div>
             <div style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '12px' }}>
-              {totalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              {/* ✅ FIX: Formatar centavos corretamente */}
+              {Money.format(totalAmount)}
             </div>
             <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>
               {description}
@@ -99,35 +103,37 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
               gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', 
               gap: '12px' 
             }}>
-              {[2, 3, 4, 5, 6, 9, 12].map(num => (
-                <button
-                  key={num}
-                  onClick={() => setInstallments(num)}
-                  style={{
-                    padding: '16px 12px',
-                    border: installments === num 
-                      ? '2px solid var(--primary)' 
-                      : '1px solid var(--border)',
-                    borderRadius: '8px',
-                    background: installments === num 
-                      ? 'rgba(130, 87, 230, 0.1)' 
-                      : 'white',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    fontWeight: installments === num ? 'bold' : 'normal',
-                    color: installments === num ? 'var(--primary)' : 'var(--text)'
-                  }}
-                >
-                  <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>{num}x</div>
-                  <div style={{ fontSize: '0.75rem', opacity: 0.7 }}>
-                    {(totalAmount / num).toLocaleString('pt-BR', { 
-                      style: 'currency', 
-                      currency: 'BRL',
-                      minimumFractionDigits: 2
-                    })}
-                  </div>
-                </button>
-              ))}
+              {[2, 3, 4, 5, 6, 9, 12].map(num => {
+                // ✅ FIX: Calcular parcela em centavos e depois formatar
+                const parcelaEmCentavos = Math.round(totalAmount / num);
+                
+                return (
+                  <button
+                    key={num}
+                    onClick={() => setInstallments(num)}
+                    style={{
+                      padding: '16px 12px',
+                      border: installments === num 
+                        ? '2px solid var(--primary)' 
+                        : '1px solid var(--border)',
+                      borderRadius: '8px',
+                      background: installments === num 
+                        ? 'rgba(130, 87, 230, 0.1)' 
+                        : 'white',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      fontWeight: installments === num ? 'bold' : 'normal',
+                      color: installments === num ? 'var(--primary)' : 'var(--text)'
+                    }}
+                  >
+                    <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>{num}x</div>
+                    <div style={{ fontSize: '0.75rem', opacity: 0.7 }}>
+                      {/* ✅ FIX: Formatar centavos corretamente */}
+                      {Money.format(parcelaEmCentavos)}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -201,13 +207,25 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
                   </div>
                 </div>
                 <div style={{ fontWeight: 'bold', color: 'var(--primary)', fontSize: '1.1rem' }}>
-                  {installmentAmount.toLocaleString('pt-BR', { 
-                    style: 'currency', 
-                    currency: 'BRL' 
-                  })}
+                  {/* ✅ FIX: Formatar centavos corretamente */}
+                  {Money.format(installmentAmountCents)}
                 </div>
               </div>
             ))}
+            
+            {/* 👉 Exibir total para validar */}
+            <div style={{ 
+              marginTop: '16px', 
+              paddingTop: '16px', 
+              borderTop: '2px dashed var(--border)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontWeight: 'bold',
+              fontSize: '1.1rem'
+            }}>
+              <span>Total:</span>
+              <span>{Money.format(installmentAmountCents * installments)}</span>
+            </div>
           </div>
         </div>
 

@@ -83,7 +83,7 @@ export const CRMPage: React.FC<CRMPageProps> = ({
       };
   };
 
-  // ✅ CORRIGIDO: Abrir WhatsApp com logs detalhados
+  // ✅ CORRIGIDO: Abrir WhatsApp com múltiplos fallbacks
   const openWhatsApp = (phone: string, clientName: string) => {
     console.log('📱 ===== ABERTURA WHATSAPP =====');
     console.log('Telefone original:', phone);
@@ -115,10 +115,52 @@ export const CRMPage: React.FC<CRMPageProps> = ({
     const whatsappUrl = `https://wa.me/55${cleanPhone}?text=${message}`;
     console.log('URL final:', whatsappUrl);
     console.log('Telefone com código do país: +55' + cleanPhone);
-    console.log('✅ Abrindo WhatsApp...');
     
-    // Abre em nova aba
-    window.open(whatsappUrl, '_blank');
+    // ✅ MÉTODO 1: Tenta window.open() (nova aba)
+    console.log('✅ Método 1: Tentando window.open()...');
+    const newWindow = window.open(whatsappUrl, '_blank');
+    
+    // Se não conseguiu abrir (bloqueado)
+    if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+      console.warn('⚠️ window.open() bloqueado!');
+      
+      // ✅ MÉTODO 2: Tenta redirecionar na mesma aba
+      console.log('✅ Método 2: Tentando window.location.href...');
+      if (confirm(`O bloqueador de pop-ups impediu a abertura.\n\nDeseja abrir o WhatsApp na mesma aba?\n(Você perderá a página atual)`)) {
+        window.location.href = whatsappUrl;
+        return;
+      }
+      
+      // ✅ MÉTODO 3: Cria link cllicável e dispara click
+      console.log('✅ Método 3: Criando link <a> e disparando click...');
+      try {
+        const link = document.createElement('a');
+        link.href = whatsappUrl;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        console.log('✅ Link criado e clicado!');
+        return;
+      } catch (error) {
+        console.error('❌ Método 3 falhou:', error);
+      }
+      
+      // ✅ MÉTODO 4 (Último recurso): Copia URL para área de transferência
+      console.log('✅ Método 4: Copiando URL para área de transferência...');
+      try {
+        navigator.clipboard.writeText(whatsappUrl);
+        alert(`Não foi possível abrir o WhatsApp automaticamente.\n\nO link foi COPIADO para sua área de transferência!\n\nCole (Ctrl+V) no navegador:\n${whatsappUrl}`);
+        console.log('✅ URL copiada com sucesso!');
+      } catch (clipboardError) {
+        console.error('❌ Clipboard também falhou:', clipboardError);
+        // Mostra a URL em um prompt para copiar manualmente
+        prompt('Copie este link e cole no navegador:', whatsappUrl);
+      }
+    } else {
+      console.log('✅ WhatsApp aberto com sucesso via window.open()!');
+    }
   };
 
   // ✅ NOVO: Salvar edição do cliente

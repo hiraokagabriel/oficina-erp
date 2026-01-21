@@ -7,11 +7,9 @@ interface ProcessPageProps {
   onUpdateStatus: (id: string, newStatus: OSStatus) => void;
 }
 
-type ViewMode = 'grouped' | 'timeline' | 'compact';
 type SortKey = 'osNumber' | 'clientName' | 'createdAt' | 'total';
 
 export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew, onUpdateStatus }) => {
-  const [viewMode, setViewMode] = useState<ViewMode>('grouped');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<OSStatus | 'ALL'>('ALL');
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
@@ -53,7 +51,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
     // Filtro de data
     if (dateFilter !== 'all') {
       const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       
       result = result.filter(os => {
         const osDate = new Date(os.createdAt);
@@ -128,12 +125,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return {
-      day: date.getDate().toString().padStart(2, '0'),
-      month: date.toLocaleDateString('pt-BR', { month: 'short' }).toUpperCase(),
-      year: date.getFullYear(),
-      full: date.toLocaleDateString('pt-BR')
-    };
+    return date.toLocaleDateString('pt-BR');
   };
 
   const getStatusColor = (status: OSStatus) => {
@@ -145,6 +137,11 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
       ARQUIVADO: { bg: 'rgba(160, 160, 160, 0.1)', border: 'var(--text-muted)', text: 'var(--text-muted)' }
     };
     return colors[status];
+  };
+
+  const SortIcon = ({ column }: { column: SortKey }) => {
+    if (sortBy !== column) return <span style={{ opacity: 0.3, marginLeft: 5 }}>⇅</span>;
+    return <span style={{ marginLeft: 5 }}>{sortDirection === 'asc' ? '⬆️' : '⬇️'}</span>;
   };
 
   const allStatuses: OSStatus[] = ['ORCAMENTO', 'APROVADO', 'EM_SERVICO', 'FINALIZADO', 'ARQUIVADO'];
@@ -341,30 +338,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
               <option value="month">Mês</option>
             </select>
           </div>
-
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">🔢 Ordenar por</label>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <select 
-                className="form-input"
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as SortKey)}
-                style={{ cursor: 'pointer', flex: 1 }}
-              >
-                <option value="createdAt">Data</option>
-                <option value="osNumber">Nº OS</option>
-                <option value="clientName">Cliente</option>
-                <option value="total">Valor</option>
-              </select>
-              <button 
-                className="btn-sm"
-                onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
-                style={{ padding: '0 16px' }}
-              >
-                {sortDirection === 'asc' ? '⬆️' : '⬇️'}
-              </button>
-            </div>
-          </div>
         </div>
 
         {(searchTerm || selectedStatus !== 'ALL' || dateFilter !== 'all') && (
@@ -383,6 +356,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
         )}
       </div>
 
+      {/* 📋 LISTAGEM EM FORMATO DE TABELA */}
       {filteredOrders.length === 0 ? (
         <div className="card" style={{
           textAlign: 'center',
@@ -400,7 +374,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
           </p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div className="process-view" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {allStatuses.map(status => {
             const groupOrders = filteredOrders.filter(os => os.status === status);
             if (groupOrders.length === 0 && selectedStatus === 'ALL') return null;
@@ -409,150 +383,167 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
             const colors = getStatusColor(status);
 
             return (
-              <div key={status} className="process-group-modern" style={{ animation: 'fadeIn 0.3s ease-out' }}>
+              <div key={status} className="process-group" style={{ animation: 'fadeIn 0.3s ease-out' }}>
+                {/* Cabeçalho do Grupo (Clicável) */}
                 <div 
+                  className={`process-group-header status-${status}`}
                   onClick={() => toggleGroup(status)}
-                  style={{
-                    background: colors.bg,
-                    borderLeft: `4px solid ${colors.border}`,
-                    padding: '16px 24px',
-                    borderRadius: 'var(--radius-card)',
+                  style={{ 
                     cursor: 'pointer',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    transition: 'all 0.2s ease',
-                    border: `1px solid ${colors.border}`,
-                    marginBottom: isExpanded ? '16px' : 0
+                    transition: 'all 0.2s ease'
                   }}
                   onMouseEnter={(e) => e.currentTarget.style.transform = 'translateX(4px)'}
                   onMouseLeave={(e) => e.currentTarget.style.transform = 'translateX(0)'}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <span style={{ fontSize: '1.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ fontSize: '1.2rem' }}>
                       {isExpanded ? '🔽' : '🔺'}
                     </span>
-                    <div>
-                      <div style={{ 
-                        fontSize: '1.1rem', 
-                        fontWeight: 700, 
-                        color: colors.text,
-                        marginBottom: '4px'
-                      }}>
-                        {STATUS_LABELS[status]}
-                      </div>
-                      <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                        {groupOrders.length} {groupOrders.length === 1 ? 'processo' : 'processos'} • {formatMoney(groupStats[status].total)}
-                      </div>
-                    </div>
+                    <span>{STATUS_LABELS[status]}</span>
+                    <span className="count-badge">{groupOrders.length}</span>
                   </div>
-
-                  <div style={{ 
-                    background: colors.border,
-                    color: '#fff',
-                    padding: '8px 16px',
-                    borderRadius: '20px',
-                    fontWeight: 700,
-                    fontSize: '1.1rem'
-                  }}>
-                    {groupOrders.length}
+                  <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>
+                    {formatMoney(groupStats[status].total)}
                   </div>
                 </div>
-
+                
+                {/* Tabela do Grupo */}
                 {isExpanded && (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '16px' }}>
-                    {groupOrders.map((os, index) => {
-                      const dateObj = formatDate(os.createdAt);
-                      
-                      return (
-                        <div 
-                          key={os.id}
-                          className="process-card-modern"
-                          onClick={() => setSelectedOS(selectedOS === os.id ? null : os.id)}
-                          style={{
-                            background: 'var(--bg-panel)',
-                            border: `1px solid ${selectedOS === os.id ? colors.border : 'var(--border)'}`,
-                            borderRadius: '12px',
-                            padding: '20px',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease',
-                            animation: `slideInUp 0.3s ease-out ${index * 0.05}s both`,
-                            position: 'relative',
-                            overflow: 'hidden'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.transform = 'translateY(-4px)';
-                            e.currentTarget.style.boxShadow = '0 8px 20px rgba(0,0,0,0.15)';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.transform = 'translateY(0)';
-                            e.currentTarget.style.boxShadow = 'none';
-                          }}
-                        >
-                          <div style={{
-                            position: 'absolute',
-                            left: 0,
-                            top: 0,
-                            width: '4px',
-                            height: '100%',
-                            background: colors.border
-                          }}/>
-
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                            <div style={{
-                              background: colors.bg,
-                              border: `1px solid ${colors.border}`,
-                              padding: '6px 12px',
-                              borderRadius: '8px',
-                              fontWeight: 700,
-                              color: colors.text,
-                              fontSize: '0.9rem'
-                            }}>
-                              OS #{os.osNumber}
-                            </div>
-
-                            <div style={{ position: 'relative' }}>
-                              <button
-                                className="btn-sm"
+                  <div className="card" style={{ 
+                    padding: 0, 
+                    overflow: 'visible', 
+                    borderTopLeftRadius: 0, 
+                    marginTop: -1,
+                    animation: 'slideDown 0.3s ease-out'
+                  }}>
+                    <table className="process-table">
+                      <thead>
+                        <tr>
+                          <th 
+                            style={{ width: '12%', cursor: 'pointer' }} 
+                            onClick={() => handleSort('osNumber')}
+                            className="sortable-th"
+                          > 
+                            Nº OS <SortIcon column="osNumber" />
+                          </th>
+                          <th 
+                            onClick={() => handleSort('clientName')} 
+                            className="sortable-th"
+                            style={{ cursor: 'pointer' }}
+                          >
+                            Cliente / Veículo <SortIcon column="clientName"/>
+                          </th>
+                          <th 
+                            style={{ width: '15%', cursor: 'pointer' }} 
+                            onClick={() => handleSort('createdAt')}
+                            className="sortable-th"
+                          >
+                            Data <SortIcon column="createdAt" />
+                          </th>
+                          <th 
+                            style={{ width: '15%', cursor: 'pointer' }}
+                            onClick={() => handleSort('total')}
+                            className="sortable-th"
+                          >
+                            Valor <SortIcon column="total" />
+                          </th>
+                          <th style={{ width: '18%' }}>Status (Alterar)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {groupOrders.map((os, index) => (
+                          <tr 
+                            key={os.id} 
+                            className="process-row"
+                            style={{
+                              animation: `slideIn 0.3s ease-out ${index * 0.03}s both`,
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            <td>
+                              <span className="os-number" style={{
+                                background: colors.bg,
+                                border: `1px solid ${colors.border}`,
+                                color: colors.text,
+                                padding: '4px 10px',
+                                borderRadius: '6px',
+                                fontWeight: 700,
+                                fontSize: '0.85rem'
+                              }}>#{os.osNumber}</span>
+                            </td>
+                            <td>
+                              <div className="cell-primary">{os.clientName}</div>
+                              <div className="cell-secondary">🚗 {os.vehicle}</div>
+                            </td>
+                            <td className="cell-secondary">
+                              📅 {formatDate(os.createdAt)}
+                            </td>
+                            <td>
+                              <span style={{
+                                fontWeight: 700,
+                                color: 'var(--success)',
+                                fontSize: '1.05rem',
+                                fontFamily: 'monospace'
+                              }}>
+                                {formatMoney(os.total)}
+                              </span>
+                            </td>
+                            
+                            {/* Célula de Status com Dropdown */}
+                            <td className="status-cell" style={{ position: 'relative' }}>
+                              <span 
+                                className={`status-badge st-${os.status} clickable`}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setSelectedOS(selectedOS === os.id ? null : os.id);
                                 }}
                                 style={{
-                                  background: colors.bg,
-                                  borderColor: colors.border,
-                                  color: colors.text
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  transition: 'all 0.2s ease'
                                 }}
                               >
-                                {STATUS_LABELS[os.status]} ▼
-                              </button>
+                                {STATUS_LABELS[os.status]} 
+                                <span className="dropdown-arrow">▼</span>
+                              </span>
 
+                              {/* Menu Dropdown */}
                               {selectedOS === os.id && (
-                                <div style={{
-                                  position: 'absolute',
-                                  top: '100%',
-                                  right: 0,
-                                  marginTop: '8px',
-                                  background: 'var(--bg-panel)',
-                                  border: '1px solid var(--border)',
-                                  borderRadius: '8px',
-                                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                                  zIndex: 10,
-                                  minWidth: '180px',
-                                  overflow: 'hidden'
-                                }}>
-                                  {allStatuses.map(newStatus => (
-                                    <div
-                                      key={newStatus}
+                                <div 
+                                  className="status-dropdown-menu" 
+                                  style={{
+                                    position: 'absolute',
+                                    top: '100%',
+                                    left: 0,
+                                    marginTop: '8px',
+                                    background: 'var(--bg-panel)',
+                                    border: '1px solid var(--border)',
+                                    borderRadius: '8px',
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                    zIndex: 100,
+                                    minWidth: '180px',
+                                    overflow: 'hidden',
+                                    animation: 'fadeIn 0.2s ease-out'
+                                  }}
+                                >
+                                  {allStatuses.map(optStatus => (
+                                    <div 
+                                      key={optStatus}
+                                      className={`status-option ${optStatus === os.status ? 'selected' : ''}`}
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        onUpdateStatus(os.id, newStatus);
+                                        onUpdateStatus(os.id, optStatus);
                                         setSelectedOS(null);
                                       }}
                                       style={{
                                         padding: '12px 16px',
                                         cursor: 'pointer',
-                                        background: newStatus === os.status ? 'var(--bg-card-hover)' : 'transparent',
+                                        background: optStatus === os.status ? 'var(--bg-card-hover)' : 'transparent',
                                         borderBottom: '1px solid var(--border)',
                                         display: 'flex',
                                         alignItems: 'center',
@@ -561,51 +552,22 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                                       }}
                                       onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-card-hover)'}
                                       onMouseLeave={(e) => {
-                                        if (newStatus !== os.status) {
+                                        if (optStatus !== os.status) {
                                           e.currentTarget.style.background = 'transparent';
                                         }
                                       }}
                                     >
-                                      {newStatus === os.status && <span>✔️</span>}
-                                      <span>{STATUS_LABELS[newStatus]}</span>
+                                      {optStatus === os.status && <span>✔️</span>}
+                                      {STATUS_LABELS[optStatus]}
                                     </div>
                                   ))}
                                 </div>
                               )}
-                            </div>
-                          </div>
-
-                          <div style={{ marginBottom: '12px' }}>
-                            <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '4px' }}>
-                              {os.clientName}
-                            </div>
-                            <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              🚗 {os.vehicle}
-                            </div>
-                          </div>
-
-                          <div style={{ 
-                            display: 'flex', 
-                            justifyContent: 'space-between', 
-                            alignItems: 'center',
-                            paddingTop: '12px',
-                            borderTop: '1px solid var(--border)'
-                          }}>
-                            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                              📅 {dateObj.full}
-                            </div>
-                            <div style={{ 
-                              fontSize: '1.2rem', 
-                              fontWeight: 800, 
-                              color: 'var(--success)',
-                              fontFamily: 'monospace'
-                            }}>
-                              {formatMoney(os.total)}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
@@ -614,16 +576,43 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
         </div>
       )}
 
+      {/* Animações CSS */}
       <style>{`
-        @keyframes slideInUp {
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        
+        @keyframes slideIn {
           from {
             opacity: 0;
-            transform: translateY(20px);
+            transform: translateX(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
           }
           to {
             opacity: 1;
             transform: translateY(0);
           }
+        }
+
+        .process-row:hover {
+          background-color: var(--bg-card-hover) !important;
+          transform: translateX(2px);
+        }
+
+        .status-badge.clickable:hover {
+          transform: scale(1.05);
+          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
         }
       `}</style>
     </>

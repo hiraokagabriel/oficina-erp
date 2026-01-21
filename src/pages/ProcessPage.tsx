@@ -145,8 +145,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
     <div>
       {/* 🏝️ ILHA FLUTUANTE - ELEMENTO NORMAL DO FLUXO */}
       <div style={{
-        width: '100%',
-        maxWidth: '100%',
         background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
         borderRadius: '24px',
         padding: '40px',

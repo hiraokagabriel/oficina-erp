@@ -18,7 +18,6 @@ interface KanbanCardProps {
     onRestore?: (os: WorkOrder) => void;
     onQuickFinish?: (id: string) => void;
   };
-  onWhatsApp?: () => void;
   isDragging?: boolean;
 }
 
@@ -27,7 +26,6 @@ export const KanbanCard = React.memo(({
   formatMoney, 
   status, 
   actions, 
-  onWhatsApp,
   isDragging: forcedDragging
 }: KanbanCardProps) => {
   const {
@@ -64,6 +62,23 @@ export const KanbanCard = React.memo(({
     return { color: 'var(--danger)', bg: 'rgba(229, 76, 76, 0.1)' };
   };
 
+  // 🆕 FUNÇÃO PARA ABRIR WHATSAPP
+  const handleWhatsApp = () => {
+    if (!os.clientPhone) return;
+    
+    // Remove caracteres não numéricos do telefone
+    const phone = os.clientPhone.replace(/\D/g, '');
+    
+    // Adiciona código do país (Brasil = 55) se não tiver
+    const fullPhone = phone.startsWith('55') ? phone : `55${phone}`;
+    
+    // Mensagem padrão
+    const message = encodeURIComponent(`Olá ${os.clientName}, tudo bem? Sou da oficina em relação à OS #${os.osNumber} do seu ${os.vehicle}.`);
+    
+    // Abre WhatsApp Web
+    window.open(`https://wa.me/${fullPhone}?text=${message}`, '_blank');
+  };
+
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
       <div
@@ -90,6 +105,7 @@ export const KanbanCard = React.memo(({
           willChange: 'transform, box-shadow, opacity',
         }}
       >
+        {/* HEADER: NÚmero da OS e Valor */}
         <div className="os-header">
           <span className="os-number">#{os.osNumber}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -114,92 +130,134 @@ export const KanbanCard = React.memo(({
             )}
           </div>
         </div>
+
+        {/* INFO: Cliente, Veículo, Telefone */}
         <div className="os-client">{os.clientName}</div>
         <div className="os-vehicle">{os.vehicle}</div>
         
+        {/* 🆕 TELEFONE COM BOTÃO WHATSAPP */}
         {os.clientPhone && (
-          <div className="os-id" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span>📞 {os.clientPhone}</span>
-            {onWhatsApp && (
-              <button 
-                  className="btn-icon" 
-                  title="Enviar mensagem no WhatsApp"
-                  onClick={(e) => { e.stopPropagation(); onWhatsApp(); }}
-                  style={{
-                      background: '#25D366', 
-                      color: '#fff', 
-                      border: 'none', 
-                      borderRadius: '50%',
-                      width: '22px', 
-                      height: '22px', 
-                      display: 'flex', 
-                      alignItems: 'center',
-                      justifyContent: 'center', 
-                      cursor: 'pointer', 
-                      fontSize: '0.8rem',
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                  }}
-              >
-                  💬
-              </button>
-            )}
+          <div 
+            className="os-phone" 
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 8,
+              fontSize: '0.85rem',
+              color: 'var(--text-muted)',
+              marginTop: 6,
+              paddingTop: 6,
+              borderTop: '1px solid var(--border)'
+            }}
+          >
+            <span style={{ flex: 1 }}>📞 {os.clientPhone}</span>
+            <button 
+              className="btn-whatsapp" 
+              title="Enviar mensagem no WhatsApp"
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                handleWhatsApp(); 
+              }}
+              style={{
+                background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                padding: '4px 8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                boxShadow: '0 2px 4px rgba(37, 211, 102, 0.3)',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'scale(1.05)';
+                e.currentTarget.style.boxShadow = '0 4px 8px rgba(37, 211, 102, 0.4)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.boxShadow = '0 2px 4px rgba(37, 211, 102, 0.3)';
+              }}
+            >
+              <span style={{ marginRight: 4 }}>💬</span>
+              WhatsApp
+            </button>
           </div>
         )}
 
-        {/* ✅ Esconde ações durante drag para melhor performance */}
+        {/* 🆕 AÇÕES REORGANIZADAS - Mais espaçadas e harmônicas */}
         <div 
           className="card-actions" 
           style={{ 
             display: isDragging || forcedDragging ? 'none' : 'flex',
             opacity: isDragging || forcedDragging ? 0 : 1,
+            flexDirection: 'column',
+            gap: 8,
+            marginTop: 12,
+            paddingTop: 12,
+            borderTop: '1px solid var(--border)'
           }}
         >
-          {status !== 'ARQUIVADO' && status !== 'ORCAMENTO' && (
+          {/* LINHA 1: Ações Principais (Editar, Checklist, Imprimir) */}
+          <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
             <button 
               className="btn-icon" 
-              title="Voltar" 
-              onClick={(e) => {
-                e.stopPropagation(); 
-                actions.onRegress(os.id);
-              }}
-            >
-              ⬅️
-            </button>
-          )}
-
-          <div style={{ display: 'flex', gap: 5 }}>
-            <button 
-              className="btn-icon" 
-              title="Editar" 
+              title="Editar OS" 
               onClick={(e) => {
                 e.stopPropagation(); 
                 actions.onEdit(os);
               }}
+              style={{ padding: '6px 10px', fontSize: '0.9rem' }}
             >
-              ✏️
+              ✏️ Editar
             </button>
             <button 
-              className="btn-icon check" 
-              title="Checklist" 
+              className="btn-icon" 
+              title="Checklist de Inspeção" 
               onClick={(e) => {
                 e.stopPropagation(); 
                 actions.onChecklist(os);
               }}
+              style={{ padding: '6px 10px', fontSize: '0.9rem' }}
             >
-              📋
+              📋 Check
             </button>
             <button 
               className="btn-icon" 
-              title="Imprimir" 
+              title="Imprimir OS" 
               onClick={(e) => {
                 e.stopPropagation(); 
                 actions.onPrint(os);
               }}
+              style={{ padding: '6px 10px', fontSize: '0.9rem' }}
             >
-              🖨️
+              🖨️ Print
             </button>
-            
-            {status === 'ARQUIVADO' ? (
+          </div>
+
+          {/* LINHA 2: Navegação e Gerenciamento */}
+          <div style={{ display: 'flex', gap: 6, justifyContent: 'space-between', alignItems: 'center' }}>
+            {/* Botão Voltar (esquerda) */}
+            {status !== 'ARQUIVADO' && status !== 'ORCAMENTO' && (
+              <button 
+                className="btn-icon" 
+                title="Voltar Status" 
+                onClick={(e) => {
+                  e.stopPropagation(); 
+                  actions.onRegress(os.id);
+                }}
+                style={{ padding: '6px 12px' }}
+              >
+                ⬅️
+              </button>
+            )}
+
+            {/* Ações centrais (Arquivar/Restaurar, Excluir) */}
+            <div style={{ display: 'flex', gap: 6 }}>
+              {status === 'ARQUIVADO' ? (
                 <button 
                   className="btn-icon" 
                   title="Restaurar OS" 
@@ -207,11 +265,11 @@ export const KanbanCard = React.memo(({
                     e.stopPropagation(); 
                     actions.onRestore && actions.onRestore(os);
                   }} 
-                  style={{color: 'var(--success)'}}
+                  style={{ padding: '6px 10px', color: 'var(--success)' }}
                 >
-                    ↩️
+                  ↩️ Restaurar
                 </button>
-            ) : (
+              ) : (
                 <button 
                   className="btn-icon" 
                   title="Arquivar OS" 
@@ -219,36 +277,40 @@ export const KanbanCard = React.memo(({
                     e.stopPropagation(); 
                     actions.onArchive && actions.onArchive(os);
                   }} 
-                  style={{color: 'var(--text-muted)'}}
+                  style={{ padding: '6px 10px', color: 'var(--text-muted)' }}
                 >
-                    📦
+                  📦 Arquivar
                 </button>
-            )}
-            
-            <button 
-              className="btn-icon danger" 
-              title="Excluir" 
-              onClick={(e) => {
-                e.stopPropagation(); 
-                actions.onDelete(os);
-              }}
-            >
-              🗑️
-            </button>
-          </div>
+              )}
+              
+              <button 
+                className="btn-icon danger" 
+                title="Excluir OS Permanentemente" 
+                onClick={(e) => {
+                  e.stopPropagation(); 
+                  actions.onDelete(os);
+                }}
+                style={{ padding: '6px 10px' }}
+              >
+                🗑️ Excluir
+              </button>
+            </div>
 
-          {status !== 'ARQUIVADO' && status !== 'FINALIZADO' && (
-            <button 
-              className="btn-icon" 
-              title="Avançar" 
-              onClick={(e) => {
-                e.stopPropagation(); 
-                actions.onAdvance(os.id);
-              }}
-            >
-              ➡️
-            </button>
-          )}
+            {/* Botão Avançar (direita) */}
+            {status !== 'ARQUIVADO' && status !== 'FINALIZADO' && (
+              <button 
+                className="btn-icon" 
+                title="Avançar Status" 
+                onClick={(e) => {
+                  e.stopPropagation(); 
+                  actions.onAdvance(os.id);
+                }}
+                style={{ padding: '6px 12px' }}
+              >
+                ➡️
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { LedgerEntry } from '../types';
+import { getLocalDateString } from '../utils/helpers';
 
 interface EntryModalProps {
   isOpen: boolean;
@@ -34,7 +35,7 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
             setDescription('');
             setAmount('');
             setType('DEBIT');
-            setDate(new Date().toISOString().split('T')[0]);
+            setDate(getLocalDateString()); // 🔧 CORREÇÃO: Usa data local do computador
             setRecurrence('SINGLE');
             setCount(2);
         }

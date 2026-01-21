@@ -35,6 +35,7 @@ export interface WorkOrder {
   publicNotes?: string;
   paymentMethod?: 'CASH' | 'CARD' | 'PIX' | 'INSTALLMENT';
   installmentConfig?: InstallmentConfig;
+  paymentDate?: string; // 🆕 Data de pagamento (preenchida ao finalizar)
 }
 
 // ✅ FIX: Adicionar lastInstallmentAmount para arredondamento correto

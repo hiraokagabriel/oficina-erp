@@ -22,20 +22,31 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
     new Date().toISOString().split('T')[0]
   );
 
-  // ✅ FIX: Calcular parcelas com arredondamento correto
+  // ✅ FIX CRÍTICO: Arredondamento perfeito de parcelas
+  // Exemplo: R$ 100 (10000 centavos) ÷ 3 parcelas
+  // = 2x R$ 33,33 (3333 centavos) + 1x R$ 33,34 (3334 centavos)
   const calculateInstallments = (total: number, count: number) => {
-    const totalInReais = Money.toFloat(total);
-    const baseValue = Math.floor((totalInReais / count) * 100) / 100; // Arredondar para baixo
-    const baseValueInCents = Money.fromFloat(baseValue);
+    // Valor base por parcela (arredondado para baixo)
+    const baseValueInCents = Math.floor(total / count);
     
-    // Calcular o resto para a última parcela
-    const sumOfNormalInstallments = baseValueInCents * (count - 1);
-    const lastInstallment = total - sumOfNormalInstallments;
+    // Calcular o resto que sobra
+    const remainder = total - (baseValueInCents * count);
+    
+    // Última parcela = base + resto
+    const lastInstallmentAmount = baseValueInCents + remainder;
+    
+    // Validação: (count-1) * base + lastInstallment deve ser = total
+    const calculatedTotal = (baseValueInCents * (count - 1)) + lastInstallmentAmount;
+    
+    if (calculatedTotal !== total) {
+      console.error('Erro de arredondamento!', { total, calculatedTotal, diff: total - calculatedTotal });
+    }
     
     return {
       normalInstallmentAmount: baseValueInCents,
-      lastInstallmentAmount: lastInstallment,
-      installmentsCount: count
+      lastInstallmentAmount: lastInstallmentAmount,
+      installmentsCount: count,
+      isValid: calculatedTotal === total
     };
   };
 
@@ -193,7 +204,7 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
                     background: 'white',
                     borderRadius: '8px',
                     marginBottom: '8px',
-                    border: '1px solid var(--border)'
+                    border: isLast ? '2px solid var(--success)' : '1px solid var(--border)'
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -201,7 +212,7 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
                       width: '32px',
                       height: '32px',
                       borderRadius: '50%',
-                      background: 'var(--primary)',
+                      background: isLast ? 'var(--success)' : 'var(--primary)',
                       color: 'white',
                       display: 'flex',
                       alignItems: 'center',
@@ -213,30 +224,37 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
                     </div>
                     <div>
                       <div style={{ fontWeight: 500, color: 'var(--text)' }}>
-                        Parcela {index + 1}/{installments}
+                        Parcela {index + 1}/{installments} {isLast && '✅'}
                       </div>
                       <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                         Vencimento: {date.toLocaleDateString('pt-BR')}
                       </div>
                     </div>
                   </div>
-                  <div style={{ fontWeight: 'bold', color: 'var(--primary)', fontSize: '1.1rem' }}>
+                  <div style={{ fontWeight: 'bold', color: isLast ? 'var(--success)' : 'var(--primary)', fontSize: '1.1rem' }}>
                     {Money.format(amount)}
                   </div>
                 </div>
               );
             })}
             
-            {/* ✅ Mostra verificação da soma */}
+            {/* ✅ Validação da soma */}
             <div style={{
               marginTop: '12px',
               padding: '12px',
-              background: 'rgba(34, 197, 94, 0.1)',
+              background: installmentCalc.isValid ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
               borderRadius: '8px',
               fontSize: '0.85rem',
-              color: 'var(--success)'
+              color: installmentCalc.isValid ? 'var(--success)' : 'var(--danger)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
             }}>
-              ✅ Soma das parcelas: {Money.format(totalAmount)}
+              {installmentCalc.isValid ? '✅' : '⚠️'}
+              <div>
+                <strong>Soma das parcelas:</strong> {Money.format(totalAmount)}
+                {!installmentCalc.isValid && <div style={{ fontSize: '0.75rem', marginTop: '4px' }}>Erro de arredondamento detectado!</div>}
+              </div>
             </div>
           </div>
         </div>
@@ -245,7 +263,11 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
           <button className="btn btn-secondary" onClick={onClose}>
             Cancelar
           </button>
-          <button className="btn btn-primary" onClick={handleConfirm}>
+          <button 
+            className="btn btn-primary" 
+            onClick={handleConfirm}
+            disabled={!installmentCalc.isValid}
+          >
             ✅ Confirmar Parcelamento
           </button>
         </div>

@@ -24,6 +24,7 @@ const DatabaseModal = lazy(() => import('./modals/DatabaseModal').then(m => ({ d
 const DeleteConfirmationModal = lazy(() => import('./modals/DeleteConfirmationModal').then(m => ({ default: m.DeleteConfirmationModal })));
 const ConfirmationModal = lazy(() => import('./modals/ConfirmationModal').then(m => ({ default: m.ConfirmationModal })));
 const InstallmentModal = lazy(() => import('./modals/InstallmentModal').then(m => ({ default: m.InstallmentModal })));
+const ChoiceModal = lazy(() => import('./modals/ChoiceModal').then(m => ({ default: m.ChoiceModal })));
 
 import { SoundFX } from './utils/audio';
 import { Money, createEntry, updateWorkOrderData, learnClientData, learnCatalogItems } from './utils/helpers';
@@ -51,6 +52,8 @@ function AppContent() {
   const [isDatabaseModalOpen, setIsDatabaseModalOpen] = useState(false);
   const [isInstallmentModalOpen, setIsInstallmentModalOpen] = useState(false);
   const [installmentOS, setInstallmentOS] = useState<WorkOrder | null>(null);
+  const [isInstallmentChoiceOpen, setIsInstallmentChoiceOpen] = useState(false);
+  const [pendingInstallmentOS, setPendingInstallmentOS] = useState<WorkOrder | null>(null);
   const [editingOS, setEditingOS] = useState<WorkOrder | null>(null);
   const [editingEntry, setEditingEntry] = useState<LedgerEntry | null>(null);
   const [checklistOS, setChecklistOS] = useState<WorkOrder | null>(null);
@@ -303,37 +306,6 @@ function AppContent() {
     setDeleteModalInfo({ isOpen: false, entry: null });
   };
 
-  const handleSaveClient = (updatedClient: Client) => {
-    const oldClient = clients.find(c => c.id === updatedClient.id);
-    setClients(prev => prev.find(c => c.id === updatedClient.id) ? prev.map(c => c.id === updatedClient.id ? updatedClient : c) : [...prev, updatedClient]);
-    const { newWorkOrders, newLedger, hasChanges } = updateClientCascading(oldClient, updatedClient, workOrders, ledger);
-    if (hasChanges) {
-      setWorkOrders(newWorkOrders);
-      setLedger(newLedger);
-      addToast("Atualizado em cascata!", "success");
-    } else {
-      addToast("Salvo!", "success");
-    }
-  };
-
-  const handleSaveCatalogItem = (updatedItem: CatalogItem, type: 'part' | 'service') => {
-    let oldItem: CatalogItem | undefined;
-    if (type === 'part') {
-      oldItem = catalogParts.find(p => p.id === updatedItem.id);
-      setCatalogParts(prev => prev.find(p => p.id === updatedItem.id) ? prev.map(p => p.id === updatedItem.id ? updatedItem : p) : [...prev, updatedItem]);
-    } else {
-      oldItem = catalogServices.find(s => s.id === updatedItem.id);
-      setCatalogServices(prev => prev.find(s => s.id === updatedItem.id) ? prev.map(s => s.id === updatedItem.id ? updatedItem : s) : [...prev, updatedItem]);
-    }
-    const { newWorkOrders, hasChanges } = updateCatalogItemCascading(oldItem, updatedItem, workOrders);
-    if (hasChanges) {
-      setWorkOrders(newWorkOrders);
-      addToast("Atualizado em cascata!", "success");
-    } else {
-      addToast("Salvo!", "success");
-    }
-  };
-
   const handleInstallmentConfirm = (config: any) => {
     console.log('🚀 ===== INÍCIO PARCELAMENTO =====');
     console.log('installmentOS:', installmentOS);
@@ -429,37 +401,11 @@ function AppContent() {
       const os = pendingAction.data;
       console.log('💰 FINISH_OS_FINANCIAL:', os);
       
-      if (confirm(`Deseja parcelar ${Money.format(os.total)}?`)) {
-        console.log('✅ Usuário escolheu PARCELAR');
-        setInstallmentOS(os);
-        setIsInstallmentModalOpen(true);
-        setPendingAction(null);
-        return;
-      }
-      
-      console.log('❌ Usuário escolheu NÃO parcelar - pagamento único');
-      const paymentDate = new Date().toISOString();
-      const entry = createEntry(
-        `Receita OS #${os.osNumber} - ${os.clientName}`, 
-        os.total, 
-        'CREDIT', 
-        os.createdAt,
-        undefined, // groupId
-        paymentDate // 🔧 PASSA DATA DE PAGAMENTO
-      );
-      setLedger(prev => [entry, ...prev]);
-      setWorkOrders(prev => prev.map(o => 
-        o.id === os.id 
-          ? { 
-              ...o, 
-              status: 'FINALIZADO' as OSStatus, 
-              financialId: entry.id,
-              paymentDate: paymentDate
-            } 
-          : o
-      ));
-      addToast("OS Finalizada!", "success");
-      setShowConfetti(true);
+      // ✅ AGORA ABRE O MODAL BONITO ao invés de confirm() feio
+      setPendingInstallmentOS(os);
+      setIsInstallmentChoiceOpen(true);
+      setPendingAction(null);
+      return;
     }
 
     if (pendingAction.type === 'RESTORE_FINANCIAL') {
@@ -525,6 +471,43 @@ function AppContent() {
     setPendingAction(null);
   };
 
+  // 🆕 NOVA FUNÇÃO: Lidar com resposta do ChoiceModal
+  const handleInstallmentChoice = (wantsInstallment: boolean) => {
+    if (!pendingInstallmentOS) return;
+
+    if (wantsInstallment) {
+      console.log('✅ Usuário escolheu PARCELAR');
+      setInstallmentOS(pendingInstallmentOS);
+      setIsInstallmentModalOpen(true);
+    } else {
+      console.log('❌ Usuário escolheu NÃO parcelar - pagamento único');
+      const paymentDate = new Date().toISOString();
+      const entry = createEntry(
+        `Receita OS #${pendingInstallmentOS.osNumber} - ${pendingInstallmentOS.clientName}`, 
+        pendingInstallmentOS.total, 
+        'CREDIT', 
+        pendingInstallmentOS.createdAt,
+        undefined, // groupId
+        paymentDate // 🔧 PASSA DATA DE PAGAMENTO
+      );
+      setLedger(prev => [entry, ...prev]);
+      setWorkOrders(prev => prev.map(o => 
+        o.id === pendingInstallmentOS.id 
+          ? { 
+              ...o, 
+              status: 'FINALIZADO' as OSStatus, 
+              financialId: entry.id,
+              paymentDate: paymentDate
+            } 
+          : o
+      ));
+      addToast("OS Finalizada!", "success");
+      setShowConfetti(true);
+    }
+
+    setPendingInstallmentOS(null);
+  };
+
   useEffect(() => { document.documentElement.setAttribute('data-theme', currentTheme); }, [currentTheme]);
   useEffect(() => { if (showConfetti) setTimeout(() => setShowConfetti(false), 3000); }, [showConfetti]);
 
@@ -543,6 +526,7 @@ function AppContent() {
     if (isChecklistOpen) setIsChecklistOpen(false);
     if (isDatabaseModalOpen) setIsDatabaseModalOpen(false);
     if (isInstallmentModalOpen) { setIsInstallmentModalOpen(false); setInstallmentOS(null); }
+    if (isInstallmentChoiceOpen) { setIsInstallmentChoiceOpen(false); setPendingInstallmentOS(null); }
     if (deleteModalInfo.isOpen) setDeleteModalInfo({ isOpen: false, entry: null });
     if (pendingAction) setPendingAction(null);
   });
@@ -575,6 +559,24 @@ function AppContent() {
         {isChecklistOpen && <ChecklistModal isOpen={isChecklistOpen} onClose={() => setIsChecklistOpen(false)} onSave={(data) => { if (checklistOS) setWorkOrders(p => p.map(o => o.id === checklistOS.id ? { ...o, checklist: data } : o)); setIsChecklistOpen(false); }} os={checklistOS} />}
         <PrintableInvoice data={printingOS} settings={settings} formatMoney={Money.format} />
         {deleteModalInfo.isOpen && <DeleteConfirmationModal isOpen={deleteModalInfo.isOpen} onClose={() => setDeleteModalInfo({ isOpen: false, entry: null })} onConfirmSingle={confirmDeleteSingle} onConfirmGroup={confirmDeleteGroup} isGroup={!!deleteModalInfo.entry?.groupId} />}
+        
+        {/* 🆕 NOVO MODAL BONITO DE PARCELAMENTO */}
+        {isInstallmentChoiceOpen && pendingInstallmentOS && (
+          <ChoiceModal
+            isOpen={isInstallmentChoiceOpen}
+            onClose={() => { setIsInstallmentChoiceOpen(false); setPendingInstallmentOS(null); }}
+            onYes={() => handleInstallmentChoice(true)}
+            onNo={() => handleInstallmentChoice(false)}
+            title="Deseja Parcelar?"
+            message={`Valor total: ${Money.format(pendingInstallmentOS.total)}\n\nEscolha como deseja receber o pagamento`}
+            yesText="Parcelar"
+            noText="Pagamento Único"
+            yesIcon="💳"
+            noIcon="💵"
+            icon="💰"
+          />
+        )}
+        
         {pendingAction && <ConfirmationModal isOpen={!!pendingAction} onClose={() => setPendingAction(null)} onConfirm={executePendingAction} title={pendingAction?.type === 'DELETE_OS' ? 'Excluir OS?' : pendingAction?.type === 'ARCHIVE_OS' ? 'Arquivar OS?' : pendingAction?.type === 'FINISH_OS_FINANCIAL' ? 'OS Finalizada' : pendingAction?.type === 'RESTORE_FINANCIAL' ? 'Reabrir OS?' : pendingAction?.type === 'IMPORT_DATA' ? 'Importar?' : 'Confirmar'} message={pendingAction?.type === 'DELETE_OS' ? 'Removerá a OS e lançamento financeiro.' : pendingAction?.type === 'ARCHIVE_OS' ? 'A OS sairá do quadro Kanban.' : pendingAction?.type === 'FINISH_OS_FINANCIAL' ? `Lançar ${Money.format(pendingAction.data?.total || 0)} nas Receitas?` : pendingAction?.type === 'RESTORE_FINANCIAL' ? 'Removerá o lançamento financeiro.' : pendingAction?.type === 'IMPORT_DATA' ? 'Substituir todos os dados?' : 'Tem certeza?'} confirmText={pendingAction?.type === 'DELETE_OS' ? 'Excluir' : pendingAction?.type === 'IMPORT_DATA' ? 'Substituir' : 'Confirmar'} confirmColor={pendingAction?.type === 'DELETE_OS' || pendingAction?.type === 'RESTORE_FINANCIAL' ? 'danger' : 'primary'} />}
       </Suspense>
     </>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { WorkOrder, Client, OrderItem, CatalogItem } from '../types';
+import { getLocalDateString } from '../utils/helpers';
 
 interface OSModalProps {
   isOpen: boolean;
@@ -65,7 +66,7 @@ export const OSModal: React.FC<OSModalProps> = ({
     if (isOpen) {
       if (editingOS) {
         setOsNumber(editingOS.osNumber.toString());
-        setDate(editingOS.createdAt ? editingOS.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]);
+        setDate(editingOS.createdAt ? editingOS.createdAt.split('T')[0] : getLocalDateString());
         // 🆕 CARREGAR DATA DE PAGAMENTO
         setPaymentDate(editingOS.paymentDate ? editingOS.paymentDate.split('T')[0] : "");
         setClientName(editingOS.clientName);
@@ -88,7 +89,7 @@ export const OSModal: React.FC<OSModalProps> = ({
         setServices((editingOS.services || []) as OrderItem[]);
       } else {
         setOsNumber(nextOSNumber.toString());
-        setDate(new Date().toISOString().split('T')[0]);
+        setDate(getLocalDateString()); // 🔧 CORREÇÃO: Usa data local do computador
         setPaymentDate(""); // 🆕 VAZIO POR PADRÃO
         setClientName("");
         setContact("");

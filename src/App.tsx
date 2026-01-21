@@ -452,8 +452,14 @@ function AppContent() {
         'CREDIT', 
         os.createdAt,
         undefined, // groupId
+<<<<<<< Updated upstream
         paymentDate // 🔧 PASSA DATA DE PAGAMENTO
       );
+=======
+        paymentDate // 🔧 Passa a data de pagamento
+      );
+
+>>>>>>> Stashed changes
       setLedger(prev => [entry, ...prev]);
       setWorkOrders(prev => prev.map(o => 
         o.id === os.id 

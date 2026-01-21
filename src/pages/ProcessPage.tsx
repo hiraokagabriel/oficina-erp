@@ -157,13 +157,13 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
 
   return (
     <div style={{ position: 'relative' }}>
-      {/* 🔒 HEADER FIXO NO TOPO DA PÁGINA */}
+      {/* 🔒 HEADER FIXO NO TOPO - ALINHADO COM SIDEBAR */}
       <div 
         ref={headerRef}
         style={{
           position: 'fixed',
           top: 0,
-          left: 0,
+          left: '260px', // 👈 COMPENSA A LARGURA DA SIDEBAR!
           right: 0,
           background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
           borderRadius: '0 0 var(--radius-card) var(--radius-card)',

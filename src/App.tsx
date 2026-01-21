@@ -453,8 +453,14 @@ function AppContent() {
         os.createdAt,
         undefined, // groupId
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         paymentDate // 🔧 PASSA DATA DE PAGAMENTO
       );
+=======
+        paymentDate // 🔧 Passa a data de pagamento
+      );
+
+>>>>>>> Stashed changes
 =======
         paymentDate // 🔧 Passa a data de pagamento
       );

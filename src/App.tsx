@@ -207,7 +207,19 @@ function AppContent() {
     setCatalogServices(prev => learnCatalogItems(prev, data.services));
 
     if (editingOS) {
-      const updated = updateWorkOrderData(editingOS, data.osNumber, data.vehicle, data.clientName, data.clientPhone, data.mileage, data.parts, data.services, data.createdAt);
+      // 🔧 AGORA PASSA PUBLICNOTES
+      const updated = updateWorkOrderData(
+        editingOS, 
+        data.osNumber, 
+        data.vehicle, 
+        data.clientName, 
+        data.clientPhone, 
+        data.mileage, 
+        data.parts, 
+        data.services, 
+        data.createdAt,
+        data.publicNotes // 🔧 ADICIONA PUBLICNOTES
+      );
       setWorkOrders(prev => prev.map(o => o.id === editingOS.id ? updated : o));
       
       if (updated.financialId) {
@@ -215,6 +227,7 @@ function AppContent() {
       }
       addToast("OS atualizada!", "success");
     } else {
+      // 🔧 NOVA OS TAMBÉM PRECISA DE PUBLICNOTES
       const newOS = {
         id: crypto.randomUUID(),
         osNumber: data.osNumber,
@@ -226,7 +239,8 @@ function AppContent() {
         parts: data.parts,
         services: data.services,
         total: data.parts.reduce((a: number, b: any) => a + b.price, 0) + data.services.reduce((a: number, b: any) => a + b.price, 0),
-        createdAt: data.createdAt || new Date().toISOString()
+        createdAt: data.createdAt || new Date().toISOString(),
+        publicNotes: data.publicNotes || '' // 🔧 ADICIONA PUBLICNOTES
       };
       setWorkOrders(prev => [...prev, newOS]);
       addToast("Nova OS criada!", "success");

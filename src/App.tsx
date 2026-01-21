@@ -1,5 +1,4 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
-import { DropResult } from '@hello-pangea/dnd';
 
 // --- CONTEXT & HOOKS ---
 import { DatabaseProvider, useDatabase } from './context/DatabaseContext';
@@ -32,8 +31,6 @@ const ChecklistModal = lazy(() => import('./modals/ChecklistModal').then(m => ({
 const DatabaseModal = lazy(() => import('./modals/DatabaseModal').then(m => ({ default: m.DatabaseModal })));
 const DeleteConfirmationModal = lazy(() => import('./modals/DeleteConfirmationModal').then(m => ({ default: m.DeleteConfirmationModal })));
 const ConfirmationModal = lazy(() => import('./modals/ConfirmationModal').then(m => ({ default: m.ConfirmationModal })));
-
-// ✅ NOVO: Modal de Pagamento Parcelado
 const InstallmentModal = lazy(() => import('./modals/InstallmentModal').then(m => ({ default: m.InstallmentModal })));
 
 // --- UTILS ---
@@ -80,7 +77,6 @@ function AppContent() {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isChecklistOpen, setIsChecklistOpen] = useState(false);
   const [isDatabaseModalOpen, setIsDatabaseModalOpen] = useState(false);
-  // ✅ NOVO: Estado do modal de parcelamento
   const [isInstallmentModalOpen, setIsInstallmentModalOpen] = useState(false);
   const [installmentOS, setInstallmentOS] = useState<WorkOrder | null>(null);
 
@@ -97,9 +93,6 @@ function AppContent() {
   const [isBackuping, setIsBackuping] = useState(false);
   const [driveStatus, setDriveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
-
-  // ✅ FIX DEFINITIVO: Força re-render após drag
-  const [dragUpdateKey, setDragUpdateKey] = useState(0);
 
   const addToast = (message: string, type: ToastType = 'info') => {
     const id = crypto.randomUUID();
@@ -149,10 +142,12 @@ function AppContent() {
   };
 
   // --- ACTIONS ---
+  // ✅ NOVA API: Handler simplificado que recebe diretamente (osId, newStatus)
   const handleUpdateStatus = (osId: string, newStatus: OSStatus) => {
     const os = workOrders.find(o => o.id === osId);
     if (!os || os.status === newStatus) return;
 
+    // Verificar se precisa criar/remover lançamento financeiro
     if (newStatus === 'FINALIZADO' && os.status !== 'FINALIZADO' && !os.financialId) {
       setPendingAction({ type: 'FINISH_OS_FINANCIAL', data: os });
       return;
@@ -161,14 +156,8 @@ function AppContent() {
       return;
     }
 
-    // ✅ FIX: Atualizar imediatamente e forçar re-render
+    // ✅ Atualização direta - sem gambiarras!
     setWorkOrders(prev => prev.map(o => o.id === osId ? { ...o, status: newStatus } : o));
-    
-    // ✅ FIX: Força atualização do KanbanBoard
-    requestAnimationFrame(() => {
-      setDragUpdateKey(k => k + 1);
-    });
-    
     SoundFX.pop();
   };
 
@@ -316,9 +305,7 @@ function AppContent() {
     }
   };
 
-  // ✅ NOVO: Handler para pagamento parcelado
   const handleInstallmentConfirm = (config: any) => {
-    // Criar lançamentos financeiros para cada parcela
     const newEntries: LedgerEntry[] = [];
     const baseDate = new Date(config.firstPaymentDate);
     
@@ -329,7 +316,7 @@ function AppContent() {
       const entry: LedgerEntry = {
         id: crypto.randomUUID(),
         description: `${config.description} - Parcela ${i + 1}/${config.installments}`,
-        amount: Money.fromFloat(config.installmentAmount),
+        amount: config.installmentAmount,
         type: 'CREDIT',
         effectiveDate: dueDate.toISOString(),
         createdAt: new Date().toISOString(),
@@ -345,7 +332,6 @@ function AppContent() {
     
     setLedger(prev => [...newEntries, ...prev]);
     
-    // Se veio de uma OS, vincular ao primeiro lançamento
     if (installmentOS) {
       setWorkOrders(prev => prev.map(o => 
         o.id === installmentOS.id 
@@ -378,7 +364,6 @@ function AppContent() {
     if (pendingAction.type === 'FINISH_OS_FINANCIAL') {
       const os = pendingAction.data;
       
-      // ✅ EXEMPLO: Perguntar se quer parcelar
       if (confirm(`Deseja parcelar o pagamento de ${Money.format(os.total)}?`)) {
         setInstallmentOS(os);
         setIsInstallmentModalOpen(true);
@@ -386,7 +371,6 @@ function AppContent() {
         return;
       }
       
-      // Pagamento à vista normal
       const entry = createEntry(`Receita OS #${os.osNumber} - ${os.clientName}`, os.total, 'CREDIT', os.createdAt);
       setLedger(prev => [entry, ...prev]);
       setWorkOrders(prev => prev.map(o => o.id === os.id ? { ...o, status: 'FINALIZADO', financialId: entry.id } : o));
@@ -451,7 +435,6 @@ function AppContent() {
         <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
 
         <main className="main-content">
-          {/* Suspense boundary para cada página */}
           <Suspense fallback={<LoadingSkeleton type="page" />}>
             {activeTab === 'FINANCEIRO' && (
               <FinancialPage
@@ -476,15 +459,12 @@ function AppContent() {
 
             {activeTab === 'OFICINA' && (
               <WorkshopPage
-                key={dragUpdateKey}
                 workOrders={workOrders}
                 isLoading={isLoading}
                 formatMoney={Money.format}
                 onNewOS={() => { setEditingOS(null); setIsModalOpen(true); }}
-                onDragEnd={(res: DropResult) => {
-                  if (res.destination && res.destination.droppableId !== res.source.droppableId)
-                    handleUpdateStatus(res.draggableId, res.destination.droppableId as OSStatus);
-                }}
+                {/* ✅ NOVA API: Passar onStatusChange ao invés de onDragEnd */}
+                onStatusChange={handleUpdateStatus}
                 kanbanActions={{
                   onRegress: (id) => {
                     const os = workOrders.find(o => o.id === id);
@@ -545,7 +525,6 @@ function AppContent() {
         </main>
       </div>
 
-      {/* Suspense boundary para modais */}
       <Suspense fallback={null}>
         {isModalOpen && (
           <OSModal
@@ -571,7 +550,6 @@ function AppContent() {
           />
         )}
 
-        {/* ✅ NOVO: Modal de Pagamento Parcelado */}
         {isInstallmentModalOpen && installmentOS && (
           <InstallmentModal
             isOpen={isInstallmentModalOpen}

@@ -196,10 +196,24 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                    </td></tr>
                 ) : (
                     paginatedLedger.map(e => {
-                        // 🆕 Determinar qual data exibir: paymentDate para receitas, effectiveDate para demais
-                        const displayDate = (e.type === 'CREDIT' && e.paymentDate) 
-                            ? new Date(e.paymentDate).toLocaleDateString('pt-BR')
-                            : new Date(e.effectiveDate).toLocaleDateString('pt-BR');
+                        // 🔧 CORREÇÃO: Para receitas (OS), prioriza data de pagamento
+                        let displayDate: string;
+                        let isPaymentDate = false;
+                        
+                        if (e.type === 'CREDIT') {
+                            // Para receitas (vindas de OS), mostra data de pagamento se existir
+                            if (e.paymentDate) {
+                                displayDate = new Date(e.paymentDate).toLocaleDateString('pt-BR');
+                                isPaymentDate = true;
+                            } else {
+                                // Se não tem data de pagamento, mostra a data de criação com indicador
+                                displayDate = new Date(e.effectiveDate).toLocaleDateString('pt-BR');
+                                isPaymentDate = false;
+                            }
+                        } else {
+                            // Para despesas, sempre mostra a data efetiva
+                            displayDate = new Date(e.effectiveDate).toLocaleDateString('pt-BR');
+                        }
                         
                         return (
                             <tr key={e.id}>
@@ -209,7 +223,7 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                                 </td>
                                 <td style={{fontSize: '0.8rem', color: 'var(--text-muted)'}}>
                                     {displayDate}
-                                    {e.type === 'CREDIT' && e.paymentDate && (
+                                    {e.type === 'CREDIT' && isPaymentDate && (
                                         <span style={{
                                             marginLeft: '6px',
                                             fontSize: '0.7rem',
@@ -219,7 +233,20 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                                             borderRadius: '4px',
                                             fontWeight: 600
                                         }}>
-                                            💵
+                                            💵 Pago
+                                        </span>
+                                    )}
+                                    {e.type === 'CREDIT' && !isPaymentDate && (
+                                        <span style={{
+                                            marginLeft: '6px',
+                                            fontSize: '0.7rem',
+                                            padding: '2px 6px',
+                                            background: 'rgba(255, 152, 0, 0.15)',
+                                            color: 'var(--warning)',
+                                            borderRadius: '4px',
+                                            fontWeight: 600
+                                        }}>
+                                            ⏳ Pendente
                                         </span>
                                     )}
                                 </td>

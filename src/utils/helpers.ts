@@ -40,7 +40,7 @@ export const createEntry = (
   type: 'CREDIT' | 'DEBIT',
   dateString?: string,
   groupId?: string,
-  paymentDate?: string // 🔧 NOVO PARÂMETRO: Data de pagamento
+  paymentDate?: string
 ): LedgerEntry => {
   return {
     id: generateId(),
@@ -51,7 +51,7 @@ export const createEntry = (
     createdAt: new Date().toISOString(),
     history: [],
     groupId,
-    paymentDate: paymentDate ? new Date(paymentDate).toISOString() : undefined // 🔧 Inclui paymentDate
+    paymentDate: paymentDate ? new Date(paymentDate).toISOString() : undefined
   };
 };
 
@@ -79,7 +79,7 @@ export const updateEntryAmount = (
   };
 };
 
-// --- 🆕 NOVO: CÁLCULOS DE ROI ---
+// --- CÁLCULOS DE ROI ---
 
 /**
  * Calcula o custo total, lucro bruto, margem de lucro e ROI de uma OS
@@ -94,23 +94,16 @@ export const calculateFinancials = (
   profitMargin: number;
   roi: number;
 } => {
-  // Soma receita (preços de venda)
   const partsRevenue = parts.reduce((acc, p) => acc + p.price, 0);
   const servicesRevenue = services.reduce((acc, s) => acc + s.price, 0);
   const totalRevenue = partsRevenue + servicesRevenue;
 
-  // Soma custos internos
   const partsCost = parts.reduce((acc, p) => acc + (p.cost || 0), 0);
   const servicesCost = services.reduce((acc, s) => acc + (s.cost || 0), 0);
   const totalCost = partsCost + servicesCost;
 
-  // Lucro bruto
   const profit = totalRevenue - totalCost;
-
-  // Margem de lucro (%)
   const profitMargin = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
-
-  // ROI (%)
   const roi = totalCost > 0 ? (profit / totalCost) * 100 : 0;
 
   return { totalRevenue, totalCost, profit, profitMargin, roi };
@@ -129,7 +122,6 @@ export const createWorkOrder = (
   dateString?: string
 ): WorkOrder => {
   
-  // --- CORREÇÃO DE DATA (TIMEZONE FIX) ---
   let finalDate = new Date().toISOString();
   
   if (dateString) {
@@ -141,11 +133,9 @@ export const createWorkOrder = (
   const subParts = parts.reduce((a, b) => a + b.price, 0);
   const subServices = services.reduce((a, b) => a + b.price, 0);
 
-  // Mapeia CatalogItem para OrderItem adicionando ID
   const orderParts: OrderItem[] = parts.map(p => ({ ...p, id: generateId() }));
   const orderServices: OrderItem[] = services.map(s => ({ ...s, id: generateId() }));
 
-  // 🆕 Calcula financeiros
   const financials = calculateFinancials(orderParts, orderServices);
 
   return {
@@ -177,7 +167,8 @@ export const updateWorkOrderData = (
   mileage: string,
   parts: CatalogItem[],
   services: CatalogItem[],
-  dateString?: string
+  dateString?: string,
+  publicNotes?: string // 🔧 NOVO PARÂMETRO
 ): WorkOrder => {
   const subParts = parts.reduce((a, b) => a + b.price, 0);
   const subServices = services.reduce((a, b) => a + b.price, 0);
@@ -189,11 +180,9 @@ export const updateWorkOrderData = (
       finalDate = d.toISOString();
   }
 
-  // Mapeia CatalogItem para OrderItem adicionando ID
   const orderParts: OrderItem[] = parts.map(p => ({ ...p, id: generateId() }));
   const orderServices: OrderItem[] = services.map(s => ({ ...s, id: generateId() }));
 
-  // 🆕 Calcula financeiros
   const financials = calculateFinancials(orderParts, orderServices);
 
   return {
@@ -209,7 +198,8 @@ export const updateWorkOrderData = (
     totalCost: financials.totalCost,
     profit: financials.profit,
     profitMargin: financials.profitMargin,
-    createdAt: finalDate
+    createdAt: finalDate,
+    publicNotes: publicNotes !== undefined ? publicNotes : original.publicNotes // 🔧 PRESERVA PUBLICNOTES
   };
 };
 

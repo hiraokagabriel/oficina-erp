@@ -305,32 +305,34 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
 
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">📋 Status</label>
-            <select 
-              className="form-input" 
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value as OSStatus | 'ALL')}
-              style={{ cursor: 'pointer' }}
-            >
-              <option value="ALL">Todos os Status</option>
-              {allStatuses.map(status => (
-                <option key={status} value={status}>{STATUS_LABELS[status]}</option>
-              ))}
-            </select>
+            <div className="custom-select-wrapper">
+              <select 
+                className="form-input" 
+                value={selectedStatus}
+                onChange={(e) => setSelectedStatus(e.target.value as OSStatus | 'ALL')}
+              >
+                <option value="ALL">Todos os Status</option>
+                {allStatuses.map(status => (
+                  <option key={status} value={status}>{STATUS_LABELS[status]}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">📅 Período</label>
-            <select 
-              className="form-input"
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value as any)}
-              style={{ cursor: 'pointer' }}
-            >
-              <option value="all">Todo o período</option>
-              <option value="today">Hoje</option>
-              <option value="week">Semana</option>
-              <option value="month">Mês</option>
-            </select>
+            <div className="custom-select-wrapper">
+              <select 
+                className="form-input"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value as any)}
+              >
+                <option value="all">Todo o período</option>
+                <option value="today">Hoje</option>
+                <option value="week">Semana</option>
+                <option value="month">Mês</option>
+              </select>
+            </div>
           </div>
         </div>
 

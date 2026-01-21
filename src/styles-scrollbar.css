@@ -55,11 +55,18 @@
 }
 
 /* ==========================================================================
-   CORREÇÃO DO DROPDOWN FLUTUANTE (PROCESSOS)
+   CORREÇÃO DO DROPDOWN FLUTUANTE (PROCESSOS) - Z-INDEX ULTRA ALTO
    ========================================================================== */
 
 .status-cell {
   position: relative; /* Contexto de posicionamento para o dropdown */
+  z-index: 1; /* Base para a célula */
+}
+
+/* Quando o dropdown está aberto, eleva o z-index da linha inteira */
+.process-row:has(.status-dropdown-menu) {
+  position: relative;
+  z-index: 9999 !important;
 }
 
 .status-dropdown-menu {
@@ -69,8 +76,8 @@
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-  z-index: 1000; /* Garante que fique acima de outros elementos */
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  z-index: 99999 !important; /* Z-INDEX SUPER ALTO - sempre por cima */
   min-width: 200px;
   overflow: hidden;
   animation: dropdownSlideIn 0.2s ease-out;
@@ -79,17 +86,17 @@
 [data-theme="pastel"] .status-dropdown-menu {
   background: #FFFFFF;
   border-color: #E2D9F3;
-  box-shadow: 0 10px 40px -10px rgba(60, 40, 90, 0.2);
+  box-shadow: 0 20px 60px -10px rgba(60, 40, 90, 0.25), 0 0 0 1px #E2D9F3;
 }
 
 @keyframes dropdownSlideIn {
   from {
     opacity: 0;
-    transform: translateY(-10px);
+    transform: translateY(-10px) scale(0.95);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -111,6 +118,7 @@
 
 .status-option:hover {
   background-color: var(--bg-card-hover);
+  transform: translateX(4px);
 }
 
 .status-option.selected {
@@ -164,4 +172,115 @@
 /* Grupo de processos */
 .process-group {
   overflow: visible !important;
+}
+
+/* ==========================================================================
+   SELECTS CUSTOMIZADOS DE FILTRO (PROCESSOS)
+   ========================================================================== */
+
+/* Wrapper do select customizado */
+.custom-select-wrapper {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+/* Esconde a seta padrão do select */
+.custom-select-wrapper select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 40px; /* Espaço para a seta customizada */
+  cursor: pointer;
+  background-image: none;
+}
+
+/* Seta customizada */
+.custom-select-wrapper::after {
+  content: '▼';
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  transition: all 0.2s ease;
+}
+
+.custom-select-wrapper:hover::after {
+  color: var(--primary);
+}
+
+/* Estilização específica para os selects de filtro */
+select.form-input {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+select.form-input:hover {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(130, 87, 230, 0.1);
+}
+
+select.form-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(130, 87, 230, 0.2);
+}
+
+/* Opções do select (navegadores que suportam) */
+select.form-input option {
+  background: var(--bg-panel);
+  color: var(--text-main);
+  padding: 12px;
+}
+
+select.form-input option:hover {
+  background: var(--bg-card-hover);
+}
+
+/* Tema Pastel */
+[data-theme="pastel"] select.form-input {
+  background: #FFFFFF;
+  border-color: #E2D9F3;
+  color: var(--text-main);
+}
+
+[data-theme="pastel"] select.form-input:hover {
+  border-color: #8B5CF6;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+}
+
+[data-theme="pastel"] select.form-input:focus {
+  border-color: #8B5CF6;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+}
+
+[data-theme="pastel"] select.form-input option {
+  background: #FFFFFF;
+  color: var(--text-main);
+}
+
+[data-theme="pastel"] .custom-select-wrapper::after {
+  color: #6B6078;
+}
+
+[data-theme="pastel"] .custom-select-wrapper:hover::after {
+  color: #8B5CF6;
+}
+
+/* Estilo especial quando o select está com valor selecionado (não "Todos") */
+select.form-input:not([value="ALL"]):not([value="all"]) {
+  background: linear-gradient(90deg, rgba(130, 87, 230, 0.1) 0%, transparent 100%);
+  border-left: 3px solid var(--primary);
+  font-weight: 600;
+}
+
+[data-theme="pastel"] select.form-input:not([value="ALL"]):not([value="all"]) {
+  background: linear-gradient(90deg, rgba(139, 92, 246, 0.08) 0%, transparent 100%);
+  border-left: 3px solid #8B5CF6;
 }

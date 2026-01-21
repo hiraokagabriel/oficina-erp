@@ -25,6 +25,7 @@ export const OSModal: React.FC<OSModalProps> = ({
   // --- ESTADOS DE DADOS ---
   const [osNumber, setOsNumber] = useState("");
   const [date, setDate] = useState("");
+  const [paymentDate, setPaymentDate] = useState(""); // 🆕 NOVO CAMPO
   const [clientName, setClientName] = useState("");
   const [contact, setContact] = useState("");
   const [notes, setNotes] = useState(""); // Obs. Interna (Cliente)
@@ -65,6 +66,8 @@ export const OSModal: React.FC<OSModalProps> = ({
       if (editingOS) {
         setOsNumber(editingOS.osNumber.toString());
         setDate(editingOS.createdAt ? editingOS.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]);
+        // 🆕 CARREGAR DATA DE PAGAMENTO
+        setPaymentDate(editingOS.paymentDate ? editingOS.paymentDate.split('T')[0] : "");
         setClientName(editingOS.clientName);
         
         const client = clients.find(c => c.name.toLowerCase() === editingOS.clientName.trim().toLowerCase());
@@ -86,6 +89,7 @@ export const OSModal: React.FC<OSModalProps> = ({
       } else {
         setOsNumber(nextOSNumber.toString());
         setDate(new Date().toISOString().split('T')[0]);
+        setPaymentDate(""); // 🆕 VAZIO POR PADRÃO
         setClientName("");
         setContact("");
         setNotes("");
@@ -182,6 +186,7 @@ export const OSModal: React.FC<OSModalProps> = ({
     onSave({
         osNumber: numOS,
         createdAt: date,
+        paymentDate: paymentDate ? new Date(paymentDate).toISOString() : undefined, // 🆕 SALVAR DATA DE PAGAMENTO
         clientName,
         clientPhone: contact,
         clientNotes: notes,
@@ -206,7 +211,7 @@ export const OSModal: React.FC<OSModalProps> = ({
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [isOpen, clientName, vehicle, parts, services, osNumber, publicNotes]);
+  }, [isOpen, clientName, vehicle, parts, services, osNumber, publicNotes, paymentDate]);
 
   if (!isOpen) return null;
 
@@ -224,6 +229,17 @@ export const OSModal: React.FC<OSModalProps> = ({
           <div className="form-group" style={{ flex: 1 }}>
             <label className="form-label">Data</label>
             <input className="form-input" type="date" value={date} onChange={e => setDate(e.target.value)} style={{ color: 'var(--text-main)' }} />
+          </div>
+          {/* 🆕 NOVO CAMPO: DATA DE PAGAMENTO */}
+          <div className="form-group" style={{ flex: 1 }}>
+            <label className="form-label">📅 Data Pagamento <span style={{opacity: 0.6, fontSize: '0.8rem'}}>(Opcional)</span></label>
+            <input 
+              className="form-input" 
+              type="date" 
+              value={paymentDate} 
+              onChange={e => setPaymentDate(e.target.value)} 
+              style={{ color: paymentDate ? 'var(--success)' : 'var(--text-muted)', fontWeight: paymentDate ? 'bold' : 'normal' }} 
+            />
           </div>
           <div className="form-group" style={{ flex: 2 }}>
             <label className="form-label">Cliente</label>

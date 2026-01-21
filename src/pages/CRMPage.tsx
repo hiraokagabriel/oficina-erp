@@ -566,6 +566,26 @@ export const CRMPage: React.FC<CRMPageProps> = ({
                                                <span className="tl-os-number">OS #{os.osNumber}</span>
                                                <span className="tl-price">{formatMoney(os.total)}</span>
                                            </div>
+                                           
+                                           {/* 🆕 DATA DE PAGAMENTO */}
+                                           {os.paymentDate && (
+                                             <div style={{
+                                               marginTop: '8px',
+                                               padding: '6px 10px',
+                                               background: 'rgba(4, 211, 97, 0.1)',
+                                               border: '1px solid rgba(4, 211, 97, 0.3)',
+                                               borderRadius: '6px',
+                                               fontSize: '0.75rem',
+                                               color: 'var(--success)',
+                                               fontWeight: 600,
+                                               display: 'flex',
+                                               alignItems: 'center',
+                                               gap: '6px'
+                                             }}>
+                                               📅 Pago em: {new Date(os.paymentDate).toLocaleDateString('pt-BR')}
+                                             </div>
+                                           )}
+                                           
                                            {onOpenOS && (
                                              <div style={{ 
                                                fontSize: '0.7rem', 

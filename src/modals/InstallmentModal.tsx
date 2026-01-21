@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { InstallmentConfig } from '../types';
+import { Money } from '../utils/helpers';
 
 interface InstallmentModalProps {
   isOpen: boolean;
@@ -21,7 +22,9 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
     new Date().toISOString().split('T')[0]
   );
 
-  const installmentAmount = totalAmount / installments;
+  // ✅ FIX CRÍTICO: Converter totalAmount (centavos) para reais ANTES de dividir
+  const totalAmountInReais = Money.toFloat(totalAmount);
+  const installmentAmount = totalAmountInReais / installments;
 
   useEffect(() => {
     if (isOpen) {
@@ -34,9 +37,9 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
     const config: InstallmentConfig = {
       totalAmount,
       installments,
-      installmentAmount,
+      installmentAmount: Money.fromFloat(installmentAmount), // ✅ Converter de volta para centavos
       firstPaymentDate,
-      groupId: crypto.randomUUID(), // ✅ Usando crypto.randomUUID() nativo do navegador
+      groupId: crypto.randomUUID(),
       description
     };
     onConfirm(config);
@@ -82,7 +85,8 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
               Valor Total
             </div>
             <div style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '12px' }}>
-              {totalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              {/* ✅ FIX: Usar Money.format() para formatar centavos corretamente */}
+              {Money.format(totalAmount)}
             </div>
             <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>
               {description}
@@ -120,7 +124,8 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
                 >
                   <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>{num}x</div>
                   <div style={{ fontSize: '0.75rem', opacity: 0.7 }}>
-                    {(totalAmount / num).toLocaleString('pt-BR', { 
+                    {/* ✅ FIX: Dividir em reais, não em centavos */}
+                    {(totalAmountInReais / num).toLocaleString('pt-BR', { 
                       style: 'currency', 
                       currency: 'BRL',
                       minimumFractionDigits: 2
@@ -201,6 +206,7 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
                   </div>
                 </div>
                 <div style={{ fontWeight: 'bold', color: 'var(--primary)', fontSize: '1.1rem' }}>
+                  {/* ✅ FIX: Formatar valor em reais corretamente */}
                   {installmentAmount.toLocaleString('pt-BR', { 
                     style: 'currency', 
                     currency: 'BRL' 

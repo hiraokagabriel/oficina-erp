@@ -8,6 +8,14 @@ export const Money = {
   parse: (valor: string): number => {
     const num = parseFloat(valor.replace(/[^\d,-]/g, '').replace(',', '.'));
     return isNaN(num) ? 0 : Math.round(num * 100);
+  },
+  // ✅ ADICIONADO: Converte float para centavos
+  fromFloat: (reais: number): number => {
+    return Math.round(reais * 100);
+  },
+  // ✅ ADICIONADO: Converte centavos para float
+  toFloat: (centavos: number): number => {
+    return centavos / 100;
   }
 };
 
@@ -61,6 +69,17 @@ export function createLedgerEntry(
   };
 }
 
+// ✅ ADICIONADO: Alias para createLedgerEntry (compatibilidade com useFinance)
+export function createEntry(
+  description: string,
+  amount: number,
+  type: 'CREDIT' | 'DEBIT',
+  effectiveDate: string,
+  groupId?: string
+): LedgerEntry {
+  return createLedgerEntry(description, amount, type, effectiveDate, { groupId });
+}
+
 export function updateLedgerEntry(
   entry: LedgerEntry,
   updates: Partial<Omit<LedgerEntry, 'id' | 'createdAt'>>,
@@ -69,7 +88,7 @@ export function updateLedgerEntry(
   const newHistory = [...(entry.history || [])];
   newHistory.push({
     date: new Date().toISOString(),
-    timestamp: new Date().toISOString(), // ✅ ADICIONADO para compatibilidade
+    timestamp: new Date().toISOString(),
     action: `Atualizado: ${Object.keys(updates).join(', ')}`,
     user
   });

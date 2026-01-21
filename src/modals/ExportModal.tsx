@@ -63,7 +63,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     }
 
     // Gera o conteúdo do CSV
-    const headers = ["ID", "Data", "Data Registro", "Nº OS", "Cliente", "Descricao", "Valor", "Tipo", "Auditado"];
+    const headers = ["ID", "Data", "Data Registro", "Data Pagamento", "Nº OS", "Cliente", "Descricao", "Valor", "Tipo", "Auditado"];
     const rows = filteredLedger.map(entry => {
       // CORREÇÃO AQUI: Garante que 'history' seja um array, mesmo que undefined
       const safeHistory = entry.history || [];
@@ -83,7 +83,12 @@ export const ExportModal: React.FC<ExportModalProps> = ({
       const osNum = relatedOS ? relatedOS.osNumber.toString() : "";
       const client = relatedOS ? relatedOS.clientName.replace(/;/g, " ") : ""; 
       
-      return `${entry.id.slice(0,8)};${dataCompetencia};${dataRegistro};${osNum};${client};${desc};${valor};${entry.type};${audit}`;
+      // 🆕 NOVA COLUNA: Data de Pagamento
+      const dataPagamento = relatedOS?.paymentDate 
+        ? new Date(relatedOS.paymentDate).toLocaleDateString() 
+        : "";
+      
+      return `${entry.id.slice(0,8)};${dataCompetencia};${dataRegistro};${dataPagamento};${osNum};${client};${desc};${valor};${entry.type};${audit}`;
     });
     
     const csvContent = [headers.join(";"), ...rows].join("\n");

@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Client, WorkOrder, CRMStats } from '../types';
+import { Money } from '../utils/helpers';
 
 interface CRMDashboardProps {
   clients: Client[];
@@ -37,7 +38,7 @@ export const CRMDashboard: React.FC<CRMDashboardProps> = ({
         serviceCount: spending.count,
         lastServiceDate: spending.lastDate,
         averageTicket: spending.count > 0 ? spending.total / spending.count : 0,
-        vipStatus: spending.total > 5000 || spending.count >= 5
+        vipStatus: spending.total > 500000 || spending.count >= 5  // ✅ FIX: 500000 centavos = R$ 5000,00
       };
     });
 
@@ -147,7 +148,8 @@ export const CRMDashboard: React.FC<CRMDashboardProps> = ({
         }}>
           <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>💰</div>
           <div style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '4px' }}>
-            {stats.monthlyRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            {/* ✅ FIX: Usar Money.format() para formatar centavos corretamente */}
+            {Money.format(stats.monthlyRevenue)}
           </div>
           <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>Receita do Mês</div>
         </div>
@@ -162,7 +164,8 @@ export const CRMDashboard: React.FC<CRMDashboardProps> = ({
         }}>
           <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>🎫</div>
           <div style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '4px' }}>
-            {stats.averageTicket.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            {/* ✅ FIX: Usar Money.format() para formatar centavos corretamente */}
+            {Money.format(stats.averageTicket)}
           </div>
           <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>Ticket Médio</div>
         </div>
@@ -199,10 +202,6 @@ export const CRMDashboard: React.FC<CRMDashboardProps> = ({
                   borderRadius: '12px',
                   cursor: onClientSelect ? 'pointer' : 'default',
                   transition: 'all 0.2s ease',
-                  ':hover': {
-                    transform: 'translateY(-2px)',
-                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
-                  }
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -234,13 +233,12 @@ export const CRMDashboard: React.FC<CRMDashboardProps> = ({
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: 'var(--success)' }}>
-                    {item.totalSpent.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    {/* ✅ FIX: Usar Money.format() para formatar centavos corretamente */}
+                    {Money.format(item.totalSpent)}
                   </div>
                   <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                    Média: {(item.totalSpent / item.serviceCount).toLocaleString('pt-BR', { 
-                      style: 'currency', 
-                      currency: 'BRL' 
-                    })}
+                    Média: {/* ✅ FIX: Usar Money.format() para formatar centavos corretamente */}
+                    {Money.format(Math.round(item.totalSpent / item.serviceCount))}
                   </div>
                 </div>
               </div>

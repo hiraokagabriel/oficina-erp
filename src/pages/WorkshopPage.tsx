@@ -1,6 +1,5 @@
 import React from 'react';
-import { DropResult } from '@hello-pangea/dnd';
-import { WorkOrder } from '../types';
+import { WorkOrder, OSStatus } from '../types';
 import { KanbanBoard } from '../components/KanbanBoard';
 
 interface WorkshopPageProps {
@@ -8,7 +7,8 @@ interface WorkshopPageProps {
   isLoading: boolean;
   formatMoney: (val: number) => string;
   onNewOS: () => void;
-  onDragEnd: (result: DropResult) => void;
+  // ✅ NOVA API: Recebe (osId, newStatus) diretamente
+  onStatusChange: (osId: string, newStatus: OSStatus) => void;
   kanbanActions: {
     onRegress: (id: string) => void;
     onEdit: (os: WorkOrder) => void;
@@ -16,10 +16,8 @@ interface WorkshopPageProps {
     onPrint: (os: WorkOrder) => void;
     onDelete: (os: WorkOrder) => void;
     onAdvance: (id: string) => void;
-    // ADICIONADO: As novas ações de arquivamento
     onArchive?: (os: WorkOrder) => void;
     onRestore?: (os: WorkOrder) => void;
-    // ADICIONADO: Atalho Ctrl + Click
     onQuickFinish?: (id: string) => void;
   };
 }
@@ -29,7 +27,7 @@ export const WorkshopPage: React.FC<WorkshopPageProps> = ({
   isLoading,
   formatMoney,
   onNewOS,
-  onDragEnd,
+  onStatusChange,
   kanbanActions
 }) => {
   return (
@@ -40,10 +38,11 @@ export const WorkshopPage: React.FC<WorkshopPageProps> = ({
       </div>
       
       <div style={{ flex: 1, overflow: 'hidden' }}>
+        {/* ✅ NOVA API: Passar onStatusChange ao invés de onDragEnd */}
         <KanbanBoard 
             workOrders={workOrders} 
             isLoading={isLoading} 
-            onDragEnd={onDragEnd} 
+            onStatusChange={onStatusChange}
             actions={kanbanActions} 
             formatMoney={formatMoney} 
         />

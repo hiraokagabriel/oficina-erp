@@ -12,7 +12,12 @@ export interface LedgerEntry {
   isPaid?: boolean;
   dueDate?: string;
   paymentDate?: string;
-  history?: Array<{ date: string; action: string; user?: string }>; // ✅ ADICIONADO
+  history?: Array<{
+    date: string;
+    action: string;
+    user?: string;
+    timestamp?: string; // ✅ ADICIONADO para compatibilidade
+  }>;
 }
 
 export interface WorkOrder {
@@ -35,7 +40,7 @@ export interface WorkOrder {
   publicNotes?: string;
   paymentDate?: string;
   paymentMethod?: 'SINGLE' | 'INSTALLMENT';
-  installmentConfig?: InstallmentConfig; // ✅ TIPADO
+  installmentConfig?: InstallmentConfig;
 }
 
 export type OSStatus = 'ORCAMENTO' | 'APROVADO' | 'EM_SERVICO' | 'FINALIZADO' | 'ARQUIVADO';
@@ -59,6 +64,12 @@ export interface Client {
   phone: string;
   notes?: string;
   vehicles: { model: string; plate: string }[];
+  // ✅ ADICIONADO: Props dinâmicas calculadas pelo CRM
+  totalSpent?: number;
+  serviceCount?: number;
+  lastServiceDate?: string;
+  averageTicket?: number;
+  vipStatus?: boolean;
 }
 
 export interface CatalogItem {
@@ -82,7 +93,7 @@ export interface WorkshopSettings {
   technician: string;
   exportPath: string;
   googleDriveToken: string;
-  googleApiKey: string; // ✅ ADICIONADO
+  googleApiKey: string;
 }
 
 export interface DatabaseSchema {
@@ -94,7 +105,6 @@ export interface DatabaseSchema {
   settings: WorkshopSettings;
 }
 
-// ✅ Checklist com tipos específicos
 export interface ChecklistSchema {
   fuelLevel: number;
   tires: {
@@ -104,30 +114,28 @@ export interface ChecklistSchema {
     br: boolean;
   };
   notes: string;
-  [key: string]: any; // Permite campos customizados
+  [key: string]: any;
 }
 
-// ✅ ADICIONADO: InstallmentConfig
+// ✅ CORRIGIDO: InstallmentConfig com totalAmount
 export interface InstallmentConfig {
   installments: number;
   firstDueDate: string;
   interval: 'DAILY' | 'WEEKLY' | 'MONTHLY';
-  amounts?: number[]; // Valores customizados por parcela
+  totalAmount: number; // ✅ ADICIONADO
+  amounts?: number[];
 }
 
-// ✅ ADICIONADO: CRMStats
+// ✅ CORRIGIDO: CRMStats com estrutura real usada no componente
 export interface CRMStats {
   totalClients: number;
-  activeClients: number;
-  totalRevenue: number;
+  vipClients: Client[]; // ✅ Array de clientes, não number
+  monthlyRevenue: number; // ✅ ADICIONADO
+  pendingServices: number; // ✅ ADICIONADO
   averageTicket: number;
   topClients: Array<{
-    name: string;
+    client: Client; // ✅ Objeto client completo, não só name
     totalSpent: number;
     serviceCount: number;
-  }>;
-  revenueByMonth: Array<{
-    month: string;
-    revenue: number;
   }>;
 }

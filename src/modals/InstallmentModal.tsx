@@ -5,7 +5,7 @@ import { Money } from '../utils/helpers';
 interface InstallmentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  totalAmount: number;
+  totalAmount: number; // Já em centavos!
   description: string;
   onConfirm: (config: InstallmentConfig) => void;
 }
@@ -22,9 +22,37 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
     new Date().toISOString().split('T')[0]
   );
 
-  // ✅ FIX CRÍTICO: Converter totalAmount (centavos) para reais ANTES de dividir
-  const totalAmountInReais = Money.toFloat(totalAmount);
-  const installmentAmount = totalAmountInReais / installments;
+  // ✅ FIX: Cálculo DIRETO em centavos - sem conversão!
+  const calculateInstallments = (totalInCents: number, count: number) => {
+    console.log(`📊 Calculando ${totalInCents} centavos em ${count} parcelas`);
+    
+    // Valor base por parcela (arredondado para baixo em centavos)
+    const baseValueInCents = Math.floor(totalInCents / count);
+    
+    // Resto em centavos
+    const remainder = totalInCents - (baseValueInCents * count);
+    
+    // Última parcela absorve o resto
+    const lastInstallmentAmount = baseValueInCents + remainder;
+    
+    // Validação
+    const total = (baseValueInCents * (count - 1)) + lastInstallmentAmount;
+    const isValid = total === totalInCents;
+    
+    console.log(`  Base: ${baseValueInCents}¢ (${Money.format(baseValueInCents)})`);
+    console.log(`  Resto: ${remainder}¢`);
+    console.log(`  Última: ${lastInstallmentAmount}¢ (${Money.format(lastInstallmentAmount)})`);
+    console.log(`  Soma: ${total}¢ | Original: ${totalInCents}¢ | Válido: ${isValid ? '✅' : '❌'}`);
+    
+    return {
+      normalInstallmentAmount: baseValueInCents,
+      lastInstallmentAmount: lastInstallmentAmount,
+      installmentsCount: count,
+      isValid: isValid
+    };
+  };
+
+  const installmentCalc = calculateInstallments(totalAmount, installments);
 
   useEffect(() => {
     if (isOpen) {
@@ -34,10 +62,18 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
   }, [isOpen]);
 
   const handleConfirm = () => {
+    console.log('🚀 Confirmando parcelamento:', {
+      totalAmount,
+      installments,
+      normalValue: installmentCalc.normalInstallmentAmount,
+      lastValue: installmentCalc.lastInstallmentAmount
+    });
+    
     const config: InstallmentConfig = {
       totalAmount,
       installments,
-      installmentAmount: Money.fromFloat(installmentAmount), // ✅ Converter de volta para centavos
+      installmentAmount: installmentCalc.normalInstallmentAmount,
+      lastInstallmentAmount: installmentCalc.lastInstallmentAmount,
       firstPaymentDate,
       groupId: crypto.randomUUID(),
       description
@@ -48,7 +84,6 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Cálculo das datas de vencimento
   const generateInstallmentDates = () => {
     const dates = [];
     const baseDate = new Date(firstPaymentDate);
@@ -72,7 +107,6 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
         </div>
 
         <div className="modal-body" style={{ padding: '24px' }}>
-          {/* Card de Resumo */}
           <div style={{
             background: 'linear-gradient(135deg, var(--primary) 0%, #6366f1 100%)',
             color: 'white',
@@ -85,7 +119,6 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
               Valor Total
             </div>
             <div style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '12px' }}>
-              {/* ✅ FIX: Usar Money.format() para formatar centavos corretamente */}
               {Money.format(totalAmount)}
             </div>
             <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>
@@ -93,7 +126,6 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
             </div>
           </div>
 
-          {/* Seletor de Parcelas */}
           <div style={{ marginBottom: '24px' }}>
             <label className="form-label" style={{ marginBottom: '12px', display: 'block' }}>
               📊 Número de Parcelas
@@ -103,40 +135,37 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
               gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', 
               gap: '12px' 
             }}>
-              {[2, 3, 4, 5, 6, 9, 12].map(num => (
-                <button
-                  key={num}
-                  onClick={() => setInstallments(num)}
-                  style={{
-                    padding: '16px 12px',
-                    border: installments === num 
-                      ? '2px solid var(--primary)' 
-                      : '1px solid var(--border)',
-                    borderRadius: '8px',
-                    background: installments === num 
-                      ? 'rgba(130, 87, 230, 0.1)' 
-                      : 'white',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    fontWeight: installments === num ? 'bold' : 'normal',
-                    color: installments === num ? 'var(--primary)' : 'var(--text)'
-                  }}
-                >
-                  <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>{num}x</div>
-                  <div style={{ fontSize: '0.75rem', opacity: 0.7 }}>
-                    {/* ✅ FIX: Dividir em reais, não em centavos */}
-                    {(totalAmountInReais / num).toLocaleString('pt-BR', { 
-                      style: 'currency', 
-                      currency: 'BRL',
-                      minimumFractionDigits: 2
-                    })}
-                  </div>
-                </button>
-              ))}
+              {[2, 3, 4, 5, 6, 9, 12].map(num => {
+                const calc = calculateInstallments(totalAmount, num);
+                return (
+                  <button
+                    key={num}
+                    onClick={() => setInstallments(num)}
+                    style={{
+                      padding: '16px 12px',
+                      border: installments === num 
+                        ? '2px solid var(--primary)' 
+                        : '1px solid var(--border)',
+                      borderRadius: '8px',
+                      background: installments === num 
+                        ? 'rgba(130, 87, 230, 0.1)' 
+                        : 'white',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      fontWeight: installments === num ? 'bold' : 'normal',
+                      color: installments === num ? 'var(--primary)' : 'var(--text)'
+                    }}
+                  >
+                    <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>{num}x</div>
+                    <div style={{ fontSize: '0.75rem', opacity: 0.7 }}>
+                      {Money.format(calc.normalInstallmentAmount)}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* Data do Primeiro Pagamento */}
           <div style={{ marginBottom: '24px' }}>
             <label className="form-label">
               📅 Data do Primeiro Pagamento
@@ -150,7 +179,6 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
             />
           </div>
 
-          {/* Preview das Parcelas */}
           <div style={{
             background: 'var(--bg-panel)',
             border: '1px solid var(--border)',
@@ -167,53 +195,79 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
             }}>
               📄 Preview das Parcelas
             </div>
-            {installmentDates.map((date, index) => (
-              <div
-                key={index}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '12px',
-                  background: 'white',
-                  borderRadius: '8px',
-                  marginBottom: '8px',
-                  border: '1px solid var(--border)'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%',
-                    background: 'var(--primary)',
-                    color: 'white',
+            {installmentDates.map((date, index) => {
+              const isLast = index === installments - 1;
+              const amount = isLast 
+                ? installmentCalc.lastInstallmentAmount 
+                : installmentCalc.normalInstallmentAmount;
+              
+              return (
+                <div
+                  key={index}
+                  style={{
                     display: 'flex',
+                    justifyContent: 'space-between',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    fontWeight: 'bold',
-                    fontSize: '0.85rem'
+                    padding: '12px',
+                    background: 'white',
+                    borderRadius: '8px',
+                    marginBottom: '8px',
+                    border: isLast ? '2px solid var(--success)' : '1px solid var(--border)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      background: isLast ? 'var(--success)' : 'var(--primary)',
+                      color: 'white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontWeight: 'bold',
+                      fontSize: '0.85rem'
+                    }}>
+                      {index + 1}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 500, color: 'var(--text)' }}>
+                        Parcela {index + 1}/{installments} {isLast && '✅'}
+                      </div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                        Vencimento: {date.toLocaleDateString('pt-BR')}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ 
+                    fontWeight: 'bold', 
+                    color: isLast ? 'var(--success)' : 'var(--primary)', 
+                    fontSize: '1.1rem'
                   }}>
-                    {index + 1}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 500, color: 'var(--text)' }}>
-                      Parcela {index + 1}/{installments}
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                      Vencimento: {date.toLocaleDateString('pt-BR')}
-                    </div>
+                    {Money.format(amount)}
+                    {isLast && <div style={{ fontSize: '0.65rem', opacity: 0.7 }}>ajustada</div>}
                   </div>
                 </div>
-                <div style={{ fontWeight: 'bold', color: 'var(--primary)', fontSize: '1.1rem' }}>
-                  {/* ✅ FIX: Formatar valor em reais corretamente */}
-                  {installmentAmount.toLocaleString('pt-BR', { 
-                    style: 'currency', 
-                    currency: 'BRL' 
-                  })}
-                </div>
+              );
+            })}
+            
+            <div style={{
+              marginTop: '12px',
+              padding: '12px',
+              background: installmentCalc.isValid ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+              borderRadius: '8px',
+              fontSize: '0.85rem',
+              color: installmentCalc.isValid ? 'var(--success)' : 'var(--danger)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              {installmentCalc.isValid ? '✅' : '⚠️'}
+              <div>
+                <strong>Soma exata:</strong> {Money.format(totalAmount)}
+                {!installmentCalc.isValid && <div style={{ fontSize: '0.75rem', marginTop: '4px' }}>Erro de arredondamento!</div>}
               </div>
-            ))}
+            </div>
           </div>
         </div>
 
@@ -221,7 +275,11 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
           <button className="btn btn-secondary" onClick={onClose}>
             Cancelar
           </button>
-          <button className="btn btn-primary" onClick={handleConfirm}>
+          <button 
+            className="btn btn-primary" 
+            onClick={handleConfirm}
+            disabled={!installmentCalc.isValid}
+          >
             ✅ Confirmar Parcelamento
           </button>
         </div>

@@ -20,17 +20,22 @@ export const DroppableColumn: React.FC<DroppableColumnProps> = ({ id, children }
         display: 'flex',
         flexDirection: 'column',
         gap: '12px',
-        padding: '8px',
+        // ✅ FIX: Hitbox MUITO maior para facilitar drop
+        padding: '16px', // Era 8px, agora 16px (2x maior)
         background: isOver
-          ? 'linear-gradient(180deg, rgba(130, 87, 230, 0.05) 0%, rgba(130, 87, 230, 0.02) 100%)'
+          ? 'linear-gradient(180deg, rgba(130, 87, 230, 0.1) 0%, rgba(130, 87, 230, 0.05) 100%)'
           : 'transparent',
-        border: isOver ? '2px dashed var(--primary)' : '2px solid transparent',
+        border: isOver ? '3px dashed var(--primary)' : '3px solid transparent',
         borderRadius: '12px',
-        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-        minHeight: 150,
+        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+        // ✅ FIX: minHeight MUITO maior - quase 3x
+        minHeight: 400, // Era 150px, agora 400px!
         flex: 1,
         overflowY: 'auto',
         willChange: 'background, border',
+        // ✅ Feedback visual mais forte
+        transform: isOver ? 'scale(1.01)' : 'scale(1)',
+        boxShadow: isOver ? '0 8px 24px rgba(130, 87, 230, 0.2)' : 'none',
       }}
     >
       {children}

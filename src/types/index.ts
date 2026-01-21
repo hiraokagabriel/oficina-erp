@@ -10,13 +10,12 @@ export interface LedgerEntry {
   updatedAt?: string;
   groupId?: string;
   history?: { timestamp: string; note: string }[];
-  // ✅ NOVO: Campos para pagamento parcelado
-  installmentNumber?: number; // Número da parcela (1, 2, 3...)
-  totalInstallments?: number; // Total de parcelas (2, 3, 6, 12)
-  installmentGroupId?: string; // ID do grupo de parcelas
-  isPaid?: boolean; // Se a parcela foi paga
-  paidAt?: string; // Data do pagamento
-  dueDate?: string; // Data de vencimento
+  installmentNumber?: number;
+  totalInstallments?: number;
+  installmentGroupId?: string;
+  isPaid?: boolean;
+  paidAt?: string;
+  dueDate?: string;
 }
 
 export interface WorkOrder {
@@ -34,19 +33,19 @@ export interface WorkOrder {
   financialId?: string;
   checklist?: ChecklistSchema;
   publicNotes?: string;
-  // ✅ NOVO: Campos para controle de pagamento
   paymentMethod?: 'CASH' | 'CARD' | 'PIX' | 'INSTALLMENT';
   installmentConfig?: InstallmentConfig;
 }
 
-// ✅ NOVO: Configuração de parcelamento
+// ✅ FIX: Adicionar lastInstallmentAmount para arredondamento correto
 export interface InstallmentConfig {
   totalAmount: number;
-  installments: number; // 2-12x
-  installmentAmount: number; // Valor de cada parcela
-  firstPaymentDate: string; // Data do primeiro pagamento
-  groupId: string; // ID para agrupar parcelas
-  description: string; // Descrição (ex: "OS #123 - Cliente X")
+  installments: number;
+  installmentAmount: number; // Valor das parcelas normais
+  lastInstallmentAmount?: number; // ✅ Última parcela ajustada
+  firstPaymentDate: string;
+  groupId: string;
+  description: string;
 }
 
 export type OSStatus = 'ORCAMENTO' | 'APROVADO' | 'EM_SERVICO' | 'FINALIZADO' | 'ARQUIVADO';
@@ -59,7 +58,6 @@ export const STATUS_LABELS: Record<OSStatus, string> = {
   ARQUIVADO: 'Arquivado'
 };
 
-// --- ADICIONADO: A constante que faltava para o ExportModal ---
 export const MONTH_NAMES = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
@@ -71,12 +69,11 @@ export interface Client {
   phone: string;
   notes?: string;
   vehicles: { model: string; plate: string }[];
-  // ✅ NOVO: Campos para CRM
-  totalSpent?: number; // Total gasto pelo cliente
-  lastServiceDate?: string; // Último serviço realizado
-  serviceCount?: number; // Quantidade de serviços
-  averageTicket?: number; // Ticket médio
-  vipStatus?: boolean; // Cliente VIP
+  totalSpent?: number;
+  lastServiceDate?: string;
+  serviceCount?: number;
+  averageTicket?: number;
+  vipStatus?: boolean;
 }
 
 export interface CatalogItem {
@@ -122,7 +119,6 @@ export interface ChecklistSchema {
   [key: string]: boolean | string | number | object | undefined;
 }
 
-// ✅ NOVO: Interface para estatísticas do CRM
 export interface CRMStats {
   totalClients: number;
   vipClients: Client[];

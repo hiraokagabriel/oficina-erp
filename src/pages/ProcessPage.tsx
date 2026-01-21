@@ -157,23 +157,28 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
 
   return (
     <div style={{ position: 'relative' }}>
-      {/* 🔒 HEADER FIXO NO TOPO - ALINHADO COM SIDEBAR */}
+      {/* 🏝️ ILHA FLUTUANTE - HEADER FIXO */}
       <div 
         ref={headerRef}
         style={{
           position: 'fixed',
-          top: 0,
-          left: '260px', // 👈 COMPENSA A LARGURA DA SIDEBAR!
-          right: 0,
+          top: '20px',
+          left: '280px', // 260px sidebar + 20px margem
+          right: '20px',
+          maxWidth: '1400px',
+          margin: '0 auto',
           background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
-          borderRadius: '0 0 var(--radius-card) var(--radius-card)',
+          backdropFilter: 'blur(20px)',
+          borderRadius: '24px', // 👈 Border radius completo!
           padding: '32px',
           color: '#fff',
           overflow: 'hidden',
-          boxShadow: '0 10px 40px rgba(130, 87, 230, 0.3)',
-          zIndex: 1000
+          boxShadow: '0 20px 60px rgba(130, 87, 230, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)',
+          zIndex: 999,
+          border: '1px solid rgba(255, 255, 255, 0.1)'
         }}
       >
+        {/* Orbe decorativo */}
         <div style={{
           position: 'absolute',
           top: '-100px',
@@ -186,7 +191,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
           pointerEvents: 'none'
         }}/>
         
-        <div style={{ position: 'relative', zIndex: 1, maxWidth: '1400px', margin: '0 auto' }}>
+        <div style={{ position: 'relative', zIndex: 1 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
             <div>
               <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '2px', opacity: 0.9, marginBottom: '8px' }}>
@@ -312,7 +317,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
       </div>
 
       {/* CONTEÚDO COM PADDING-TOP PARA NÃO FICAR SOB O HEADER */}
-      <div style={{ paddingTop: headerHeight > 0 ? `${headerHeight + 32}px` : '350px' }}>
+      <div style={{ paddingTop: headerHeight > 0 ? `${headerHeight + 60}px` : '380px' }}>
         {/* 🔍 FILTROS AVANÇADOS */}
         <div className="card" style={{ marginBottom: '24px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', alignItems: 'end' }}>

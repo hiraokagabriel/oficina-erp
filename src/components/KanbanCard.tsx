@@ -111,7 +111,7 @@ export const KanbanCard = React.memo(({
     if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
       try {
         await navigator.clipboard.writeText(whatsappUrl);
-        alert(`Link do WhatsApp copiado!\n\nCole no navegador:\n${whatsappUrl}`);
+        alert(`Link copiado!\n\nCole no navegador:\n${whatsappUrl}`);
       } catch {
         prompt('Copie este link:', whatsappUrl);
       }
@@ -123,38 +123,26 @@ export const KanbanCard = React.memo(({
       {
         icon: '✏️',
         label: 'Editar OS',
-        onClick: () => {
-          console.log('✅ Executando: Editar OS');
-          actions.onEdit(os);
-        },
+        onClick: () => actions.onEdit(os),
         variant: 'primary'
       },
       {
         icon: '📋',
-        label: 'Checklist',
-        onClick: () => {
-          console.log('✅ Executando: Checklist');
-          actions.onChecklist(os);
-        }
+        label: 'Checklist de Inspeção',
+        onClick: () => actions.onChecklist(os)
       },
       {
         icon: '🖨️',
-        label: 'Imprimir',
-        onClick: () => {
-          console.log('✅ Executando: Imprimir');
-          actions.onPrint(os);
-        }
+        label: 'Imprimir OS',
+        onClick: () => actions.onPrint(os)
       }
     ];
 
     if (os.clientPhone) {
       items.push({
         icon: '💬',
-        label: 'WhatsApp',
-        onClick: () => {
-          console.log('✅ Executando: WhatsApp');
-          openWhatsApp();
-        },
+        label: 'Enviar WhatsApp',
+        onClick: openWhatsApp,
         variant: 'success'
       });
     }
@@ -165,10 +153,7 @@ export const KanbanCard = React.memo(({
       items.push({
         icon: '⬅️',
         label: 'Voltar Status',
-        onClick: () => {
-          console.log('✅ Executando: Voltar Status');
-          actions.onRegress(os.id);
-        }
+        onClick: () => actions.onRegress(os.id)
       });
     }
 
@@ -176,10 +161,7 @@ export const KanbanCard = React.memo(({
       items.push({
         icon: '➡️',
         label: 'Avançar Status',
-        onClick: () => {
-          console.log('✅ Executando: Avançar Status');
-          actions.onAdvance(os.id);
-        }
+        onClick: () => actions.onAdvance(os.id)
       });
     }
 
@@ -189,30 +171,21 @@ export const KanbanCard = React.memo(({
       items.push({
         icon: '↩️',
         label: 'Restaurar OS',
-        onClick: () => {
-          console.log('✅ Executando: Restaurar OS');
-          actions.onRestore?.(os);
-        },
+        onClick: () => actions.onRestore?.(os),
         variant: 'success'
       });
     } else {
       items.push({
         icon: '📦',
-        label: 'Arquivar',
-        onClick: () => {
-          console.log('✅ Executando: Arquivar');
-          actions.onArchive?.(os);
-        }
+        label: 'Arquivar OS',
+        onClick: () => actions.onArchive?.(os)
       });
     }
 
     items.push({
       icon: '🗑️',
       label: 'Excluir Permanentemente',
-      onClick: () => {
-        console.log('✅ Executando: Excluir');
-        actions.onDelete(os);
-      },
+      onClick: () => actions.onDelete(os),
       variant: 'danger'
     });
 
@@ -222,7 +195,6 @@ export const KanbanCard = React.memo(({
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log('✅ Context menu aberto em:', e.clientX, e.clientY);
     setContextMenu({ x: e.clientX, y: e.clientY });
   };
 
@@ -240,7 +212,7 @@ export const KanbanCard = React.memo(({
       >
         <div
           className={cardClassName}
-          title="💡 Clique direito: menu | Ctrl+Clique: finalizar"
+          title="💡 Clique direito: menu completo | Ctrl+Clique: finalizar rápido"
           onClick={(e) => {
             if (e.ctrlKey && status !== 'FINALIZADO' && actions.onQuickFinish) {
               e.preventDefault();
@@ -262,7 +234,6 @@ export const KanbanCard = React.memo(({
               : shouldShowHoverEffects
                 ? '0 8px 24px rgba(0, 0, 0, 0.15)'
                 : '0 2px 8px rgba(0, 0, 0, 0.1)',
-            willChange: 'transform, box-shadow, opacity',
             transition: 'box-shadow 0.2s ease'
           }}
         >
@@ -320,7 +291,6 @@ export const KanbanCard = React.memo(({
 
           {shouldShowHoverEffects && (
             <div 
-              className="card-quick-actions" 
               style={{ 
                 display: 'flex',
                 gap: 6,
@@ -331,7 +301,6 @@ export const KanbanCard = React.memo(({
               }}
             >
               <button 
-                className="btn-quick-edit" 
                 title="Editar OS" 
                 onClick={(e) => {
                   e.stopPropagation(); 
@@ -368,7 +337,6 @@ export const KanbanCard = React.memo(({
 
               {os.clientPhone && (
                 <button 
-                  className="btn-quick-whatsapp" 
                   title="WhatsApp Rápido" 
                   onClick={(e) => {
                     e.stopPropagation(); 
@@ -413,10 +381,7 @@ export const KanbanCard = React.memo(({
           x={contextMenu.x}
           y={contextMenu.y}
           items={menuItems}
-          onClose={() => {
-            console.log('✅ Context menu fechado');
-            setContextMenu(null);
-          }}
+          onClose={() => setContextMenu(null)}
         />
       )}
 

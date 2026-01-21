@@ -231,29 +231,53 @@ function AppContent() {
   const handleInstallmentConfirm = (config: any) => {
     const newEntries: LedgerEntry[] = [];
     const baseDate = new Date(config.firstPaymentDate);
+    const groupId = config.groupId;
     
     for (let i = 0; i < config.installments; i++) {
       const dueDate = new Date(baseDate);
       dueDate.setMonth(dueDate.getMonth() + i);
+      
+      // ✅ FIX: Última parcela usa o valor ajustado para absorver diferença de centavos
+      const isLastInstallment = i === config.installments - 1;
+      const amount = isLastInstallment ? config.lastInstallmentAmount : config.installmentAmount;
+      
       newEntries.push({
         id: crypto.randomUUID(),
         description: `${config.description} - Parcela ${i + 1}/${config.installments}`,
-        amount: config.installmentAmount,
+        amount: amount,
         type: 'CREDIT',
         effectiveDate: dueDate.toISOString(),
         createdAt: new Date().toISOString(),
-        groupId: config.groupId,
+        groupId: groupId,
         installmentNumber: i + 1,
         totalInstallments: config.installments,
-        installmentGroupId: config.groupId,
+        installmentGroupId: groupId,
         isPaid: false,
         dueDate: dueDate.toISOString()
       });
     }
     
     setLedger(prev => [...newEntries, ...prev]);
-    if (installmentOS) setWorkOrders(prev => prev.map(o => o.id === installmentOS.id ? { ...o, financialId: newEntries[0].id, paymentMethod: 'INSTALLMENT', installmentConfig: config } : o));
-    addToast(`Parcelamento criado! ${config.installments}x de ${Money.format(config.installmentAmount)}`, "success");
+    
+    // ✅ FIX CRÍTICO: Marcar OS como FINALIZADO e vincular primeira parcela
+    if (installmentOS) {
+      setWorkOrders(prev => prev.map(o => 
+        o.id === installmentOS.id 
+          ? { 
+              ...o, 
+              status: 'FINALIZADO',  // ✅ FINALIZA A OS!
+              financialId: newEntries[0].id, 
+              paymentMethod: 'INSTALLMENT', 
+              installmentConfig: config 
+            } 
+          : o
+      ));
+      
+      addToast(`OS #${installmentOS.osNumber} finalizada!`, "success");
+      setShowConfetti(true);
+    }
+    
+    addToast(`Parcelamento criado! ${config.installments}x`, "success");
     setIsInstallmentModalOpen(false);
     setInstallmentOS(null);
   };

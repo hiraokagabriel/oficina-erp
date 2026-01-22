@@ -16,11 +16,10 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   onClose,
   ledger,
   workOrders,
-  defaultPath: _defaultPath, // ✅ Prefixo com _ indica parâmetro não utilizado
+  defaultPath: _defaultPath,
   Money,
   SoundFX
 }) => {
-  const [selectedType, setSelectedType] = useState<'LEDGER' | 'WORK_ORDERS'>('LEDGER');
   const [startDate, setStartDate] = useState<string>(
     new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
   );
@@ -30,56 +29,62 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
   const handleExport = () => {
     try {
-      let data: any[] = [];
-      let headers: string[] = [];
-      let filename = '';
+      // Filtra lançamentos no período
+      const filteredLedger = ledger.filter(e => {
+        const date = new Date(e.effectiveDate);
+        return date >= new Date(startDate) && date <= new Date(endDate);
+      });
 
-      if (selectedType === 'LEDGER') {
-        const filtered = ledger.filter(e => {
-          const date = new Date(e.effectiveDate);
-          return date >= new Date(startDate) && date <= new Date(endDate);
-        });
+      // Prepara dados unificados
+      const data: any[] = [];
 
-        headers = ['Data', 'Descrição', 'Tipo', 'Valor', 'Criado Em', 'Parcela', 'Total Parcelas', 'Última Modificação'];
-        data = filtered.map(e => {
-          const safeHistory = e.history || [];
-          return {
-            'Data': new Date(e.effectiveDate).toLocaleDateString('pt-BR'),
-            'Descrição': e.description,
-            'Tipo': e.type === 'CREDIT' ? 'Receita' : 'Despesa',
-            'Valor': Money.format(e.amount),
-            'Criado Em': new Date(e.createdAt).toLocaleDateString('pt-BR'),
-            'Parcela': e.installmentNumber ? `${e.installmentNumber}/${e.totalInstallments}` : '-',
-            'Total Parcelas': e.totalInstallments || '-',
-            'Última Modificação': safeHistory.length > 0 && safeHistory[0].timestamp
-              ? new Date(safeHistory[0].timestamp).toLocaleDateString()
-              : '-'
-          };
-        });
-        filename = `lancamentos_${startDate}_${endDate}.csv`;
-      } else {
-        const filtered = workOrders.filter(w => {
-          const date = new Date(w.createdAt);
-          return date >= new Date(startDate) && date <= new Date(endDate);
-        });
+      // Adiciona cada lançamento
+      filteredLedger.forEach(entry => {
+        // Procura OS vinculada
+        const linkedOS = workOrders.find(os => os.financialId === entry.id);
 
-        headers = ['OS', 'Cliente', 'Veículo', 'Status', 'Total', 'Criado Em'];
-        data = filtered.map(w => ({
-          'OS': `#${w.osNumber}`,
-          'Cliente': w.clientName,
-          'Veículo': w.vehicle,
-          'Status': w.status,
-          'Total': Money.format(w.total),
-          'Criado Em': new Date(w.createdAt).toLocaleDateString('pt-BR')
-        }));
-        filename = `ordens_servico_${startDate}_${endDate}.csv`;
-      }
+        data.push({
+          'Número OS': linkedOS ? linkedOS.osNumber.toString() : '',
+          'Cliente': linkedOS ? linkedOS.clientName : '',
+          'Data Criação': linkedOS ? new Date(linkedOS.createdAt).toLocaleDateString('pt-BR') : '',
+          'Veículo': linkedOS ? linkedOS.vehicle : '',
+          'Km': linkedOS ? linkedOS.mileage.toString() : '',
+          'Valor': Money.format(entry.amount),
+          'Tipo': entry.type === 'CREDIT' ? 'Receita' : 'Despesa',
+          'Data Pagamento': entry.paymentDate 
+            ? new Date(entry.paymentDate).toLocaleDateString('pt-BR') 
+            : '',
+          'Descrição': entry.description,
+          'Data Lançamento': new Date(entry.effectiveDate).toLocaleDateString('pt-BR')
+        });
+      });
+
+      // Ordena por data de lançamento
+      data.sort((a, b) => {
+        const dateA = a['Data Lançamento'].split('/').reverse().join('-');
+        const dateB = b['Data Lançamento'].split('/').reverse().join('-');
+        return dateA.localeCompare(dateB);
+      });
+
+      const headers = [
+        'Número OS',
+        'Cliente', 
+        'Data Criação',
+        'Veículo',
+        'Km',
+        'Valor',
+        'Tipo',
+        'Data Pagamento',
+        'Descrição',
+        'Data Lançamento'
+      ];
 
       const csvContent = [
         headers.join(';'),
         ...data.map(row => headers.map(h => row[h]).join(';'))
       ].join('\n');
 
+      const filename = `relatorio_financeiro_${startDate}_${endDate}.csv`;
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
@@ -98,29 +103,35 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
         <div className="modal-header">
-          <h2>📊 Exportar Dados</h2>
+          <h2>📊 Exportar Relatório</h2>
           <button className="btn-icon" onClick={onClose}>✕</button>
         </div>
 
         <div className="modal-body" style={{ padding: '24px' }}>
-          <div style={{ marginBottom: '24px' }}>
-            <label className="form-label">Tipo de Exportação</label>
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <button
-                className={`btn ${selectedType === 'LEDGER' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setSelectedType('LEDGER')}
-                style={{ flex: 1 }}
-              >
-                💰 Lançamentos
-              </button>
-              <button
-                className={`btn ${selectedType === 'WORK_ORDERS' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setSelectedType('WORK_ORDERS')}
-                style={{ flex: 1 }}
-              >
-                🔧 Ordens de Serviço
-              </button>
+          <div style={{ 
+            marginBottom: '24px', 
+            padding: '16px', 
+            background: 'var(--bg-card)', 
+            borderRadius: '8px',
+            border: '1px solid var(--border)'
+          }}>
+            <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
+              📝 O relatório incluirá:
             </div>
+            <ul style={{ 
+              fontSize: '0.85rem', 
+              color: 'var(--text-muted)', 
+              margin: 0, 
+              paddingLeft: '20px',
+              lineHeight: '1.6'
+            }}>
+              <li>Número da OS (quando vinculada)</li>
+              <li>Cliente e veículo da OS</li>
+              <li>Data de criação da OS</li>
+              <li>Quilometragem</li>
+              <li>Valor e tipo (Receita/Despesa)</li>
+              <li>Data de pagamento</li>
+            </ul>
           </div>
 
           <div style={{ marginBottom: '16px' }}>

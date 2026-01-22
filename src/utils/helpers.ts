@@ -191,7 +191,10 @@ export function updateWorkOrderData(
   ].reduce((sum, price) => sum + price, 0);
   
   const profit = total - totalCost;
-  const profitMargin = totalCost > 0 ? (profit / totalCost) * 100 : 0;
+  
+  // 🔧 CORRIGIDO: Margem de Lucro = (Lucro / Faturamento) × 100
+  // Antes estava: (profit / totalCost) × 100 que é ROI
+  const profitMargin = total > 0 ? (profit / total) * 100 : 0;
   
   return {
     ...os,

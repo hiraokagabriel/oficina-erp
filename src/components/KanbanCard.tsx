@@ -252,7 +252,7 @@ export const KanbanCard = React.memo(({
                     borderRadius: 4,
                     backgroundColor: getProfitMarginColor(os.profitMargin).bg
                   }}
-                  title={`Lucro: ${formatMoney(os.profit || 0)} | ROI: ${os.totalCost && os.totalCost > 0 ? ((os.profit || 0) / os.totalCost * 100).toFixed(0) : '0'}%`}
+                  title={`Margem de Lucro: ${os.profitMargin.toFixed(1)}% | Lucro: ${formatMoney(os.profit || 0)}`}
                 >
                   +{os.profitMargin.toFixed(0)}%
                 </span>

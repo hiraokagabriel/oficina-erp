@@ -4,6 +4,7 @@ import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   User
 } from "firebase/auth";
 
@@ -17,6 +18,10 @@ export function login(email: string, password: string) {
 
 export function logout() {
   return signOut(auth);
+}
+
+export function resetPassword(email: string) {
+  return sendPasswordResetEmail(auth, email);
 }
 
 export function listenAuthChanges(callback: (user: User | null) => void) {

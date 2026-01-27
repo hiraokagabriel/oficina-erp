@@ -1,456 +1,491 @@
 /**
- * syncService.ts
+ * 🔄 SYNC SERVICE - Sincronização Firestore + Backup Local
  * 
- * Serviço de sincronização do banco de dados com Firestore
- * - Sincronização automática no primeiro login
- * - Cache local para modo offline
- * - Merge inteligente de conflitos
- * - Backup antes de operações destrutivas
+ * Funcionalidades:
+ * - Sincronização bidirecional Firestore <-> Local
+ * - Backup automático em IndexedDB
+ * - Backup em arquivo JSON (Tauri)
+ * - Modo offline com cache
+ * - Resolução de conflitos (last-write-wins)
+ * - Versionamento de dados
  */
 
-import { db } from '../lib/firebase';
-import {
-  collection,
-  doc,
-  setDoc,
-  getDoc,
-  getDocs,
-  updateDoc,
+import { 
+  collection, 
+  doc, 
+  getDoc, 
+  setDoc, 
+  updateDoc, 
   deleteDoc,
-  onSnapshot,
-  serverTimestamp,
+  getDocs,
+  query,
+  where,
+  orderBy,
+  limit,
   Timestamp,
-  writeBatch
+  writeBatch,
+  onSnapshot,
+  Unsubscribe
 } from 'firebase/firestore';
+import { db, auth } from '../lib/firebase';
+import { invoke } from '@tauri-apps/api/core';
 import { DatabaseSchema } from '../types';
 
+// ==============================
+// TIPOS
+// ==============================
+
 export interface SyncMetadata {
-  lastSyncTimestamp: number;
-  lastSyncDate: string;
-  syncCount: number;
   userId: string;
+  lastSyncAt: string;
+  version: number;
   deviceId: string;
+  platform: string;
 }
 
 export interface SyncStatus {
   isOnline: boolean;
-  isSyncing: boolean;
   lastSync: Date | null;
+  isSyncing: boolean;
   error: string | null;
+  pendingChanges: number;
 }
 
-class SyncService {
-  private userId: string | null = null;
-  private deviceId: string;
-  private syncStatus: SyncStatus = {
-    isOnline: navigator.onLine,
-    isSyncing: false,
-    lastSync: null,
-    error: null
-  };
-  private statusListeners: Array<(status: SyncStatus) => void> = [];
-  private unsubscribeSnapshot: (() => void) | null = null;
+export interface BackupInfo {
+  timestamp: string;
+  size: number;
+  source: 'firestore' | 'local' | 'manual';
+  metadata: SyncMetadata;
+}
 
-  constructor() {
-    // Gera ID único do dispositivo
-    this.deviceId = this.getDeviceId();
+// ==============================
+// CONSTANTES
+// ==============================
 
-    // Monitora estado da conexão
-    window.addEventListener('online', () => this.updateStatus({ isOnline: true }));
-    window.addEventListener('offline', () => this.updateStatus({ isOnline: false }));
-  }
+const COLLECTION_NAME = 'workshops';
+const BACKUP_DB_NAME = 'oficina_backup';
+const BACKUP_STORE_NAME = 'database_snapshots';
+const DEVICE_ID_KEY = 'oficina_device_id';
+const MAX_BACKUPS = 10; // Máximo de backups locais
 
-  /**
-   * Inicializa sincronização para um usuário
-   */
-  async initialize(userId: string): Promise<void> {
-    console.log('🔄 Inicializando sincronização para usuário:', userId);
-    this.userId = userId;
+// ==============================
+// INDEXEDDB - Backup Local
+// ==============================
 
-    try {
-      // Verifica se é o primeiro login
-      const isFirstLogin = await this.isFirstLogin();
+class LocalBackupDB {
+  private db: IDBDatabase | null = null;
 
-      if (isFirstLogin) {
-        console.log('🎉 Primeiro login detectado! Iniciando sincronização inicial...');
-        await this.initialSync();
-      } else {
-        console.log('🔄 Sincronizando dados...');
-        await this.syncFromFirestore();
-      }
+  async init(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(BACKUP_DB_NAME, 1);
 
-      // Ativa listener de mudanças em tempo real
-      this.startRealtimeSync();
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        this.db = request.result;
+        resolve();
+      };
 
-      console.log('✅ Sincronização inicializada com sucesso');
-    } catch (error: any) {
-      console.error('❌ Erro ao inicializar sincronização:', error);
-      this.updateStatus({ error: error.message });
-      throw error;
-    }
-  }
-
-  /**
-   * Sincronização inicial (primeiro login)
-   * Faz upload dos dados locais para Firestore
-   */
-  private async initialSync(): Promise<void> {
-    if (!this.userId) throw new Error('Usuário não autenticado');
-
-    this.updateStatus({ isSyncing: true });
-
-    try {
-      // Busca dados locais
-      const localData = this.getLocalData();
-
-      if (!localData) {
-        console.log('⚠️ Nenhum dado local encontrado. Criando estrutura vazia...');
-        await this.createEmptyDatabase();
-        return;
-      }
-
-      console.log('📦 Fazendo upload dos dados locais para Firestore...');
-
-      // Salva no Firestore
-      await this.saveToFirestore(localData);
-
-      // Atualiza metadata
-      await this.updateSyncMetadata();
-
-      this.updateStatus({
-        isSyncing: false,
-        lastSync: new Date(),
-        error: null
-      });
-
-      console.log('✅ Sincronização inicial concluída');
-    } catch (error: any) {
-      this.updateStatus({ isSyncing: false, error: error.message });
-      throw error;
-    }
-  }
-
-  /**
-   * Sincroniza dados do Firestore para local
-   */
-  async syncFromFirestore(): Promise<void> {
-    if (!this.userId) throw new Error('Usuário não autenticado');
-
-    this.updateStatus({ isSyncing: true });
-
-    try {
-      console.log('📞 Baixando dados do Firestore...');
-
-      const userDocRef = doc(db, 'users', this.userId, 'data', 'database');
-      const docSnap = await getDoc(userDocRef);
-
-      if (docSnap.exists()) {
-        const firestoreData = docSnap.data() as DatabaseSchema;
+      request.onupgradeneeded = (event) => {
+        const db = (event.target as IDBOpenDBRequest).result;
         
-        // Faz merge com dados locais
-        const mergedData = this.mergeData(this.getLocalData(), firestoreData);
-        
-        // Salva localmente
-        this.saveLocal(mergedData);
-
-        console.log('✅ Dados sincronizados com sucesso');
-      } else {
-        console.log('⚠️ Nenhum dado no Firestore. Fazendo upload dos dados locais...');
-        await this.initialSync();
-      }
-
-      this.updateStatus({
-        isSyncing: false,
-        lastSync: new Date(),
-        error: null
-      });
-    } catch (error: any) {
-      console.error('❌ Erro ao sincronizar do Firestore:', error);
-      this.updateStatus({ isSyncing: false, error: error.message });
-      throw error;
-    }
-  }
-
-  /**
-   * Sincroniza dados locais para Firestore
-   */
-  async syncToFirestore(data: DatabaseSchema): Promise<void> {
-    if (!this.userId) throw new Error('Usuário não autenticado');
-    if (!this.syncStatus.isOnline) {
-      console.log('⚠️ Offline. Dados serão sincronizados quando voltar online.');
-      return;
-    }
-
-    try {
-      await this.saveToFirestore(data);
-      await this.updateSyncMetadata();
-      this.updateStatus({ lastSync: new Date() });
-    } catch (error: any) {
-      console.error('❌ Erro ao sincronizar para Firestore:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Salva dados no Firestore
-   */
-  private async saveToFirestore(data: DatabaseSchema): Promise<void> {
-    if (!this.userId) throw new Error('Usuário não autenticado');
-
-    const userDocRef = doc(db, 'users', this.userId, 'data', 'database');
-    
-    await setDoc(userDocRef, {
-      ...data,
-      _metadata: {
-        lastModified: serverTimestamp(),
-        deviceId: this.deviceId,
-        version: '1.0.0'
-      }
-    }, { merge: true });
-  }
-
-  /**
-   * Inicia sincronização em tempo real
-   */
-  private startRealtimeSync(): void {
-    if (!this.userId) return;
-
-    const userDocRef = doc(db, 'users', this.userId, 'data', 'database');
-
-    this.unsubscribeSnapshot = onSnapshot(
-      userDocRef,
-      (docSnapshot) => {
-        if (docSnapshot.exists() && docSnapshot.metadata.hasPendingWrites === false) {
-          console.log('🔄 Mudanças remotas detectadas. Atualizando cache local...');
-          const firestoreData = docSnapshot.data() as DatabaseSchema;
-          const localData = this.getLocalData();
-          const mergedData = this.mergeData(localData, firestoreData);
-          this.saveLocal(mergedData);
+        if (!db.objectStoreNames.contains(BACKUP_STORE_NAME)) {
+          const store = db.createObjectStore(BACKUP_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+          store.createIndex('timestamp', 'timestamp', { unique: false });
+          store.createIndex('source', 'source', { unique: false });
         }
+      };
+    });
+  }
+
+  async saveBackup(data: DatabaseSchema, source: 'firestore' | 'local' | 'manual'): Promise<void> {
+    if (!this.db) await this.init();
+
+    const backup: BackupInfo & { data: DatabaseSchema } = {
+      timestamp: new Date().toISOString(),
+      size: JSON.stringify(data).length,
+      source,
+      metadata: {
+        userId: auth.currentUser?.uid || 'anonymous',
+        lastSyncAt: new Date().toISOString(),
+        version: data.settings?.version || 1,
+        deviceId: getDeviceId(),
+        platform: navigator.platform
       },
-      (error) => {
-        console.error('❌ Erro no listener de tempo real:', error);
-        this.updateStatus({ error: error.message });
-      }
-    );
-  }
-
-  /**
-   * Para sincronização em tempo real
-   */
-  stopRealtimeSync(): void {
-    if (this.unsubscribeSnapshot) {
-      this.unsubscribeSnapshot();
-      this.unsubscribeSnapshot = null;
-      console.log('🚫 Sincronização em tempo real parada');
-    }
-  }
-
-  /**
-   * Faz merge inteligente de dados locais e remotos
-   */
-  private mergeData(
-    local: DatabaseSchema | null,
-    remote: DatabaseSchema
-  ): DatabaseSchema {
-    if (!local) return remote;
-
-    // Estratégia: remote wins (dados remotos têm prioridade)
-    // Mas preserva dados locais mais recentes
-    return {
-      ledger: this.mergeArrays(local.ledger, remote.ledger, 'id'),
-      workOrders: this.mergeArrays(local.workOrders, remote.workOrders, 'id'),
-      clients: this.mergeArrays(local.clients, remote.clients, 'id'),
-      catalogParts: this.mergeArrays(local.catalogParts, remote.catalogParts, 'id'),
-      catalogServices: this.mergeArrays(local.catalogServices, remote.catalogServices, 'id'),
-      settings: remote.settings || local.settings
+      data
     };
-  }
 
-  /**
-   * Merge de arrays por ID
-   */
-  private mergeArrays<T extends { id: string }>(local: T[], remote: T[], key: keyof T): T[] {
-    const remoteMap = new Map(remote.map(item => [item[key], item]));
-    const merged = [...remote];
-
-    // Adiciona itens locais que não existem no remoto
-    local.forEach(item => {
-      if (!remoteMap.has(item[key])) {
-        merged.push(item);
-      }
-    });
-
-    return merged;
-  }
-
-  /**
-   * Cria backup dos dados antes de reset
-   */
-  async createBackup(): Promise<void> {
-    if (!this.userId) throw new Error('Usuário não autenticado');
-
-    const localData = this.getLocalData();
-    if (!localData) return;
-
-    const backupDocRef = doc(db, 'users', this.userId, 'backups', `backup_${Date.now()}`);
+    const transaction = this.db!.transaction([BACKUP_STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(BACKUP_STORE_NAME);
     
-    await setDoc(backupDocRef, {
-      data: localData,
-      createdAt: serverTimestamp(),
-      deviceId: this.deviceId
-    });
+    await store.add(backup);
 
-    console.log('✅ Backup criado com sucesso');
+    // Limita quantidade de backups
+    await this.cleanOldBackups();
   }
 
-  /**
-   * Reseta o banco de dados (requer autenticação)
-   */
-  async resetDatabase(): Promise<void> {
-    if (!this.userId) throw new Error('Usuário não autenticado');
+  async getLatestBackup(): Promise<(BackupInfo & { data: DatabaseSchema }) | null> {
+    if (!this.db) await this.init();
 
-    console.log('⚠️ Criando backup antes de resetar...');
-    await this.createBackup();
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([BACKUP_STORE_NAME], 'readonly');
+      const store = transaction.objectStore(BACKUP_STORE_NAME);
+      const index = store.index('timestamp');
+      const request = index.openCursor(null, 'prev'); // Mais recente primeiro
 
-    console.log('🗑️ Resetando banco de dados...');
+      request.onsuccess = () => {
+        const cursor = request.result;
+        resolve(cursor ? cursor.value : null);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async getAllBackups(): Promise<BackupInfo[]> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([BACKUP_STORE_NAME], 'readonly');
+      const store = transaction.objectStore(BACKUP_STORE_NAME);
+      const request = store.getAll();
+
+      request.onsuccess = () => resolve(request.result.map(r => ({
+        timestamp: r.timestamp,
+        size: r.size,
+        source: r.source,
+        metadata: r.metadata
+      })));
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async deleteBackup(timestamp: string): Promise<void> {
+    if (!this.db) await this.init();
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([BACKUP_STORE_NAME], 'readwrite');
+      const store = transaction.objectStore(BACKUP_STORE_NAME);
+      const index = store.index('timestamp');
+      const request = index.openCursor(IDBKeyRange.only(timestamp));
+
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (cursor) {
+          cursor.delete();
+        }
+        resolve();
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  private async cleanOldBackups(): Promise<void> {
+    const backups = await this.getAllBackups();
     
-    // Limpa dados locais
-    localStorage.removeItem('oficina-erp-data');
+    if (backups.length > MAX_BACKUPS) {
+      const toDelete = backups
+        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+        .slice(0, backups.length - MAX_BACKUPS);
 
-    // Cria estrutura vazia
-    await this.createEmptyDatabase();
-
-    console.log('✅ Banco de dados resetado com sucesso');
-  }
-
-  /**
-   * Cria estrutura vazia do banco
-   */
-  private async createEmptyDatabase(): Promise<void> {
-    const emptyData: DatabaseSchema = {
-      ledger: [],
-      workOrders: [],
-      clients: [],
-      catalogParts: [],
-      catalogServices: [],
-      settings: {
-        name: '',
-        cnpj: '',
-        address: '',
-        technician: '',
-        exportPath: '',
-        googleDriveToken: '',
-        googleApiKey: ''
+      for (const backup of toDelete) {
+        await this.deleteBackup(backup.timestamp);
       }
-    };
-
-    this.saveLocal(emptyData);
-    if (this.userId) {
-      await this.saveToFirestore(emptyData);
     }
   }
 
-  /**
-   * Verifica se é o primeiro login do usuário
-   */
-  private async isFirstLogin(): Promise<boolean> {
-    if (!this.userId) return true;
+  async clearAll(): Promise<void> {
+    if (!this.db) await this.init();
 
-    const userDocRef = doc(db, 'users', this.userId, 'data', 'database');
-    const docSnap = await getDoc(userDocRef);
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([BACKUP_STORE_NAME], 'readwrite');
+      const store = transaction.objectStore(BACKUP_STORE_NAME);
+      const request = store.clear();
 
-    return !docSnap.exists();
-  }
-
-  /**
-   * Atualiza metadata de sincronização
-   */
-  private async updateSyncMetadata(): Promise<void> {
-    if (!this.userId) return;
-
-    const metadataRef = doc(db, 'users', this.userId, 'metadata', 'sync');
-    const currentMetadata = await getDoc(metadataRef);
-    const syncCount = currentMetadata.exists() ? (currentMetadata.data().syncCount || 0) + 1 : 1;
-
-    await setDoc(metadataRef, {
-      lastSyncTimestamp: Date.now(),
-      lastSyncDate: new Date().toISOString(),
-      syncCount,
-      userId: this.userId,
-      deviceId: this.deviceId,
-      updatedAt: serverTimestamp()
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
     });
-  }
-
-  /**
-   * Obtém dados do LocalStorage
-   */
-  private getLocalData(): DatabaseSchema | null {
-    const data = localStorage.getItem('oficina-erp-data');
-    return data ? JSON.parse(data) : null;
-  }
-
-  /**
-   * Salva dados no LocalStorage
-   */
-  private saveLocal(data: DatabaseSchema): void {
-    localStorage.setItem('oficina-erp-data', JSON.stringify(data));
-  }
-
-  /**
-   * Gera ou recupera ID do dispositivo
-   */
-  private getDeviceId(): string {
-    let deviceId = localStorage.getItem('device-id');
-    if (!deviceId) {
-      deviceId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      localStorage.setItem('device-id', deviceId);
-    }
-    return deviceId;
-  }
-
-  /**
-   * Atualiza status de sincronização e notifica listeners
-   */
-  private updateStatus(update: Partial<SyncStatus>): void {
-    this.syncStatus = { ...this.syncStatus, ...update };
-    this.statusListeners.forEach(listener => listener(this.syncStatus));
-  }
-
-  /**
-   * Adiciona listener de status
-   */
-  onStatusChange(listener: (status: SyncStatus) => void): () => void {
-    this.statusListeners.push(listener);
-    // Retorna função para remover listener
-    return () => {
-      this.statusListeners = this.statusListeners.filter(l => l !== listener);
-    };
-  }
-
-  /**
-   * Obtém status atual
-   */
-  getStatus(): SyncStatus {
-    return { ...this.syncStatus };
-  }
-
-  /**
-   * Cleanup ao fazer logout
-   */
-  cleanup(): void {
-    this.stopRealtimeSync();
-    this.userId = null;
-    this.statusListeners = [];
-    this.syncStatus = {
-      isOnline: navigator.onLine,
-      isSyncing: false,
-      lastSync: null,
-      error: null
-    };
   }
 }
 
-// Export instância singleton
-export const syncService = new SyncService();
+const localBackupDB = new LocalBackupDB();
+
+// ==============================
+// UTILITÁRIOS
+// ==============================
+
+function getDeviceId(): string {
+  let deviceId = localStorage.getItem(DEVICE_ID_KEY);
+  if (!deviceId) {
+    deviceId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    localStorage.setItem(DEVICE_ID_KEY, deviceId);
+  }
+  return deviceId;
+}
+
+function getUserDocPath(): string {
+  const userId = auth.currentUser?.uid;
+  if (!userId) throw new Error('❌ Usuário não autenticado');
+  return userId;
+}
+
+// ==============================
+// FIRESTORE - Operações
+// ==============================
+
+export async function uploadToFirestore(data: DatabaseSchema): Promise<void> {
+  const userId = getUserDocPath();
+  const docRef = doc(db, COLLECTION_NAME, userId);
+
+  const metadata: SyncMetadata = {
+    userId,
+    lastSyncAt: new Date().toISOString(),
+    version: (data.settings?.version || 0) + 1,
+    deviceId: getDeviceId(),
+    platform: navigator.platform
+  };
+
+  const dataWithMetadata = {
+    ...data,
+    _metadata: metadata,
+    updatedAt: Timestamp.now()
+  };
+
+  await setDoc(docRef, dataWithMetadata, { merge: true });
+  console.log('✅ Dados enviados para Firestore');
+}
+
+export async function downloadFromFirestore(): Promise<DatabaseSchema | null> {
+  const userId = getUserDocPath();
+  const docRef = doc(db, COLLECTION_NAME, userId);
+
+  const docSnap = await getDoc(docRef);
+
+  if (docSnap.exists()) {
+    const data = docSnap.data();
+    const { _metadata, updatedAt, ...cleanData } = data;
+    console.log('✅ Dados baixados do Firestore');
+    return cleanData as DatabaseSchema;
+  }
+
+  console.log('⚠️ Nenhum dado encontrado no Firestore');
+  return null;
+}
+
+export async function syncWithFirestore(
+  localData: DatabaseSchema,
+  onProgress?: (message: string, progress: number) => void
+): Promise<DatabaseSchema> {
+  try {
+    onProgress?.('Conectando ao Firestore...', 10);
+
+    // 1. Baixar dados da nuvem
+    onProgress?.('Baixando dados da nuvem...', 30);
+    const cloudData = await downloadFromFirestore();
+
+    if (!cloudData) {
+      // Primeira sincronização - Fazer upload dos dados locais
+      onProgress?.('Primeira sincronização - Enviando dados...', 60);
+      await uploadToFirestore(localData);
+      onProgress?.('Salvando backup local...', 80);
+      await localBackupDB.saveBackup(localData, 'firestore');
+      onProgress?.('Sincronização concluída!', 100);
+      return localData;
+    }
+
+    // 2. Resolver conflitos (last-write-wins)
+    onProgress?.('Resolvendo conflitos...', 50);
+    const mergedData = mergeData(localData, cloudData);
+
+    // 3. Fazer upload dos dados mesclados
+    onProgress?.('Enviando dados atualizados...', 70);
+    await uploadToFirestore(mergedData);
+
+    // 4. Salvar backup local
+    onProgress?.('Salvando backup local...', 90);
+    await localBackupDB.saveBackup(mergedData, 'firestore');
+
+    onProgress?.('Sincronização concluída!', 100);
+    return mergedData;
+  } catch (error) {
+    console.error('❌ Erro na sincronização:', error);
+    throw error;
+  }
+}
+
+// ==============================
+// MERGE DE DADOS
+// ==============================
+
+function mergeData(local: DatabaseSchema, cloud: DatabaseSchema): DatabaseSchema {
+  // Estratégia: Last-Write-Wins
+  // Compara timestamps e mantém o mais recente
+
+  const localVersion = local.settings?.version || 0;
+  const cloudVersion = cloud.settings?.version || 0;
+
+  console.log(`🔄 Mesclando dados: Local v${localVersion} <-> Cloud v${cloudVersion}`);
+
+  // Se versões são iguais, mantém dados locais (usuário acabou de modificar)
+  if (localVersion >= cloudVersion) {
+    console.log('💾 Dados locais são mais recentes ou iguais');
+    return {
+      ...local,
+      settings: {
+        ...local.settings,
+        version: localVersion + 1
+      }
+    };
+  }
+
+  // Dados da nuvem são mais recentes
+  console.log('☁️ Dados da nuvem são mais recentes');
+  return {
+    ...cloud,
+    settings: {
+      ...cloud.settings,
+      version: cloudVersion + 1
+    }
+  };
+}
+
+// ==============================
+// BACKUP EM ARQUIVO (Tauri)
+// ==============================
+
+export async function saveFileBackup(
+  data: DatabaseSchema,
+  filepath?: string
+): Promise<void> {
+  const dbPath = filepath || localStorage.getItem('oficina_db_path') || 'C:\\OficinaData\\database.json';
+  
+  const metadata: SyncMetadata = {
+    userId: auth.currentUser?.uid || 'anonymous',
+    lastSyncAt: new Date().toISOString(),
+    version: data.settings?.version || 1,
+    deviceId: getDeviceId(),
+    platform: navigator.platform
+  };
+
+  const dataWithMetadata = {
+    ...data,
+    _backup: metadata
+  };
+
+  await invoke('save_database_atomic', {
+    filepath: dbPath,
+    content: JSON.stringify(dataWithMetadata, null, 2)
+  });
+
+  console.log('✅ Backup salvo em arquivo:', dbPath);
+}
+
+export async function loadFileBackup(filepath?: string): Promise<DatabaseSchema | null> {
+  const dbPath = filepath || localStorage.getItem('oficina_db_path') || 'C:\\OficinaData\\database.json';
+
+  try {
+    const data = await invoke<string>('load_database', { filepath: dbPath });
+    if (data && data.trim()) {
+      const parsed = JSON.parse(data);
+      const { _backup, ...cleanData } = parsed;
+      console.log('✅ Backup carregado de arquivo:', dbPath);
+      return cleanData as DatabaseSchema;
+    }
+  } catch (error) {
+    console.error('❌ Erro ao carregar backup:', error);
+  }
+
+  return null;
+}
+
+// ==============================
+// RESET DE BANCO DE DADOS
+// ==============================
+
+export async function resetDatabase(password: string): Promise<boolean> {
+  // Verifica senha do usuário
+  const user = auth.currentUser;
+  if (!user || !user.email) {
+    throw new Error('Usuário não autenticado');
+  }
+
+  try {
+    // Reautentica para confirmar senha
+    const { signInWithEmailAndPassword } = await import('firebase/auth');
+    await signInWithEmailAndPassword(auth, user.email, password);
+
+    // Senha correta - Prosseguir com reset
+    const userId = getUserDocPath();
+    const docRef = doc(db, COLLECTION_NAME, userId);
+
+    // Criar backup antes de deletar
+    const currentData = await downloadFromFirestore();
+    if (currentData) {
+      await localBackupDB.saveBackup(currentData, 'manual');
+      console.log('📦 Backup criado antes do reset');
+    }
+
+    // Deletar dados do Firestore
+    await deleteDoc(docRef);
+    console.log('🗑️ Dados removidos do Firestore');
+
+    return true;
+  } catch (error: any) {
+    if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+      throw new Error('Senha incorreta');
+    }
+    throw error;
+  }
+}
+
+// ==============================
+// LISTENER EM TEMPO REAL
+// ==============================
+
+export function listenToFirestoreChanges(
+  onUpdate: (data: DatabaseSchema) => void
+): Unsubscribe {
+  const userId = getUserDocPath();
+  const docRef = doc(db, COLLECTION_NAME, userId);
+
+  return onSnapshot(docRef, (snapshot) => {
+    if (snapshot.exists()) {
+      const data = snapshot.data();
+      const { _metadata, updatedAt, ...cleanData } = data;
+      console.log('🔄 Atualização em tempo real recebida');
+      onUpdate(cleanData as DatabaseSchema);
+    }
+  });
+}
+
+// ==============================
+// STATUS DE SINCRONIZAÇÃO
+// ==============================
+
+export async function getSyncStatus(): Promise<SyncStatus> {
+  const isOnline = navigator.onLine;
+  const latestBackup = await localBackupDB.getLatestBackup();
+
+  return {
+    isOnline,
+    lastSync: latestBackup ? new Date(latestBackup.timestamp) : null,
+    isSyncing: false,
+    error: null,
+    pendingChanges: 0
+  };
+}
+
+// ==============================
+// EXPORTS
+// ==============================
+
+export { localBackupDB };
+export default {
+  uploadToFirestore,
+  downloadFromFirestore,
+  syncWithFirestore,
+  saveFileBackup,
+  loadFileBackup,
+  resetDatabase,
+  listenToFirestoreChanges,
+  getSyncStatus,
+  localBackupDB
+};

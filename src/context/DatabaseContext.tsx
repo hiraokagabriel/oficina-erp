@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { invoke } from '@tauri-apps/api/core';
 import { LedgerEntry, WorkOrder, Client, CatalogItem, WorkshopSettings, DatabaseSchema } from '../types';
+
+// Detecta se está rodando em Tauri (desktop) ou navegador (web)
+const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
 
 interface DatabaseContextData {
   ledger: LedgerEntry[];
@@ -36,15 +38,63 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     technician: "", 
     exportPath: "", 
     googleDriveToken: "",
-    googleApiKey: "" // 🆕 ADICIONADO
+    googleApiKey: ""
   });
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   
-  // NOVO: Referência para evitar saves desnecessários durante o load
   const isInitialLoad = useRef(true);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Função para carregar dados (Tauri ou LocalStorage)
+  const loadDatabase = async (): Promise<DatabaseSchema | null> => {
+    if (isTauri) {
+      // TAURI: Carrega do sistema de arquivos
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const data = await invoke<string>('load_database', { filepath: dbPath });
+        if (data && data.trim()) {
+          return JSON.parse(data);
+        }
+      } catch (e) {
+        console.error("❌ Erro ao carregar banco (Tauri):", e);
+      }
+    } else {
+      // WEB: Carrega do LocalStorage
+      try {
+        const data = localStorage.getItem('oficina_database');
+        if (data) {
+          return JSON.parse(data);
+        }
+      } catch (e) {
+        console.error("❌ Erro ao carregar banco (LocalStorage):", e);
+      }
+    }
+    return null;
+  };
+
+  // Função para salvar dados (Tauri ou LocalStorage)
+  const saveDatabase = async (data: DatabaseSchema): Promise<void> => {
+    if (isTauri) {
+      // TAURI: Salva no sistema de arquivos
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('save_database_atomic', { filepath: dbPath, content: JSON.stringify(data) });
+        console.log('✅ Banco salvo (Tauri)');
+      } catch (e) {
+        console.error("❌ Erro ao salvar banco (Tauri):", e);
+      }
+    } else {
+      // WEB: Salva no LocalStorage
+      try {
+        localStorage.setItem('oficina_database', JSON.stringify(data));
+        console.log('✅ Banco salvo (LocalStorage)');
+      } catch (e) {
+        console.error("❌ Erro ao salvar banco (LocalStorage):", e);
+      }
+    }
+  };
 
   // Load Inicial
   useEffect(() => {
@@ -52,26 +102,29 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setIsLoading(true);
       isInitialLoad.current = true;
       
-      try {
-        const data = await invoke<string>('load_database', { filepath: dbPath });
-        if (data && data.trim()) {
-          const parsed = JSON.parse(data);
-          setLedger(parsed.ledger || []);
-          setWorkOrders(parsed.workOrders || []);
-          setClients(parsed.clients || []);
-          setCatalogParts(parsed.catalogParts || []);
-          setCatalogServices(parsed.catalogServices || []);
-          setSettings(parsed.settings || settings);
-        }
-      } catch (e) {
-        console.error("Erro ao carregar banco:", e);
-      } finally {
-        setIsLoading(false);
-        // Aguarda um pouco antes de permitir saves automáticos
-        setTimeout(() => {
-          isInitialLoad.current = false;
-        }, 500);
+      console.log(`🔄 Carregando banco... (${isTauri ? 'Tauri' : 'Web'})`);
+      
+      const parsed = await loadDatabase();
+      
+      if (parsed) {
+        setLedger(parsed.ledger || []);
+        setWorkOrders(parsed.workOrders || []);
+        setClients(parsed.clients || []);
+        setCatalogParts(parsed.catalogParts || []);
+        setCatalogServices(parsed.catalogServices || []);
+        setSettings(parsed.settings || settings);
+        console.log('✅ Banco carregado com sucesso!');
+      } else {
+        console.log('🆕 Banco vazio - iniciando com dados padrão');
       }
+      
+      setIsLoading(false);
+      
+      // Aguarda um pouco antes de permitir saves automáticos
+      setTimeout(() => {
+        isInitialLoad.current = false;
+        console.log('✅ Auto-save habilitado');
+      }, 500);
     }
     load();
   }, [dbPath]);
@@ -89,18 +142,13 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       clearTimeout(saveTimeoutRef.current);
     }
 
-    // NOVO DEBOUNCE: 3 segundos (ao invés de 1.5s)
+    // DEBOUNCE: 3 segundos
     saveTimeoutRef.current = setTimeout(async () => {
       setIsSaving(true);
-      try {
-        const fullDb: DatabaseSchema = { ledger, workOrders, clients, catalogParts, catalogServices, settings };
-        await invoke('save_database_atomic', { filepath: dbPath, content: JSON.stringify(fullDb) });
-      } catch (e) {
-        console.error("Erro ao salvar:", e);
-      } finally {
-        setIsSaving(false);
-      }
-    }, 3000); // Aumentado de 1500ms para 3000ms
+      const fullDb: DatabaseSchema = { ledger, workOrders, clients, catalogParts, catalogServices, settings };
+      await saveDatabase(fullDb);
+      setIsSaving(false);
+    }, 3000);
 
     return () => {
       if (saveTimeoutRef.current) {

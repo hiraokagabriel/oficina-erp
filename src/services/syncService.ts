@@ -1,449 +1,513 @@
 /**
- * syncService.ts
+ * SYNC SERVICE - Sincronização Cloud (Firestore) + Local (IndexedDB)
  * 
- * Serviço de sincronização entre Firestore (nuvem) e IndexedDB (local)
- * Gerencia upload, download, conflitos e sincronização automática
+ * Funcionalidades:
+ * - Sincronização automática no primeiro login
+ * - Cache local para offline-first
+ * - Backup automático
+ * - Reset do banco via autenticação
+ * - Migração de dados existentes
  */
 
 import { db } from '../lib/firebase';
-import { 
-  collection, 
-  getDocs, 
-  doc, 
-  setDoc, 
+import {
+  collection,
+  doc,
+  getDocs,
+  setDoc,
   deleteDoc,
   writeBatch,
   query,
   where,
-  Timestamp
+  Timestamp,
+  onSnapshot
 } from 'firebase/firestore';
-import { localStorageService, STORES } from './localStorageService';
 import { auth } from '../lib/firebase';
 
-interface SyncStatus {
-  syncing: boolean;
-  lastSync: number | null;
-  error: string | null;
-  progress: number; // 0-100
-  mode: 'idle' | 'downloading' | 'uploading' | 'checking';
-}
+// ============================================================================
+// TIPOS
+// ============================================================================
 
-interface SyncResult {
-  success: boolean;
-  uploaded: number;
-  downloaded: number;
+export interface SyncStatus {
+  lastSync: Date | null;
+  syncInProgress: boolean;
+  itemsSynced: number;
   errors: string[];
-  timestamp: number;
 }
 
-class SyncService {
-  private status: SyncStatus = {
-    syncing: false,
-    lastSync: null,
-    error: null,
-    progress: 0,
-    mode: 'idle'
-  };
+export interface BackupMetadata {
+  createdAt: Date;
+  userId: string;
+  userEmail: string;
+  itemCount: number;
+  collections: string[];
+}
 
-  private listeners: Array<(status: SyncStatus) => void> = [];
-  private autoSyncInterval: number | null = null;
+// ============================================================================
+// INDEXEDDB - CACHE LOCAL
+// ============================================================================
+
+class LocalDatabase {
+  private dbName = 'oficina-erp-local';
+  private version = 1;
+  private db: IDBDatabase | null = null;
+
+  async init(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.dbName, this.version);
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        this.db = request.result;
+        resolve();
+      };
+
+      request.onupgradeneeded = (event: any) => {
+        const db = event.target.result;
+        
+        // Criar object stores se não existirem
+        const stores = ['clientes', 'processos', 'financeiro', 'oficina', 'metadata'];
+        stores.forEach(storeName => {
+          if (!db.objectStoreNames.contains(storeName)) {
+            db.createObjectStore(storeName, { keyPath: 'id' });
+          }
+        });
+      };
+    });
+  }
+
+  async saveToStore(storeName: string, data: any[]): Promise<void> {
+    if (!this.db) await this.init();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([storeName], 'readwrite');
+      const store = transaction.objectStore(storeName);
+      
+      // Limpar store antes de salvar
+      store.clear();
+      
+      // Adicionar todos os itens
+      data.forEach(item => store.add(item));
+      
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  }
+
+  async getFromStore(storeName: string): Promise<any[]> {
+    if (!this.db) await this.init();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([storeName], 'readonly');
+      const store = transaction.objectStore(storeName);
+      const request = store.getAll();
+      
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async saveMetadata(key: string, value: any): Promise<void> {
+    if (!this.db) await this.init();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['metadata'], 'readwrite');
+      const store = transaction.objectStore('metadata');
+      
+      store.put({ id: key, value, updatedAt: new Date() });
+      
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  }
+
+  async getMetadata(key: string): Promise<any> {
+    if (!this.db) await this.init();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['metadata'], 'readonly');
+      const store = transaction.objectStore('metadata');
+      const request = store.get(key);
+      
+      request.onsuccess = () => resolve(request.result?.value);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async clearAll(): Promise<void> {
+    if (!this.db) await this.init();
+    
+    const stores = ['clientes', 'processos', 'financeiro', 'oficina', 'metadata'];
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(stores, 'readwrite');
+      
+      stores.forEach(storeName => {
+        transaction.objectStore(storeName).clear();
+      });
+      
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  }
+}
+
+const localDB = new LocalDatabase();
+
+// ============================================================================
+// SINCRONIZAÇÃO COM FIRESTORE
+// ============================================================================
+
+export class SyncService {
+  private userId: string | null = null;
+  private syncListeners: Map<string, () => void> = new Map();
+
+  constructor() {
+    // Inicializar IndexedDB
+    localDB.init().catch(err => console.error('Erro ao inicializar IndexedDB:', err));
+  }
 
   /**
-   * Inscreve um listener para mudanças de status
+   * Define o usuário atual para sincronização
    */
-  onStatusChange(callback: (status: SyncStatus) => void): () => void {
-    this.listeners.push(callback);
-    // Retorna função de unsubscribe
-    return () => {
-      this.listeners = this.listeners.filter(l => l !== callback);
+  setUser(userId: string) {
+    this.userId = userId;
+  }
+
+  /**
+   * Sincronização inicial - baixa dados da nuvem e salva localmente
+   */
+  async initialSync(): Promise<SyncStatus> {
+    console.log('🔄 Iniciando sincronização inicial...');
+    
+    const status: SyncStatus = {
+      lastSync: null,
+      syncInProgress: true,
+      itemsSynced: 0,
+      errors: []
     };
+
+    if (!this.userId) {
+      status.errors.push('Usuário não autenticado');
+      status.syncInProgress = false;
+      return status;
+    }
+
+    try {
+      // Verificar se já sincronizou antes
+      const lastSyncDate = await localDB.getMetadata('lastSync');
+      
+      if (lastSyncDate) {
+        console.log('✅ Já sincronizado anteriormente em:', lastSyncDate);
+        // Se já sincronizou, apenas atualizar
+        return await this.syncFromCloud();
+      }
+
+      // Primeira sincronização - baixar tudo da nuvem
+      const collections = ['clientes', 'processos', 'financeiro', 'oficina'];
+      
+      for (const collectionName of collections) {
+        const data = await this.downloadCollection(collectionName);
+        await localDB.saveToStore(collectionName, data);
+        status.itemsSynced += data.length;
+        console.log(`✅ ${collectionName}: ${data.length} itens sincronizados`);
+      }
+
+      // Salvar metadata
+      await localDB.saveMetadata('lastSync', new Date());
+      await localDB.saveMetadata('userId', this.userId);
+      
+      status.lastSync = new Date();
+      status.syncInProgress = false;
+      
+      console.log('✅ Sincronização inicial concluída:', status.itemsSynced, 'itens');
+      
+    } catch (error: any) {
+      console.error('❌ Erro na sincronização:', error);
+      status.errors.push(error.message);
+      status.syncInProgress = false;
+    }
+
+    return status;
   }
 
   /**
-   * Notifica todos os listeners
+   * Baixa uma coleção do Firestore
    */
-  private notifyListeners() {
-    this.listeners.forEach(listener => listener({ ...this.status }));
+  private async downloadCollection(collectionName: string): Promise<any[]> {
+    const collectionRef = collection(db, `users/${this.userId}/${collectionName}`);
+    const snapshot = await getDocs(collectionRef);
+    
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
   }
 
   /**
-   * Atualiza status e notifica
+   * Sincroniza dados da nuvem para local
    */
-  private updateStatus(partial: Partial<SyncStatus>) {
-    this.status = { ...this.status, ...partial };
-    this.notifyListeners();
+  async syncFromCloud(): Promise<SyncStatus> {
+    const status: SyncStatus = {
+      lastSync: null,
+      syncInProgress: true,
+      itemsSynced: 0,
+      errors: []
+    };
+
+    if (!this.userId) {
+      status.errors.push('Usuário não autenticado');
+      status.syncInProgress = false;
+      return status;
+    }
+
+    try {
+      const collections = ['clientes', 'processos', 'financeiro', 'oficina'];
+      
+      for (const collectionName of collections) {
+        const data = await this.downloadCollection(collectionName);
+        await localDB.saveToStore(collectionName, data);
+        status.itemsSynced += data.length;
+      }
+
+      await localDB.saveMetadata('lastSync', new Date());
+      status.lastSync = new Date();
+      status.syncInProgress = false;
+      
+      console.log('✅ Sincronização concluída:', status.itemsSynced, 'itens');
+      
+    } catch (error: any) {
+      console.error('❌ Erro na sincronização:', error);
+      status.errors.push(error.message);
+      status.syncInProgress = false;
+    }
+
+    return status;
   }
 
   /**
-   * Obtém status atual
+   * Sincroniza dados locais para a nuvem
    */
-  getStatus(): SyncStatus {
-    return { ...this.status };
+  async syncToCloud(): Promise<SyncStatus> {
+    const status: SyncStatus = {
+      lastSync: null,
+      syncInProgress: true,
+      itemsSynced: 0,
+      errors: []
+    };
+
+    if (!this.userId) {
+      status.errors.push('Usuário não autenticado');
+      status.syncInProgress = false;
+      return status;
+    }
+
+    try {
+      const collections = ['clientes', 'processos', 'financeiro', 'oficina'];
+      
+      for (const collectionName of collections) {
+        const localData = await localDB.getFromStore(collectionName);
+        
+        // Upload em batch para performance
+        const batch = writeBatch(db);
+        
+        localData.forEach(item => {
+          const docRef = doc(db, `users/${this.userId}/${collectionName}`, item.id);
+          batch.set(docRef, {
+            ...item,
+            updatedAt: Timestamp.now()
+          });
+        });
+        
+        await batch.commit();
+        status.itemsSynced += localData.length;
+        
+        console.log(`✅ ${collectionName}: ${localData.length} itens enviados`);
+      }
+
+      await localDB.saveMetadata('lastSync', new Date());
+      status.lastSync = new Date();
+      status.syncInProgress = false;
+      
+      console.log('✅ Upload concluído:', status.itemsSynced, 'itens');
+      
+    } catch (error: any) {
+      console.error('❌ Erro no upload:', error);
+      status.errors.push(error.message);
+      status.syncInProgress = false;
+    }
+
+    return status;
   }
 
   /**
-   * Inicializa sincronização no primeiro login
+   * Ativar sincronização em tempo real
    */
-  async initializeOnFirstLogin(): Promise<void> {
-    const user = auth.currentUser;
-    if (!user) {
+  enableRealtimeSync(collectionName: string, callback: (data: any[]) => void) {
+    if (!this.userId) {
+      console.error('❌ Não é possível ativar sync em tempo real sem usuário');
+      return;
+    }
+
+    const collectionRef = collection(db, `users/${this.userId}/${collectionName}`);
+    
+    const unsubscribe = onSnapshot(collectionRef, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // Atualizar cache local
+      localDB.saveToStore(collectionName, data);
+      
+      // Callback com dados atualizados
+      callback(data);
+      
+      console.log(`🔄 ${collectionName} atualizado em tempo real:`, data.length, 'itens');
+    });
+
+    this.syncListeners.set(collectionName, unsubscribe);
+  }
+
+  /**
+   * Desativar sincronização em tempo real
+   */
+  disableRealtimeSync(collectionName: string) {
+    const unsubscribe = this.syncListeners.get(collectionName);
+    if (unsubscribe) {
+      unsubscribe();
+      this.syncListeners.delete(collectionName);
+      console.log(`❌ Sync em tempo real desativado para ${collectionName}`);
+    }
+  }
+
+  /**
+   * Criar backup completo
+   */
+  async createBackup(): Promise<BackupMetadata> {
+    if (!this.userId || !auth.currentUser) {
       throw new Error('Usuário não autenticado');
     }
 
-    // Verifica se é o primeiro login
-    const hasLocalData = await this.hasLocalData();
-    const lastSync = await localStorageService.getMetadata('lastSyncTimestamp');
+    const collections = ['clientes', 'processos', 'financeiro', 'oficina'];
+    const backup: any = {};
+    let totalItems = 0;
 
-    if (!hasLocalData || !lastSync) {
-      console.log('🌟 Primeiro login detectado - iniciando sincronização inicial...');
-      await this.downloadFromCloud();
-      await localStorageService.setMetadata('firstLoginCompleted', true);
-    } else {
-      console.log('🔄 Login subsequente - verificando atualizações...');
-      await this.syncBidirectional();
+    for (const collectionName of collections) {
+      const data = await localDB.getFromStore(collectionName);
+      backup[collectionName] = data;
+      totalItems += data.length;
     }
-  }
 
-  /**
-   * Verifica se existem dados locais
-   */
-  private async hasLocalData(): Promise<boolean> {
-    const stats = await localStorageService.getStats();
-    return stats.totalRecords > 0;
-  }
-
-  /**
-   * Download completo da nuvem para local
-   */
-  async downloadFromCloud(): Promise<SyncResult> {
-    this.updateStatus({ syncing: true, mode: 'downloading', progress: 0, error: null });
-
-    const result: SyncResult = {
-      success: false,
-      uploaded: 0,
-      downloaded: 0,
-      errors: [],
-      timestamp: Date.now()
+    const metadata: BackupMetadata = {
+      createdAt: new Date(),
+      userId: this.userId,
+      userEmail: auth.currentUser.email || '',
+      itemCount: totalItems,
+      collections
     };
 
-    try {
-      const user = auth.currentUser;
-      if (!user) throw new Error('Usuário não autenticado');
+    // Salvar backup em Firestore
+    const backupRef = doc(db, `backups/${this.userId}/snapshots/${Date.now()}`);
+    await setDoc(backupRef, {
+      ...backup,
+      metadata
+    });
 
-      console.log('📥 Baixando dados da nuvem...');
+    // Também salvar localmente como JSON
+    const backupData = JSON.stringify({ ...backup, metadata }, null, 2);
+    this.downloadBackupFile(backupData, `backup-${Date.now()}.json`);
 
-      // Download Clients
-      this.updateStatus({ progress: 10 });
-      const clientsSnapshot = await getDocs(
-        collection(db, `users/${user.uid}/clients`)
-      );
-      const clients = clientsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      await localStorageService.save(STORES.CLIENTS, clients);
-      result.downloaded += clients.length;
-
-      // Download Processes
-      this.updateStatus({ progress: 40 });
-      const processesSnapshot = await getDocs(
-        collection(db, `users/${user.uid}/processes`)
-      );
-      const processes = processesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      await localStorageService.save(STORES.PROCESSES, processes);
-      result.downloaded += processes.length;
-
-      // Download Finance
-      this.updateStatus({ progress: 70 });
-      const financeSnapshot = await getDocs(
-        collection(db, `users/${user.uid}/finance`)
-      );
-      const finance = financeSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      await localStorageService.save(STORES.FINANCE, finance);
-      result.downloaded += finance.length;
-
-      // Atualiza metadata
-      await localStorageService.setMetadata('lastSyncTimestamp', Date.now());
-      await localStorageService.setMetadata('lastSyncType', 'download');
-
-      // Log de sucesso
-      await localStorageService.addSyncLog({
-        timestamp: Date.now(),
-        action: 'download',
-        status: 'success',
-        details: `${result.downloaded} registros baixados da nuvem`,
-        recordsCount: result.downloaded
-      });
-
-      result.success = true;
-      this.updateStatus({ 
-        progress: 100, 
-        syncing: false, 
-        mode: 'idle',
-        lastSync: Date.now()
-      });
-
-      console.log(`✅ Download concluído: ${result.downloaded} registros`);
-
-    } catch (error: any) {
-      console.error('❌ Erro no download:', error);
-      result.errors.push(error.message);
-      
-      await localStorageService.addSyncLog({
-        timestamp: Date.now(),
-        action: 'download',
-        status: 'error',
-        details: `Erro: ${error.message}`
-      });
-
-      this.updateStatus({ 
-        syncing: false, 
-        mode: 'idle',
-        error: error.message 
-      });
-    }
-
-    return result;
+    console.log('✅ Backup criado:', metadata);
+    return metadata;
   }
 
   /**
-   * Upload completo do local para nuvem
+   * Download de arquivo de backup
    */
-  async uploadToCloud(): Promise<SyncResult> {
-    this.updateStatus({ syncing: true, mode: 'uploading', progress: 0, error: null });
-
-    const result: SyncResult = {
-      success: false,
-      uploaded: 0,
-      downloaded: 0,
-      errors: [],
-      timestamp: Date.now()
-    };
-
-    try {
-      const user = auth.currentUser;
-      if (!user) throw new Error('Usuário não autenticado');
-
-      console.log('📤 Enviando dados para nuvem...');
-
-      // Upload Clients
-      this.updateStatus({ progress: 10 });
-      const clients = await localStorageService.getAll(STORES.CLIENTS);
-      for (const client of clients) {
-        await setDoc(doc(db, `users/${user.uid}/clients`, client.id), client);
-      }
-      result.uploaded += clients.length;
-
-      // Upload Processes
-      this.updateStatus({ progress: 40 });
-      const processes = await localStorageService.getAll(STORES.PROCESSES);
-      for (const process of processes) {
-        await setDoc(doc(db, `users/${user.uid}/processes`, process.id), process);
-      }
-      result.uploaded += processes.length;
-
-      // Upload Finance
-      this.updateStatus({ progress: 70 });
-      const finance = await localStorageService.getAll(STORES.FINANCE);
-      for (const item of finance) {
-        await setDoc(doc(db, `users/${user.uid}/finance`, item.id), item);
-      }
-      result.uploaded += finance.length;
-
-      // Atualiza metadata
-      await localStorageService.setMetadata('lastSyncTimestamp', Date.now());
-      await localStorageService.setMetadata('lastSyncType', 'upload');
-
-      // Log de sucesso
-      await localStorageService.addSyncLog({
-        timestamp: Date.now(),
-        action: 'upload',
-        status: 'success',
-        details: `${result.uploaded} registros enviados para nuvem`,
-        recordsCount: result.uploaded
-      });
-
-      result.success = true;
-      this.updateStatus({ 
-        progress: 100, 
-        syncing: false, 
-        mode: 'idle',
-        lastSync: Date.now()
-      });
-
-      console.log(`✅ Upload concluído: ${result.uploaded} registros`);
-
-    } catch (error: any) {
-      console.error('❌ Erro no upload:', error);
-      result.errors.push(error.message);
-      
-      await localStorageService.addSyncLog({
-        timestamp: Date.now(),
-        action: 'upload',
-        status: 'error',
-        details: `Erro: ${error.message}`
-      });
-
-      this.updateStatus({ 
-        syncing: false, 
-        mode: 'idle',
-        error: error.message 
-      });
-    }
-
-    return result;
+  private downloadBackupFile(content: string, filename: string) {
+    const blob = new Blob([content], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   /**
-   * Sincronização bidirecional inteligente
-   * Compara timestamps e mescla dados
+   * Resetar banco de dados (requer autenticação)
    */
-  async syncBidirectional(): Promise<SyncResult> {
-    this.updateStatus({ syncing: true, mode: 'checking', progress: 0, error: null });
-
-    const result: SyncResult = {
-      success: false,
-      uploaded: 0,
-      downloaded: 0,
-      errors: [],
-      timestamp: Date.now()
-    };
-
-    try {
-      const user = auth.currentUser;
-      if (!user) throw new Error('Usuário não autenticado');
-
-      console.log('🔄 Sincronizando dados...');
-
-      // Por simplicidade, fazer download e depois upload
-      // Em produção, implementar merge inteligente baseado em timestamps
-      
-      // 1. Download primeiro
-      this.updateStatus({ mode: 'downloading', progress: 25 });
-      const downloadResult = await this.downloadFromCloud();
-      result.downloaded = downloadResult.downloaded;
-
-      // 2. Upload depois
-      this.updateStatus({ mode: 'uploading', progress: 75 });
-      const uploadResult = await this.uploadToCloud();
-      result.uploaded = uploadResult.uploaded;
-
-      result.success = true;
-      this.updateStatus({ 
-        progress: 100, 
-        syncing: false, 
-        mode: 'idle',
-        lastSync: Date.now()
-      });
-
-      console.log(`✅ Sync concluída: ${result.downloaded} down, ${result.uploaded} up`);
-
-    } catch (error: any) {
-      console.error('❌ Erro na sincronização:', error);
-      result.errors.push(error.message);
-      this.updateStatus({ 
-        syncing: false, 
-        mode: 'idle',
-        error: error.message 
-      });
+  async resetDatabase(password: string): Promise<boolean> {
+    if (!auth.currentUser || !auth.currentUser.email) {
+      throw new Error('Usuário não autenticado');
     }
 
-    return result;
-  }
-
-  /**
-   * Reseta TODOS os dados (local e nuvem)
-   * Requer autenticação do usuário
-   */
-  async resetAllData(password: string): Promise<boolean> {
     try {
-      const user = auth.currentUser;
-      if (!user || !user.email) {
-        throw new Error('Usuário não autenticado');
-      }
-
-      // Reautentica usuário para segurança
+      // Reautenticar usuário para confirmar senha
       const { signInWithEmailAndPassword } = await import('firebase/auth');
-      await signInWithEmailAndPassword(auth, user.email, password);
+      await signInWithEmailAndPassword(auth, auth.currentUser.email, password);
 
-      console.log('🗑️ Resetando todos os dados...');
+      console.log('⚠️ Resetando banco de dados...');
 
-      // 1. Limpa Firestore
-      const collections = ['clients', 'processes', 'finance'];
+      // 1. Limpar IndexedDB local
+      await localDB.clearAll();
+      console.log('✅ Cache local limpo');
+
+      // 2. Deletar dados do Firestore
+      const collections = ['clientes', 'processos', 'financeiro', 'oficina'];
+      
       for (const collectionName of collections) {
-        const snapshot = await getDocs(
-          collection(db, `users/${user.uid}/${collectionName}`)
-        );
+        const collectionRef = collection(db, `users/${this.userId}/${collectionName}`);
+        const snapshot = await getDocs(collectionRef);
         
         const batch = writeBatch(db);
-        snapshot.docs.forEach(document => {
-          batch.delete(document.ref);
+        snapshot.docs.forEach(doc => {
+          batch.delete(doc.ref);
         });
+        
         await batch.commit();
+        console.log(`✅ ${collectionName} limpo`);
       }
 
-      // 2. Limpa local
-      await localStorageService.clearAll();
-
-      // 3. Log
-      await localStorageService.addSyncLog({
-        timestamp: Date.now(),
-        action: 'reset',
-        status: 'success',
-        details: 'Todos os dados foram resetados (nuvem + local)'
-      });
-
-      console.log('✅ Reset concluído com sucesso');
+      console.log('✅ Banco de dados resetado com sucesso');
       return true;
-
+      
     } catch (error: any) {
-      console.error('❌ Erro ao resetar:', error);
-      await localStorageService.addSyncLog({
-        timestamp: Date.now(),
-        action: 'reset',
-        status: 'error',
-        details: `Erro: ${error.message}`
-      });
+      console.error('❌ Erro ao resetar banco:', error);
+      
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
+        throw new Error('Senha incorreta');
+      }
+      
       throw error;
     }
   }
 
   /**
-   * Inicia sincronização automática periódica
+   * Obter dados locais (cache)
    */
-  startAutoSync(intervalMinutes: number = 30) {
-    if (this.autoSyncInterval) {
-      this.stopAutoSync();
-    }
-
-    console.log(`⏰ Auto-sync iniciado (${intervalMinutes} min)`);
-
-    this.autoSyncInterval = window.setInterval(() => {
-      if (!this.status.syncing) {
-        console.log('🔄 Auto-sync executando...');
-        this.syncBidirectional();
-      }
-    }, intervalMinutes * 60 * 1000);
+  async getLocalData(collectionName: string): Promise<any[]> {
+    return await localDB.getFromStore(collectionName);
   }
 
   /**
-   * Para sincronização automática
+   * Salvar dados localmente
    */
-  stopAutoSync() {
-    if (this.autoSyncInterval) {
-      clearInterval(this.autoSyncInterval);
-      this.autoSyncInterval = null;
-      console.log('⏹️ Auto-sync parado');
-    }
+  async saveLocalData(collectionName: string, data: any[]): Promise<void> {
+    await localDB.saveToStore(collectionName, data);
+  }
+
+  /**
+   * Status da última sincronização
+   */
+  async getLastSyncStatus(): Promise<{ lastSync: Date | null; userId: string | null }> {
+    const lastSync = await localDB.getMetadata('lastSync');
+    const userId = await localDB.getMetadata('userId');
+    
+    return { lastSync, userId };
   }
 }
 
-// Export singleton instance
+// Export instância singleton
 export const syncService = new SyncService();
-export type { SyncStatus, SyncResult };

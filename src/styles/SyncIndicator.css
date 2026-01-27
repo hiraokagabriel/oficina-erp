@@ -1,0 +1,189 @@
+/**
+ * SyncIndicator.css
+ * 
+ * Estilos para o indicador de sincronização
+ */
+
+.sync-indicator {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Estados */
+.sync-indicator.online {
+  background: rgba(4, 211, 97, 0.1);
+  border: 1px solid rgba(4, 211, 97, 0.3);
+  color: var(--success);
+}
+
+[data-theme="pastel"] .sync-indicator.online {
+  background: #ECFDF5;
+  border-color: #A7F3D0;
+  color: #059669;
+}
+
+.sync-indicator.syncing {
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  color: var(--info);
+}
+
+[data-theme="pastel"] .sync-indicator.syncing {
+  background: #EFF6FF;
+  border-color: #BFDBFE;
+  color: #3B82F6;
+}
+
+.sync-indicator.offline {
+  background: rgba(156, 163, 175, 0.1);
+  border: 1px solid rgba(156, 163, 175, 0.3);
+  color: var(--text-muted);
+}
+
+[data-theme="pastel"] .sync-indicator.offline {
+  background: #F3F4F6;
+  border-color: #D1D5DB;
+  color: #6B7280;
+}
+
+.sync-indicator.error {
+  background: rgba(247, 90, 104, 0.1);
+  border: 1px solid rgba(247, 90, 104, 0.3);
+  color: var(--danger);
+}
+
+[data-theme="pastel"] .sync-indicator.error {
+  background: #FEF2F2;
+  border-color: #FECACA;
+  color: #DC2626;
+}
+
+/* Hover */
+.sync-indicator:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Conteúdo */
+.sync-indicator-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sync-icon {
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+}
+
+/* Animação de sincronização */
+.sync-indicator.syncing .sync-icon {
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.sync-text {
+  white-space: nowrap;
+}
+
+/* Tooltip */
+.sync-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 280px;
+  padding: 16px;
+  background: var(--card-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  animation: tooltipFadeIn 0.2s ease;
+  backdrop-filter: blur(10px);
+}
+
+[data-theme="pastel"] .sync-tooltip {
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 8px 32px rgba(60, 40, 90, 0.12);
+}
+
+@keyframes tooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sync-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  font-size: 0.85rem;
+  color: var(--text-main);
+}
+
+.sync-tooltip-row strong {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.sync-tooltip-row.error-message {
+  flex-direction: column;
+  padding: 12px;
+  margin-top: 8px;
+  background: rgba(247, 90, 104, 0.1);
+  border-radius: 8px;
+  color: var(--danger);
+}
+
+[data-theme="pastel"] .sync-tooltip-row.error-message {
+  background: #FEF2F2;
+  color: #DC2626;
+}
+
+.sync-tooltip-row.info-message {
+  flex-direction: column;
+  padding: 12px;
+  margin-top: 8px;
+  background: rgba(96, 165, 250, 0.1);
+  border-radius: 8px;
+  color: var(--info);
+  font-size: 0.8rem;
+}
+
+[data-theme="pastel"] .sync-tooltip-row.info-message {
+  background: #EFF6FF;
+  color: #3B82F6;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+  .sync-indicator {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+  }
+
+  .sync-tooltip {
+    min-width: 240px;
+    right: -10px;
+  }
+}

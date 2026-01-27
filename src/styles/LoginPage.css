@@ -1,5 +1,5 @@
 /* ==========================================================================
-   LOGIN PAGE - GLASSMORPHISM DESIGN
+   LOGIN PAGE - GLASSMORPHISM DESIGN COM BUBBLES INTERATIVOS
    ========================================================================== */
 
 .login-container {
@@ -14,104 +14,15 @@
   transition: background-color 0.5s ease;
 }
 
-/* --- BACKGROUND ANIMADO --- */
-.login-bg {
+/* --- CANVAS DE BUBBLES INTERATIVOS --- */
+.bubbles-canvas {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
   z-index: 0;
-  overflow: hidden;
-}
-
-.login-bg-gradient {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  background: radial-gradient(
-    ellipse at top left,
-    rgba(130, 87, 230, 0.15) 0%,
-    transparent 50%
-  ),
-  radial-gradient(
-    ellipse at bottom right,
-    rgba(0, 188, 212, 0.1) 0%,
-    transparent 50%
-  );
-  animation: gradientShift 20s ease infinite;
-}
-
-[data-theme="pastel"] .login-bg-gradient {
-  background: radial-gradient(
-    ellipse at top left,
-    rgba(139, 92, 246, 0.08) 0%,
-    transparent 50%
-  ),
-  radial-gradient(
-    ellipse at bottom right,
-    rgba(244, 114, 182, 0.06) 0%,
-    transparent 50%
-  );
-}
-
-@keyframes gradientShift {
-  0%, 100% { transform: scale(1) rotate(0deg); opacity: 1; }
-  50% { transform: scale(1.2) rotate(180deg); opacity: 0.8; }
-}
-
-/* --- FORMAS DECORATIVAS FLUTUANTES --- */
-.login-bg-shapes {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-}
-
-.shape {
-  position: absolute;
-  border-radius: 50%;
-  opacity: 0.1;
-  filter: blur(60px);
-  animation: float 15s ease-in-out infinite;
-}
-
-[data-theme="pastel"] .shape {
-  opacity: 0.06;
-}
-
-.shape-1 {
-  width: 400px;
-  height: 400px;
-  background: var(--primary);
-  top: -100px;
-  left: -100px;
-  animation-delay: 0s;
-}
-
-.shape-2 {
-  width: 350px;
-  height: 350px;
-  background: var(--info);
-  bottom: -80px;
-  right: -80px;
-  animation-delay: 3s;
-}
-
-.shape-3 {
-  width: 300px;
-  height: 300px;
-  background: var(--success);
-  top: 50%;
-  right: 10%;
-  animation-delay: 6s;
-}
-
-@keyframes float {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  25% { transform: translate(30px, -30px) scale(1.1); }
-  50% { transform: translate(-20px, 20px) scale(0.9); }
-  75% { transform: translate(20px, 30px) scale(1.05); }
+  pointer-events: none;
 }
 
 /* --- BOTÃO DE TROCA DE TEMA --- */
@@ -231,10 +142,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2rem;
-  font-weight: 800;
-  color: white;
-  letter-spacing: -1px;
+  padding: 18px;
   box-shadow: 0 10px 30px rgba(130, 87, 230, 0.4);
   position: relative;
   overflow: hidden;
@@ -258,6 +166,13 @@
 @keyframes logoShine {
   0% { transform: translateX(-100%); }
   50%, 100% { transform: translateX(200%); }
+}
+
+/* Logo do Carro JDM */
+.car-logo {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
 }
 
 .login-title {
@@ -284,7 +199,14 @@
 }
 
 .login-subtitle {
-  font-size: 0.9rem;
+  font-size: 1.1rem;
+  color: var(--text-main);
+  margin: 8px 0 4px 0;
+  font-weight: 600;
+}
+
+.login-description {
+  font-size: 0.85rem;
   color: var(--text-muted);
   margin: 0;
   font-weight: 500;
@@ -394,7 +316,7 @@
   opacity: 0.5;
 }
 
-/* --- MENSAGEM DE ERRO --- */
+/* --- MENSAGENS --- */
 .error-message {
   display: flex;
   align-items: center;
@@ -422,6 +344,36 @@
 }
 
 .error-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.success-message {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(4, 211, 97, 0.1);
+  border: 1px solid rgba(4, 211, 97, 0.3);
+  border-radius: 12px;
+  color: var(--success);
+  font-size: 0.85rem;
+  font-weight: 500;
+  animation: successSlide 0.4s ease;
+}
+
+[data-theme="pastel"] .success-message {
+  background: #ECFDF5;
+  border-color: #A7F3D0;
+  color: #059669;
+}
+
+@keyframes successSlide {
+  from { transform: translateY(-10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.success-icon {
   font-size: 1.1rem;
   flex-shrink: 0;
 }
@@ -514,6 +466,48 @@
   to { transform: rotate(360deg); }
 }
 
+/* --- LINKS DE NAVEGAÇÃO --- */
+.form-links {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 20px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 8px;
+  text-align: center;
+  transition: all 0.2s ease;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.link-btn:hover {
+  color: var(--primary);
+  background: rgba(130, 87, 230, 0.05);
+}
+
+.link-btn.primary {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.link-btn.primary:hover {
+  background: rgba(130, 87, 230, 0.1);
+  transform: translateY(-1px);
+}
+
+[data-theme="pastel"] .link-btn:hover {
+  background: rgba(139, 92, 246, 0.08);
+}
+
 /* --- FOOTER DO LOGIN --- */
 .login-footer {
   margin-top: 32px;
@@ -556,21 +550,13 @@
   .logo-circle {
     width: 70px;
     height: 70px;
-    font-size: 1.7rem;
+    padding: 16px;
   }
 
   .form-input,
   .login-btn {
     height: 48px;
   }
-
-  .shape {
-    filter: blur(40px);
-  }
-
-  .shape-1 { width: 300px; height: 300px; }
-  .shape-2 { width: 250px; height: 250px; }
-  .shape-3 { width: 200px; height: 200px; }
 }
 
 @media (max-width: 480px) {
@@ -584,6 +570,10 @@
   }
 
   .login-subtitle {
-    font-size: 0.85rem;
+    font-size: 1rem;
+  }
+
+  .login-description {
+    font-size: 0.8rem;
   }
 }

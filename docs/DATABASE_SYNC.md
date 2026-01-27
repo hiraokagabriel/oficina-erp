@@ -1,490 +1,539 @@
-# 💾 Sistema de Sincronização Híbrida (Cloud + Local)
+# 🔄 Sistema de Sincronização do Banco de Dados
 
 ## 🎯 Visão Geral
 
-Sistema completo de sincronização de banco de dados com arquitetura híbrida:
-- **Firebase Firestore** (nuvem)
-- **IndexedDB** (local no navegador)
-- **Sincronização automática** bidirecional
-- **Backup e restauração** de dados
-- **Reset autenticado** do banco
+Sistema completo de sincronização bidirecional entre Firestore (nuvem) e LocalStorage (cache local) com suporte a modo offline, backup automático e reset controlado.
 
 ---
 
 ## ✨ Funcionalidades
 
-### 🔄 Sincronização
-- ✅ **Primeiro Login**: Baixa todos os dados da nuvem para local
-- ✅ **Sincronização Incremental**: Apenas dados modificados
-- ✅ **Tempo Real**: Atualizações instantâneas via listeners
-- ✅ **Offline First**: Funciona sem internet
-- ✅ **Auto-Sync**: Sincroniza quando voltar online
-
-### 💾 Armazenamento Local
-- ✅ **IndexedDB**: Banco estruturado no navegador
-- ✅ **Persistência**: Dados salvos localmente
-- ✅ **Performance**: Acesso instantâneo aos dados
-- ✅ **Backup Automático**: Cache local sempre atualizado
-
-### 🛡️ Segurança
-- ✅ **Reset Autenticado**: Requer senha para resetar
-- ✅ **Usuário Específico**: Cada usuário vê apenas seus dados
-- ✅ **Backup Download**: Exportar dados em JSON
-- ✅ **Restore Upload**: Importar backup anterior
+### 🔑 Principais
+- ✅ **Sincronização Automática** no primeiro login
+- ✅ **Cache Local** (LocalStorage) para modo offline
+- ✅ **Sincronização em Tempo Real** com Firestore snapshots
+- ✅ **Merge Inteligente** de dados locais e remotos
+- ✅ **Indicador Visual** de status (online/offline/syncing/error)
+- ✅ **Reset do Banco** com autenticação obrigatória
+- ✅ **Backup Automático** antes de operações destrutivas
+- ✅ **Detecção de Conflitos** com estratégia remote-wins
+- ✅ **Modo Offline** completo com sincronização posterior
 
 ---
 
-## 🏛️ Arquitetura
+## 📚 Arquitetura
 
-### Camadas
+### Estrutura do Sistema
 
 ```
-┌──────────────────────────────────┐
-│          APLICAÇÃO (React)         │
-└──────────────┬───────────────────┘
-               │
-       ┌───────┼───────┐
-       │               │
-       ↓               ↓
-┌──────────┐   ┌──────────────────┐
-│ IndexedDB │   │  Firestore      │
-│  (Local)  │⇄─│  (Cloud/Rede)   │
-│  Offline  │   │  Real-time Sync │
-│  Cache    │   │  Multi-device   │
-└──────────┘   └──────────────────┘
-```
+Firestore (Nuvem)
+  │
+  ├─ users/{userId}/data/database
+  │  └─ DatabaseSchema + _metadata
+  │
+  ├─ users/{userId}/metadata/sync
+  │  └─ SyncMetadata (timestamps, counts)
+  │
+  └─ users/{userId}/backups/backup_{timestamp}
+     └─ Backups automáticos
 
-### Fluxo de Dados
+      ↕️ (Sincronização Bidirecional)
 
-#### Primeiro Login
-```
-Usuário Loga → Sync Service Inicializa
-    │
-    └──→ Verifica IndexedDB
-         │
-         ├─ Vazio? → Sincronização Completa
-         │            │
-         │            └─→ Baixa TUDO do Firestore
-         │                 │
-         │                 └─→ Salva em IndexedDB
-         │                      │
-         │                      └─→ Pronto para usar!
-         │
-         └─ Tem dados? → Sincronização Incremental
-                        │
-                        └─→ Baixa apenas novos/modificados
+LocalStorage (Cache)
+  ├─ oficina-erp-data: DatabaseSchema
+  └─ device-id: ID único do dispositivo
 ```
 
-#### Operação Normal (Online)
-```
-Usuário cria/edita dado
-    │
-    ├─→ Salva em IndexedDB (instantâneo)
-    │
-    └─→ Sincroniza com Firestore (background)
-         │
-         └─→ Firestore propaga para outros dispositivos
-```
+### Fluxo de Sincronização
 
-#### Operação Offline
 ```
-Usuário cria/edita dado (sem internet)
-    │
-    ├─→ Salva em IndexedDB (funciona normalmente)
-    │
-    └─→ Marca como "pending sync"
-         │
-         └─→ Quando voltar online:
-              └─→ Sincroniza automaticamente
+1. Usuário faz Login
+   ↓
+2. syncService.initialize(userId)
+   ↓
+3. Verifica se é primeiro login
+   │
+   ├── SIM → Upload dados locais → Firestore
+   │
+   └── NÃO → Download Firestore → Merge → Cache local
+   ↓
+4. Ativa listener tempo real
+   ↓
+5. Monitora mudanças (local ↔ remoto)
 ```
 
 ---
 
-## 📝 Estrutura do IndexedDB
+## 🚀 Como Usar
 
-### Object Stores (Tabelas)
+### 1. Instalação
+
+Já vem integrado! Não precisa instalar nada.
+
+### 2. Hook React (Recomendado)
 
 ```typescript
-clients: {
-  id: string (PK)
-  name: string
-  email: string
-  phone: string
-  // ... outros campos
-  userId: string
-  updatedAt: timestamp
-  _localUpdatedAt: timestamp
-}
+import { useDatabaseSync } from './hooks/useDatabaseSync';
 
-orders: {
-  id: string (PK)
-  clientId: string
-  items: array
-  total: number
-  status: string
-  // ... outros campos
-  userId: string
-  updatedAt: timestamp
-  _localUpdatedAt: timestamp
-}
+function App() {
+  const { status, isInitialized, syncNow, uploadData, createBackup } = useDatabaseSync();
 
-processes: {
-  id: string (PK)
-  title: string
-  description: string
-  status: string
-  // ... outros campos
-  userId: string
-  updatedAt: timestamp
-  _localUpdatedAt: timestamp
-}
-
-financial: {
-  id: string (PK)
-  type: 'income' | 'expense'
-  amount: number
-  category: string
-  date: timestamp
-  // ... outros campos
-  userId: string
-  updatedAt: timestamp
-  _localUpdatedAt: timestamp
-}
-
-sync_metadata: {
-  key: 'main'
-  lastSync: timestamp
-  userId: string
-  version: string
-  deviceId: string
+  return (
+    <div>
+      <p>Status: {status.isSyncing ? 'Sincronizando...' : 'Online'}</p>
+      <button onClick={syncNow}>Sincronizar Agora</button>
+    </div>
+  );
 }
 ```
 
----
+### 3. Indicador Visual
 
-## 🚀 Implementação
+```typescript
+import SyncIndicator from './components/SyncIndicator';
 
-### Instalação de Dependências
-
-```bash
-npm install idb
+function Header() {
+  return (
+    <header>
+      <SyncIndicator showDetails={true} />
+    </header>
+  );
+}
 ```
 
-### Uso Básico
+### 4. Modal de Reset
+
+```typescript
+import DatabaseResetModal from './modals/DatabaseResetModal';
+
+function Settings() {
+  const [showResetModal, setShowResetModal] = useState(false);
+
+  return (
+    <div>
+      <button onClick={() => setShowResetModal(true)}>
+        Resetar Banco de Dados
+      </button>
+
+      <DatabaseResetModal
+        isOpen={showResetModal}
+        onClose={() => setShowResetModal(false)}
+        onSuccess={() => {
+          console.log('Banco resetado!');
+          window.location.reload();
+        }}
+      />
+    </div>
+  );
+}
+```
+
+### 5. Uso Direto do Service
 
 ```typescript
 import { syncService } from './services/syncService';
 
-// 1. Inicializar (no App.tsx ou após login)
-await syncService.initialize();
+// Inicializar manualmente
+await syncService.initialize(userId);
 
-// 2. Obter dados locais (instantâneo)
-const clients = await syncService.getLocalData('clients');
+// Sincronizar dados
+await syncService.syncFromFirestore();
+await syncService.syncToFirestore(data);
 
-// 3. Salvar dados (auto-sync)
-await syncService.saveLocal('clients', {
-  id: 'client-123',
-  name: 'João Silva',
-  email: 'joao@email.com',
-  // ...
-});
+// Criar backup
+await syncService.createBackup();
 
-// 4. Deletar dados
-await syncService.deleteLocal('clients', 'client-123');
+// Resetar banco
+await syncService.resetDatabase();
 
-// 5. Monitorar status de sync
+// Monitorar status
 syncService.onStatusChange((status) => {
-  console.log('Online:', status.isOnline);
-  console.log('Última sync:', status.lastSync);
-  console.log('Sincronizando:', status.isSyncing);
-  console.log('Pendentes:', status.pendingChanges);
+  console.log('Status:', status);
 });
+
+// Cleanup
+syncService.cleanup();
 ```
 
 ---
 
-## 💾 Backup e Restauração
+## 🛠️ Configuração do Firestore
 
-### Criar e Baixar Backup
+### Rules de Segurança (Obrigatório)
+
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Dados do usuário
+    match /users/{userId} {
+      // Permite acesso apenas ao próprio usuário
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Subcollections
+      match /data/{document=**} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      match /metadata/{document=**} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      match /backups/{document=**} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+  }
+}
+```
+
+### Indexes (Recomendado)
+
+```javascript
+// Firebase Console → Firestore → Indexes
+
+// Collection: users/{userId}/data
+// Fields: _metadata.lastModified (Descending)
+
+// Collection: users/{userId}/backups  
+// Fields: createdAt (Descending)
+```
+
+---
+
+## 📊 Status de Sincronização
+
+### Estados Possíveis
+
+| Status | Ícone | Descrição |
+|--------|------|-------------|
+| **Online** | ✅ | Conectado e sincronizado |
+| **Syncing** | 🔄 | Sincronizando dados |
+| **Offline** | 🚫 | Sem conexão, usando cache |
+| **Error** | ⚠️ | Erro de sincronização |
+
+### Interface `SyncStatus`
 
 ```typescript
-// Botão na interface
-async function handleBackup() {
-  try {
-    await syncService.downloadBackup();
-    alert('Backup criado com sucesso!');
-  } catch (error) {
-    console.error('Erro ao criar backup:', error);
-    alert('Erro ao criar backup');
-  }
+interface SyncStatus {
+  isOnline: boolean;      // Conexão com internet
+  isSyncing: boolean;     // Sincronização em andamento
+  lastSync: Date | null;  // Última sincronização
+  error: string | null;   // Mensagem de erro
+}
+```
+
+---
+
+## 🔒 Reset do Banco de Dados
+
+### Processo de Reset
+
+1. **Usuário clica** em "Resetar Banco"
+2. **Modal de confirmação** é exibido
+3. **Usuário confirma** a ação
+4. **Modal de senha** é exibido
+5. **Usuário digita senha** atual
+6. **Reautenticação** no Firebase
+7. **Backup automático** é criado
+8. **Dados são apagados** (local + remoto)
+9. **Estrutura vazia** é criada
+10. **Sucesso!** ✅
+
+### Segurança
+
+- ⚠️ **Requer senha** do usuário logado
+- 💾 **Backup automático** antes de apagar
+- ❌ **Não pode ser desfeito** (exceto restaurando backup)
+- 🔒 **Reautenticação obrigatória**
+
+---
+
+## 💾 Sistema de Backup
+
+### Backup Automático
+
+Backups são criados automaticamente:
+- Antes de resetar o banco
+- Podem ser criados manualmente com `createBackup()`
+
+### Estrutura do Backup
+
+```typescript
+// Firestore: users/{userId}/backups/backup_{timestamp}
+{
+  data: DatabaseSchema,      // Dados completos
+  createdAt: Timestamp,      // Data/hora
+  deviceId: string          // ID do dispositivo
+}
+```
+
+### Listar Backups
+
+```typescript
+import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { db, auth } from './lib/firebase';
+
+async function listBackups() {
+  const userId = auth.currentUser?.uid;
+  if (!userId) return [];
+
+  const backupsRef = collection(db, 'users', userId, 'backups');
+  const q = query(backupsRef, orderBy('createdAt', 'desc'));
+  const snapshot = await getDocs(q);
+
+  return snapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data()
+  }));
 }
 ```
 
 ### Restaurar Backup
 
 ```typescript
-// Input de arquivo na interface
-async function handleRestore(event) {
-  const file = event.target.files[0];
-  if (!file) return;
+import { doc, getDoc } from 'firebase/firestore';
+import { syncService } from './services/syncService';
 
-  if (!confirm('Restaurar backup? Dados atuais serão substituídos!')) {
-    return;
+async function restoreBackup(backupId: string) {
+  const userId = auth.currentUser?.uid;
+  if (!userId) throw new Error('Não autenticado');
+
+  // Busca backup
+  const backupRef = doc(db, 'users', userId, 'backups', backupId);
+  const backupSnap = await getDoc(backupRef);
+
+  if (!backupSnap.exists()) {
+    throw new Error('Backup não encontrado');
   }
 
-  try {
-    await syncService.restoreFromBackup(file);
-    // Página recarrega automaticamente
-  } catch (error) {
-    console.error('Erro ao restaurar:', error);
-    alert('Erro ao restaurar backup');
-  }
+  const backupData = backupSnap.data();
+  
+  // Restaura dados
+  await syncService.syncToFirestore(backupData.data);
+  
+  console.log('✅ Backup restaurado com sucesso!');
 }
 ```
 
 ---
 
-## 🛡️ Reset do Banco de Dados
+## 🧠 Merge Inteligente
 
-### Com Autenticação
+### Estratégia: Remote Wins
+
+Quando há conflito entre dados locais e remotos:
+
+1. **Dados remotos têm prioridade** (mais recentes)
+2. **Dados locais exclusivos são preservados** (não existem no remoto)
+3. **Merge por ID** em arrays (ledger, workOrders, clients, etc)
+
+### Exemplo de Merge
 
 ```typescript
-async function handleReset() {
-  const password = prompt('🔑 Digite sua senha para confirmar o RESET:');
-  
-  if (!password) return;
+// Local
+ledger: [
+  { id: '1', description: 'Item A', amount: 100 },
+  { id: '2', description: 'Item B', amount: 200 }
+]
 
-  if (!confirm('⚠️ ATENÇÃO: Isso apagará TODOS os dados! Continuar?')) {
-    return;
-  }
+// Remoto
+ledger: [
+  { id: '1', description: 'Item A Editado', amount: 150 },
+  { id: '3', description: 'Item C', amount: 300 }
+]
 
-  try {
-    await syncService.resetDatabase(password);
-    alert('✅ Banco de dados resetado com sucesso!');
-    window.location.reload();
-  } catch (error) {
-    if (error.message === 'Senha incorreta') {
-      alert('❌ Senha incorreta!');
-    } else {
-      alert('❌ Erro ao resetar banco de dados');
-    }
-    console.error(error);
-  }
-}
+// Resultado do Merge
+ledger: [
+  { id: '1', description: 'Item A Editado', amount: 150 }, // Remote wins
+  { id: '2', description: 'Item B', amount: 200 },        // Local preservado
+  { id: '3', description: 'Item C', amount: 300 }         // Remote adicionado
+]
 ```
 
 ---
 
-## 🎨 Componente de Controle
+## 🔥 Modo Offline
 
-Exemplo de componente React para gerenciar sincronização:
+### Funcionalidades
 
-```tsx
-import { useState, useEffect } from 'react';
-import { syncService, SyncStatus } from '../services/syncService';
+- ✅ **Leitura completa** dos dados em cache
+- ✅ **Escrita local** com sincronização posterior
+- ✅ **Indicador visual** de status offline
+- ✅ **Sincronização automática** ao voltar online
+- ✅ **Sem perda de dados** – tudo é sincronizado depois
 
-function SyncControl() {
-  const [status, setStatus] = useState<SyncStatus>(syncService.getStatus());
-  const [showResetDialog, setShowResetDialog] = useState(false);
+### Como Funciona
 
-  useEffect(() => {
-    syncService.onStatusChange(setStatus);
-  }, []);
+```typescript
+// Detecta mudança de conexão
+window.addEventListener('online', () => {
+  console.log('✅ Online! Sincronizando...');
+  syncService.syncFromFirestore();
+});
 
-  return (
-    <div className="sync-control">
-      {/* Status Indicator */}
-      <div className="status-badge">
-        <span className={status.isOnline ? 'dot-green' : 'dot-red'} />
-        {status.isOnline ? 'Online' : 'Offline'}
-      </div>
+window.addEventListener('offline', () => {
+  console.log('🚫 Offline. Usando cache local.');
+});
+```
 
-      {/* Last Sync */}
-      {status.lastSync && (
-        <div className="last-sync">
-          Última sincronização: {status.lastSync.toLocaleTimeString()}
-        </div>
-      )}
+---
 
-      {/* Syncing Indicator */}
-      {status.isSyncing && (
-        <div className="syncing">
-          <span className="spinner" />
-          Sincronizando...
-        </div>
-      )}
+## 🐞 Troubleshooting
 
-      {/* Pending Changes */}
-      {status.pendingChanges > 0 && (
-        <div className="pending">
-          {status.pendingChanges} alterações pendentes
-        </div>
-      )}
+### Erro: "Usuário não autenticado"
 
-      {/* Actions */}
-      <div className="actions">
-        <button onClick={() => syncService.incrementalSync()}>
-          🔄 Forçar Sync
-        </button>
-        
-        <button onClick={() => syncService.downloadBackup()}>
-          💾 Backup
-        </button>
-        
-        <label className="btn-secondary">
-          📝 Restaurar
-          <input 
-            type="file" 
-            accept=".json"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) syncService.restoreFromBackup(file);
-            }}
-            style={{ display: 'none' }}
-          />
-        </label>
+**Solução:**
+```typescript
+// Certifique-se de chamar initialize() após login
+await syncService.initialize(user.uid);
+```
 
-        <button 
-          onClick={() => setShowResetDialog(true)}
-          className="btn-danger"
-        >
-          🛡️ Reset Banco
-        </button>
-      </div>
+### Erro: "Permission denied" no Firestore
 
-      {/* Reset Dialog */}
-      {showResetDialog && (
-        <ResetDialog 
-          onConfirm={async (password) => {
-            await syncService.resetDatabase(password);
-            setShowResetDialog(false);
-          }}
-          onCancel={() => setShowResetDialog(false)}
-        />
-      )}
-    </div>
-  );
-}
+**Solução:**
+- Verifique as rules de segurança no Firestore
+- Garanta que `request.auth.uid == userId`
+
+### Dados não sincronizando
+
+**Diagnóstico:**
+```typescript
+const status = syncService.getStatus();
+console.log('Status:', status);
+
+// Verifica:
+// - isOnline: true?
+// - isSyncing: false?
+// - error: null?
+```
+
+**Solução:**
+```typescript
+// Forçar sincronização manual
+await syncService.syncFromFirestore();
+```
+
+### Reset não funciona
+
+**Possíveis causas:**
+- Senha incorreta
+- Usuário logado com Google (não tem senha)
+
+**Solução para Google:**
+```typescript
+// Adicionar suporte a reauthenticateWithPopup
+import { GoogleAuthProvider, reauthenticateWithPopup } from 'firebase/auth';
+
+const provider = new GoogleAuthProvider();
+await reauthenticateWithPopup(user, provider);
 ```
 
 ---
 
 ## 📊 Monitoramento
 
-### Console Logs
+### Logs Automáticos
 
-O SyncService produz logs detalhados:
+O sistema loga automaticamente:
+- 🔄 Inicialização de sincronização
+- ✅ Sucesso em operações
+- ❌ Erros e exceções
+- 💾 Criação de backups
+- 🗑️ Reset do banco
 
+### Metadata de Sincronização
+
+```typescript
+// Firestore: users/{userId}/metadata/sync
+interface SyncMetadata {
+  lastSyncTimestamp: number;
+  lastSyncDate: string;
+  syncCount: number;          // Total de sincronizações
+  userId: string;
+  deviceId: string;
+}
 ```
-💾 IndexedDB inicializado com sucesso
-🆕 Primeiro login detectado - iniciando sincronização completa
-📥 Baixando clients...
-✅ clients: 45 itens salvos localmente
-📥 Baixando orders...
-✅ orders: 128 itens salvos localmente
-✅ Sincronização completa finalizada!
-✅ Listeners em tempo real ativados
-🔄 Real-time: clients/client-123 modified
-☁️ Sincronizado para cloud: clients/client-123
-```
 
-### DevTools
+### Firebase Console
 
-**Application Tab** (Chrome):
-- IndexedDB → `oficina-erp-local` → Ver dados salvos
-- Storage → Ver tamanho usado
+1. **Firestore → Data**
+   - Veja estrutura de dados
+   - Monitore mudanças em tempo real
+
+2. **Firestore → Usage**
+   - Reads, Writes, Deletes
+   - Custo estimado
 
 ---
 
 ## ⚡ Performance
 
-### Otimizações Implementadas
+### Otimizações
 
-1. **Lazy Loading**: Apenas dados necessários
-2. **Sincronização Incremental**: Apenas deltas
-3. **Batch Operations**: Múltiplas operações em uma transação
-4. **IndexedDB Indexes**: Busca rápida por updatedAt
-5. **Real-time Listeners**: Apenas para usuário atual
+- ✅ **Cache local** reduz reads do Firestore
+- ✅ **Merge inteligente** evita rewrites desnecessários
+- ✅ **Snapshots em tempo real** só para mudanças
+- ✅ **Batching** em operações múltiplas (futuro)
 
-### Limites
+### Limitações do Firestore
 
-- **IndexedDB**: ~50-100 MB por origem (navegador dependente)
-- **Firestore**: 1 MB por documento, 1 escrita/segundo por documento
-- **Real-time Listeners**: 100 listeners simultâneos
-
----
-
-## 🛡️ Segurança
-
-### Firestore Rules
-
-Adicionar no Firebase Console:
-
-```javascript
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    
-    // Função auxiliar
-    function isOwner(userId) {
-      return request.auth != null && request.auth.uid == userId;
-    }
-    
-    // Clientes
-    match /clients/{clientId} {
-      allow read, write: if isOwner(resource.data.userId);
-      allow create: if isOwner(request.resource.data.userId);
-    }
-    
-    // Pedidos
-    match /orders/{orderId} {
-      allow read, write: if isOwner(resource.data.userId);
-      allow create: if isOwner(request.resource.data.userId);
-    }
-    
-    // Processos
-    match /processes/{processId} {
-      allow read, write: if isOwner(resource.data.userId);
-      allow create: if isOwner(request.resource.data.userId);
-    }
-    
-    // Financeiro
-    match /financial/{financialId} {
-      allow read, write: if isOwner(resource.data.userId);
-      allow create: if isOwner(request.resource.data.userId);
-    }
-  }
-}
-```
+| Operação | Limite Gratuito/Dia |
+|-----------|---------------------|
+| Reads | 50.000 |
+| Writes | 20.000 |
+| Deletes | 20.000 |
+| Armazenamento | 1 GB |
 
 ---
 
-## ❓ FAQ
+## 🚀 Próximos Passos
 
-### O que acontece se eu usar em múltiplos dispositivos?
-**R**: Dados sincronizam automaticamente entre dispositivos. Mudanças em um aparecem em tempo real no outro.
+### Melhorias Futuras
 
-### E se eu ficar offline?
-**R**: Aplicativo funciona normalmente. Dados são salvos localmente e sincronizam quando voltar online.
+- [ ] **Batching** de operações múltiplas
+- [ ] **IndexedDB** ao invés de LocalStorage (maior capacidade)
+- [ ] **Comprimir dados** antes de salvar
+- [ ] **Sincronização incremental** (apenas mudanças)
+- [ ] **Versionamento** de dados com histórico
+- [ ] **Restauração de backup** via UI
+- [ ] **Export/Import** manual de dados
+- [ ] **Multi-device sync** com resolução de conflitos avançada
 
-### Posso perder dados?
-**R**: Não. Dados estão em 3 lugares: Firestore (cloud), IndexedDB (local) e backup JSON (download).
+---
 
-### Como funciona o reset?
-**R**: Requer senha para confirmar. Apaga tudo do Firestore E IndexedDB. Irreversível (a menos que tenha backup).
+## 📝 Checklist de Integração
 
-### Quanto espaço usa?
-**R**: Depende dos dados. Ex: 1000 clientes + 5000 pedidos ≈ 20-30 MB.
+### Firestore
+- [ ] Rules de segurança configuradas
+- [ ] Indexes criados (se necessário)
+- [ ] Testes de leitura/escrita funcionando
+
+### Código
+- [ ] `syncService.initialize()` chamado após login
+- [ ] `syncService.cleanup()` chamado no logout
+- [ ] `SyncIndicator` visível no header
+- [ ] `DatabaseResetModal` acessível nas configurações
+- [ ] Tratamento de erros implementado
+
+### Testes
+- [ ] Primeiro login sincroniza dados
+- [ ] Modo offline funciona
+- [ ] Sincronização em tempo real ativa
+- [ ] Reset com senha funciona
+- [ ] Backup é criado antes de reset
 
 ---
 
 ## 📚 Referências
 
-- [IndexedDB API](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API)
-- [Firestore Documentation](https://firebase.google.com/docs/firestore)
-- [idb Library](https://github.com/jakearchibald/idb)
-- [Offline First Patterns](https://developers.google.com/web/fundamentals/instant-and-offline/offline-cookbook)
+- [Firebase Firestore Docs](https://firebase.google.com/docs/firestore)
+- [Offline Data](https://firebase.google.com/docs/firestore/manage-data/enable-offline)
+- [Security Rules](https://firebase.google.com/docs/firestore/security/get-started)
+- [Best Practices](https://firebase.google.com/docs/firestore/best-practices)
 
 ---
 
-**💡 Desenvolvido por Gabriel Ferigato**
+**✅ Sistema de sincronização completo e pronto para uso!**
+
+**Desenvolvido por Gabriel Ferigato** 💜

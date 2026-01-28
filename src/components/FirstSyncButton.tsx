@@ -3,7 +3,7 @@
  * Botão para fazer a primeira sincronização de dados locais para o Firestore
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDatabase } from '../context/DatabaseContext';
 import { saveToFirestore, COLLECTIONS } from '../services/firestoreService';
 import { auth } from '../config/firebase';
@@ -17,16 +17,41 @@ export function FirstSyncButton() {
   const [hasSynced, setHasSynced] = useState(() => {
     return localStorage.getItem('firstSyncCompleted') === 'true';
   });
+  const [forceShow, setForceShow] = useState(false);
 
-  // Não mostra o botão se:
-  // 1. Já sincronizou antes
-  // 2. Não está usando Firestore (não autenticado)
-  // 3. Não tem dados para sincronizar
   const totalItems = ledger.length + workOrders.length + clients.length + catalogParts.length + catalogServices.length;
   
-  if (hasSynced || !useFirestore || totalItems === 0) {
-    return null;
-  }
+  // 🔍 DEBUG: Log detalhado
+  useEffect(() => {
+    console.log('\n🔍 FIRST SYNC BUTTON - DEBUG');
+    console.log('='.repeat(60));
+    console.log('hasSynced:', hasSynced);
+    console.log('useFirestore:', useFirestore);
+    console.log('totalItems:', totalItems);
+    console.log('auth.currentUser:', auth.currentUser?.email || 'NÃO AUTENTICADO');
+    console.log('ledger:', ledger.length);
+    console.log('workOrders:', workOrders.length);
+    console.log('clients:', clients.length);
+    console.log('catalogParts:', catalogParts.length);
+    console.log('catalogServices:', catalogServices.length);
+    console.log('='.repeat(60));
+
+    if (hasSynced) {
+      console.log('❌ Não mostra: Já sincronizou antes');
+    } else if (!useFirestore) {
+      console.log('❌ Não mostra: useFirestore = false (não autenticado ou Firebase desabilitado)');
+    } else if (totalItems === 0) {
+      console.log('❌ Não mostra: Nenhum dado local para sincronizar');
+    } else {
+      console.log('✅ DEVERIA MOSTRAR O BOTÃO!');
+    }
+    console.log('\n');
+  }, [hasSynced, useFirestore, totalItems, ledger.length, workOrders.length, clients.length]);
+
+  // Botão de debug (apenas em desenvolvimento)
+  const isDev = import.meta.env.DEV;
+
+  const shouldShow = (!hasSynced && useFirestore && totalItems > 0) || forceShow;
 
   const handleSync = async () => {
     if (!auth.currentUser) {
@@ -43,7 +68,6 @@ export function FirstSyncButton() {
       console.log('\n🚀 PRIMEIRA SINCRONIZAÇÃO INICIADA');
       console.log('='.repeat(60));
 
-      // Envia cada coleção
       const collections = [
         { name: 'Financeiro', collection: COLLECTIONS.financeiro, data: ledger },
         { name: 'Processos (OSs)', collection: COLLECTIONS.processos, data: workOrders },
@@ -68,13 +92,11 @@ export function FirstSyncButton() {
       console.log('='.repeat(60));
       console.log(`✅ SINCRONIZAÇÃO CONCLUÍDA: ${totalSynced} itens enviados\n`);
 
-      // Marca como concluído
       localStorage.setItem('firstSyncCompleted', 'true');
       setHasSynced(true);
       setSyncStatus('success');
       setSyncMessage(`✅ ${totalSynced} itens sincronizados com sucesso!`);
 
-      // Esconde mensagem após 5 segundos
       setTimeout(() => {
         setSyncStatus('idle');
       }, 5000);
@@ -87,6 +109,36 @@ export function FirstSyncButton() {
       setIsSyncing(false);
     }
   };
+
+  // Botão de debug flutuante (apenas em DEV)
+  if (isDev && !shouldShow) {
+    return (
+      <button
+        onClick={() => setForceShow(true)}
+        style={{
+          position: 'fixed',
+          bottom: '60px',
+          right: '20px',
+          padding: '8px 16px',
+          background: '#ff9800',
+          color: 'white',
+          border: 'none',
+          borderRadius: '8px',
+          cursor: 'pointer',
+          fontSize: '12px',
+          fontWeight: 'bold',
+          zIndex: 9999,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+        }}
+      >
+        🔧 Debug: Forçar Sync
+      </button>
+    );
+  }
+
+  if (!shouldShow) {
+    return null;
+  }
 
   return (
     <div className="first-sync-container">
@@ -144,6 +196,28 @@ export function FirstSyncButton() {
         <p className="first-sync-note">
           <small>⚠️ Isso só precisa ser feito uma vez!</small>
         </p>
+
+        {isDev && (
+          <button
+            onClick={() => {
+              localStorage.removeItem('firstSyncCompleted');
+              setHasSynced(false);
+              setForceShow(false);
+            }}
+            style={{
+              marginTop: '12px',
+              padding: '8px 16px',
+              background: 'rgba(255,255,255,0.2)',
+              color: 'white',
+              border: '1px solid rgba(255,255,255,0.3)',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            🔧 Reset (Dev)
+          </button>
+        )}
       </div>
     </div>
   );

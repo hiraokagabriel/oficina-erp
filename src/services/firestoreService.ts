@@ -3,10 +3,12 @@
  * Gerenciamento de dados usando Firebase Firestore
  * Substitui o IndexedDB com sincronização na nuvem
  * 
- * OTIMIZAÇÕES:
- * - Batches paralelos (até 3 simultâneos)
- * - Chunking inteligente (500 docs por batch)
- * - Progress callbacks
+ * 🚀 OTIMIZAÇÕES V2:
+ * ✅ Batches paralelos (até 3 simultâneos)
+ * ✅ Chunking inteligente (500 docs por batch)
+ * ✅ Progress callbacks aprimorados
+ * ✅ Retry automático em falhas
+ * ✅ Cache de timestamp para sync incremental
  */
 
 import {
@@ -41,6 +43,8 @@ export const COLLECTIONS = {
 // 🔥 CONSTANTES DE PERFORMANCE
 const BATCH_SIZE = 500; // Limite do Firestore
 const MAX_CONCURRENT_BATCHES = 3; // Batches simultâneos
+const MAX_RETRIES = 3; // Tentativas em caso de erro
+const RETRY_DELAY = 1000; // Delay entre retries (ms)
 
 /**
  * Obtém o ID do usuário autenticado
@@ -62,12 +66,41 @@ function getUserCollectionPath(collectionName: string): string {
 }
 
 /**
+ * 🔧 NOVO: Aguarda com exponential backoff
+ */
+async function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * 🔧 NOVO: Retry wrapper com exponential backoff
+ */
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  retries: number = MAX_RETRIES
+): Promise<T> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      if (attempt === retries) throw error;
+      
+      const delayMs = RETRY_DELAY * Math.pow(2, attempt - 1);
+      console.warn(`⚠️ Tentativa ${attempt} falhou, aguardando ${delayMs}ms...`);
+      await delay(delayMs);
+    }
+  }
+  throw new Error('Max retries exceeded');
+}
+
+/**
  * 🚀 OTIMIZADO: Salva múltiplos documentos com batches paralelos
  * 
  * PERFORMANCE:
  * - Divide em chunks de 500 (limite do Firestore)
  * - Processa até 3 batches simultaneamente
  * - Callback de progresso opcional
+ * - Retry automático em falhas
  * 
  * @param collectionName Nome da coleção
  * @param data Array de documentos
@@ -92,6 +125,7 @@ export async function saveToFirestore<T extends { id?: string }>(
     }
 
     console.log(`🚀 Sincronizando ${total} itens em ${chunks.length} batch(es)...`);
+    const startTime = Date.now();
 
     // Processar chunks em paralelo (máximo 3 simultâneos)
     for (let i = 0; i < chunks.length; i += MAX_CONCURRENT_BATCHES) {
@@ -99,31 +133,35 @@ export async function saveToFirestore<T extends { id?: string }>(
       
       await Promise.all(
         batchGroup.map(async (chunk) => {
-          const batch = writeBatch(db);
-          
-          chunk.forEach((item) => {
-            const id = item.id || doc(collection(db, collectionPath)).id;
-            const docRef = doc(db, collectionPath, id);
-            batch.set(docRef, {
-              ...item,
-              id,
-              updatedAt: Timestamp.now(),
-              userId: getUserId()
+          await withRetry(async () => {
+            const batch = writeBatch(db);
+            
+            chunk.forEach((item) => {
+              const id = item.id || doc(collection(db, collectionPath)).id;
+              const docRef = doc(db, collectionPath, id);
+              batch.set(docRef, {
+                ...item,
+                id,
+                updatedAt: Timestamp.now().toDate().toISOString(),
+                userId: getUserId()
+              });
             });
+            
+            await batch.commit();
+            processed += chunk.length;
+            
+            // Callback de progresso
+            if (onProgress) {
+              onProgress(processed, total);
+            }
           });
-          
-          await batch.commit();
-          processed += chunk.length;
-          
-          // Callback de progresso
-          if (onProgress) {
-            onProgress(processed, total);
-          }
         })
       );
     }
 
-    console.log(`✅ ${total} itens salvos em ${collectionName}`);
+    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+    const rate = Math.round(total / parseFloat(duration));
+    console.log(`✅ ${total} itens salvos em ${duration}s (~${rate} itens/s)`);
   } catch (error) {
     console.error(`❌ Erro ao salvar em ${collectionName}:`, error);
     throw error;
@@ -168,6 +206,34 @@ export async function syncAllCollections(
 }
 
 /**
+ * 🚀 NOVO: Busca incremental com filtro de data
+ */
+export async function getIncrementalUpdates<T>(
+  collectionName: string,
+  lastSyncTimestamp: string
+): Promise<T[]> {
+  try {
+    const collectionPath = getUserCollectionPath(collectionName);
+    const q = query(
+      collection(db, collectionPath),
+      where('updatedAt', '>', lastSyncTimestamp)
+    );
+    const querySnapshot = await getDocs(q);
+
+    const results: T[] = [];
+    querySnapshot.forEach((doc) => {
+      results.push({ id: doc.id, ...doc.data() } as T);
+    });
+
+    console.log(`📥 ${collectionName}: ${results.length} atualizações desde ${lastSyncTimestamp}`);
+    return results;
+  } catch (error) {
+    console.error(`❌ Erro ao buscar updates incrementais de ${collectionName}:`, error);
+    throw error;
+  }
+}
+
+/**
  * Busca todos os documentos de uma coleção
  */
 export async function getAllFromFirestore<T>(collectionName: string): Promise<T[]> {
@@ -208,10 +274,13 @@ export async function getOneFromFirestore<T>(collectionName: string, id: string)
 }
 
 /**
- * Adiciona ou atualiza um documento
+ * 🚀 OTIMIZADO: Adiciona ou atualiza um documento com retry
  */
-export async function putInFirestore<T extends { id?: string }>(collectionName: string, item: T): Promise<void> {
-  try {
+export async function putInFirestore<T extends { id?: string }>(
+  collectionName: string, 
+  item: T
+): Promise<void> {
+  await withRetry(async () => {
     const collectionPath = getUserCollectionPath(collectionName);
     const id = item.id || doc(collection(db, collectionPath)).id;
     const docRef = doc(db, collectionPath, id);
@@ -219,28 +288,29 @@ export async function putInFirestore<T extends { id?: string }>(collectionName: 
     await setDoc(docRef, {
       ...item,
       id,
-      updatedAt: Timestamp.now(),
+      updatedAt: Timestamp.now().toDate().toISOString(),
       userId: getUserId()
     }, { merge: true });
 
     console.log(`✅ Documento salvo: ${id}`);
-  } catch (error) {
-    console.error(`❌ Erro ao salvar documento:`, error);
-    throw error;
-  }
+  });
 }
 
 /**
  * Atualiza campos específicos de um documento
  */
-export async function updateInFirestore(collectionName: string, id: string, data: Partial<any>): Promise<void> {
+export async function updateInFirestore(
+  collectionName: string, 
+  id: string, 
+  data: Partial<any>
+): Promise<void> {
   try {
     const collectionPath = getUserCollectionPath(collectionName);
     const docRef = doc(db, collectionPath, id);
 
     await updateDoc(docRef, {
       ...data,
-      updatedAt: Timestamp.now()
+      updatedAt: Timestamp.now().toDate().toISOString()
     });
 
     console.log(`✅ Documento atualizado: ${id}`);
@@ -267,20 +337,39 @@ export async function deleteFromFirestore(collectionName: string, id: string): P
 }
 
 /**
- * Limpa todos os documentos de uma coleção
+ * 🚀 OTIMIZADO: Limpa coleção com batching
  */
 export async function clearCollection(collectionName: string): Promise<void> {
   try {
     const collectionPath = getUserCollectionPath(collectionName);
     const querySnapshot = await getDocs(collection(db, collectionPath));
-    const batch = writeBatch(db);
+    
+    if (querySnapshot.empty) {
+      console.log(`✅ Coleção ${collectionName} já está vazia`);
+      return;
+    }
 
-    querySnapshot.forEach((document) => {
-      batch.delete(document.ref);
-    });
+    // Dividir em batches
+    const docs = querySnapshot.docs;
+    const chunks: typeof docs[] = [];
+    for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+      chunks.push(docs.slice(i, i + BATCH_SIZE));
+    }
 
-    await batch.commit();
-    console.log(`🗑️ Coleção limpa: ${collectionName}`);
+    // Processar batches em paralelo
+    for (let i = 0; i < chunks.length; i += MAX_CONCURRENT_BATCHES) {
+      const batchGroup = chunks.slice(i, i + MAX_CONCURRENT_BATCHES);
+      
+      await Promise.all(
+        batchGroup.map(async (chunk) => {
+          const batch = writeBatch(db);
+          chunk.forEach(doc => batch.delete(doc.ref));
+          await batch.commit();
+        })
+      );
+    }
+
+    console.log(`🗑️ Coleção limpa: ${collectionName} (${docs.length} docs)`);
   } catch (error) {
     console.error(`❌ Erro ao limpar coleção:`, error);
     throw error;
@@ -346,8 +435,10 @@ export async function queryFirestore<T>(
 }
 
 /**
- * Listener em tempo real para uma coleção
+ * 🚀 OTIMIZADO: Listener em tempo real com controle de instâncias
  */
+const activeListeners = new Map<string, () => void>();
+
 export function subscribeToCollection<T>(
   collectionName: string,
   callback: (data: T[]) => void,
@@ -355,6 +446,15 @@ export function subscribeToCollection<T>(
 ): () => void {
   try {
     const collectionPath = getUserCollectionPath(collectionName);
+    const listenerId = `${collectionPath}_${JSON.stringify(constraints)}`;
+    
+    // Remover listener anterior se existir
+    if (activeListeners.has(listenerId)) {
+      console.log(`♻️ Removendo listener antigo: ${listenerId}`);
+      activeListeners.get(listenerId)!();
+      activeListeners.delete(listenerId);
+    }
+    
     const q = query(collection(db, collectionPath), ...constraints);
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -364,12 +464,32 @@ export function subscribeToCollection<T>(
       });
       callback(results);
     });
+    
+    // Armazenar referência do listener
+    activeListeners.set(listenerId, unsubscribe);
+    console.log(`👂 Listener ativo: ${listenerId}`);
 
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      activeListeners.delete(listenerId);
+      console.log(`🔇 Listener removido: ${listenerId}`);
+    };
   } catch (error) {
     console.error(`❌ Erro ao criar listener:`, error);
     return () => {};
   }
+}
+
+/**
+ * 🔧 NOVO: Remove todos os listeners ativos
+ */
+export function unsubscribeAllListeners(): void {
+  activeListeners.forEach((unsubscribe, id) => {
+    unsubscribe();
+    console.log(`🔇 Listener removido: ${id}`);
+  });
+  activeListeners.clear();
+  console.log('✅ Todos os listeners foram removidos');
 }
 
 /**

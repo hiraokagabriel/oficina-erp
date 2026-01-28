@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { WorkOrder, Client, OrderItem, CatalogItem } from '../types';
 import { getLocalDateString } from '../utils/helpers';
+import { MarginIndicator } from '../components/MarginIndicator';
 
 interface OSModalProps {
   isOpen: boolean;
@@ -37,11 +38,12 @@ export const OSModal: React.FC<OSModalProps> = ({
   
   const [parts, setParts] = useState<OrderItem[]>([]);
   const [services, setServices] = useState<OrderItem[]>([]);
-  const [showCostColumn, setShowCostColumn] = useState(false); // 🆕 NOVO
+  const [showCostColumn, setShowCostColumn] = useState(false);
+  const [minMargin, setMinMargin] = useState(70); // 🆕 Margem mínima configurável
 
   // --- ESTADOS TEMPORÁRIOS ---
-  const [tempPart, setTempPart] = useState({ description: '', price: '', cost: '' }); // 🆕 Adiciona cost
-  const [tempService, setTempService] = useState({ description: '', price: '', cost: '' }); // 🆕 Adiciona cost
+  const [tempPart, setTempPart] = useState({ description: '', price: '', cost: '' });
+  const [tempService, setTempService] = useState({ description: '', price: '', cost: '' });
 
   const toFloat = (val: number) => val / 100;
   const fromFloat = (val: number) => Math.round(val * 100);
@@ -163,7 +165,7 @@ export const OSModal: React.FC<OSModalProps> = ({
         const match = catalog.find(c => c.description.toLowerCase() === (value as string).toLowerCase());
         if (match) {
           newList[index].price = match.price;
-          newList[index].cost = match.cost || 0; // 🆕 Auto-preenche custo
+          newList[index].cost = match.cost || 0;
         }
     }
     setList(newList);
@@ -175,12 +177,12 @@ export const OSModal: React.FC<OSModalProps> = ({
       e.preventDefault();
       if (!tempPart.description) return;
       const priceVal = parseFloat(tempPart.price.replace(',', '.')) || 0;
-      const costVal = parseFloat(tempPart.cost.replace(',', '.')) || 0; // 🆕
+      const costVal = parseFloat(tempPart.cost.replace(',', '.')) || 0;
       const newItem: OrderItem = { 
         id: crypto.randomUUID(), 
         description: tempPart.description, 
         price: fromFloat(priceVal),
-        cost: fromFloat(costVal) // 🆕
+        cost: fromFloat(costVal)
       };
       setParts(prev => [...prev, newItem]);
       setTempPart({ description: '', price: '', cost: '' });
@@ -193,12 +195,12 @@ export const OSModal: React.FC<OSModalProps> = ({
       e.preventDefault();
       if (!tempService.description) return;
       const priceVal = parseFloat(tempService.price.replace(',', '.')) || 0;
-      const costVal = parseFloat(tempService.cost.replace(',', '.')) || 0; // 🆕
+      const costVal = parseFloat(tempService.cost.replace(',', '.')) || 0;
       const newItem: OrderItem = { 
         id: crypto.randomUUID(), 
         description: tempService.description, 
         price: fromFloat(priceVal),
-        cost: fromFloat(costVal) // 🆕
+        cost: fromFloat(costVal)
       };
       setServices(prev => [...prev, newItem]);
       setTempService({ description: '', price: '', cost: '' });
@@ -211,7 +213,7 @@ export const OSModal: React.FC<OSModalProps> = ({
       setTempPart({ 
         description: val, 
         price: match ? (match.price / 100).toString() : tempPart.price,
-        cost: match ? ((match.cost || 0) / 100).toString() : tempPart.cost // 🆕
+        cost: match ? ((match.cost || 0) / 100).toString() : tempPart.cost
       });
   };
 
@@ -220,7 +222,7 @@ export const OSModal: React.FC<OSModalProps> = ({
       setTempService({ 
         description: val, 
         price: match ? (match.price / 100).toString() : tempService.price,
-        cost: match ? ((match.cost || 0) / 100).toString() : tempService.cost // 🆕
+        cost: match ? ((match.cost || 0) / 100).toString() : tempService.cost
       });
   };
 
@@ -326,6 +328,22 @@ export const OSModal: React.FC<OSModalProps> = ({
 
         <hr style={{ borderColor: 'var(--border)', margin: '20px 0', opacity: 0.3 }} />
 
+        {/* 🆕 Configuração de margem mínima */}
+        {showCostColumn && (
+          <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', backgroundColor: 'rgba(130, 87, 230, 0.05)', borderRadius: '6px' }}>
+            <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--primary)' }}>Margem Mínima Desejada:</label>
+            <input 
+              type="number" 
+              value={minMargin} 
+              onChange={e => setMinMargin(parseInt(e.target.value) || 70)}
+              min="0"
+              max="100"
+              style={{ width: '70px', padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--border)', fontSize: '0.9rem' }}
+            />
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>%</span>
+          </div>
+        )}
+
         {/* COLUNAS PEÇAS / SERVIÇOS */}
         <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
             
@@ -389,41 +407,56 @@ export const OSModal: React.FC<OSModalProps> = ({
                 
                 <div style={{maxHeight: 250, overflowY: 'auto'}}>
                     {parts.map((p, i) => (
-                        <div key={p.id} className="item-row">
-                            <input 
-                                className="form-input" 
-                                value={p.description} 
-                                onChange={e => updateItem(parts, setParts, i, 'description', e.target.value, catalogParts)} 
-                                style={{ flex: 2 }} 
-                            />
-                            
-                            {showCostColumn && (
+                        <div key={p.id} style={{ marginBottom: showCostColumn ? '12px' : '0' }}>
+                            <div className="item-row">
+                                <input 
+                                    className="form-input" 
+                                    value={p.description} 
+                                    onChange={e => updateItem(parts, setParts, i, 'description', e.target.value, catalogParts)} 
+                                    style={{ flex: 2 }} 
+                                />
+                                
+                                {showCostColumn && (
+                                    <input 
+                                        className="form-input" 
+                                        type="number" 
+                                        value={toFloat(p.cost || 0)} 
+                                        onChange={e => updateItem(parts, setParts, i, 'cost', fromFloat(parseFloat(e.target.value) || 0), catalogParts)} 
+                                        style={{ flex: 0.8, fontSize: '0.85rem', backgroundColor: 'rgba(255,152,0,0.1)' }} 
+                                        placeholder="Custo"
+                                        title="Custo interno de aquisição"
+                                    />
+                                )}
+                                
                                 <input 
                                     className="form-input" 
                                     type="number" 
-                                    value={toFloat(p.cost || 0)} 
-                                    onChange={e => updateItem(parts, setParts, i, 'cost', fromFloat(parseFloat(e.target.value) || 0), catalogParts)} 
-                                    style={{ flex: 0.8, fontSize: '0.85rem', backgroundColor: 'rgba(255,152,0,0.1)' }} 
-                                    placeholder="Custo"
-                                    title="Custo interno de aquisição"
+                                    value={toFloat(p.price)} 
+                                    onChange={e => updateItem(parts, setParts, i, 'price', fromFloat(parseFloat(e.target.value) || 0), catalogParts)} 
+                                    style={{ flex: 1 }} 
+                                />
+                                
+                                <button 
+                                    className="btn-icon danger" 
+                                    onClick={() => setParts(parts.filter((_, idx) => idx !== i))} 
+                                    tabIndex={-1}
+                                >
+                                    x
+                                </button>
+                            </div>
+                            
+                            {/* 🆕 Indicador de Margem */}
+                            {showCostColumn && p.cost && p.cost > 0 && (
+                                <MarginIndicator 
+                                    cost={p.cost}
+                                    price={p.price}
+                                    formatMoney={formatMoney}
+                                    minMarginPercent={minMargin}
+                                    onSuggestPrice={(suggestedPrice) => {
+                                        updateItem(parts, setParts, i, 'price', suggestedPrice, catalogParts);
+                                    }}
                                 />
                             )}
-                            
-                            <input 
-                                className="form-input" 
-                                type="number" 
-                                value={toFloat(p.price)} 
-                                onChange={e => updateItem(parts, setParts, i, 'price', fromFloat(parseFloat(e.target.value) || 0), catalogParts)} 
-                                style={{ flex: 1 }} 
-                            />
-                            
-                            <button 
-                                className="btn-icon danger" 
-                                onClick={() => setParts(parts.filter((_, idx) => idx !== i))} 
-                                tabIndex={-1}
-                            >
-                                x
-                            </button>
                         </div>
                     ))}
                 </div>
@@ -489,41 +522,56 @@ export const OSModal: React.FC<OSModalProps> = ({
                 
                 <div style={{maxHeight: 250, overflowY: 'auto'}}>
                     {services.map((s, i) => (
-                        <div key={s.id} className="item-row">
-                            <input 
-                                className="form-input" 
-                                value={s.description} 
-                                onChange={e => updateItem(services, setServices, i, 'description', e.target.value, catalogServices)} 
-                                style={{ flex: 2 }} 
-                            />
-                            
-                            {showCostColumn && (
+                        <div key={s.id} style={{ marginBottom: showCostColumn ? '12px' : '0' }}>
+                            <div className="item-row">
+                                <input 
+                                    className="form-input" 
+                                    value={s.description} 
+                                    onChange={e => updateItem(services, setServices, i, 'description', e.target.value, catalogServices)} 
+                                    style={{ flex: 2 }} 
+                                />
+                                
+                                {showCostColumn && (
+                                    <input 
+                                        className="form-input" 
+                                        type="number" 
+                                        value={toFloat(s.cost || 0)} 
+                                        onChange={e => updateItem(services, setServices, i, 'cost', fromFloat(parseFloat(e.target.value) || 0), catalogServices)} 
+                                        style={{ flex: 0.8, fontSize: '0.85rem', backgroundColor: 'rgba(255,152,0,0.1)' }} 
+                                        placeholder="Custo"
+                                        title="Custo interno de aquisição"
+                                    />
+                                )}
+                                
                                 <input 
                                     className="form-input" 
                                     type="number" 
-                                    value={toFloat(s.cost || 0)} 
-                                    onChange={e => updateItem(services, setServices, i, 'cost', fromFloat(parseFloat(e.target.value) || 0), catalogServices)} 
-                                    style={{ flex: 0.8, fontSize: '0.85rem', backgroundColor: 'rgba(255,152,0,0.1)' }} 
-                                    placeholder="Custo"
-                                    title="Custo interno de aquisição"
+                                    value={toFloat(s.price)} 
+                                    onChange={e => updateItem(services, setServices, i, 'price', fromFloat(parseFloat(e.target.value) || 0), catalogServices)} 
+                                    style={{ flex: 1 }} 
+                                />
+                                
+                                <button 
+                                    className="btn-icon danger" 
+                                    onClick={() => setServices(services.filter((_, idx) => idx !== i))} 
+                                    tabIndex={-1}
+                                >
+                                    x
+                                </button>
+                            </div>
+                            
+                            {/* 🆕 Indicador de Margem */}
+                            {showCostColumn && s.cost && s.cost > 0 && (
+                                <MarginIndicator 
+                                    cost={s.cost}
+                                    price={s.price}
+                                    formatMoney={formatMoney}
+                                    minMarginPercent={minMargin}
+                                    onSuggestPrice={(suggestedPrice) => {
+                                        updateItem(services, setServices, i, 'price', suggestedPrice, catalogServices);
+                                    }}
                                 />
                             )}
-                            
-                            <input 
-                                className="form-input" 
-                                type="number" 
-                                value={toFloat(s.price)} 
-                                onChange={e => updateItem(services, setServices, i, 'price', fromFloat(parseFloat(e.target.value) || 0), catalogServices)} 
-                                style={{ flex: 1 }} 
-                            />
-                            
-                            <button 
-                                className="btn-icon danger" 
-                                onClick={() => setServices(services.filter((_, idx) => idx !== i))} 
-                                tabIndex={-1}
-                            >
-                                x
-                            </button>
                         </div>
                     ))}
                 </div>

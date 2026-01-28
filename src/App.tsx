@@ -8,7 +8,7 @@ import { updateClientCascading, updateCatalogItemCascading } from './services/ca
 import { uploadToDrive } from './services/googleDrive';
 import { Sidebar } from './components/Sidebar';
 import { Confetti } from './components/ui/Confetti';
-import { SyncStatus } from './components/ui/SyncStatus'; // 🆕 NOVO
+import { SyncStatus } from './components/SyncStatus'; // 🔧 CORRIGIDO
 import { PrintableInvoice } from './components/PrintableInvoice';
 import { ToastContainer, ToastMessage, ToastType } from './components/ui/ToastContainer';
 import { LoadingSkeleton } from './components/ui/LoadingSkeleton';
@@ -72,7 +72,6 @@ function AppContent() {
     const migrateOldWorkOrders = () => {
       let updated = false;
       const newWorkOrders = workOrders.map(os => {
-        // Se a OS está finalizada mas não tem paymentDate, seta como createdAt
         if (os.status === 'FINALIZADO' && !os.paymentDate) {
           console.log(`🔄 Migrando OS #${os.osNumber}: paymentDate = createdAt`);
           updated = true;
@@ -88,7 +87,6 @@ function AppContent() {
       }
     };
 
-    // Executa migração após carregar dados
     if (!isLoading && workOrders.length > 0) {
       migrateOldWorkOrders();
     }
@@ -99,7 +97,6 @@ function AppContent() {
     const migrateLedgerEntries = () => {
       let updated = false;
       const newLedger = ledger.map(entry => {
-        // Se é receita (CREDIT) e não tem paymentDate, verifica se tem OS vinculada
         if (entry.type === 'CREDIT' && !entry.paymentDate) {
           const linkedOS = workOrders.find(os => os.financialId === entry.id);
           if (linkedOS && linkedOS.paymentDate) {
@@ -117,7 +114,6 @@ function AppContent() {
       }
     };
 
-    // Executa após migração de OSs
     if (!isLoading && ledger.length > 0 && workOrders.length > 0) {
       migrateLedgerEntries();
     }
@@ -135,7 +131,6 @@ function AppContent() {
   const handleGoogleDriveBackup = async () => {
     if (isBackuping) return;
     
-    // 🆕 NOVA VALIDAÇÃO: Verifica se API Key e Token estão configurados
     if (!settings.googleApiKey || settings.googleApiKey.trim() === "") {
       addToast("⚠️ Configure a Google API Key nas configurações.", "error");
       return;
@@ -157,7 +152,6 @@ function AppContent() {
       const timestamp = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}-${String(now.getMinutes()).padStart(2,'0')}`;
       const filename = `backup_oficina_${timestamp}.json`;
 
-      // 🆕 AGORA USA settings.googleApiKey
       await uploadToDrive(filename, content, settings.googleDriveToken, settings.googleApiKey);
       setDriveStatus('success');
       addToast("Backup salvo!", "success");
@@ -176,7 +170,6 @@ function AppContent() {
     const os = workOrders.find(o => o.id === osId);
     if (!os || os.status === newStatus) return;
 
-    // 📅 LÓGICA DE PAYMENTDATE
     const isBecomingFinalized = newStatus === 'FINALIZADO' && os.status !== 'FINALIZADO';
     const isLeavingFinalized = os.status === 'FINALIZADO' && newStatus !== 'FINALIZADO';
 
@@ -193,12 +186,10 @@ function AppContent() {
       
       const updates: Partial<WorkOrder> = { status: newStatus };
       
-      // 🆕 Setar paymentDate ao finalizar
       if (isBecomingFinalized) {
         updates.paymentDate = new Date().toISOString();
       }
       
-      // ❌ Limpar paymentDate ao sair de finalizado
       if (isLeavingFinalized) {
         updates.paymentDate = undefined;
       }
@@ -218,7 +209,6 @@ function AppContent() {
     setCatalogServices(prev => learnCatalogItems(prev, data.services));
 
     if (editingOS) {
-      // 🔧 AGORA PASSA PUBLICNOTES
       const updated = updateWorkOrderData(
         editingOS, 
         data.osNumber, 
@@ -287,7 +277,6 @@ function AppContent() {
     }
   };
 
-  // 🆕 NOVA FUNÇÃO: Marcar/desmarcar pagamento
   const handleTogglePayment = (entryId: string) => {
     const entry = ledger.find(e => e.id === entryId);
     if (!entry || entry.type !== 'CREDIT') return;
@@ -295,14 +284,12 @@ function AppContent() {
     const now = new Date().toISOString();
     const newPaymentDate = entry.paymentDate ? undefined : now;
 
-    // Atualiza o ledger
     setLedger(prev => prev.map(e => 
       e.id === entryId 
         ? { ...e, paymentDate: newPaymentDate }
         : e
     ));
 
-    // Se tem OS vinculada, atualiza também
     const linkedOS = workOrders.find(os => os.financialId === entryId);
     if (linkedOS) {
       setWorkOrders(prev => prev.map(os => 
@@ -330,7 +317,6 @@ function AppContent() {
     setDeleteModalInfo({ isOpen: false, entry: null });
   };
 
-  // 👥 SALVAR CLIENTE (CRM)
   const handleSaveClient = (updatedClient: Client) => {
     const oldClient = clients.find(c => c.id === updatedClient.id);
     setClients(prev => prev.find(c => c.id === updatedClient.id) ? prev.map(c => c.id === updatedClient.id ? updatedClient : c) : [...prev, updatedClient]);
@@ -344,7 +330,6 @@ function AppContent() {
     }
   };
 
-  // 🛠️ SALVAR ITEM DO CATÁLOGO (PEÇAS/SERVIÇOS)
   const handleSaveCatalogItem = (updatedItem: CatalogItem, type: 'part' | 'service') => {
     let oldItem: CatalogItem | undefined;
     if (type === 'part') {
@@ -422,7 +407,6 @@ function AppContent() {
     setActiveTab('OFICINA');
   };
 
-  // 🖨️ FUNÇÃO PARA IMPRIMIR PDF COM NOME AUTOMÁTICO
   const handlePrintOS = (os: WorkOrder) => {
     const sanitize = (str: string) => str
       .replace(/[^a-zA-Z0-9\s-]/g, '')

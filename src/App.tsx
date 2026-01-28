@@ -3,11 +3,12 @@ import { useState, useEffect, lazy, Suspense } from 'react';
 import { DatabaseProvider, useDatabase } from './context/DatabaseContext';
 import { useFinance } from './hooks/useFinance';
 import { useKeyboard } from './hooks/useKeyboard';
-import { useMigrationTools } from './hooks/useMigrationTools'; // 🆕 NOVO
+import { useMigrationTools } from './hooks/useMigrationTools';
 import { updateClientCascading, updateCatalogItemCascading } from './services/cascadeService';
 import { uploadToDrive } from './services/googleDrive';
 import { Sidebar } from './components/Sidebar';
 import { Confetti } from './components/ui/Confetti';
+import { SyncStatus } from './components/ui/SyncStatus'; // 🆕 NOVO
 import { PrintableInvoice } from './components/PrintableInvoice';
 import { ToastContainer, ToastMessage, ToastType } from './components/ui/ToastContainer';
 import { LoadingSkeleton } from './components/ui/LoadingSkeleton';
@@ -91,7 +92,7 @@ function AppContent() {
     if (!isLoading && workOrders.length > 0) {
       migrateOldWorkOrders();
     }
-  }, [isLoading]); // Só executa quando o loading terminar
+  }, [isLoading]);
 
   // 🔧 MIGRAÇÃO: Atualiza lançamentos de receitas sem paymentDate
   useEffect(() => {
@@ -228,7 +229,7 @@ function AppContent() {
         data.parts, 
         data.services, 
         data.createdAt,
-        data.publicNotes // 🔧 ADICIONA PUBLICNOTES
+        data.publicNotes
       );
       setWorkOrders(prev => prev.map(o => o.id === editingOS.id ? updated : o));
       
@@ -237,7 +238,6 @@ function AppContent() {
       }
       addToast("OS atualizada!", "success");
     } else {
-      // 🔧 NOVA OS TAMBÉM PRECISA DE PUBLICNOTES
       const newOS = {
         id: crypto.randomUUID(),
         osNumber: data.osNumber,
@@ -250,7 +250,7 @@ function AppContent() {
         services: data.services,
         total: data.parts.reduce((a: number, b: any) => a + b.price, 0) + data.services.reduce((a: number, b: any) => a + b.price, 0),
         createdAt: data.createdAt || new Date().toISOString(),
-        publicNotes: data.publicNotes || '' // 🔧 ADICIONA PUBLICNOTES
+        publicNotes: data.publicNotes || ''
       };
       setWorkOrders(prev => [...prev, newOS]);
       addToast("Nova OS criada!", "success");
@@ -364,10 +364,6 @@ function AppContent() {
   };
 
   const handleInstallmentConfirm = (config: any) => {
-    console.log('🚀 ===== INÍCIO PARCELAMENTO =====');
-    console.log('installmentOS:', installmentOS);
-    console.log('config:', config);
-    
     const newEntries: LedgerEntry[] = [];
     const baseDate = new Date(config.firstPaymentDate);
     const groupId = config.groupId;
@@ -378,8 +374,6 @@ function AppContent() {
       
       const isLastInstallment = i === config.installments - 1;
       const amount = isLastInstallment ? config.lastInstallmentAmount : config.installmentAmount;
-      
-      console.log(`  Parcela ${i + 1}/${config.installments}: ${Money.format(amount)} (${isLastInstallment ? 'Última' : 'Normal'})`);
       
       newEntries.push({
         id: crypto.randomUUID(),
@@ -397,16 +391,9 @@ function AppContent() {
       });
     }
     
-    console.log(`✅ ${newEntries.length} entradas criadas`);
     setLedger(prev => [...newEntries, ...prev]);
     
     if (installmentOS) {
-      console.log(`🔄 Atualizando OS #${installmentOS.osNumber} (ID: ${installmentOS.id})`);
-      console.log(`  Status atual: ${installmentOS.status}`);
-      console.log(`  Novo status: FINALIZADO`);
-      console.log(`  FinancialId: ${newEntries[0].id}`);
-      console.log(`  📅 PaymentDate: ${new Date().toISOString()}`);
-      
       setWorkOrders(prev => prev.map(o => 
         o.id === installmentOS.id 
           ? { 
@@ -422,15 +409,11 @@ function AppContent() {
       
       addToast(`OS #${installmentOS.osNumber} finalizada!`, "success");
       setShowConfetti(true);
-    } else {
-      console.error('❌ installmentOS é NULL!');
     }
     
     addToast(`Parcelamento criado! ${config.installments}x`, "success");
     setIsInstallmentModalOpen(false);
     setInstallmentOS(null);
-    
-    console.log('🏁 ===== FIM PARCELAMENTO =====');
   };
 
   const handleOpenOSFromCRM = (os: WorkOrder) => {
@@ -441,29 +424,21 @@ function AppContent() {
 
   // 🖨️ FUNÇÃO PARA IMPRIMIR PDF COM NOME AUTOMÁTICO
   const handlePrintOS = (os: WorkOrder) => {
-    // Remove caracteres especiais e espaços para criar nome de arquivo válido
     const sanitize = (str: string) => str
-      .replace(/[^a-zA-Z0-9\s-]/g, '') // Remove caracteres especiais
-      .replace(/\s+/g, '_') // Substitui espaços por underscore
-      .substring(0, 30); // Limita tamanho
+      .replace(/[^a-zA-Z0-9\s-]/g, '')
+      .replace(/\s+/g, '_')
+      .substring(0, 30);
 
     const clientName = sanitize(os.clientName);
-    const vehicle = sanitize(os.vehicle.split(' - ')[0]); // Pega apenas modelo sem placa
+    const vehicle = sanitize(os.vehicle.split(' - ')[0]);
     const newTitle = `OS-${os.osNumber}_${clientName}_${vehicle}`;
     
-    // Salva título original
     const originalTitle = document.title;
-    
-    // Muda para o novo título
     document.title = newTitle;
-    
-    // Define printingOS e aguarda renderização
     setPrintingOS(os);
     
     setTimeout(() => {
       window.print();
-      
-      // Restaura título original após impressão
       setTimeout(() => {
         document.title = originalTitle;
       }, 500);
@@ -487,9 +462,6 @@ function AppContent() {
 
     if (pendingAction.type === 'FINISH_OS_FINANCIAL') {
       const os = pendingAction.data;
-      console.log('💰 FINISH_OS_FINANCIAL:', os);
-      
-      // ✅ AGORA ABRE O MODAL BONITO ao invés de confirm() feio
       setPendingInstallmentOS(os);
       setIsInstallmentChoiceOpen(true);
       setPendingAction(null);
@@ -498,35 +470,23 @@ function AppContent() {
 
     if (pendingAction.type === 'RESTORE_FINANCIAL') {
       const os = pendingAction.data;
-      console.log('🔙 RESTORE_FINANCIAL:', os);
-      
       const financialEntry = ledger.find(e => e.id === os.financialId);
       
       if (financialEntry) {
         const groupToDelete = financialEntry.groupId || financialEntry.installmentGroupId;
         
         if (groupToDelete) {
-          console.log(`🗑️ Removendo TODAS as parcelas do grupo: ${groupToDelete}`);
           const parcelsToRemove = ledger.filter(e => 
             e.groupId === groupToDelete || e.installmentGroupId === groupToDelete
           );
-          console.log(`  Total de parcelas a remover: ${parcelsToRemove.length}`);
-          parcelsToRemove.forEach(p => {
-            console.log(`    - ${p.description}: ${Money.format(p.amount)}`);
-          });
-          
           setLedger(prev => prev.filter(e => 
             e.groupId !== groupToDelete && e.installmentGroupId !== groupToDelete
           ));
-          
           addToast(`${parcelsToRemove.length} parcelas removidas.`, "info");
         } else {
-          console.log('💵 Removendo pagamento único');
           setLedger(prev => prev.filter(e => e.id !== os.financialId));
           addToast("Lançamento removido.", "info");
         }
-      } else {
-        console.warn('⚠️ FinancialId não encontrado no ledger');
       }
       
       setWorkOrders(prev => prev.map(o => 
@@ -559,24 +519,21 @@ function AppContent() {
     setPendingAction(null);
   };
 
-  // 🆕 NOVA FUNÇÃO: Lidar com resposta do ChoiceModal
   const handleInstallmentChoice = (wantsInstallment: boolean) => {
     if (!pendingInstallmentOS) return;
 
     if (wantsInstallment) {
-      console.log('✅ Usuário escolheu PARCELAR');
       setInstallmentOS(pendingInstallmentOS);
       setIsInstallmentModalOpen(true);
     } else {
-      console.log('❌ Usuário escolheu NÃO parcelar - pagamento único');
       const paymentDate = new Date().toISOString();
       const entry = createEntry(
         `Receita OS #${pendingInstallmentOS.osNumber} - ${pendingInstallmentOS.clientName}`, 
         pendingInstallmentOS.total, 
         'CREDIT', 
         pendingInstallmentOS.createdAt,
-        undefined, // groupId
-        paymentDate // 🔧 PASSA DATA DE PAGAMENTO
+        undefined,
+        paymentDate
       );
       setLedger(prev => [entry, ...prev]);
       setWorkOrders(prev => prev.map(o => 
@@ -623,6 +580,7 @@ function AppContent() {
     <>
       {showConfetti && <Confetti />}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <SyncStatus /> {/* 🆕 INDICADOR DE SINCRONIZAÇÃO */}
 
       <div className="app-container">
         <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
@@ -648,7 +606,6 @@ function AppContent() {
         <PrintableInvoice data={printingOS} settings={settings} formatMoney={Money.format} />
         {deleteModalInfo.isOpen && <DeleteConfirmationModal isOpen={deleteModalInfo.isOpen} onClose={() => setDeleteModalInfo({ isOpen: false, entry: null })} onConfirmSingle={confirmDeleteSingle} onConfirmGroup={confirmDeleteGroup} isGroup={!!deleteModalInfo.entry?.groupId} />}
         
-        {/* 🆕 NOVO MODAL BONITO DE PARCELAMENTO */}
         {isInstallmentChoiceOpen && pendingInstallmentOS && (
           <ChoiceModal
             isOpen={isInstallmentChoiceOpen}

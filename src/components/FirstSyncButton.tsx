@@ -17,13 +17,12 @@ export function FirstSyncButton() {
   const [hasSynced, setHasSynced] = useState(() => {
     return localStorage.getItem('firstSyncCompleted') === 'true';
   });
-  const [forceShow, setForceShow] = useState(false);
 
   const totalItems = ledger.length + workOrders.length + clients.length + catalogParts.length + catalogServices.length;
   
-  // 🔍 DEBUG: Log detalhado
+  // 🔍 DEBUG: Log detalhado (apenas console)
   useEffect(() => {
-    console.log('\n🔍 FIRST SYNC BUTTON - DEBUG');
+    console.log('\n🔍 FIRST SYNC BUTTON - STATUS');
     console.log('='.repeat(60));
     console.log('hasSynced:', hasSynced);
     console.log('useFirestore:', useFirestore);
@@ -34,24 +33,18 @@ export function FirstSyncButton() {
     console.log('clients:', clients.length);
     console.log('catalogParts:', catalogParts.length);
     console.log('catalogServices:', catalogServices.length);
-    console.log('='.repeat(60));
-
-    if (hasSynced) {
-      console.log('❌ Não mostra: Já sincronizou antes');
-    } else if (!useFirestore) {
-      console.log('❌ Não mostra: useFirestore = false (não autenticado ou Firebase desabilitado)');
-    } else if (totalItems === 0) {
-      console.log('❌ Não mostra: Nenhum dado local para sincronizar');
+    
+    if (!hasSynced && useFirestore && totalItems > 0) {
+      console.log('✅ EXIBINDO BOTÃO DE SYNC');
     } else {
-      console.log('✅ DEVERIA MOSTRAR O BOTÃO!');
+      if (hasSynced) console.log('❌ Oculto: Já sincronizou');
+      if (!useFirestore) console.log('❌ Oculto: Não autenticado');
+      if (totalItems === 0) console.log('❌ Oculto: Sem dados locais');
     }
-    console.log('\n');
-  }, [hasSynced, useFirestore, totalItems, ledger.length, workOrders.length, clients.length]);
+    console.log('='.repeat(60) + '\n');
+  }, [hasSynced, useFirestore, totalItems]);
 
-  // Botão de debug (apenas em desenvolvimento)
-  const isDev = import.meta.env.DEV;
-
-  const shouldShow = (!hasSynced && useFirestore && totalItems > 0) || forceShow;
+  const shouldShow = !hasSynced && useFirestore && totalItems > 0;
 
   const handleSync = async () => {
     if (!auth.currentUser) {
@@ -109,32 +102,6 @@ export function FirstSyncButton() {
       setIsSyncing(false);
     }
   };
-
-  // Botão de debug flutuante (apenas em DEV)
-  if (isDev && !shouldShow) {
-    return (
-      <button
-        onClick={() => setForceShow(true)}
-        style={{
-          position: 'fixed',
-          bottom: '60px',
-          right: '20px',
-          padding: '8px 16px',
-          background: '#ff9800',
-          color: 'white',
-          border: 'none',
-          borderRadius: '8px',
-          cursor: 'pointer',
-          fontSize: '12px',
-          fontWeight: 'bold',
-          zIndex: 9999,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-        }}
-      >
-        🔧 Debug: Forçar Sync
-      </button>
-    );
-  }
 
   if (!shouldShow) {
     return null;
@@ -196,28 +163,6 @@ export function FirstSyncButton() {
         <p className="first-sync-note">
           <small>⚠️ Isso só precisa ser feito uma vez!</small>
         </p>
-
-        {isDev && (
-          <button
-            onClick={() => {
-              localStorage.removeItem('firstSyncCompleted');
-              setHasSynced(false);
-              setForceShow(false);
-            }}
-            style={{
-              marginTop: '12px',
-              padding: '8px 16px',
-              background: 'rgba(255,255,255,0.2)',
-              color: 'white',
-              border: '1px solid rgba(255,255,255,0.3)',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '12px'
-            }}
-          >
-            🔧 Reset (Dev)
-          </button>
-        )}
       </div>
     </div>
   );

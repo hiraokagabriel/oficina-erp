@@ -96,7 +96,7 @@ export const MarginIndicator: React.FC<MarginIndicatorProps> = ({
             💡 Preço sugerido ({minMarginPercent}%):
           </span>
           <button
-            onClick={() => onSuggestPrice(Math.round(suggestedPrice * 100))} // Converte para centavos
+            onClick={() => onSuggestPrice(Math.round(suggestedPrice))} // ✅ suggestedPrice já está em centavos
             style={{
               background: 'var(--primary)',
               color: 'white',
@@ -109,7 +109,7 @@ export const MarginIndicator: React.FC<MarginIndicatorProps> = ({
             }}
             type="button"
           >
-            {formatMoney(Math.round(suggestedPrice * 100))}
+            {formatMoney(Math.round(suggestedPrice))}
           </button>
         </div>
       )}

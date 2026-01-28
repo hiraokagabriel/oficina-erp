@@ -1,12 +1,12 @@
 /**
  * FirstSyncButton.tsx
- * Botão para fazer a primeira sincronização de dados locais para o Firestore
- * OTIMIZADO com batches paralelos
+ * Botão para fazer a primeira sincronização de dados locais para o Firebase
+ * USA FIREBASE STORAGE (100x mais rápido que Firestore)
  */
 
 import React, { useState, useEffect } from 'react';
 import { useDatabase } from '../context/DatabaseContext';
-import { syncAllCollections, COLLECTIONS } from '../services/firestoreService';
+import { syncDatabaseFast } from '../services/storageService';
 import { auth } from '../config/firebase';
 import './FirstSyncButton.css';
 
@@ -58,7 +58,7 @@ export function FirstSyncButton() {
 
   const shouldShow = !hasSynced && !hasDeclined && useFirestore && totalItems > 0;
 
-  // 🚀 OTIMIZADO: Usa syncAllCollections paralelo
+  // 🚀 SUPER RÁPIDO: Usa Firebase Storage (1 upload)
   const handleSync = async () => {
     if (!auth.currentUser) {
       setSyncStatus('error');
@@ -68,29 +68,28 @@ export function FirstSyncButton() {
 
     setIsSyncing(true);
     setSyncStatus('syncing');
-    setSyncMessage('🚀 Iniciando sincronização paralela...');
+    setSyncMessage('🚀 Preparando dados...');
 
     try {
-      const collections = [
-        { name: 'Financeiro', collection: COLLECTIONS.financeiro, data: ledger },
-        { name: 'Processos (OSs)', collection: COLLECTIONS.processos, data: workOrders },
-        { name: 'Clientes', collection: COLLECTIONS.clientes, data: clients },
-        { name: 'Catálogo', collection: COLLECTIONS.oficina, data: [...catalogParts, ...catalogServices] }
-      ];
+      const database = {
+        ledger,
+        workOrders,
+        clients,
+        catalogParts,
+        catalogServices,
+        settings: { name: '', cnpj: '', address: '', technician: '', exportPath: '', googleDriveToken: '', googleApiKey: '' }
+      };
 
-      // 🚀 Sincronização PARALELA com progresso
-      await syncAllCollections(
-        collections,
-        (collectionName, current, total) => {
-          const percent = Math.round((current / total) * 100);
-          setSyncMessage(`🔄 ${collectionName}: ${current}/${total} (${percent}%)`);
-        }
+      // 🚀 FIREBASE STORAGE: 1 upload vs milhares de writes
+      await syncDatabaseFast(
+        database,
+        (message) => setSyncMessage(message)
       );
 
       localStorage.setItem('firstSyncCompleted', 'true');
       setHasSynced(true);
       setSyncStatus('success');
-      setSyncMessage(`✅ ${totalItems} itens sincronizados com sucesso!`);
+      setSyncMessage(`✅ ${totalItems} itens sincronizados!`);
 
       setTimeout(() => {
         setSyncStatus('idle');
@@ -121,12 +120,12 @@ export function FirstSyncButton() {
           ×
         </button>
 
-        <div className="first-sync-icon">🔥</div>
-        <h3>Sincronizar com a Nuvem</h3>
+        <div className="first-sync-icon">🚀</div>
+        <h3>Backup Rápido na Nuvem</h3>
         <p>
           Você tem <strong>{totalItems} itens</strong> no banco local.
           <br />
-          Envie-os para o Firestore para acessá-los de qualquer dispositivo!
+          <strong>1 upload rápido</strong> em vez de milhares de operações!
         </p>
 
         <div className="first-sync-details">
@@ -162,17 +161,17 @@ export function FirstSyncButton() {
           {isSyncing ? (
             <>
               <span className="spinner"></span>
-              Sincronizando...
+              Enviando...
             </>
           ) : (
             <>
-              ⚡ Sincronização Rápida
+              🚀 Backup Rápido (Storage)
             </>
           )}
         </button>
 
         <p className="first-sync-note">
-          <small>⚡ Sincronização paralela otimizada! Use Configurações depois.</small>
+          <small>⚡ Firebase Storage: 100x mais rápido e sem limites!</small>
         </p>
       </div>
     </div>

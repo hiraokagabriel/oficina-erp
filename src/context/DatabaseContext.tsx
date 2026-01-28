@@ -3,7 +3,7 @@ import { LedgerEntry, WorkOrder, Client, CatalogItem, WorkshopSettings, Database
 import { auth } from '../config/firebase';
 import {
   getAllFromFirestore,
-  putInFirestore,
+  saveToFirestore,
   subscribeToCollection,
   COLLECTIONS
 } from '../services/firestoreService';
@@ -58,30 +58,33 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const isInitialLoad = useRef(true);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const unsubscribeFunctions = useRef<(() => void)[]>([]);
+  const isSyncingFromFirestore = useRef(false);
 
   // Monitora status de autenticação e conexão
   useEffect(() => {
-    // Verifica se o usuário está autenticado
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
-      setUseFirestore(!!user && isOnline);
+      const shouldUseFirestore = !!user && isOnline;
+      setUseFirestore(shouldUseFirestore);
+      
       if (user) {
-        console.log(`🔥 Firestore ativado para: ${user.email}`);
+        console.log(`🔥 Firestore ativo: ${user.email}`);
       } else {
-        console.log('💾 Usando LocalStorage (não autenticado)');
+        console.log('💾 LocalStorage ativo (não autenticado)');
       }
     });
 
-    // Monitora conexão com a internet
     const handleOnline = () => {
       setIsOnline(true);
-      if (auth.currentUser) setUseFirestore(true);
-      console.log('✅ Conexão online - Firestore ativado');
+      if (auth.currentUser) {
+        setUseFirestore(true);
+        console.log('✅ Online - Firestore ativado');
+      }
     };
 
     const handleOffline = () => {
       setIsOnline(false);
       setUseFirestore(false);
-      console.log('⚠️ Conexão offline - Usando cache local');
+      console.log('⚠️ Offline - Cache local ativado');
     };
 
     window.addEventListener('online', handleOnline);
@@ -94,31 +97,42 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
   }, [isOnline]);
 
-  // Função para carregar dados (Firestore, Tauri ou LocalStorage)
+  // Função para carregar dados
   const loadDatabase = async (): Promise<DatabaseSchema | null> => {
-    // PRIORIDADE 1: Firestore (se autenticado)
-    if (useFirestore && auth.currentUser) {
+    // PRIORIDADE 1: Firestore (se autenticado e online)
+    if (useFirestore && auth.currentUser && isOnline) {
       try {
         console.log('🔥 Carregando do Firestore...');
         const [ledgerData, workOrdersData, clientsData, partsData, servicesData] = await Promise.all([
           getAllFromFirestore<LedgerEntry>(COLLECTIONS.financeiro),
           getAllFromFirestore<WorkOrder>(COLLECTIONS.processos),
           getAllFromFirestore<Client>(COLLECTIONS.clientes),
-          getAllFromFirestore<CatalogItem>(COLLECTIONS.oficina + '_parts'),
-          getAllFromFirestore<CatalogItem>(COLLECTIONS.oficina + '_services')
+          getAllFromFirestore<CatalogItem>(COLLECTIONS.oficina),
+          getAllFromFirestore<CatalogItem>(COLLECTIONS.oficina)
         ]);
 
-        return {
+        // Separa peças e serviços (se vierem juntos)
+        const parts = partsData.filter((item: any) => !item.isService);
+        const services = servicesData.filter((item: any) => item.isService);
+
+        const firestoreData = {
           ledger: ledgerData,
           workOrders: workOrdersData,
           clients: clientsData,
-          catalogParts: partsData,
-          catalogServices: servicesData,
+          catalogParts: parts,
+          catalogServices: services,
           settings
         };
-      } catch (e) {
-        console.error("❌ Erro ao carregar do Firestore:", e);
-        // Fallback para LocalStorage
+
+        // Salva no cache local para uso offline
+        localStorage.setItem('oficina_database', JSON.stringify(firestoreData));
+        console.log('✅ Dados carregados do Firestore e cacheados');
+        
+        return firestoreData;
+      } catch (e: any) {
+        console.warn("⚠️ Erro ao carregar do Firestore:", e.message);
+        console.log('🔄 Tentando cache local...');
+        // Fallback para cache local
       }
     }
 
@@ -131,48 +145,51 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           console.log('🖥️ Carregado do Tauri');
           return JSON.parse(data);
         }
-      } catch (e) {
-        console.error("❌ Erro ao carregar banco (Tauri):", e);
+      } catch (e: any) {
+        console.warn("⚠️ Erro ao carregar do Tauri:", e.message);
       }
     }
 
-    // PRIORIDADE 3: LocalStorage (web)
+    // PRIORIDADE 3: LocalStorage (web - cache)
     try {
       const data = localStorage.getItem('oficina_database');
       if (data) {
-        console.log('💾 Carregado do LocalStorage');
+        console.log('💾 Carregado do cache local');
         return JSON.parse(data);
       }
-    } catch (e) {
-      console.error("❌ Erro ao carregar banco (LocalStorage):", e);
+    } catch (e: any) {
+      console.error("❌ Erro ao carregar cache:", e.message);
     }
 
+    console.log('🆕 Nenhum dado encontrado');
     return null;
   };
 
-  // Função para salvar dados (Firestore, Tauri ou LocalStorage)
+  // Função para salvar dados (OTIMIZADA COM BATCH)
   const saveDatabase = async (data: DatabaseSchema): Promise<void> => {
     // SEMPRE salva no LocalStorage como backup
     try {
       localStorage.setItem('oficina_database', JSON.stringify(data));
-    } catch (e) {
-      console.error("❌ Erro ao salvar no LocalStorage:", e);
+    } catch (e: any) {
+      console.error("❌ Erro ao salvar cache:", e.message);
     }
 
-    // Se estiver usando Firestore, salva lá também
-    if (useFirestore && auth.currentUser) {
+    // Se estiver usando Firestore, salva lá também (BATCH)
+    if (useFirestore && auth.currentUser && isOnline && !isSyncingFromFirestore.current) {
       try {
-        // Salva cada coleção separadamente (mais eficiente)
+        console.log('🔄 Sincronizando com Firestore...');
+        
+        // Usa função batch otimizada
         await Promise.all([
-          ...data.ledger.map(item => putInFirestore(COLLECTIONS.financeiro, item)),
-          ...data.workOrders.map(item => putInFirestore(COLLECTIONS.processos, item)),
-          ...data.clients.map(item => putInFirestore(COLLECTIONS.clientes, item)),
-          ...data.catalogParts.map(item => putInFirestore(COLLECTIONS.oficina + '_parts', item)),
-          ...data.catalogServices.map(item => putInFirestore(COLLECTIONS.oficina + '_services', item))
+          saveToFirestore(COLLECTIONS.financeiro, data.ledger),
+          saveToFirestore(COLLECTIONS.processos, data.workOrders),
+          saveToFirestore(COLLECTIONS.clientes, data.clients),
+          saveToFirestore(COLLECTIONS.oficina, [...data.catalogParts, ...data.catalogServices])
         ]);
+        
         console.log('✅ Sincronizado com Firestore');
-      } catch (e) {
-        console.error("❌ Erro ao sincronizar com Firestore:", e);
+      } catch (e: any) {
+        console.error("❌ Erro ao sincronizar:", e.message);
       }
     }
 
@@ -182,8 +199,8 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const { invoke } = await import('@tauri-apps/api/core');
         await invoke('save_database_atomic', { filepath: dbPath, content: JSON.stringify(data) });
         console.log('✅ Salvo no Tauri');
-      } catch (e) {
-        console.error("❌ Erro ao salvar banco (Tauri):", e);
+      } catch (e: any) {
+        console.error("❌ Erro ao salvar no Tauri:", e.message);
       }
     }
   };
@@ -194,7 +211,8 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setIsLoading(true);
       isInitialLoad.current = true;
       
-      console.log(`🔄 Carregando banco... (${useFirestore ? 'Firestore' : isTauri ? 'Tauri' : 'LocalStorage'})`);
+      const mode = useFirestore ? 'Firestore' : isTauri ? 'Tauri' : 'Cache Local';
+      console.log(`🔄 Carregando banco (${mode})...`);
       
       const parsed = await loadDatabase();
       
@@ -205,83 +223,116 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setCatalogParts(parsed.catalogParts || []);
         setCatalogServices(parsed.catalogServices || []);
         setSettings(parsed.settings || settings);
-        console.log('✅ Banco carregado com sucesso!');
+        
+        const total = (parsed.ledger?.length || 0) + (parsed.workOrders?.length || 0) + (parsed.clients?.length || 0);
+        console.log(`✅ Carregados ${total} registros`);
       } else {
-        console.log('🆕 Banco vazio - iniciando com dados padrão');
+        console.log('🆕 Banco vazio - modo inicial');
       }
       
       setIsLoading(false);
       
-      // Aguarda um pouco antes de permitir saves automáticos
+      // Aguarda antes de permitir saves automáticos
       setTimeout(() => {
         isInitialLoad.current = false;
         console.log('✅ Auto-save habilitado');
-      }, 500);
+      }, 1000);
     }
     load();
   }, [useFirestore]);
 
   // Sincronização em tempo real com Firestore
   useEffect(() => {
-    if (!useFirestore || !auth.currentUser) {
+    if (!useFirestore || !auth.currentUser || !isOnline) {
       // Limpa listeners anteriores
       unsubscribeFunctions.current.forEach(unsubscribe => unsubscribe());
       unsubscribeFunctions.current = [];
       return;
     }
 
-    console.log('🔄 Ativando sincronização em tempo real...');
+    console.log('🔄 Ativando listeners em tempo real...');
 
-    // Cria listeners para cada coleção
+    // Listeners para cada coleção
     const unsubscribeLedger = subscribeToCollection<LedgerEntry>(
       COLLECTIONS.financeiro,
-      (data) => setLedger(data)
+      (data) => {
+        isSyncingFromFirestore.current = true;
+        setLedger(data);
+        setTimeout(() => { isSyncingFromFirestore.current = false; }, 100);
+      }
     );
 
     const unsubscribeWorkOrders = subscribeToCollection<WorkOrder>(
       COLLECTIONS.processos,
-      (data) => setWorkOrders(data)
+      (data) => {
+        isSyncingFromFirestore.current = true;
+        setWorkOrders(data);
+        setTimeout(() => { isSyncingFromFirestore.current = false; }, 100);
+      }
     );
 
     const unsubscribeClients = subscribeToCollection<Client>(
       COLLECTIONS.clientes,
-      (data) => setClients(data)
+      (data) => {
+        isSyncingFromFirestore.current = true;
+        setClients(data);
+        setTimeout(() => { isSyncingFromFirestore.current = false; }, 100);
+      }
     );
 
-    // Guarda funções de desinscrever
+    const unsubscribeOfficina = subscribeToCollection<CatalogItem>(
+      COLLECTIONS.oficina,
+      (data) => {
+        isSyncingFromFirestore.current = true;
+        const parts = data.filter((item: any) => !item.isService);
+        const services = data.filter((item: any) => item.isService);
+        setCatalogParts(parts);
+        setCatalogServices(services);
+        setTimeout(() => { isSyncingFromFirestore.current = false; }, 100);
+      }
+    );
+
     unsubscribeFunctions.current = [
       unsubscribeLedger,
       unsubscribeWorkOrders,
-      unsubscribeClients
+      unsubscribeClients,
+      unsubscribeOfficina
     ];
 
-    // Cleanup
     return () => {
       unsubscribeFunctions.current.forEach(unsubscribe => unsubscribe());
       unsubscribeFunctions.current = [];
     };
-  }, [useFirestore]);
+  }, [useFirestore, isOnline]);
 
-  // Auto-Save OTIMIZADO com debounce de 3 segundos
+  // Auto-Save OTIMIZADO com debounce de 2 segundos
   useEffect(() => {
-    // Não salva durante o load inicial
-    if (isInitialLoad.current || isLoading) return;
+    // Não salva durante o load inicial ou sincronização
+    if (isInitialLoad.current || isLoading || isSyncingFromFirestore.current) return;
     
     // Não salva se não houver dados
-    if (workOrders.length === 0 && clients.length === 0 && ledger.length === 0) return;
+    const hasData = workOrders.length > 0 || clients.length > 0 || ledger.length > 0;
+    if (!hasData) return;
 
     // Limpa timeout anterior
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
 
-    // DEBOUNCE: 3 segundos
+    // DEBOUNCE: 2 segundos
     saveTimeoutRef.current = setTimeout(async () => {
       setIsSaving(true);
-      const fullDb: DatabaseSchema = { ledger, workOrders, clients, catalogParts, catalogServices, settings };
+      const fullDb: DatabaseSchema = { 
+        ledger, 
+        workOrders, 
+        clients, 
+        catalogParts, 
+        catalogServices, 
+        settings 
+      };
       await saveDatabase(fullDb);
       setIsSaving(false);
-    }, 3000);
+    }, 2000);
 
     return () => {
       if (saveTimeoutRef.current) {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { WorkOrder, Client, OrderItem, CatalogItem } from '../types';
 import { getLocalDateString } from '../utils/helpers';
+import { MarginIndicator } from '../components/MarginIndicator';
 
 interface OSModalProps {
   isOpen: boolean;
@@ -37,16 +38,16 @@ export const OSModal: React.FC<OSModalProps> = ({
   
   const [parts, setParts] = useState<OrderItem[]>([]);
   const [services, setServices] = useState<OrderItem[]>([]);
-  const [showCostColumn, setShowCostColumn] = useState(false); // 🆕 NOVO
+  const [showCostColumn, setShowCostColumn] = useState(false);
 
   // --- ESTADOS TEMPORÁRIOS ---
-  const [tempPart, setTempPart] = useState({ description: '', price: '', cost: '' }); // 🆕 Adiciona cost
-  const [tempService, setTempService] = useState({ description: '', price: '', cost: '' }); // 🆕 Adiciona cost
+  const [tempPart, setTempPart] = useState({ description: '', price: '', cost: '' });
+  const [tempService, setTempService] = useState({ description: '', price: '', cost: '' });
 
   const toFloat = (val: number) => val / 100;
   const fromFloat = (val: number) => Math.round(val * 100);
 
-  // --- 🆕 CÁLCULOS FINANCEIROS MEMOIZADOS ---
+  // --- CÁLCULOS FINANCEIROS MEMOIZADOS ---
   const partsTotal = useMemo(() => parts.reduce((acc, i) => acc + i.price, 0), [parts]);
   const servicesTotal = useMemo(() => services.reduce((acc, i) => acc + i.price, 0), [services]);
   const partsCost = useMemo(() => parts.reduce((acc, i) => acc + (i.cost || 0), 0), [parts]);
@@ -62,6 +63,27 @@ export const OSModal: React.FC<OSModalProps> = ({
     if (totalCost === 0) return 0;
     return (profit / totalCost) * 100;
   }, [profit, totalCost]);
+
+  // --- Custo e preço dos itens temporários ---
+  const tempPartCost = useMemo(() => {
+    const cost = parseFloat(tempPart.cost.replace(',', '.')) || 0;
+    return fromFloat(cost);
+  }, [tempPart.cost]);
+
+  const tempPartPrice = useMemo(() => {
+    const price = parseFloat(tempPart.price.replace(',', '.')) || 0;
+    return fromFloat(price);
+  }, [tempPart.price]);
+
+  const tempServiceCost = useMemo(() => {
+    const cost = parseFloat(tempService.cost.replace(',', '.')) || 0;
+    return fromFloat(cost);
+  }, [tempService.cost]);
+
+  const tempServicePrice = useMemo(() => {
+    const price = parseFloat(tempService.price.replace(',', '.')) || 0;
+    return fromFloat(price);
+  }, [tempService.price]);
 
   // --- LISTAS OTIMIZADAS ---
   const suggestedParts = useMemo(() => {
@@ -163,7 +185,7 @@ export const OSModal: React.FC<OSModalProps> = ({
         const match = catalog.find(c => c.description.toLowerCase() === (value as string).toLowerCase());
         if (match) {
           newList[index].price = match.price;
-          newList[index].cost = match.cost || 0; // 🆕 Auto-preenche custo
+          newList[index].cost = match.cost || 0;
         }
     }
     setList(newList);
@@ -175,12 +197,12 @@ export const OSModal: React.FC<OSModalProps> = ({
       e.preventDefault();
       if (!tempPart.description) return;
       const priceVal = parseFloat(tempPart.price.replace(',', '.')) || 0;
-      const costVal = parseFloat(tempPart.cost.replace(',', '.')) || 0; // 🆕
+      const costVal = parseFloat(tempPart.cost.replace(',', '.')) || 0;
       const newItem: OrderItem = { 
         id: crypto.randomUUID(), 
         description: tempPart.description, 
         price: fromFloat(priceVal),
-        cost: fromFloat(costVal) // 🆕
+        cost: fromFloat(costVal)
       };
       setParts(prev => [...prev, newItem]);
       setTempPart({ description: '', price: '', cost: '' });
@@ -193,12 +215,12 @@ export const OSModal: React.FC<OSModalProps> = ({
       e.preventDefault();
       if (!tempService.description) return;
       const priceVal = parseFloat(tempService.price.replace(',', '.')) || 0;
-      const costVal = parseFloat(tempService.cost.replace(',', '.')) || 0; // 🆕
+      const costVal = parseFloat(tempService.cost.replace(',', '.')) || 0;
       const newItem: OrderItem = { 
         id: crypto.randomUUID(), 
         description: tempService.description, 
         price: fromFloat(priceVal),
-        cost: fromFloat(costVal) // 🆕
+        cost: fromFloat(costVal)
       };
       setServices(prev => [...prev, newItem]);
       setTempService({ description: '', price: '', cost: '' });
@@ -211,7 +233,7 @@ export const OSModal: React.FC<OSModalProps> = ({
       setTempPart({ 
         description: val, 
         price: match ? (match.price / 100).toString() : tempPart.price,
-        cost: match ? ((match.cost || 0) / 100).toString() : tempPart.cost // 🆕
+        cost: match ? ((match.cost || 0) / 100).toString() : tempPart.cost
       });
   };
 
@@ -220,7 +242,7 @@ export const OSModal: React.FC<OSModalProps> = ({
       setTempService({ 
         description: val, 
         price: match ? (match.price / 100).toString() : tempService.price,
-        cost: match ? ((match.cost || 0) / 100).toString() : tempService.cost // 🆕
+        cost: match ? ((match.cost || 0) / 100).toString() : tempService.cost
       });
   };
 
@@ -386,6 +408,18 @@ export const OSModal: React.FC<OSModalProps> = ({
                         placeholder="Preço" 
                     />
                 </div>
+
+                {/* 🆕 INDICADOR DE MARGEM PARA PEÇA TEMPORÁRIA */}
+                {showCostColumn && tempPart.description && tempPartCost > 0 && (
+                    <MarginIndicator
+                        cost={tempPartCost}
+                        price={tempPartPrice}
+                        formatMoney={formatMoney}
+                        onSuggestedPriceClick={(suggestedPrice) => {
+                            setTempPart({...tempPart, price: (suggestedPrice / 100).toString()});
+                        }}
+                    />
+                )}
                 
                 <div style={{maxHeight: 250, overflowY: 'auto'}}>
                     {parts.map((p, i) => (
@@ -486,6 +520,18 @@ export const OSModal: React.FC<OSModalProps> = ({
                         placeholder="Preço" 
                     />
                 </div>
+
+                {/* 🆕 INDICADOR DE MARGEM PARA SERVIÇO TEMPORÁRIO */}
+                {showCostColumn && tempService.description && tempServiceCost > 0 && (
+                    <MarginIndicator
+                        cost={tempServiceCost}
+                        price={tempServicePrice}
+                        formatMoney={formatMoney}
+                        onSuggestedPriceClick={(suggestedPrice) => {
+                            setTempService({...tempService, price: (suggestedPrice / 100).toString()});
+                        }}
+                    />
+                )}
                 
                 <div style={{maxHeight: 250, overflowY: 'auto'}}>
                     {services.map((s, i) => (
@@ -530,7 +576,7 @@ export const OSModal: React.FC<OSModalProps> = ({
             </div>
         </div>
 
-        {/* 🆕 ANÁLISE FINANCEIRA / HUB DE ROI */}
+        {/* ANÁLISE FINANCEIRA / HUB DE ROI */}
         {showCostColumn && (
             <div style={{ 
                 marginTop: 20, 

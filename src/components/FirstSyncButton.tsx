@@ -1,11 +1,12 @@
 /**
  * FirstSyncButton.tsx
  * Botão para fazer a primeira sincronização de dados locais para o Firestore
+ * OTIMIZADO com batches paralelos
  */
 
 import React, { useState, useEffect } from 'react';
 import { useDatabase } from '../context/DatabaseContext';
-import { saveToFirestore, COLLECTIONS } from '../services/firestoreService';
+import { syncAllCollections, COLLECTIONS } from '../services/firestoreService';
 import { auth } from '../config/firebase';
 import './FirstSyncButton.css';
 
@@ -49,7 +50,6 @@ export function FirstSyncButton() {
     console.log('='.repeat(60) + '\n');
   }, [hasSynced, hasDeclined, useFirestore, totalItems]);
 
-  // 🆕 NOVA FUNÇÃO: Recusar sincronização
   const handleDecline = () => {
     localStorage.setItem('firstSyncDeclined', 'true');
     setHasDeclined(true);
@@ -58,6 +58,7 @@ export function FirstSyncButton() {
 
   const shouldShow = !hasSynced && !hasDeclined && useFirestore && totalItems > 0;
 
+  // 🚀 OTIMIZADO: Usa syncAllCollections paralelo
   const handleSync = async () => {
     if (!auth.currentUser) {
       setSyncStatus('error');
@@ -67,12 +68,9 @@ export function FirstSyncButton() {
 
     setIsSyncing(true);
     setSyncStatus('syncing');
-    setSyncMessage('🔄 Enviando dados para a nuvem...');
+    setSyncMessage('🚀 Iniciando sincronização paralela...');
 
     try {
-      console.log('\n🚀 PRIMEIRA SINCRONIZAÇÃO INICIADA');
-      console.log('='.repeat(60));
-
       const collections = [
         { name: 'Financeiro', collection: COLLECTIONS.financeiro, data: ledger },
         { name: 'Processos (OSs)', collection: COLLECTIONS.processos, data: workOrders },
@@ -80,27 +78,19 @@ export function FirstSyncButton() {
         { name: 'Catálogo', collection: COLLECTIONS.oficina, data: [...catalogParts, ...catalogServices] }
       ];
 
-      let totalSynced = 0;
-
-      for (const { name, collection, data } of collections) {
-        if (data.length > 0) {
-          console.log(`📂 Sincronizando ${name}: ${data.length} itens...`);
-          setSyncMessage(`🔄 Enviando ${name}...`);
-          
-          await saveToFirestore(collection, data);
-          totalSynced += data.length;
-          
-          console.log(`  ✅ ${name} sincronizado!`);
+      // 🚀 Sincronização PARALELA com progresso
+      await syncAllCollections(
+        collections,
+        (collectionName, current, total) => {
+          const percent = Math.round((current / total) * 100);
+          setSyncMessage(`🔄 ${collectionName}: ${current}/${total} (${percent}%)`);
         }
-      }
-
-      console.log('='.repeat(60));
-      console.log(`✅ SINCRONIZAÇÃO CONCLUÍDA: ${totalSynced} itens enviados\n`);
+      );
 
       localStorage.setItem('firstSyncCompleted', 'true');
       setHasSynced(true);
       setSyncStatus('success');
-      setSyncMessage(`✅ ${totalSynced} itens sincronizados com sucesso!`);
+      setSyncMessage(`✅ ${totalItems} itens sincronizados com sucesso!`);
 
       setTimeout(() => {
         setSyncStatus('idle');
@@ -122,7 +112,6 @@ export function FirstSyncButton() {
   return (
     <div className="first-sync-container">
       <div className="first-sync-card">
-        {/* 🆕 BOTÃO DE FECHAR */}
         <button 
           className="first-sync-close"
           onClick={handleDecline}
@@ -177,13 +166,13 @@ export function FirstSyncButton() {
             </>
           ) : (
             <>
-              🚀 Enviar para Nuvem
+              ⚡ Sincronização Rápida
             </>
           )}
         </button>
 
         <p className="first-sync-note">
-          <small>⚠️ Isso só precisa ser feito uma vez! Use Configurações depois.</small>
+          <small>⚡ Sincronização paralela otimizada! Use Configurações depois.</small>
         </p>
       </div>
     </div>

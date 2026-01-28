@@ -4,22 +4,28 @@
  */
 
 import { useEffect } from 'react';
-import { migrateAllToFirestore, compareData, resetFirestore, checkFirestoreData } from '../utils/migrateToFirestore';
 
 export function useMigrationTools() {
   useEffect(() => {
-    // Disponibilizar funções no window global
+    // Disponibilizar informações sobre migração
     if (typeof window !== 'undefined') {
-      (window as any).migrateToFirestore = migrateAllToFirestore;
-      (window as any).compareData = compareData;
-      (window as any).resetFirestore = resetFirestore;
-      (window as any).checkFirestoreData = checkFirestoreData;
-
-      console.log('%c🔧 FERRAMENTAS DE MIGRAÇÃO DISPONÍVEIS', 'color: #8B5CF6; font-weight: bold; font-size: 14px');
-      console.log('%c• window.migrateToFirestore()%c - Migra todos os dados do IndexedDB para Firestore', 'color: #10B981; font-weight: bold', 'color: #6B7280');
-      console.log('%c• window.compareData()%c - Compara dados entre IndexedDB e Firestore', 'color: #10B981; font-weight: bold', 'color: #6B7280');
-      console.log('%c• window.checkFirestoreData()%c - Verifica quantidade de dados no Firestore', 'color: #10B981; font-weight: bold', 'color: #6B7280');
-      console.log('%c• window.resetFirestore()%c - PERIGO: Limpa TODOS os dados do Firestore', 'color: #EF4444; font-weight: bold', 'color: #6B7280');
+      console.log('%c🔥 FIREBASE FIRESTORE DISPONÍVEL', 'color: #FF6B35; font-weight: bold; font-size: 16px');
+      console.log('%c✅ Serviços criados:', 'color: #4ECDC4; font-weight: bold');
+      console.log('  • src/config/firebase.ts');
+      console.log('  • src/services/firestoreService.ts');
+      console.log('');
+      console.log('%c📚 Documentação:', 'color: #FFE66D; font-weight: bold');
+      console.log('  • docs/FIREBASE_MIGRATION.md');
+      console.log('  • .env.example (template de configuração)');
+      console.log('');
+      console.log('%c🚀 Próximos Passos:', 'color: #95E1D3; font-weight: bold');
+      console.log('  1. npm install firebase');
+      console.log('  2. Configure .env com credenciais do Firebase');
+      console.log('  3. Atualize imports para usar firestoreService');
+      console.log('');
+      console.log('%c💬 Exemplo de uso:', 'color: #A8E6CF; font-weight: bold');
+      console.log('  import * as db from "./services/firestoreService";');
+      console.log('  await db.getAllFromFirestore("processos");');
       console.log('');
     }
   }, []);

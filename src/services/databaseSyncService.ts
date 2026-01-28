@@ -5,9 +5,11 @@ import {
   setDoc, 
   deleteDoc,
   query,
+  where,
   writeBatch,
   onSnapshot,
-  Unsubscribe
+  Unsubscribe,
+  Timestamp
 } from 'firebase/firestore';
 import { 
   reauthenticateWithCredential, 
@@ -35,14 +37,28 @@ interface LocalDatabase {
 export type SyncStatus = 'idle' | 'syncing' | 'success' | 'error' | 'offline';
 
 /**
- * Serviço de sincronização de banco de dados
- * Gerencia sincronização bidirecional entre LocalStorage e Firestore
+ * Constantes de otimização
+ */
+const BATCH_SIZE = 500; // Limite do Firestore
+const DEBOUNCE_DELAY = 3000; // 3 segundos
+const SYNC_METADATA_KEY = 'oficina-erp-sync-metadata';
+
+/**
+ * 🚀 OTIMIZADO: Serviço de sincronização de banco de dados
+ * 
+ * MELHORIAS IMPLEMENTADAS:
+ * ✅ Sync Incremental: Queries com where('updatedAt', '>', lastSyncTime)
+ * ✅ Batching: Chunks de 500 documentos
+ * ✅ Debounce: Agrupa mudanças por 3 segundos
+ * ✅ Hash: Compara conteúdo antes de gravar
  */
 export class DatabaseSyncService {
   private userId: string;
   private localStorageKey = 'oficina-erp-database';
   private listeners: Unsubscribe[] = [];
   private onStatusChange?: (status: SyncStatus, message?: string) => void;
+  private debounceTimers: Map<string, NodeJS.Timeout> = new Map();
+  private pendingUpdates: Map<string, any[]> = new Map();
 
   constructor(userId: string) {
     this.userId = userId;
@@ -65,39 +81,98 @@ export class DatabaseSyncService {
   }
 
   /**
-   * Sincroniza dados no primeiro login
+   * 🔧 NOVO: Calcula hash SHA-256 de um objeto
+   */
+  private async hashObject(obj: any): Promise<string> {
+    const str = JSON.stringify(obj, Object.keys(obj).sort());
+    const encoder = new TextEncoder();
+    const data = encoder.encode(str);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  /**
+   * 🔧 NOVO: Divide array em chunks
+   */
+  private chunkArray<T>(array: T[], size: number): T[][] {
+    const chunks: T[][] = [];
+    for (let i = 0; i < array.length; i += size) {
+      chunks.push(array.slice(i, i + size));
+    }
+    return chunks;
+  }
+
+  /**
+   * 🔧 NOVO: Obtém timestamp da última sincronização
+   */
+  private getLastSyncTimestamp(): string | null {
+    try {
+      const metadata = localStorage.getItem(SYNC_METADATA_KEY);
+      if (metadata) {
+        const parsed = JSON.parse(metadata);
+        return parsed.lastSync || null;
+      }
+    } catch (error) {
+      console.error('❌ Erro ao ler metadata de sync:', error);
+    }
+    return null;
+  }
+
+  /**
+   * 🔧 NOVO: Salva timestamp da última sincronização
+   */
+  private saveLastSyncTimestamp(): void {
+    try {
+      const metadata = {
+        lastSync: new Date().toISOString(),
+        userId: this.userId
+      };
+      localStorage.setItem(SYNC_METADATA_KEY, JSON.stringify(metadata));
+    } catch (error) {
+      console.error('❌ Erro ao salvar metadata de sync:', error);
+    }
+  }
+
+  /**
+   * 🚀 OTIMIZADO: Sincroniza dados no primeiro login
    */
   async syncOnFirstLogin(): Promise<void> {
     this.updateStatus('syncing', 'Verificando dados...');
     
     try {
       const localData = this.getLocalData();
-      const firestoreData = await this.downloadFromFirestore();
+      const lastSync = this.getLastSyncTimestamp();
 
-      // Se não há dados no Firestore mas há dados locais, fazer upload
-      if (this.isFirestoreEmpty(firestoreData) && this.hasLocalData(localData)) {
-        console.log('🔼 Migrando dados locais para Firebase...');
-        this.updateStatus('syncing', 'Enviando dados locais para nuvem...');
-        await this.uploadToFirestore(localData);
-        localData.lastSync = new Date().toISOString();
-        this.saveLocalData(localData);
-        this.updateStatus('success', 'Dados migrados para nuvem!');
-      } 
-      // Se há dados no Firestore, fazer download
-      else if (!this.isFirestoreEmpty(firestoreData)) {
-        console.log('🔽 Baixando dados do Firebase...');
-        this.updateStatus('syncing', 'Baixando dados da nuvem...');
-        await this.saveFirestoreDataLocally(firestoreData);
-        this.updateStatus('success', 'Dados sincronizados!');
-      }
-      // Se não há dados em lugar nenhum, inicializar vazio
-      else {
-        console.log('📝 Inicializando banco de dados...');
-        this.updateStatus('success', 'Banco de dados inicializado!');
+      // Se há timestamp de sync, fazer sincronização incremental
+      if (lastSync) {
+        console.log('🔄 Sincronização incremental desde:', lastSync);
+        await this.incrementalSync(lastSync);
+      } else {
+        // Primeira sincronização completa
+        const firestoreData = await this.downloadFromFirestore();
+
+        if (this.isFirestoreEmpty(firestoreData) && this.hasLocalData(localData)) {
+          console.log('🔼 Migrando dados locais para Firebase...');
+          this.updateStatus('syncing', 'Enviando dados locais para nuvem...');
+          await this.uploadToFirestoreOptimized(localData);
+          this.saveLastSyncTimestamp();
+          this.updateStatus('success', 'Dados migrados para nuvem!');
+        } else if (!this.isFirestoreEmpty(firestoreData)) {
+          console.log('🔽 Baixando dados do Firebase...');
+          this.updateStatus('syncing', 'Baixando dados da nuvem...');
+          await this.saveFirestoreDataLocally(firestoreData);
+          this.saveLastSyncTimestamp();
+          this.updateStatus('success', 'Dados sincronizados!');
+        } else {
+          console.log('📝 Inicializando banco de dados...');
+          this.saveLastSyncTimestamp();
+          this.updateStatus('success', 'Banco de dados inicializado!');
+        }
       }
 
-      // Configurar listeners em tempo real
-      this.setupRealtimeListeners();
+      // Configurar listeners otimizados
+      this.setupOptimizedListeners();
     } catch (error: any) {
       console.error('❌ Erro na sincronização:', error);
       this.updateStatus('error', error.message || 'Erro na sincronização');
@@ -106,112 +181,162 @@ export class DatabaseSyncService {
   }
 
   /**
-   * Faz upload de dados locais para Firestore
+   * 🚀 NOVO: Sincronização incremental
    */
-  private async uploadToFirestore(localData: LocalDatabase): Promise<void> {
-    const batch = writeBatch(db);
-    let count = 0;
+  private async incrementalSync(lastSync: string): Promise<void> {
+    this.updateStatus('syncing', 'Sincronizando mudanças...');
+    
+    const collections = [
+      { name: 'clients', key: 'clients' as keyof LocalDatabase },
+      { name: 'workOrders', key: 'workOrders' as keyof LocalDatabase },
+      { name: 'ledger', key: 'ledger' as keyof LocalDatabase },
+      { name: 'catalogParts', key: 'catalogParts' as keyof LocalDatabase },
+      { name: 'catalogServices', key: 'catalogServices' as keyof LocalDatabase }
+    ];
 
-    // Upload de clientes
-    for (const client of localData.clients || []) {
-      const clientRef = doc(db, `users/${this.userId}/clients`, client.id);
-      batch.set(clientRef, {
-        ...client,
-        syncedAt: new Date().toISOString()
-      });
-      count++;
+    let totalUpdated = 0;
+
+    for (const { name, key } of collections) {
+      try {
+        const q = query(
+          collection(db, `users/${this.userId}/${name}`),
+          where('updatedAt', '>', lastSync)
+        );
+        
+        const snapshot = await getDocs(q);
+        
+        if (!snapshot.empty) {
+          const updates = snapshot.docs.map(doc => ({ 
+            id: doc.id, 
+            ...doc.data() 
+          }));
+          
+          console.log(`📥 ${name}: ${updates.length} mudanças detectadas`);
+          await this.mergeUpdatesLocally(key, updates);
+          totalUpdated += updates.length;
+        }
+      } catch (error) {
+        console.error(`❌ Erro na sync incremental de ${name}:`, error);
+      }
     }
 
-    // Upload de ordens de serviço
-    for (const workOrder of localData.workOrders || []) {
-      const workOrderRef = doc(db, `users/${this.userId}/workOrders`, workOrder.id);
-      batch.set(workOrderRef, {
-        ...workOrder,
-        syncedAt: new Date().toISOString()
-      });
-      count++;
+    this.saveLastSyncTimestamp();
+    
+    if (totalUpdated > 0) {
+      console.log(`✅ ${totalUpdated} documentos atualizados`);
+      this.updateStatus('success', `${totalUpdated} itens atualizados!`);
+    } else {
+      console.log('✅ Dados já atualizados');
+      this.updateStatus('success', 'Dados atualizados!');
     }
-
-    // Upload de lançamentos financeiros
-    for (const entry of localData.ledger || []) {
-      const ledgerRef = doc(db, `users/${this.userId}/ledger`, entry.id);
-      batch.set(ledgerRef, {
-        ...entry,
-        syncedAt: new Date().toISOString()
-      });
-      count++;
-    }
-
-    // Upload de peças do catálogo
-    for (const part of localData.catalogParts || []) {
-      const partRef = doc(db, `users/${this.userId}/catalogParts`, part.id);
-      batch.set(partRef, {
-        ...part,
-        syncedAt: new Date().toISOString()
-      });
-      count++;
-    }
-
-    // Upload de serviços do catálogo
-    for (const service of localData.catalogServices || []) {
-      const serviceRef = doc(db, `users/${this.userId}/catalogServices`, service.id);
-      batch.set(serviceRef, {
-        ...service,
-        syncedAt: new Date().toISOString()
-      });
-      count++;
-    }
-
-    // Upload de configurações
-    if (localData.settings) {
-      const settingsRef = doc(db, `users/${this.userId}/settings`, 'preferences');
-      batch.set(settingsRef, {
-        ...localData.settings,
-        syncedAt: new Date().toISOString()
-      });
-      count++;
-    }
-
-    await batch.commit();
-    console.log(`✅ ${count} documentos enviados para Firebase`);
   }
 
   /**
-   * Faz download de dados do Firestore
+   * 🔧 NOVO: Mescla atualizações localmente
+   */
+  private async mergeUpdatesLocally<K extends keyof LocalDatabase>(
+    collectionKey: K,
+    updates: any[]
+  ): Promise<void> {
+    const localData = this.getLocalData();
+    const currentData = localData[collectionKey] as any[];
+    
+    // Criar mapa por ID para eficiência
+    const dataMap = new Map(currentData.map(item => [item.id, item]));
+    
+    // Aplicar atualizações
+    for (const update of updates) {
+      dataMap.set(update.id, update);
+    }
+    
+    // Atualizar coleção
+    localData[collectionKey] = Array.from(dataMap.values()) as any;
+    localData.lastSync = new Date().toISOString();
+    
+    this.saveLocalData(localData);
+  }
+
+  /**
+   * 🚀 OTIMIZADO: Upload com batching
+   */
+  private async uploadToFirestoreOptimized(localData: LocalDatabase): Promise<void> {
+    const collections = [
+      { name: 'clients', data: localData.clients || [] },
+      { name: 'workOrders', data: localData.workOrders || [] },
+      { name: 'ledger', data: localData.ledger || [] },
+      { name: 'catalogParts', data: localData.catalogParts || [] },
+      { name: 'catalogServices', data: localData.catalogServices || [] }
+    ];
+
+    let totalUploaded = 0;
+
+    for (const { name, data } of collections) {
+      if (data.length === 0) continue;
+
+      console.log(`📤 Enviando ${data.length} ${name}...`);
+      
+      // Dividir em chunks de 500
+      const chunks = this.chunkArray(data, BATCH_SIZE);
+      
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        const batch = writeBatch(db);
+        
+        for (const item of chunk) {
+          const docRef = doc(db, `users/${this.userId}/${name}`, item.id);
+          batch.set(docRef, {
+            ...item,
+            updatedAt: Timestamp.now().toDate().toISOString(),
+            syncedAt: new Date().toISOString()
+          });
+        }
+        
+        await batch.commit();
+        totalUploaded += chunk.length;
+        
+        const progress = Math.round((totalUploaded / data.length) * 100);
+        this.updateStatus('syncing', `Enviando ${name}: ${progress}%`);
+      }
+      
+      console.log(`✅ ${data.length} ${name} enviados`);
+    }
+
+    // Upload de configurações (único documento)
+    if (localData.settings) {
+      const settingsRef = doc(db, `users/${this.userId}/settings`, 'preferences');
+      await setDoc(settingsRef, {
+        ...localData.settings,
+        updatedAt: Timestamp.now().toDate().toISOString(),
+        syncedAt: new Date().toISOString()
+      });
+      totalUploaded++;
+    }
+
+    console.log(`✅ Total: ${totalUploaded} documentos enviados`);
+  }
+
+  /**
+   * Faz download de dados do Firestore (mantido para compatibilidade)
    */
   private async downloadFromFirestore(): Promise<Partial<LocalDatabase>> {
     const data: Partial<LocalDatabase> = {};
 
     try {
-      // Download de clientes
-      const clientsSnapshot = await getDocs(
-        collection(db, `users/${this.userId}/clients`)
-      );
-      data.clients = clientsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client));
+      const collections = [
+        { name: 'clients', key: 'clients' as keyof LocalDatabase },
+        { name: 'workOrders', key: 'workOrders' as keyof LocalDatabase },
+        { name: 'ledger', key: 'ledger' as keyof LocalDatabase },
+        { name: 'catalogParts', key: 'catalogParts' as keyof LocalDatabase },
+        { name: 'catalogServices', key: 'catalogServices' as keyof LocalDatabase }
+      ];
 
-      // Download de ordens de serviço
-      const workOrdersSnapshot = await getDocs(
-        collection(db, `users/${this.userId}/workOrders`)
-      );
-      data.workOrders = workOrdersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WorkOrder));
-
-      // Download de lançamentos financeiros
-      const ledgerSnapshot = await getDocs(
-        collection(db, `users/${this.userId}/ledger`)
-      );
-      data.ledger = ledgerSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LedgerEntry));
-
-      // Download de peças do catálogo
-      const catalogPartsSnapshot = await getDocs(
-        collection(db, `users/${this.userId}/catalogParts`)
-      );
-      data.catalogParts = catalogPartsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CatalogItem));
-
-      // Download de serviços do catálogo
-      const catalogServicesSnapshot = await getDocs(
-        collection(db, `users/${this.userId}/catalogServices`)
-      );
-      data.catalogServices = catalogServicesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CatalogItem));
+      for (const { name, key } of collections) {
+        const snapshot = await getDocs(collection(db, `users/${this.userId}/${name}`));
+        data[key] = snapshot.docs.map(doc => ({ 
+          id: doc.id, 
+          ...doc.data() 
+        })) as any;
+      }
 
       // Download de configurações
       const settingsSnapshot = await getDocs(
@@ -257,64 +382,90 @@ export class DatabaseSyncService {
   }
 
   /**
-   * Configura listeners em tempo real
+   * 🚀 OTIMIZADO: Listeners com debounce e hash
    */
-  private setupRealtimeListeners(): void {
-    console.log('👂 Configurando listeners em tempo real...');
+  private setupOptimizedListeners(): void {
+    console.log('👂 Configurando listeners otimizados...');
 
-    // Listener para clientes
-    const clientsListener = onSnapshot(
-      collection(db, `users/${this.userId}/clients`),
-      (snapshot) => {
-        const clients = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client));
-        this.updateLocalCollection('clients', clients);
-        console.log('🔄 Clientes atualizados:', clients.length);
-      },
-      (error) => {
-        console.error('❌ Erro no listener de clientes:', error);
-        this.updateStatus('error', 'Erro na sincronização de clientes');
-      }
-    );
+    const collections = [
+      { name: 'clients', key: 'clients' as keyof LocalDatabase },
+      { name: 'workOrders', key: 'workOrders' as keyof LocalDatabase },
+      { name: 'ledger', key: 'ledger' as keyof LocalDatabase }
+    ];
 
-    // Listener para ordens de serviço
-    const workOrdersListener = onSnapshot(
-      collection(db, `users/${this.userId}/workOrders`),
-      (snapshot) => {
-        const workOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WorkOrder));
-        this.updateLocalCollection('workOrders', workOrders);
-        console.log('🔄 Ordens de serviço atualizadas:', workOrders.length);
-      },
-      (error) => {
-        console.error('❌ Erro no listener de ordens:', error);
-        this.updateStatus('error', 'Erro na sincronização de ordens');
-      }
-    );
-
-    // Listener para lançamentos financeiros
-    const ledgerListener = onSnapshot(
-      collection(db, `users/${this.userId}/ledger`),
-      (snapshot) => {
-        const ledger = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LedgerEntry));
-        this.updateLocalCollection('ledger', ledger);
-        console.log('🔄 Lançamentos atualizados:', ledger.length);
-      },
-      (error) => {
-        console.error('❌ Erro no listener de lançamentos:', error);
-        this.updateStatus('error', 'Erro na sincronização financeira');
-      }
-    );
-
-    this.listeners.push(clientsListener, workOrdersListener, ledgerListener);
+    for (const { name, key } of collections) {
+      const listener = onSnapshot(
+        collection(db, `users/${this.userId}/${name}`),
+        (snapshot) => {
+          // Coletar mudanças
+          const changes = snapshot.docs.map(doc => ({ 
+            id: doc.id, 
+            ...doc.data() 
+          }));
+          
+          // Adicionar ao buffer de atualizações pendentes
+          this.pendingUpdates.set(key, changes);
+          
+          // Cancelar timer anterior se existir
+          if (this.debounceTimers.has(key)) {
+            clearTimeout(this.debounceTimers.get(key)!);
+          }
+          
+          // Criar novo timer de debounce
+          const timer = setTimeout(async () => {
+            const pendingData = this.pendingUpdates.get(key);
+            if (pendingData) {
+              await this.processUpdatesWithHash(key, pendingData);
+              this.pendingUpdates.delete(key);
+            }
+            this.debounceTimers.delete(key);
+          }, DEBOUNCE_DELAY);
+          
+          this.debounceTimers.set(key, timer);
+        },
+        (error) => {
+          console.error(`❌ Erro no listener de ${name}:`, error);
+          this.updateStatus('error', `Erro na sincronização de ${name}`);
+        }
+      );
+      
+      this.listeners.push(listener);
+    }
   }
 
   /**
-   * Reseta banco de dados com reautenticação
+   * 🔧 NOVO: Processa atualizações com verificação de hash
+   */
+  private async processUpdatesWithHash<K extends keyof LocalDatabase>(
+    collectionKey: K,
+    newData: any[]
+  ): Promise<void> {
+    const localData = this.getLocalData();
+    const currentData = localData[collectionKey] as any[];
+    
+    // Calcular hash dos dados atuais
+    const currentHash = await this.hashObject(currentData);
+    const newHash = await this.hashObject(newData);
+    
+    // Só atualizar se os dados mudaram
+    if (currentHash !== newHash) {
+      localData[collectionKey] = newData as any;
+      localData.lastSync = new Date().toISOString();
+      this.saveLocalData(localData);
+      
+      console.log(`🔄 ${collectionKey} atualizados: ${newData.length} itens`);
+    } else {
+      console.log(`⏭️ ${collectionKey} sem mudanças (hash idêntico)`);
+    }
+  }
+
+  /**
+   * 🚀 OTIMIZADO: Reseta banco com batching
    */
   async resetDatabase(password: string): Promise<boolean> {
     try {
       this.updateStatus('syncing', 'Validando senha...');
 
-      // Reautenticar usuário
       const user = auth.currentUser;
       if (!user || !user.email) {
         throw new Error('Usuário não autenticado');
@@ -325,51 +476,30 @@ export class DatabaseSyncService {
 
       this.updateStatus('syncing', 'Deletando dados...');
 
-      // Deletar todos os dados do Firestore
-      const batch = writeBatch(db);
-      let count = 0;
+      const collections = ['clients', 'workOrders', 'ledger', 'catalogParts', 'catalogServices'];
+      let totalDeleted = 0;
 
-      // Deletar clientes
-      const clientsSnapshot = await getDocs(collection(db, `users/${this.userId}/clients`));
-      clientsSnapshot.docs.forEach(doc => {
-        batch.delete(doc.ref);
-        count++;
-      });
+      for (const collectionName of collections) {
+        const snapshot = await getDocs(collection(db, `users/${this.userId}/${collectionName}`));
+        
+        if (snapshot.empty) continue;
+        
+        // Dividir em chunks
+        const chunks = this.chunkArray(snapshot.docs, BATCH_SIZE);
+        
+        for (const chunk of chunks) {
+          const batch = writeBatch(db);
+          chunk.forEach(doc => batch.delete(doc.ref));
+          await batch.commit();
+          totalDeleted += chunk.length;
+        }
+      }
 
-      // Deletar ordens de serviço
-      const workOrdersSnapshot = await getDocs(collection(db, `users/${this.userId}/workOrders`));
-      workOrdersSnapshot.docs.forEach(doc => {
-        batch.delete(doc.ref);
-        count++;
-      });
-
-      // Deletar lançamentos financeiros
-      const ledgerSnapshot = await getDocs(collection(db, `users/${this.userId}/ledger`));
-      ledgerSnapshot.docs.forEach(doc => {
-        batch.delete(doc.ref);
-        count++;
-      });
-
-      // Deletar catálogo de peças
-      const catalogPartsSnapshot = await getDocs(collection(db, `users/${this.userId}/catalogParts`));
-      catalogPartsSnapshot.docs.forEach(doc => {
-        batch.delete(doc.ref);
-        count++;
-      });
-
-      // Deletar catálogo de serviços
-      const catalogServicesSnapshot = await getDocs(collection(db, `users/${this.userId}/catalogServices`));
-      catalogServicesSnapshot.docs.forEach(doc => {
-        batch.delete(doc.ref);
-        count++;
-      });
-
-      await batch.commit();
-
-      // Limpar dados locais
+      // Limpar dados locais e metadata
       localStorage.removeItem(this.localStorageKey);
+      localStorage.removeItem(SYNC_METADATA_KEY);
 
-      console.log(`🗑️ ${count} documentos deletados`);
+      console.log(`🗑️ ${totalDeleted} documentos deletados`);
       this.updateStatus('success', 'Banco de dados resetado!');
       return true;
     } catch (error: any) {
@@ -384,12 +514,21 @@ export class DatabaseSyncService {
   }
 
   /**
-   * Limpa listeners ao destruir serviço
+   * Limpa listeners e timers
    */
   cleanup(): void {
+    // Limpar listeners
     this.listeners.forEach(unsubscribe => unsubscribe());
     this.listeners = [];
-    console.log('🧹 Listeners removidos');
+    
+    // Limpar timers de debounce
+    this.debounceTimers.forEach(timer => clearTimeout(timer));
+    this.debounceTimers.clear();
+    
+    // Limpar updates pendentes
+    this.pendingUpdates.clear();
+    
+    console.log('🧹 Recursos liberados');
   }
 
   // ===== MÉTODOS AUXILIARES =====

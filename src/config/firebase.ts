@@ -1,11 +1,12 @@
 /**
  * firebase.ts
- * Configuração do Firebase para Firestore e Auth
+ * Configuração do Firebase para Firestore, Auth e Storage
  */
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, enableIndexedDbPersistence } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+import { getStorage } from 'firebase/storage';
 
 // Configuração do Firebase
 // IMPORTANTE: Substitua com suas credenciais do Firebase Console
@@ -36,6 +37,9 @@ const db = getFirestore(app);
 // Inicializa o Auth
 const auth = getAuth(app);
 
+// 🆕 Inicializa o Storage (para backups rápidos)
+const storage = getStorage(app);
+
 // Habilita persistência offline (cache local) - apenas uma vez
 if (!getApps().some(a => a.name === '[DEFAULT]' && (a as any)._persistenceEnabled)) {
   try {
@@ -56,4 +60,4 @@ if (!getApps().some(a => a.name === '[DEFAULT]' && (a as any)._persistenceEnable
   }
 }
 
-export { app, db, auth };
+export { app, db, auth, storage };

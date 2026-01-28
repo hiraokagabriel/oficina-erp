@@ -8,7 +8,8 @@ import { updateClientCascading, updateCatalogItemCascading } from './services/ca
 import { uploadToDrive } from './services/googleDrive';
 import { Sidebar } from './components/Sidebar';
 import { Confetti } from './components/ui/Confetti';
-import { SyncStatus } from './components/SyncStatus'; // 🔧 CORRIGIDO
+import { SyncStatus } from './components/SyncStatus';
+import { FirstSyncButton } from './components/FirstSyncButton'; // 🆕 NOVO
 import { PrintableInvoice } from './components/PrintableInvoice';
 import { ToastContainer, ToastMessage, ToastType } from './components/ui/ToastContainer';
 import { LoadingSkeleton } from './components/ui/LoadingSkeleton';
@@ -564,7 +565,8 @@ function AppContent() {
     <>
       {showConfetti && <Confetti />}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
-      <SyncStatus /> {/* 🆕 INDICADOR DE SINCRONIZAÇÃO */}
+      <SyncStatus />
+      <FirstSyncButton /> {/* 🆕 BOTÃO DE PRIMEIRA SYNC */}
 
       <div className="app-container">
         <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />

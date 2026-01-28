@@ -2,6 +2,11 @@
  * firestoreService.ts
  * Gerenciamento de dados usando Firebase Firestore
  * Substitui o IndexedDB com sincronização na nuvem
+ * 
+ * OTIMIZAÇÕES:
+ * - Batches paralelos (até 3 simultâneos)
+ * - Chunking inteligente (500 docs por batch)
+ * - Progress callbacks
  */
 
 import {
@@ -33,6 +38,10 @@ export const COLLECTIONS = {
   metadata: 'metadata'
 };
 
+// 🔥 CONSTANTES DE PERFORMANCE
+const BATCH_SIZE = 500; // Limite do Firestore
+const MAX_CONCURRENT_BATCHES = 3; // Batches simultâneos
+
 /**
  * Obtém o ID do usuário autenticado
  */
@@ -53,30 +62,109 @@ function getUserCollectionPath(collectionName: string): string {
 }
 
 /**
- * Salva múltiplos documentos em uma coleção (sobrescreve)
+ * 🚀 OTIMIZADO: Salva múltiplos documentos com batches paralelos
+ * 
+ * PERFORMANCE:
+ * - Divide em chunks de 500 (limite do Firestore)
+ * - Processa até 3 batches simultaneamente
+ * - Callback de progresso opcional
+ * 
+ * @param collectionName Nome da coleção
+ * @param data Array de documentos
+ * @param onProgress Callback opcional (current, total)
  */
-export async function saveToFirestore<T extends { id?: string }>(collectionName: string, data: T[]): Promise<void> {
+export async function saveToFirestore<T extends { id?: string }>(
+  collectionName: string, 
+  data: T[],
+  onProgress?: (current: number, total: number) => void
+): Promise<void> {
+  if (data.length === 0) return;
+
   try {
     const collectionPath = getUserCollectionPath(collectionName);
-    const batch = writeBatch(db);
+    const total = data.length;
+    let processed = 0;
 
-    data.forEach((item) => {
-      const id = item.id || doc(collection(db, collectionPath)).id;
-      const docRef = doc(db, collectionPath, id);
-      batch.set(docRef, {
-        ...item,
-        id,
-        updatedAt: Timestamp.now(),
-        userId: getUserId()
-      });
-    });
+    // Dividir em chunks de 500
+    const chunks: T[][] = [];
+    for (let i = 0; i < data.length; i += BATCH_SIZE) {
+      chunks.push(data.slice(i, i + BATCH_SIZE));
+    }
 
-    await batch.commit();
-    console.log(`✅ ${data.length} itens salvos em ${collectionName}`);
+    console.log(`🚀 Sincronizando ${total} itens em ${chunks.length} batch(es)...`);
+
+    // Processar chunks em paralelo (máximo 3 simultâneos)
+    for (let i = 0; i < chunks.length; i += MAX_CONCURRENT_BATCHES) {
+      const batchGroup = chunks.slice(i, i + MAX_CONCURRENT_BATCHES);
+      
+      await Promise.all(
+        batchGroup.map(async (chunk) => {
+          const batch = writeBatch(db);
+          
+          chunk.forEach((item) => {
+            const id = item.id || doc(collection(db, collectionPath)).id;
+            const docRef = doc(db, collectionPath, id);
+            batch.set(docRef, {
+              ...item,
+              id,
+              updatedAt: Timestamp.now(),
+              userId: getUserId()
+            });
+          });
+          
+          await batch.commit();
+          processed += chunk.length;
+          
+          // Callback de progresso
+          if (onProgress) {
+            onProgress(processed, total);
+          }
+        })
+      );
+    }
+
+    console.log(`✅ ${total} itens salvos em ${collectionName}`);
   } catch (error) {
     console.error(`❌ Erro ao salvar em ${collectionName}:`, error);
     throw error;
   }
+}
+
+/**
+ * 🚀 OTIMIZADO: Sincroniza todas as coleções em paralelo
+ */
+export async function syncAllCollections(
+  collections: { name: string; collection: string; data: any[] }[],
+  onProgress?: (collectionName: string, current: number, total: number) => void
+): Promise<void> {
+  console.log('\n🚀 SINCRONIZAÇÃO PARALELA INICIADA');
+  console.log('='.repeat(60));
+
+  const startTime = Date.now();
+
+  // Processa todas as coleções em paralelo
+  await Promise.all(
+    collections.map(async ({ name, collection, data }) => {
+      if (data.length === 0) return;
+      
+      console.log(`📂 ${name}: ${data.length} itens`);
+      
+      await saveToFirestore(
+        collection,
+        data,
+        onProgress ? (current, total) => onProgress(name, current, total) : undefined
+      );
+      
+      console.log(`  ✅ ${name} concluído!`);
+    })
+  );
+
+  const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+  const totalItems = collections.reduce((sum, c) => sum + c.data.length, 0);
+  
+  console.log('='.repeat(60));
+  console.log(`✅ SINCRONIZAÇÃO CONCLUÍDA: ${totalItems} itens em ${duration}s`);
+  console.log(`   Performance: ${(totalItems / parseFloat(duration)).toFixed(0)} itens/seg\n`);
 }
 
 /**

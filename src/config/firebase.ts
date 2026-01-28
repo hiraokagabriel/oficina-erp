@@ -3,7 +3,7 @@
  * Configuração do Firebase para Firestore e Auth
  */
 
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, enableIndexedDbPersistence } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
@@ -18,8 +18,17 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID || "YOUR_APP_ID"
 };
 
-// Inicializa o Firebase
-const app = initializeApp(firebaseConfig);
+// ⚠️ PREVINE INICIALIZAÇÃO DUPLICADA (Fix para HMR do Vite)
+let app;
+if (!getApps().length) {
+  // Primeira inicialização
+  app = initializeApp(firebaseConfig);
+  console.log('✅ Firebase inicializado');
+} else {
+  // App já existe, reutiliza
+  app = getApp();
+  console.log('🔄 Firebase reutilizado (HMR)');
+}
 
 // Inicializa o Firestore
 const db = getFirestore(app);
@@ -27,19 +36,24 @@ const db = getFirestore(app);
 // Inicializa o Auth
 const auth = getAuth(app);
 
-// Habilita persistência offline (cache local)
-try {
-  enableIndexedDbPersistence(db).catch((err) => {
-    if (err.code === 'failed-precondition') {
-      console.warn('⚠️ Múltiplas abas abertas. Persistência desabilitada.');
-    } else if (err.code === 'unimplemented') {
-      console.warn('⚠️ Navegador não suporta persistência offline.');
-    }
-  });
-} catch (error) {
-  console.error('❌ Erro ao habilitar persistência:', error);
+// Habilita persistência offline (cache local) - apenas uma vez
+if (!getApps().some(a => a.name === '[DEFAULT]' && (a as any)._persistenceEnabled)) {
+  try {
+    enableIndexedDbPersistence(db).then(() => {
+      console.log('💾 Cache offline habilitado');
+      (app as any)._persistenceEnabled = true;
+    }).catch((err) => {
+      if (err.code === 'failed-precondition') {
+        console.warn('⚠️ Múltiplas abas abertas. Persistência desabilitada.');
+      } else if (err.code === 'unimplemented') {
+        console.warn('⚠️ Navegador não suporta persistência offline.');
+      } else {
+        console.warn('⚠️ Persistência já habilitada ou erro:', err.code);
+      }
+    });
+  } catch (error: any) {
+    console.warn('⚠️ Erro ao habilitar persistência:', error.message);
+  }
 }
-
-console.log('✅ Firebase inicializado com sucesso');
 
 export { app, db, auth };

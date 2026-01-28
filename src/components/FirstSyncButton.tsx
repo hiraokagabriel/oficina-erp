@@ -17,6 +17,9 @@ export function FirstSyncButton() {
   const [hasSynced, setHasSynced] = useState(() => {
     return localStorage.getItem('firstSyncCompleted') === 'true';
   });
+  const [hasDeclined, setHasDeclined] = useState(() => {
+    return localStorage.getItem('firstSyncDeclined') === 'true';
+  });
 
   const totalItems = ledger.length + workOrders.length + clients.length + catalogParts.length + catalogServices.length;
   
@@ -25,6 +28,7 @@ export function FirstSyncButton() {
     console.log('\n🔍 FIRST SYNC BUTTON - STATUS');
     console.log('='.repeat(60));
     console.log('hasSynced:', hasSynced);
+    console.log('hasDeclined:', hasDeclined);
     console.log('useFirestore:', useFirestore);
     console.log('totalItems:', totalItems);
     console.log('auth.currentUser:', auth.currentUser?.email || 'NÃO AUTENTICADO');
@@ -34,17 +38,25 @@ export function FirstSyncButton() {
     console.log('catalogParts:', catalogParts.length);
     console.log('catalogServices:', catalogServices.length);
     
-    if (!hasSynced && useFirestore && totalItems > 0) {
+    if (!hasSynced && !hasDeclined && useFirestore && totalItems > 0) {
       console.log('✅ EXIBINDO BOTÃO DE SYNC');
     } else {
       if (hasSynced) console.log('❌ Oculto: Já sincronizou');
+      if (hasDeclined) console.log('❌ Oculto: Usuário recusou');
       if (!useFirestore) console.log('❌ Oculto: Não autenticado');
       if (totalItems === 0) console.log('❌ Oculto: Sem dados locais');
     }
     console.log('='.repeat(60) + '\n');
-  }, [hasSynced, useFirestore, totalItems]);
+  }, [hasSynced, hasDeclined, useFirestore, totalItems]);
 
-  const shouldShow = !hasSynced && useFirestore && totalItems > 0;
+  // 🆕 NOVA FUNÇÃO: Recusar sincronização
+  const handleDecline = () => {
+    localStorage.setItem('firstSyncDeclined', 'true');
+    setHasDeclined(true);
+    console.log('❌ Usuário recusou a sincronização inicial');
+  };
+
+  const shouldShow = !hasSynced && !hasDeclined && useFirestore && totalItems > 0;
 
   const handleSync = async () => {
     if (!auth.currentUser) {
@@ -110,6 +122,16 @@ export function FirstSyncButton() {
   return (
     <div className="first-sync-container">
       <div className="first-sync-card">
+        {/* 🆕 BOTÃO DE FECHAR */}
+        <button 
+          className="first-sync-close"
+          onClick={handleDecline}
+          aria-label="Fechar"
+          title="Não sincronizar agora"
+        >
+          ×
+        </button>
+
         <div className="first-sync-icon">🔥</div>
         <h3>Sincronizar com a Nuvem</h3>
         <p>
@@ -161,7 +183,7 @@ export function FirstSyncButton() {
         </button>
 
         <p className="first-sync-note">
-          <small>⚠️ Isso só precisa ser feito uma vez!</small>
+          <small>⚠️ Isso só precisa ser feito uma vez! Use Configurações depois.</small>
         </p>
       </div>
     </div>

@@ -1,0 +1,119 @@
+/**
+ * SyncStatus.css
+ * Estilos para indicador de sincronização
+ */
+
+.sync-status {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 24px;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  z-index: 9999;
+  cursor: pointer;
+}
+
+.sync-status:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* Estado: Firestore */
+.sync-status.firestore {
+  background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%);
+  color: white;
+}
+
+/* Estado: Cache Local */
+.sync-status.local {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+/* Estado: Offline */
+.sync-status.offline {
+  background: linear-gradient(135deg, #757575 0%, #424242 100%);
+  color: white;
+}
+
+/* Estado: Sincronizando */
+.sync-status.syncing {
+  background: linear-gradient(135deg, #4ECDC4 0%, #44A08D 100%);
+  color: white;
+}
+
+/* Ícone */
+.sync-icon {
+  font-size: 16px;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* Animação de sincronização */
+.sync-status.syncing .sync-icon {
+  animation: rotate 1.5s linear infinite;
+}
+
+/* Texto */
+.sync-text {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  letter-spacing: 0.3px;
+}
+
+/* Animações */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsivo */
+@media (max-width: 768px) {
+  .sync-status {
+    bottom: 12px;
+    right: 12px;
+    padding: 8px 12px;
+    font-size: 11px;
+  }
+
+  .sync-icon {
+    font-size: 14px;
+  }
+
+  /* Esconde texto em mobile */
+  .sync-text {
+    display: none;
+  }
+}
+
+/* Tema escuro */
+@media (prefers-color-scheme: dark) {
+  .sync-status {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+
+  .sync-status:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+  }
+}

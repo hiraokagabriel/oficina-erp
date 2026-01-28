@@ -25,6 +25,8 @@ const DeleteConfirmationModal = lazy(() => import('./modals/DeleteConfirmationMo
 const ConfirmationModal = lazy(() => import('./modals/ConfirmationModal').then(m => ({ default: m.ConfirmationModal })));
 const InstallmentModal = lazy(() => import('./modals/InstallmentModal').then(m => ({ default: m.InstallmentModal })));
 const ChoiceModal = lazy(() => import('./modals/ChoiceModal').then(m => ({ default: m.ChoiceModal })));
+// 🆕 NOVO: Painel de Migração
+const MigrationPanel = lazy(() => import('./components/MigrationPanel'));
 
 import { SoundFX } from './utils/audio';
 import { Money, createEntry, updateWorkOrderData, learnClientData, learnCatalogItems } from './utils/helpers';
@@ -633,6 +635,11 @@ function AppContent() {
           </Suspense>
         </main>
       </div>
+
+      {/* 🆕 PAINEL DE MIGRAÇÃO */}
+      <Suspense fallback={null}>
+        <MigrationPanel />
+      </Suspense>
 
       <Suspense fallback={null}>
         {isModalOpen && <OSModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveOSModal} editingOS={editingOS} clients={clients} catalogParts={catalogParts} catalogServices={catalogServices} nextOSNumber={workOrders.length > 0 ? Math.max(...workOrders.map(o => o.osNumber)) + 1 : 1} isSaving={isSaving} formatMoney={Money.format} />}

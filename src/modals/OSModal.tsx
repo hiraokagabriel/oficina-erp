@@ -64,6 +64,16 @@ export const OSModal: React.FC<OSModalProps> = ({
     if (totalCost === 0) return 0;
     return (profit / totalCost) * 100;
   }, [profit, totalCost]);
+  
+  // 🆕 Valor mínimo sugerido para atingir a margem desejada
+  const minSuggestedRevenue = useMemo(() => {
+    if (totalCost === 0) return 0;
+    return totalCost / (1 - minMargin / 100);
+  }, [totalCost, minMargin]);
+  
+  const revenueDifference = useMemo(() => {
+    return totalRevenue - minSuggestedRevenue;
+  }, [totalRevenue, minSuggestedRevenue]);
 
   // --- LISTAS OTIMIZADAS ---
   const suggestedParts = useMemo(() => {
@@ -630,6 +640,47 @@ export const OSModal: React.FC<OSModalProps> = ({
                 <div style={{ marginTop: 12, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                     Margem de Lucro: <strong style={{ color: 'var(--primary)' }}>{profitMargin.toFixed(1)}%</strong>
                 </div>
+                
+                {/* 🆕 RESUMO GERAL - VALOR MÍNIMO SUGERIDO */}
+                {totalCost > 0 && (
+                    <div style={{
+                        marginTop: 16,
+                        padding: 12,
+                        backgroundColor: profitMargin < minMargin ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)',
+                        borderRadius: 6,
+                        border: `2px solid ${profitMargin < minMargin ? '#ef4444' : '#22c55e'}`
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 'bold' }}>
+                                    🎯 Valor Mínimo Sugerido ({minMargin}% margem)
+                                </div>
+                                <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: 'var(--primary)' }}>
+                                    {formatMoney(Math.round(minSuggestedRevenue))}
+                                </div>
+                            </div>
+                            
+                            <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                    {revenueDifference >= 0 ? 'Acima do mínimo' : 'Abaixo do mínimo'}
+                                </div>
+                                <div style={{ 
+                                    fontSize: '1.1rem', 
+                                    fontWeight: 'bold',
+                                    color: revenueDifference >= 0 ? '#22c55e' : '#ef4444'
+                                }}>
+                                    {revenueDifference >= 0 ? '+' : ''}{formatMoney(Math.round(revenueDifference))}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {profitMargin < minMargin && (
+                            <div style={{ fontSize: '0.75rem', color: '#ef4444', fontWeight: 'bold', marginTop: 8 }}>
+                                ⚠️ Esta OS está abaixo da margem mínima desejada. Considere ajustar os preços.
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         )}
 

@@ -1,0 +1,120 @@
+.sync-status {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  font-size: 14px;
+  z-index: 1000;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.sync-status:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(0, 0, 0, 0.2);
+}
+
+/* Estados */
+.sync-status.online {
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.95), rgba(56, 142, 60, 0.95));
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.sync-status.offline {
+  background: linear-gradient(135deg, rgba(255, 152, 0, 0.95), rgba(245, 124, 0, 0.95));
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.sync-status.local {
+  background: linear-gradient(135deg, rgba(33, 150, 243, 0.95), rgba(25, 118, 210, 0.95));
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+/* Ícone */
+.sync-icon {
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sync-icon .pulse {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+}
+
+/* Informações */
+.sync-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sync-label {
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.3px;
+}
+
+.sync-sublabel {
+  font-size: 11px;
+  opacity: 0.9;
+  font-weight: 400;
+}
+
+/* Tema Escuro */
+[data-theme="dark"] .sync-status {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .sync-status:hover {
+  box-shadow: 0 6px 25px rgba(0, 0, 0, 0.5);
+}
+
+/* Responsivo */
+@media (max-width: 768px) {
+  .sync-status {
+    bottom: 10px;
+    right: 10px;
+    padding: 10px 16px;
+    font-size: 12px;
+  }
+
+  .sync-icon {
+    font-size: 20px;
+  }
+
+  .sync-label {
+    font-size: 12px;
+  }
+
+  .sync-sublabel {
+    font-size: 10px;
+  }
+}
+
+/* Print */
+@media print {
+  .sync-status {
+    display: none;
+  }
+}

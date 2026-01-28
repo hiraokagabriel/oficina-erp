@@ -1,5 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { WorkshopSettings } from '../types';
+import { useDatabase } from '../context/DatabaseContext';
+import { saveToFirestore, COLLECTIONS } from '../services/firestoreService';
+import { auth } from '../config/firebase';
 
 interface ConfigPageProps {
   settings: WorkshopSettings;
@@ -10,13 +13,16 @@ interface ConfigPageProps {
   onImportData: (content: string) => void;
   isBackuping: boolean;
   driveStatus: 'idle' | 'success' | 'error';
-  // NOVA PROP
   onOpenDatabase: () => void;
 }
 
 export const ConfigPage: React.FC<ConfigPageProps> = ({
   settings, setSettings, currentTheme, setCurrentTheme, onBackup, onImportData, isBackuping, driveStatus, onOpenDatabase
 }) => {
+  const { ledger, workOrders, clients, catalogParts, catalogServices, useFirestore } = useDatabase();
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [syncMessage, setSyncMessage] = useState('');
 
   const handleChange = (field: keyof WorkshopSettings, value: string) => {
     setSettings({ ...settings, [field]: value });
@@ -37,10 +43,83 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
     e.target.value = '';
   };
 
+  // 🆕 NOVA FUNÇÃO: Sincronização manual com Firestore
+  const handleManualSync = async () => {
+    if (!auth.currentUser) {
+      setSyncStatus('error');
+      setSyncMessage('❌ Faça login no Firebase antes de sincronizar!');
+      setTimeout(() => setSyncStatus('idle'), 5000);
+      return;
+    }
+
+    if (!useFirestore) {
+      setSyncStatus('error');
+      setSyncMessage('❌ Firestore não está disponível.');
+      setTimeout(() => setSyncStatus('idle'), 5000);
+      return;
+    }
+
+    const totalItems = ledger.length + workOrders.length + clients.length + catalogParts.length + catalogServices.length;
+    if (totalItems === 0) {
+      setSyncStatus('error');
+      setSyncMessage('⚠️ Nenhum dado local para sincronizar.');
+      setTimeout(() => setSyncStatus('idle'), 5000);
+      return;
+    }
+
+    setIsSyncing(true);
+    setSyncStatus('idle');
+    setSyncMessage('');
+
+    try {
+      console.log('\n🔄 SINCRONIZAÇÃO MANUAL INICIADA');
+      console.log('='.repeat(60));
+
+      const collections = [
+        { name: 'Financeiro', collection: COLLECTIONS.financeiro, data: ledger },
+        { name: 'Processos (OSs)', collection: COLLECTIONS.processos, data: workOrders },
+        { name: 'Clientes', collection: COLLECTIONS.clientes, data: clients },
+        { name: 'Catálogo', collection: COLLECTIONS.oficina, data: [...catalogParts, ...catalogServices] }
+      ];
+
+      let totalSynced = 0;
+
+      for (const { name, collection, data } of collections) {
+        if (data.length > 0) {
+          console.log(`📂 Sincronizando ${name}: ${data.length} itens...`);
+          await saveToFirestore(collection, data);
+          totalSynced += data.length;
+          console.log(`  ✅ ${name} sincronizado!`);
+        }
+      }
+
+      console.log('='.repeat(60));
+      console.log(`✅ SINCRONIZAÇÃO CONCLUÍDA: ${totalSynced} itens enviados\n`);
+
+      setSyncStatus('success');
+      setSyncMessage(`✅ ${totalSynced} itens sincronizados com sucesso!`);
+
+      setTimeout(() => {
+        setSyncStatus('idle');
+        setSyncMessage('');
+      }, 5000);
+
+    } catch (error: any) {
+      console.error('❌ Erro na sincronização:', error);
+      setSyncStatus('error');
+      setSyncMessage(`❌ Erro: ${error.message}`);
+      setTimeout(() => setSyncStatus('idle'), 5000);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const totalLocalItems = ledger.length + workOrders.length + clients.length + catalogParts.length + catalogServices.length;
+
   return (
     <div className="config-container" style={{ maxWidth: 1000, margin: '0 auto' }}>
       
-      {/* SEÇÃO 0: GERENCIAMENTO DE CADASTROS (NOVO) */}
+      {/* SEÇÃO 0: GERENCIAMENTO DE CADASTROS */}
       <div className="card" style={{ borderLeft: '4px solid var(--primary)', background: 'var(--bg-panel)' }}>
         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
             <div>
@@ -55,9 +134,131 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
         </div>
       </div>
 
+      {/* 🆕 NOVA SEÇÃO: FIREBASE SYNC */}
+      <div className="card" style={{ borderLeft: '4px solid #ff9800' }}>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 0 }}>
+          🔥 Sincronização Firestore
+        </h3>
+        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: 20 }}>
+          Envie seus dados locais para o Firebase Firestore.
+        </p>
+
+        {/* Status do usuário */}
+        <div style={{ 
+          padding: 16, 
+          background: auth.currentUser ? 'rgba(76, 175, 80, 0.1)' : 'rgba(244, 67, 54, 0.1)',
+          border: `1px solid ${auth.currentUser ? 'var(--success)' : 'var(--danger)'}`,
+          borderRadius: 8,
+          marginBottom: 20,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12
+        }}>
+          <div style={{ fontSize: '24px' }}>{auth.currentUser ? '✅' : '❌'}</div>
+          <div>
+            <strong>{auth.currentUser ? 'Conectado' : 'Desconectado'}</strong>
+            <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>
+              {auth.currentUser ? `Usuário: ${auth.currentUser.email}` : 'Faça login para sincronizar'}
+            </div>
+          </div>
+        </div>
+
+        {/* Contadores de dados locais */}
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', 
+          gap: 12,
+          marginBottom: 20
+        }}>
+          <div style={{ 
+            padding: 12, 
+            background: 'rgba(0,0,0,0.05)', 
+            borderRadius: 8,
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--primary)' }}>{ledger.length}</div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>💵 Financeiro</div>
+          </div>
+          <div style={{ 
+            padding: 12, 
+            background: 'rgba(0,0,0,0.05)', 
+            borderRadius: 8,
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--primary)' }}>{workOrders.length}</div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>🔧 OSs</div>
+          </div>
+          <div style={{ 
+            padding: 12, 
+            background: 'rgba(0,0,0,0.05)', 
+            borderRadius: 8,
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--primary)' }}>{clients.length}</div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>👥 Clientes</div>
+          </div>
+          <div style={{ 
+            padding: 12, 
+            background: 'rgba(0,0,0,0.05)', 
+            borderRadius: 8,
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--primary)' }}>{catalogParts.length + catalogServices.length}</div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>📦 Catálogo</div>
+          </div>
+        </div>
+
+        {/* Feedback de sincronização */}
+        {syncMessage && (
+          <div style={{
+            padding: 12,
+            marginBottom: 16,
+            borderRadius: 8,
+            background: syncStatus === 'success' ? 'rgba(76, 175, 80, 0.1)' : 'rgba(244, 67, 54, 0.1)',
+            border: `1px solid ${syncStatus === 'success' ? 'var(--success)' : 'var(--danger)'}`,
+            color: syncStatus === 'success' ? 'var(--success)' : 'var(--danger)'
+          }}>
+            {syncMessage}
+          </div>
+        )}
+
+        {/* Botão de sincronização */}
+        <button 
+          className="btn" 
+          onClick={handleManualSync}
+          disabled={isSyncing || !auth.currentUser || !useFirestore || totalLocalItems === 0}
+          style={{ 
+            width: '100%',
+            padding: '14px',
+            fontSize: '1rem',
+            opacity: (!auth.currentUser || !useFirestore || totalLocalItems === 0) ? 0.5 : 1
+          }}
+        >
+          {isSyncing ? (
+            <>
+              <span className="spinner" style={{ marginRight: 8 }}></span>
+              Sincronizando...
+            </>
+          ) : (
+            <>🚀 Sincronizar {totalLocalItems} Itens</>
+          )}
+        </button>
+
+        {!auth.currentUser && (
+          <small style={{ 
+            display: 'block', 
+            marginTop: 12, 
+            color: 'var(--warning)', 
+            textAlign: 'center' 
+          }}>
+            ⚠️ Configure o Firebase e faça login para habilitar a sincronização
+          </small>
+        )}
+      </div>
+
       {/* SEÇÃO 1: DADOS DA OFICINA */}
       <div className="card">
-        <h3>🏢 Identidade da Oficina</h3>
+        <h3>🏭 Identidade da Oficina</h3>
         <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: 20 }}>
           Dados para cabeçalhos de relatórios e impressões.
         </p>

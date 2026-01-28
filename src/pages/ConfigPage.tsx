@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { WorkshopSettings } from '../types';
 import { useDatabase } from '../context/DatabaseContext';
-import { saveToFirestore, COLLECTIONS } from '../services/firestoreService';
+import { syncAllCollections, COLLECTIONS } from '../services/firestoreService';
 import { auth } from '../config/firebase';
 
 interface ConfigPageProps {
@@ -23,6 +23,7 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [syncMessage, setSyncMessage] = useState('');
+  const [syncProgress, setSyncProgress] = useState('');
 
   const handleChange = (field: keyof WorkshopSettings, value: string) => {
     setSettings({ ...settings, [field]: value });
@@ -43,7 +44,7 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
     e.target.value = '';
   };
 
-  // 🆕 NOVA FUNÇÃO: Sincronização manual com Firestore
+  // 🚀 OTIMIZADO: Sincronização manual com progresso
   const handleManualSync = async () => {
     if (!auth.currentUser) {
       setSyncStatus('error');
@@ -70,11 +71,9 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
     setIsSyncing(true);
     setSyncStatus('idle');
     setSyncMessage('');
+    setSyncProgress('');
 
     try {
-      console.log('\n🔄 SINCRONIZAÇÃO MANUAL INICIADA');
-      console.log('='.repeat(60));
-
       const collections = [
         { name: 'Financeiro', collection: COLLECTIONS.financeiro, data: ledger },
         { name: 'Processos (OSs)', collection: COLLECTIONS.processos, data: workOrders },
@@ -82,22 +81,18 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
         { name: 'Catálogo', collection: COLLECTIONS.oficina, data: [...catalogParts, ...catalogServices] }
       ];
 
-      let totalSynced = 0;
-
-      for (const { name, collection, data } of collections) {
-        if (data.length > 0) {
-          console.log(`📂 Sincronizando ${name}: ${data.length} itens...`);
-          await saveToFirestore(collection, data);
-          totalSynced += data.length;
-          console.log(`  ✅ ${name} sincronizado!`);
+      // 🚀 Sincronização PARALELA com progresso
+      await syncAllCollections(
+        collections,
+        (collectionName, current, total) => {
+          const percent = Math.round((current / total) * 100);
+          setSyncProgress(`${collectionName}: ${current}/${total} (${percent}%)`);
         }
-      }
-
-      console.log('='.repeat(60));
-      console.log(`✅ SINCRONIZAÇÃO CONCLUÍDA: ${totalSynced} itens enviados\n`);
+      );
 
       setSyncStatus('success');
-      setSyncMessage(`✅ ${totalSynced} itens sincronizados com sucesso!`);
+      setSyncMessage(`✅ ${totalItems} itens sincronizados com sucesso!`);
+      setSyncProgress('');
 
       setTimeout(() => {
         setSyncStatus('idle');
@@ -108,6 +103,7 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
       console.error('❌ Erro na sincronização:', error);
       setSyncStatus('error');
       setSyncMessage(`❌ Erro: ${error.message}`);
+      setSyncProgress('');
       setTimeout(() => setSyncStatus('idle'), 5000);
     } finally {
       setIsSyncing(false);
@@ -134,13 +130,13 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
         </div>
       </div>
 
-      {/* 🆕 NOVA SEÇÃO: FIREBASE SYNC */}
+      {/* SEÇÃO FIREBASE SYNC */}
       <div className="card" style={{ borderLeft: '4px solid #ff9800' }}>
         <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 0 }}>
-          🔥 Sincronização Firestore
+          🔥 Sincronização Firestore ⚡
         </h3>
         <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: 20 }}>
-          Envie seus dados locais para o Firebase Firestore.
+          Envie seus dados locais para o Firebase Firestore com <strong>sincronização paralela otimizada</strong>.
         </p>
 
         {/* Status do usuário */}
@@ -208,6 +204,22 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
           </div>
         </div>
 
+        {/* Progresso em tempo real */}
+        {syncProgress && (
+          <div style={{
+            padding: 12,
+            marginBottom: 12,
+            borderRadius: 8,
+            background: 'rgba(78, 205, 196, 0.1)',
+            border: '1px solid rgba(78, 205, 196, 0.5)',
+            color: 'var(--primary)',
+            textAlign: 'center',
+            fontWeight: 500
+          }}>
+            🔄 {syncProgress}
+          </div>
+        )}
+
         {/* Feedback de sincronização */}
         {syncMessage && (
           <div style={{
@@ -240,7 +252,7 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
               Sincronizando...
             </>
           ) : (
-            <>🚀 Sincronizar {totalLocalItems} Itens</>
+            <>⚡ Sincronizar {totalLocalItems} Itens (Rápido)</>
           )}
         </button>
 
@@ -252,6 +264,17 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
             textAlign: 'center' 
           }}>
             ⚠️ Configure o Firebase e faça login para habilitar a sincronização
+          </small>
+        )}
+
+        {auth.currentUser && totalLocalItems > 0 && (
+          <small style={{ 
+            display: 'block', 
+            marginTop: 12, 
+            color: 'var(--text-muted)', 
+            textAlign: 'center' 
+          }}>
+            ⚡ Sincronização paralela: até 3 coleções por vez
           </small>
         )}
       </div>

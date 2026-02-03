@@ -436,7 +436,7 @@ function AppContent() {
     setActiveTab('OFICINA');
   };
 
-  // 🖨️ FUNÇÃO SIMPLIFICADA - PrintableInvoice agora controla a impressão
+  // 🖨️ FUNÇÃO CORRIGIDA - AGORA COM WINDOW.PRINT() E CLEANUP CORRETO
   const handlePrintOS = (os: WorkOrder) => {
     // Sanitiza nome para PDF
     const sanitize = (str: string) => str
@@ -446,15 +446,39 @@ function AppContent() {
 
     const clientName = sanitize(os.clientName);
     const vehicle = sanitize(os.vehicle.split(' - ')[0]);
-    document.title = `OS-${os.osNumber}_${clientName}_${vehicle}`;
+    const pdfTitle = `OS-${os.osNumber}_${clientName}_${vehicle}`;
     
+    // Salva título original
+    const originalTitle = document.title;
+    document.title = pdfTitle;
+    
+    // Seta printingOS
     setPrintingOS(os);
-  };
-
-  // Callback para quando a impressão terminar
-  const handlePrintComplete = () => {
-    console.log('✅ Impressão completada, limpando estado...');
-    setPrintingOS(null);
+    
+    // 🔧 TIMEOUT para garantir renderização antes de imprimir
+    setTimeout(() => {
+      console.log('🖨️ Chamando window.print()...');
+      window.print();
+      
+      // ✅ Listener para detectar fim da impressão
+      const afterPrint = () => {
+        console.log('✅ Impressão concluída, restaurando...');
+        document.title = originalTitle;
+        setPrintingOS(null);
+        window.removeEventListener('afterprint', afterPrint);
+      };
+      
+      window.addEventListener('afterprint', afterPrint);
+      
+      // 🔒 Fallback: Se afterprint não disparar, limpa após 3 segundos
+      setTimeout(() => {
+        if (document.title === pdfTitle) {
+          console.log('⚠️ Fallback: Limpando estado...');
+          document.title = originalTitle;
+          setPrintingOS(null);
+        }
+      }, 3000);
+    }, 500); // 🔧 500ms para garantir renderização
   };
 
   const executePendingAction = () => {
@@ -634,12 +658,11 @@ function AppContent() {
         {isExportModalOpen && <ExportModal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} ledger={ledger} workOrders={workOrders} defaultPath={settings.exportPath} Money={Money} SoundFX={{ success: () => addToast("Sucesso!", "success"), error: () => addToast("Erro", "error") }} />}
         {isChecklistOpen && <ChecklistModal isOpen={isChecklistOpen} onClose={() => setIsChecklistOpen(false)} onSave={(data) => { if (checklistOS) setWorkOrders(p => p.map(o => o.id === checklistOS.id ? { ...o, checklist: data } : o)); setIsChecklistOpen(false); }} os={checklistOS} />}
         
-        {/* 🖨️ COMPONENTE DE IMPRESSÃO COM CALLBACK */}
+        {/* 🖨️ COMPONENTE DE IMPRESSÃO - AGORA SEM CALLBACK (não precisa mais) */}
         <PrintableInvoice 
           data={printingOS} 
           settings={settings} 
           formatMoney={Money.format}
-          onPrintComplete={handlePrintComplete}
         />
         
         {deleteModalInfo.isOpen && <DeleteConfirmationModal isOpen={deleteModalInfo.isOpen} onClose={() => setDeleteModalInfo({ isOpen: false, entry: null })} onConfirmSingle={confirmDeleteSingle} onConfirmGroup={confirmDeleteGroup} isGroup={!!deleteModalInfo.entry?.groupId} />}

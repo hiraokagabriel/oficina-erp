@@ -435,7 +435,7 @@ function AppContent() {
     setActiveTab('OFICINA');
   };
 
-  // 🖨️ FUNÇÃO PARA IMPRIMIR PDF COM NOME AUTOMÁTICO
+  // 🖨️ FUNÇÃO CORRIGIDA PARA IMPRIMIR PDF COM NOME AUTOMÁTICO
   const handlePrintOS = (os: WorkOrder) => {
     // Remove caracteres especiais e espaços para criar nome de arquivo válido
     const sanitize = (str: string) => str
@@ -453,17 +453,27 @@ function AppContent() {
     // Muda para o novo título
     document.title = newTitle;
     
-    // Define printingOS e aguarda renderização
+    // Define printingOS e aguarda renderização com timeout AUMENTADO
     setPrintingOS(os);
     
+    // 🔧 CORREÇÃO: Timeout aumentado para 500ms + aguarda evento afterprint
     setTimeout(() => {
       window.print();
       
-      // Restaura título original após impressão
+      // Listener para detectar quando a impressão terminar
+      const afterPrint = () => {
+        document.title = originalTitle;
+        setPrintingOS(null); // Limpa o estado
+        window.removeEventListener('afterprint', afterPrint);
+      };
+      
+      window.addEventListener('afterprint', afterPrint);
+      
+      // Fallback: restaura título após 2 segundos se o evento não disparar
       setTimeout(() => {
         document.title = originalTitle;
-      }, 500);
-    }, 100);
+      }, 2000);
+    }, 500); // 🔧 AUMENTADO DE 100ms PARA 500ms
   };
 
   const executePendingAction = () => {

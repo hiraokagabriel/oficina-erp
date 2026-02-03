@@ -7,9 +7,9 @@ import { updateClientCascading, updateCatalogItemCascading } from './services/ca
 import { uploadToDrive } from './services/googleDrive';
 import { Sidebar } from './components/Sidebar';
 import { Confetti } from './components/ui/Confetti';
-import { PrintableInvoice } from './components/PrintableInvoice';
 import { ToastContainer, ToastMessage, ToastType } from './components/ui/ToastContainer';
 import { LoadingSkeleton } from './components/ui/LoadingSkeleton';
+import { STATUS_LABELS } from './types';
 
 const FinancialPage = lazy(() => import('./pages/FinancialPage').then(m => ({ default: m.FinancialPage })));
 const WorkshopPage = lazy(() => import('./pages/WorkshopPage').then(m => ({ default: m.WorkshopPage })));
@@ -56,7 +56,6 @@ function AppContent() {
   const [editingOS, setEditingOS] = useState<WorkOrder | null>(null);
   const [editingEntry, setEditingEntry] = useState<LedgerEntry | null>(null);
   const [checklistOS, setChecklistOS] = useState<WorkOrder | null>(null);
-  const [printingOS, setPrintingOS] = useState<WorkOrder | null>(null);
   const [deleteModalInfo, setDeleteModalInfo] = useState<{ isOpen: boolean; entry: LedgerEntry | null }>({ isOpen: false, entry: null });
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [isBackuping, setIsBackuping] = useState(false);
@@ -68,7 +67,6 @@ function AppContent() {
     const migrateOldWorkOrders = () => {
       let updated = false;
       const newWorkOrders = workOrders.map(os => {
-        // Se a OS está finalizada mas não tem paymentDate, seta como createdAt
         if (os.status === 'FINALIZADO' && !os.paymentDate) {
           console.log(`🔄 Migrando OS #${os.osNumber}: paymentDate = createdAt`);
           updated = true;
@@ -84,18 +82,16 @@ function AppContent() {
       }
     };
 
-    // Executa migração após carregar dados
     if (!isLoading && workOrders.length > 0) {
       migrateOldWorkOrders();
     }
-  }, [isLoading]); // Só executa quando o loading terminar
+  }, [isLoading]);
 
   // 🔧 MIGRAÇÃO: Atualiza lançamentos de receitas sem paymentDate
   useEffect(() => {
     const migrateLedgerEntries = () => {
       let updated = false;
       const newLedger = ledger.map(entry => {
-        // Se é receita (CREDIT) e não tem paymentDate, verifica se tem OS vinculada
         if (entry.type === 'CREDIT' && !entry.paymentDate) {
           const linkedOS = workOrders.find(os => os.financialId === entry.id);
           if (linkedOS && linkedOS.paymentDate) {
@@ -113,27 +109,10 @@ function AppContent() {
       }
     };
 
-    // Executa após migração de OSs
     if (!isLoading && ledger.length > 0 && workOrders.length > 0) {
       migrateLedgerEntries();
     }
   }, [isLoading, workOrders]);
-
-  // 🖨️ LISTENER GLOBAL PARA AFTERPRINT - Garante limpeza confiável
-  useEffect(() => {
-    const handleAfterPrint = () => {
-      console.log('✅ Evento afterprint disparado, limpando estado...');
-      setPrintingOS(null);
-      // Restaura título padrão
-      document.title = 'Oficina ERP';
-    };
-    
-    window.addEventListener('afterprint', handleAfterPrint);
-    
-    return () => {
-      window.removeEventListener('afterprint', handleAfterPrint);
-    };
-  }, []);
 
   const addToast = (message: string, type: ToastType = 'info') => {
     const id = crypto.randomUUID();
@@ -147,7 +126,6 @@ function AppContent() {
   const handleGoogleDriveBackup = async () => {
     if (isBackuping) return;
     
-    // 🆕 NOVA VALIDAÇÃO: Verifica se API Key e Token estão configurados
     if (!settings.googleApiKey || settings.googleApiKey.trim() === "") {
       addToast("⚠️ Configure a Google API Key nas configurações.", "error");
       return;
@@ -169,7 +147,6 @@ function AppContent() {
       const timestamp = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}-${String(now.getMinutes()).padStart(2,'0')}`;
       const filename = `backup_oficina_${timestamp}.json`;
 
-      // 🆕 AGORA USA settings.googleApiKey
       await uploadToDrive(filename, content, settings.googleDriveToken, settings.googleApiKey);
       setDriveStatus('success');
       addToast("Backup salvo!", "success");
@@ -188,7 +165,6 @@ function AppContent() {
     const os = workOrders.find(o => o.id === osId);
     if (!os || os.status === newStatus) return;
 
-    // 📅 LÓGICA DE PAYMENTDATE
     const isBecomingFinalized = newStatus === 'FINALIZADO' && os.status !== 'FINALIZADO';
     const isLeavingFinalized = os.status === 'FINALIZADO' && newStatus !== 'FINALIZADO';
 
@@ -205,12 +181,10 @@ function AppContent() {
       
       const updates: Partial<WorkOrder> = { status: newStatus };
       
-      // 🆕 Setar paymentDate ao finalizar
       if (isBecomingFinalized) {
         updates.paymentDate = new Date().toISOString();
       }
       
-      // ❌ Limpar paymentDate ao sair de finalizado
       if (isLeavingFinalized) {
         updates.paymentDate = undefined;
       }
@@ -230,7 +204,6 @@ function AppContent() {
     setCatalogServices(prev => learnCatalogItems(prev, data.services));
 
     if (editingOS) {
-      // 🔧 AGORA PASSA PUBLICNOTES
       const updated = updateWorkOrderData(
         editingOS, 
         data.osNumber, 
@@ -241,7 +214,7 @@ function AppContent() {
         data.parts, 
         data.services, 
         data.createdAt,
-        data.publicNotes // 🔧 ADICIONA PUBLICNOTES
+        data.publicNotes
       );
       setWorkOrders(prev => prev.map(o => o.id === editingOS.id ? updated : o));
       
@@ -250,7 +223,6 @@ function AppContent() {
       }
       addToast("OS atualizada!", "success");
     } else {
-      // 🔧 NOVA OS TAMBÉM PRECISA DE PUBLICNOTES
       const newOS = {
         id: crypto.randomUUID(),
         osNumber: data.osNumber,
@@ -263,7 +235,7 @@ function AppContent() {
         services: data.services,
         total: data.parts.reduce((a: number, b: any) => a + b.price, 0) + data.services.reduce((a: number, b: any) => a + b.price, 0),
         createdAt: data.createdAt || new Date().toISOString(),
-        publicNotes: data.publicNotes || '' // 🔧 ADICIONA PUBLICNOTES
+        publicNotes: data.publicNotes || ''
       };
       setWorkOrders(prev => [...prev, newOS]);
       addToast("Nova OS criada!", "success");
@@ -300,7 +272,6 @@ function AppContent() {
     }
   };
 
-  // 🆕 NOVA FUNÇÃO: Marcar/desmarcar pagamento
   const handleTogglePayment = (entryId: string) => {
     const entry = ledger.find(e => e.id === entryId);
     if (!entry || entry.type !== 'CREDIT') return;
@@ -308,14 +279,12 @@ function AppContent() {
     const now = new Date().toISOString();
     const newPaymentDate = entry.paymentDate ? undefined : now;
 
-    // Atualiza o ledger
     setLedger(prev => prev.map(e => 
       e.id === entryId 
         ? { ...e, paymentDate: newPaymentDate }
         : e
     ));
 
-    // Se tem OS vinculada, atualiza também
     const linkedOS = workOrders.find(os => os.financialId === entryId);
     if (linkedOS) {
       setWorkOrders(prev => prev.map(os => 
@@ -325,7 +294,7 @@ function AppContent() {
       ));
     }
 
-    addToast(newPaymentDate ? '💵 Marcado como pago!' : '⏳ Marcado como pendente', 'info');
+    addToast(newPaymentDate ? '💵 Marcado como pago!' : '⌛ Marcado como pendente', 'info');
     SoundFX.pop();
   };
 
@@ -343,7 +312,6 @@ function AppContent() {
     setDeleteModalInfo({ isOpen: false, entry: null });
   };
 
-  // 👥 SALVAR CLIENTE (CRM)
   const handleSaveClient = (updatedClient: Client) => {
     const oldClient = clients.find(c => c.id === updatedClient.id);
     setClients(prev => prev.find(c => c.id === updatedClient.id) ? prev.map(c => c.id === updatedClient.id ? updatedClient : c) : [...prev, updatedClient]);
@@ -357,7 +325,6 @@ function AppContent() {
     }
   };
 
-  // 🛠️ SALVAR ITEM DO CATÁLOGO (PEÇAS/SERVIÇOS)
   const handleSaveCatalogItem = (updatedItem: CatalogItem, type: 'part' | 'service') => {
     let oldItem: CatalogItem | undefined;
     if (type === 'part') {
@@ -452,36 +419,443 @@ function AppContent() {
     setActiveTab('OFICINA');
   };
 
-  // 🖨️ SOLUÇÃO ROBUSTA - Usa requestAnimationFrame duplo sem timeouts problemáticos
+  // 🖨️ SOLUÇÃO DEFINITIVA: Usa técnica de iframe (igual PartsPage.tsx)
   const handlePrintOS = (os: WorkOrder) => {
     console.log('🖨️ Iniciando impressão da OS #' + os.osNumber);
-    
-    // Sanitiza nome para PDF
-    const sanitize = (str: string) => str
-      .replace(/[^a-zA-Z0-9\s-]/g, '')
-      .replace(/\s+/g, '_')
-      .substring(0, 30);
 
-    const clientName = sanitize(os.clientName);
-    const vehicle = sanitize(os.vehicle.split(' - ')[0]);
-    const pdfTitle = `OS-${os.osNumber}_${clientName}_${vehicle}`;
-    
-    // Define título do PDF
-    document.title = pdfTitle;
-    
-    // Atualiza estado para renderizar componente de impressão
-    setPrintingOS(os);
-    
-    // ✅ SOLUÇÃO: Usa requestAnimationFrame DUPLO para garantir renderização completa
-    // Primeiro frame: React processa o setState
-    requestAnimationFrame(() => {
-      // Segundo frame: O DOM já foi atualizado com o novo conteúdo
-      requestAnimationFrame(() => {
-        console.log('🖨️ Componente renderizado, disparando window.print()');
-        window.print();
-        // O listener afterprint no useEffect cuidará da limpeza
-      });
-    });
+    const formatDate = (dateString: string) => {
+      if (!dateString) return '-';
+      return new Date(dateString).toLocaleDateString('pt-BR');
+    };
+
+    const formatMoney = (val: number) => {
+      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val / 100);
+    };
+
+    const subtotalParts = os.parts.reduce((acc, item) => acc + item.price, 0);
+    const subtotalServices = os.services.reduce((acc, item) => acc + item.price, 0);
+
+    // Gera HTML completo como string
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>OS #${os.osNumber} - ${os.clientName}</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          
+          body {
+            font-family: 'Inter', Arial, sans-serif;
+            padding: 20px;
+            background: white;
+            color: black;
+            font-size: 11px;
+          }
+
+          .invoice-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 25px;
+            padding-top: 20px;
+          }
+
+          .invoice-col { flex: 1; }
+          .client-col { text-align: right; }
+          
+          .label-sm {
+            font-size: 0.65rem;
+            color: #888;
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+            font-weight: 700;
+            text-transform: uppercase;
+          }
+
+          .company-name, .client-name {
+            font-size: 1.1rem;
+            font-weight: 800;
+            margin: 0 0 4px 0;
+            text-transform: uppercase;
+            color: #000;
+          }
+
+          .invoice-col p {
+            margin: 2px 0;
+            font-size: 0.8rem;
+            color: #333;
+          }
+
+          .invoice-logo-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            gap: 8px;
+          }
+
+          .invoice-main-title {
+            font-size: 0.8rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 0;
+            color: #000;
+            text-align: center;
+            line-height: 1;
+          }
+
+          .invoice-logo-circle {
+            width: 50px;
+            height: 50px;
+            background-color: #222;
+            color: #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            font-weight: 800;
+            letter-spacing: -1px;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+
+          .divider {
+            border: 0;
+            border-top: 1px solid #ddd;
+            margin: 15px 0;
+          }
+
+          .invoice-meta-grid {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 25px;
+          }
+
+          .meta-item {
+            display: flex;
+            flex-direction: column;
+          }
+
+          .meta-value {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-top: 4px;
+            color: #000;
+          }
+
+          .meta-value.status-print {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            border: 1px solid #000;
+            padding: 2px 6px;
+            border-radius: 4px;
+          }
+
+          .section-title {
+            color: #8B5CF6;
+            font-size: 0.7rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 20px 0 5px 0;
+            border-bottom: 2px solid #8B5CF6;
+            display: inline-block;
+            padding-bottom: 2px;
+          }
+
+          .invoice-items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 5px;
+          }
+
+          .invoice-items-table th {
+            padding: 6px 0;
+            border-bottom: 1px solid #bbb;
+            font-size: 0.7rem;
+            color: #444;
+            text-transform: uppercase;
+            font-weight: 700;
+            text-align: left;
+          }
+
+          .invoice-items-table td {
+            padding: 6px 0;
+            border-bottom: 1px solid #eee;
+            font-size: 0.85rem;
+            color: #111;
+          }
+
+          .text-right { text-align: right; }
+
+          .subtotal-row {
+            text-align: right;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #444;
+            padding: 8px 0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 20px;
+          }
+
+          .subtotal-value {
+            font-weight: 700;
+            color: #000;
+          }
+
+          .invoice-total-block {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 2px solid #000;
+          }
+
+          .total-line { text-align: right; }
+
+          .label-total {
+            font-size: 0.9rem;
+            letter-spacing: 1px;
+            color: #8B5CF6;
+            font-weight: 700;
+            margin-right: 15px;
+          }
+
+          .value-total {
+            font-weight: 900;
+            color: #000;
+            font-size: 1.8rem;
+            line-height: 1;
+          }
+
+          .signature-area {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 40px;
+            padding: 0 10px;
+          }
+
+          .signature-block {
+            width: 40%;
+            text-align: center;
+          }
+
+          .sign-line {
+            border-top: 1px solid #000;
+            margin-bottom: 5px;
+            height: 1px;
+            width: 100%;
+          }
+
+          .sign-name {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #000;
+          }
+
+          .sign-label {
+            display: block;
+            font-size: 0.6rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 2px;
+          }
+
+          .footer-text-block {
+            text-align: center;
+            border-top: 1px dashed #ddd;
+            padding-top: 10px;
+            margin-top: 20px;
+          }
+
+          .declaration-text {
+            font-size: 0.65rem;
+            color: #333;
+            margin-bottom: 5px;
+          }
+
+          .thank-you-msg {
+            font-size: 0.75rem;
+            font-weight: 800;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #8B5CF6;
+          }
+
+          @page {
+            size: A4;
+            margin: 15mm;
+          }
+        </style>
+      </head>
+      <body>
+        <header class="invoice-header">
+          <div class="invoice-col supplier-col">
+            <h4 class="label-sm">PRESTADOR DE SERVIÇO</h4>
+            <h2 class="company-name">${settings.name || "NOME DA OFICINA"}</h2>
+            <p>${settings.address || "Endereço não informado"}</p>
+            <p>${settings.cnpj || "CNPJ não informado"}</p>
+            ${settings.technician ? `<p>Téc. Resp: ${settings.technician}</p>` : ''}
+          </div>
+
+          <div class="invoice-logo-area">
+            <h1 class="invoice-main-title">ORDEM DE SERVIÇO</h1>
+            <div class="invoice-logo-circle">AM</div>
+          </div>
+
+          <div class="invoice-col client-col">
+            <h4 class="label-sm">CLIENTE</h4>
+            <h2 class="client-name">${os.clientName}</h2>
+            <p>${os.clientPhone}</p>
+            <div style="margin-top: 8px;">
+              <p><strong>Veículo:</strong> ${os.vehicle}</p>
+              <p><strong>KM:</strong> ${os.mileage}</p>
+            </div>
+          </div>
+        </header>
+
+        <hr class="divider" />
+
+        <div class="invoice-meta-grid">
+          <div class="meta-item">
+            <span class="label-sm">NÚMERO OS</span>
+            <span class="meta-value">#${os.osNumber}</span>
+          </div>
+          <div class="meta-item">
+            <span class="label-sm">DATA EMISSÃO</span>
+            <span class="meta-value">${formatDate(os.createdAt)}</span>
+          </div>
+          <div class="meta-item">
+            <span class="label-sm">STATUS</span>
+            <span class="meta-value status-print">${STATUS_LABELS[os.status]}</span>
+          </div>
+        </div>
+
+        <hr class="divider" />
+
+        <div class="table-section">
+          <h3 class="section-title">PEÇAS E MATERIAIS</h3>
+          <table class="invoice-items-table">
+            <thead>
+              <tr>
+                <th style="width: 75%;">ITEM / DESCRIÇÃO</th>
+                <th style="width: 25%;" class="text-right">VALOR</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${os.parts.length === 0 ? '<tr><td colspan="2" style="font-style:italic; color:#999; padding: 15px 0">Nenhuma peça utilizada.</td></tr>' : os.parts.map(item => `
+                <tr>
+                  <td>${item.description}</td>
+                  <td class="text-right">${formatMoney(item.price)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <div class="subtotal-row">
+            <span>Subtotal Peças:</span>
+            <span class="subtotal-value">${formatMoney(subtotalParts)}</span>
+          </div>
+        </div>
+
+        <div class="table-section" style="margin-top: 30px;">
+          <h3 class="section-title">MÃO DE OBRA E SERVIÇOS</h3>
+          <table class="invoice-items-table">
+            <thead>
+              <tr>
+                <th style="width: 75%;">DESCRIÇÃO DO SERVIÇO</th>
+                <th style="width: 25%;" class="text-right">VALOR</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${os.services.length === 0 ? '<tr><td colspan="2" style="font-style:italic; color:#999; padding: 15px 0">Nenhum serviço registrado.</td></tr>' : os.services.map(item => `
+                <tr>
+                  <td>${item.description}</td>
+                  <td class="text-right">${formatMoney(item.price)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <div class="subtotal-row">
+            <span>Subtotal Serviços:</span>
+            <span class="subtotal-value">${formatMoney(subtotalServices)}</span>
+          </div>
+        </div>
+
+        <div class="invoice-total-block">
+          <div class="total-line">
+            <span class="label-total">TOTAL GERAL</span>
+            <span class="value-total">${formatMoney(os.total)}</span>
+          </div>
+        </div>
+
+        ${os.publicNotes && os.publicNotes.trim() !== '' ? `
+          <div class="table-section" style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 10px;">
+            <h3 class="section-title" style="margin-bottom: 5px;">OBSERVAÇÕES / GARANTIA</h3>
+            <div style="font-size: 10pt; line-height: 1.4; white-space: pre-wrap; color: #333;">
+              ${os.publicNotes}
+            </div>
+          </div>
+        ` : ''}
+
+        <div class="signature-area">
+          <div class="signature-block">
+            <div class="sign-line"></div>
+            <span class="sign-name">${settings.name}</span>
+            <span class="sign-label">Responsável Técnico</span>
+          </div>
+          <div class="signature-block">
+            <div class="sign-line"></div>
+            <span class="sign-name">${os.clientName}</span>
+            <span class="sign-label">Cliente</span>
+          </div>
+        </div>
+
+        <div class="footer-text-block">
+          <p class="declaration-text">
+            Declaro ter recebido os serviços e produtos acima descritos em perfeito estado.
+          </p>
+          <p class="thank-you-msg">
+            OBRIGADO PELA PREFERÊNCIA!
+          </p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    // Cria iframe invisível
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'absolute';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    document.body.appendChild(iframe);
+
+    // Escreve conteúdo no iframe
+    const doc = iframe.contentWindow?.document;
+    if (doc) {
+      doc.open();
+      doc.write(printContent);
+      doc.close();
+
+      // Aguarda carregar e imprime
+      iframe.contentWindow?.focus();
+      setTimeout(() => {
+        console.log('🖨️ Disparando print() do iframe');
+        iframe.contentWindow?.print();
+        // Remove iframe após impressão
+        setTimeout(() => {
+          console.log('✅ Removendo iframe');
+          document.body.removeChild(iframe);
+        }, 100);
+      }, 250);
+    }
   };
 
   const executePendingAction = () => {
@@ -503,7 +877,6 @@ function AppContent() {
       const os = pendingAction.data;
       console.log('💰 FINISH_OS_FINANCIAL:', os);
       
-      // ✅ AGORA ABRE O MODAL BONITO ao invés de confirm() feio
       setPendingInstallmentOS(os);
       setIsInstallmentChoiceOpen(true);
       setPendingAction(null);
@@ -573,7 +946,6 @@ function AppContent() {
     setPendingAction(null);
   };
 
-  // 🆕 NOVA FUNÇÃO: Lidar com resposta do ChoiceModal
   const handleInstallmentChoice = (wantsInstallment: boolean) => {
     if (!pendingInstallmentOS) return;
 
@@ -589,8 +961,8 @@ function AppContent() {
         pendingInstallmentOS.total, 
         'CREDIT', 
         pendingInstallmentOS.createdAt,
-        undefined, // groupId
-        paymentDate // 🔧 PASSA DATA DE PAGAMENTO
+        undefined,
+        paymentDate
       );
       setLedger(prev => [entry, ...prev]);
       setWorkOrders(prev => prev.map(o => 
@@ -661,16 +1033,8 @@ function AppContent() {
         {isExportModalOpen && <ExportModal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} ledger={ledger} workOrders={workOrders} defaultPath={settings.exportPath} Money={Money} SoundFX={{ success: () => addToast("Sucesso!", "success"), error: () => addToast("Erro", "error") }} />}
         {isChecklistOpen && <ChecklistModal isOpen={isChecklistOpen} onClose={() => setIsChecklistOpen(false)} onSave={(data) => { if (checklistOS) setWorkOrders(p => p.map(o => o.id === checklistOS.id ? { ...o, checklist: data } : o)); setIsChecklistOpen(false); }} os={checklistOS} />}
         
-        {/* 🖨️ COMPONENTE DE IMPRESSÃO - Sempre presente, controlado por printingOS */}
-        <PrintableInvoice 
-          data={printingOS} 
-          settings={settings} 
-          formatMoney={Money.format}
-        />
-        
         {deleteModalInfo.isOpen && <DeleteConfirmationModal isOpen={deleteModalInfo.isOpen} onClose={() => setDeleteModalInfo({ isOpen: false, entry: null })} onConfirmSingle={confirmDeleteSingle} onConfirmGroup={confirmDeleteGroup} isGroup={!!deleteModalInfo.entry?.groupId} />}
         
-        {/* 🆕 NOVO MODAL BONITO DE PARCELAMENTO */}
         {isInstallmentChoiceOpen && pendingInstallmentOS && (
           <ChoiceModal
             isOpen={isInstallmentChoiceOpen}

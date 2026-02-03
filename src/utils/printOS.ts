@@ -296,9 +296,9 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings) {
           text-align: center;
         }
         
-        /* Espaço para assinatura: 40mm */
+        /* Espaço para assinatura: 17mm */
         .sign-space {
-          height: 40mm;
+          height: 17mm;
           border-bottom: 1px solid #000;
           margin-bottom: 5px;
         }

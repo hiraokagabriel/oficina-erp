@@ -119,6 +119,22 @@ function AppContent() {
     }
   }, [isLoading, workOrders]);
 
+  // 🖨️ LISTENER GLOBAL PARA AFTERPRINT - Garante limpeza confiável
+  useEffect(() => {
+    const handleAfterPrint = () => {
+      console.log('✅ Evento afterprint disparado, limpando estado...');
+      setPrintingOS(null);
+      // Restaura título padrão
+      document.title = 'Oficina ERP';
+    };
+    
+    window.addEventListener('afterprint', handleAfterPrint);
+    
+    return () => {
+      window.removeEventListener('afterprint', handleAfterPrint);
+    };
+  }, []);
+
   const addToast = (message: string, type: ToastType = 'info') => {
     const id = crypto.randomUUID();
     setToasts(prev => [...prev, { id, message, type }]);
@@ -436,8 +452,10 @@ function AppContent() {
     setActiveTab('OFICINA');
   };
 
-  // 🖨️ FUNÇÃO CORRIGIDA - AGORA COM WINDOW.PRINT() E CLEANUP CORRETO
+  // 🖨️ SOLUÇÃO ROBUSTA - Usa requestAnimationFrame duplo sem timeouts problemáticos
   const handlePrintOS = (os: WorkOrder) => {
+    console.log('🖨️ Iniciando impressão da OS #' + os.osNumber);
+    
     // Sanitiza nome para PDF
     const sanitize = (str: string) => str
       .replace(/[^a-zA-Z0-9\s-]/g, '')
@@ -448,37 +466,22 @@ function AppContent() {
     const vehicle = sanitize(os.vehicle.split(' - ')[0]);
     const pdfTitle = `OS-${os.osNumber}_${clientName}_${vehicle}`;
     
-    // Salva título original
-    const originalTitle = document.title;
+    // Define título do PDF
     document.title = pdfTitle;
     
-    // Seta printingOS
+    // Atualiza estado para renderizar componente de impressão
     setPrintingOS(os);
     
-    // 🔧 TIMEOUT para garantir renderização antes de imprimir
-    setTimeout(() => {
-      console.log('🖨️ Chamando window.print()...');
-      window.print();
-      
-      // ✅ Listener para detectar fim da impressão
-      const afterPrint = () => {
-        console.log('✅ Impressão concluída, restaurando...');
-        document.title = originalTitle;
-        setPrintingOS(null);
-        window.removeEventListener('afterprint', afterPrint);
-      };
-      
-      window.addEventListener('afterprint', afterPrint);
-      
-      // 🔒 Fallback: Se afterprint não disparar, limpa após 3 segundos
-      setTimeout(() => {
-        if (document.title === pdfTitle) {
-          console.log('⚠️ Fallback: Limpando estado...');
-          document.title = originalTitle;
-          setPrintingOS(null);
-        }
-      }, 3000);
-    }, 500); // 🔧 500ms para garantir renderização
+    // ✅ SOLUÇÃO: Usa requestAnimationFrame DUPLO para garantir renderização completa
+    // Primeiro frame: React processa o setState
+    requestAnimationFrame(() => {
+      // Segundo frame: O DOM já foi atualizado com o novo conteúdo
+      requestAnimationFrame(() => {
+        console.log('🖨️ Componente renderizado, disparando window.print()');
+        window.print();
+        // O listener afterprint no useEffect cuidará da limpeza
+      });
+    });
   };
 
   const executePendingAction = () => {
@@ -658,7 +661,7 @@ function AppContent() {
         {isExportModalOpen && <ExportModal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} ledger={ledger} workOrders={workOrders} defaultPath={settings.exportPath} Money={Money} SoundFX={{ success: () => addToast("Sucesso!", "success"), error: () => addToast("Erro", "error") }} />}
         {isChecklistOpen && <ChecklistModal isOpen={isChecklistOpen} onClose={() => setIsChecklistOpen(false)} onSave={(data) => { if (checklistOS) setWorkOrders(p => p.map(o => o.id === checklistOS.id ? { ...o, checklist: data } : o)); setIsChecklistOpen(false); }} os={checklistOS} />}
         
-        {/* 🖨️ COMPONENTE DE IMPRESSÃO - AGORA SEM CALLBACK (não precisa mais) */}
+        {/* 🖨️ COMPONENTE DE IMPRESSÃO - Sempre presente, controlado por printingOS */}
         <PrintableInvoice 
           data={printingOS} 
           settings={settings} 

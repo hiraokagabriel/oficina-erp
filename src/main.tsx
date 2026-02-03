@@ -9,6 +9,8 @@ import "./styles-dragdrop-overhaul.css";
 import "./styles-crm-timeline.css";
 // SCROLLBAR CUSTOMIZADA E DROPDOWN FIXES
 import "./styles-scrollbar.css";
+// PARTS PAGE STYLES
+import "./styles-parts.css";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

@@ -79,7 +79,223 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
       alert('Selecione pelo menos uma peça para imprimir');
       return;
     }
-    window.print();
+
+    const partsToDisplay = consolidatedParts.filter(p => p.selected);
+    const totalQty = partsToDisplay.reduce((sum, p) => sum + p.quantity, 0);
+    const uniqueOSCount = new Set(partsToDisplay.flatMap(p => p.refs.map(r => r.osNumber))).size;
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Resumo de Peças</title>
+        <style>
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+          }
+          
+          body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: white;
+            color: black;
+          }
+          
+          .print-header {
+            text-align: center;
+            margin-bottom: 25px;
+            border-bottom: 3px solid #000;
+            padding-bottom: 12px;
+          }
+          
+          .print-header h1 {
+            font-size: 22pt;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+          }
+          
+          .print-date {
+            font-size: 11pt;
+          }
+          
+          .print-info {
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #f5f5f5;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+          }
+          
+          .print-info div {
+            margin: 4px 0;
+            font-size: 10pt;
+          }
+          
+          .print-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 25px;
+            font-size: 9pt;
+          }
+          
+          .print-table th {
+            background: #e0e0e0;
+            border: 2px solid #000;
+            padding: 10px 8px;
+            text-align: left;
+            font-weight: bold;
+            font-size: 10pt;
+            text-transform: uppercase;
+          }
+          
+          .print-table td {
+            border: 1px solid #666;
+            padding: 8px 6px;
+            vertical-align: top;
+          }
+          
+          .print-checkbox {
+            text-align: center;
+            font-size: 16pt;
+            font-weight: bold;
+          }
+          
+          .print-qty {
+            text-align: center;
+            font-weight: bold;
+          }
+          
+          .print-footer {
+            margin-top: 30px;
+            page-break-inside: avoid;
+          }
+          
+          .print-notes {
+            margin-bottom: 20px;
+          }
+          
+          .print-notes strong {
+            font-size: 11pt;
+            display: block;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+          }
+          
+          .print-line {
+            margin: 6px 0;
+            border-bottom: 1px solid #000;
+            padding-bottom: 2px;
+          }
+          
+          .print-signature {
+            display: flex;
+            justify-content: space-between;
+            gap: 30px;
+            margin-top: 20px;
+            border-top: 2px solid #000;
+            padding-top: 15px;
+          }
+          
+          .print-sig-line {
+            flex: 1;
+            font-size: 10pt;
+            padding: 8px 0;
+          }
+          
+          @page {
+            size: A4;
+            margin: 15mm;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="print-header">
+          <h1>📦 RESUMO DE PEÇAS PARA PEDIDO</h1>
+          <div class="print-date">
+            <strong>Data:</strong> ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+          </div>
+        </div>
+
+        <div class="print-info">
+          <div><strong>Total de peças:</strong> ${partsToDisplay.length} distintas (${totalQty} unidades)</div>
+          <div><strong>OSs relacionadas:</strong> ${uniqueOSCount}</div>
+          <div><strong>Status:</strong> ${statusFilter === 'ALL' ? 'Orçamento + Aprovado' : statusFilter === 'ORCAMENTO' ? 'Orçamento' : 'Aprovado'}</div>
+        </div>
+
+        <table class="print-table">
+          <thead>
+            <tr>
+              <th style="width: 5%">☐</th>
+              <th style="width: 35%">PEÇA</th>
+              <th style="width: 8%">QTD</th>
+              <th style="width: 22%">CLIENTE</th>
+              <th style="width: 10%">OS</th>
+              <th style="width: 20%">FORNECEDOR</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${partsToDisplay.map(part => `
+              <tr>
+                <td class="print-checkbox">☐</td>
+                <td>${part.description}</td>
+                <td class="print-qty">${part.quantity}</td>
+                <td>${Array.from(new Set(part.refs.map(r => r.clientName))).join(', ')}</td>
+                <td>${part.refs.map(r => `#${r.osNumber}`).join(', ')}</td>
+                <td>__________________</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div class="print-footer">
+          <div class="print-notes">
+            <strong>OBSERVAÇÕES:</strong>
+            <div class="print-line">_________________________________________________________________________________</div>
+            <div class="print-line">_________________________________________________________________________________</div>
+            <div class="print-line">_________________________________________________________________________________</div>
+            <div class="print-line">_________________________________________________________________________________</div>
+          </div>
+          
+          <div class="print-signature">
+            <div class="print-sig-line">
+              <strong>RESPONSÁVEL:</strong> _________________________________
+            </div>
+            <div class="print-sig-line">
+              <strong>DATA PEDIDO:</strong> ____/____/________ <strong>PREVISÃO ENTREGA:</strong> ____/____/________
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    // Criar iframe invisível
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'absolute';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    document.body.appendChild(iframe);
+
+    // Escrever conteúdo no iframe
+    const doc = iframe.contentWindow?.document;
+    if (doc) {
+      doc.open();
+      doc.write(printContent);
+      doc.close();
+
+      // Aguardar carregar e imprimir
+      iframe.contentWindow?.focus();
+      setTimeout(() => {
+        iframe.contentWindow?.print();
+        // Remover iframe após impressão
+        setTimeout(() => document.body.removeChild(iframe), 100);
+      }, 250);
+    }
   };
 
   const partsToDisplay = consolidatedParts.filter(p => selectedParts.size === 0 || p.selected);
@@ -257,75 +473,6 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
           </table>
         </div>
       )}
-
-      {/* Print View (Hidden on screen) */}
-      <div className="parts-print-container">
-        <div className="parts-print-header">
-          <h1>📦 RESUMO DE PEÇAS PARA PEDIDO</h1>
-          <div className="parts-print-date">
-            <strong>Data:</strong> {new Date().toLocaleDateString('pt-BR', { 
-              day: '2-digit', 
-              month: '2-digit', 
-              year: 'numeric' 
-            })}
-          </div>
-        </div>
-
-        <div className="parts-print-info">
-          <div><strong>Total de peças:</strong> {partsToDisplay.length} distintas ({totalQty} unidades)</div>
-          <div><strong>OSs relacionadas:</strong> {uniqueOSCount}</div>
-          <div><strong>Status:</strong> {statusFilter === 'ALL' ? 'Orçamento + Aprovado' : statusFilter === 'ORCAMENTO' ? 'Orçamento' : 'Aprovado'}</div>
-        </div>
-
-        <table className="parts-print-table">
-          <thead>
-            <tr>
-              <th style={{ width: '5%' }}>☐</th>
-              <th style={{ width: '35%' }}>PEÇA</th>
-              <th style={{ width: '8%' }}>QTD</th>
-              <th style={{ width: '22%' }}>CLIENTE</th>
-              <th style={{ width: '10%' }}>OS</th>
-              <th style={{ width: '20%' }}>FORNECEDOR</th>
-            </tr>
-          </thead>
-          <tbody>
-            {partsToDisplay.map((part, idx) => (
-              <tr key={`print-${part.description}-${idx}`}>
-                <td className="parts-print-checkbox">☐</td>
-                <td className="parts-print-name">{part.description}</td>
-                <td className="parts-print-qty">{part.quantity}</td>
-                <td className="parts-print-client">
-                  {Array.from(new Set(part.refs.map(r => r.clientName))).join(', ')}
-                </td>
-                <td className="parts-print-os">
-                  {part.refs.map(r => `#${r.osNumber}`).join(', ')}
-                </td>
-                <td className="parts-print-supplier">__________________</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        <div className="parts-print-footer">
-          <div className="parts-print-notes">
-            <strong>OBSERVAÇÕES:</strong>
-            <div className="parts-print-lines">
-              {[1, 2, 3, 4].map(i => (
-                <div key={i} className="parts-print-line">_________________________________________________________________________________</div>
-              ))}
-            </div>
-          </div>
-          
-          <div className="parts-print-signature">
-            <div className="parts-print-sig-line">
-              <strong>RESPONSÁVEL:</strong> _________________________________
-            </div>
-            <div className="parts-print-sig-line">
-              <strong>DATA PEDIDO:</strong> ____/____/________ <strong>PREVISÃO ENTREGA:</strong> ____/____/________
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

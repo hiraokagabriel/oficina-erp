@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { WorkOrder, OSStatus } from '../types';
+import '../styles-parts.css';
 
 interface PartsPageProps {
   workOrders: WorkOrder[];
@@ -12,15 +13,21 @@ interface PartWithMetadata {
   description: string;
   quantity: number;
   refs: OSPartRef[];
+  selected: boolean;
 }
 
 export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) => {
-  const [isPrinting, setIsPrinting] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ORCAMENTO' | 'APROVADO'>('ALL');
+  const [selectedParts, setSelectedParts] = useState<Set<string>>(new Set());
+  const [selectAll, setSelectAll] = useState(false);
 
   const consolidatedParts = useMemo(() => {
-    const relevantOrders = workOrders.filter(os => os.status === 'ORCAMENTO' || os.status === 'APROVADO');
+    const relevantOrders = workOrders.filter(os => {
+      if (statusFilter === 'ALL') return os.status === 'ORCAMENTO' || os.status === 'APROVADO';
+      return os.status === statusFilter;
+    });
 
-    const partsMap = new Map<string, PartWithMetadata>();
+    const partsMap = new Map<string, Omit<PartWithMetadata, 'selected'>>();
 
     relevantOrders.forEach(os => {
       os.parts.forEach(part => {
@@ -39,156 +46,286 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
     });
 
     return Array.from(partsMap.values())
+      .map(p => ({
+        ...p,
+        selected: selectedParts.has(p.description)
+      }))
       .sort((a, b) => a.description.localeCompare(b.description));
-  }, [workOrders]);
+  }, [workOrders, statusFilter, selectedParts]);
+
+  const handleTogglePart = (description: string) => {
+    setSelectedParts(prev => {
+      const next = new Set(prev);
+      if (next.has(description)) {
+        next.delete(description);
+      } else {
+        next.add(description);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectAll) {
+      setSelectedParts(new Set());
+    } else {
+      setSelectedParts(new Set(consolidatedParts.map(p => p.description)));
+    }
+    setSelectAll(!selectAll);
+  };
 
   const handlePrint = () => {
-    setIsPrinting(true);
-    setTimeout(() => {
-      window.print();
-      setIsPrinting(false);
-    }, 100);
+    if (selectedParts.size === 0) {
+      alert('Selecione pelo menos uma peça para imprimir');
+      return;
+    }
+    window.print();
   };
+
+  const partsToDisplay = consolidatedParts.filter(p => selectedParts.size === 0 || p.selected);
+  const totalQty = partsToDisplay.reduce((sum, p) => sum + p.quantity, 0);
+  const uniqueOSCount = new Set(partsToDisplay.flatMap(p => p.refs.map(r => r.osNumber))).size;
 
   if (isLoading) {
     return (
-      <div className="page-container">
-        <div style={{ textAlign: 'center', padding: '40px' }}>
+      <div className="parts-page-container">
+        <div className="parts-loading">
           <div className="spinner"></div>
-          <p>Carregando dados...</p>
+          <p>Carregando peças...</p>
         </div>
       </div>
     );
   }
 
-  const totalQty = consolidatedParts.reduce((sum, p) => sum + p.quantity, 0);
-  const uniqueOSCount = new Set(consolidatedParts.flatMap(p => p.refs.map(r => r.osNumber))).size;
-
   return (
-    <>
-      <div className={`page-container ${isPrinting ? 'printing' : ''}`}>
-        <div className="page-header">
-          <div>
-            <h1>📦 Resumo de Peças</h1>
-            <p className="subtitle">Peças de OSs em Orçamento e Aprovadas</p>
-          </div>
-          <button className="btn-primary" onClick={handlePrint} disabled={consolidatedParts.length === 0}>
-            🖨️ Gerar PDF
+    <div className="parts-page-container">
+      {/* Header */}
+      <div className="parts-header">
+        <div className="parts-header-left">
+          <h1 className="parts-title">📦 Resumo de Peças</h1>
+          <p className="parts-subtitle">Gerencie e imprima peças para pedido</p>
+        </div>
+        <div className="parts-header-right">
+          <button 
+            className="parts-btn-print" 
+            onClick={handlePrint}
+            disabled={selectedParts.size === 0}
+          >
+            🖨️ Imprimir Selecionadas ({selectedParts.size})
           </button>
         </div>
+      </div>
 
-        {consolidatedParts.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-icon">📦</div>
-            <h3>Nenhuma peça encontrada</h3>
-            <p>Não há peças em OSs com status Orçamento ou Aprovado</p>
+      {/* Filters */}
+      <div className="parts-filters">
+        <div className="parts-filter-group">
+          <label className="parts-filter-label">Filtrar por Status:</label>
+          <div className="parts-filter-buttons">
+            <button 
+              className={`parts-filter-btn ${statusFilter === 'ALL' ? 'active' : ''}`}
+              onClick={() => setStatusFilter('ALL')}
+            >
+              Todos
+            </button>
+            <button 
+              className={`parts-filter-btn ${statusFilter === 'ORCAMENTO' ? 'active' : ''}`}
+              onClick={() => setStatusFilter('ORCAMENTO')}
+            >
+              📋 Orçamento
+            </button>
+            <button 
+              className={`parts-filter-btn ${statusFilter === 'APROVADO' ? 'active' : ''}`}
+              onClick={() => setStatusFilter('APROVADO')}
+            >
+              ✅ Aprovado
+            </button>
           </div>
-        ) : (
-          <div className="parts-table-container">
-            <table className="parts-summary-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '35%' }}>Peça</th>
-                  <th style={{ width: '80px' }}>Qtd</th>
-                  <th style={{ width: '30%' }}>Cliente</th>
-                  <th style={{ width: '100px' }}>OS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {consolidatedParts.map((part) => (
-                  <tr key={part.description}>
-                    <td className="part-name">{part.description}</td>
-                    <td className="quantity-cell">{part.quantity}</td>
-                    <td className="client-cell">
-                      {Array.from(new Set(part.refs.map(r => r.clientName))).join(', ')}
-                    </td>
-                    <td className="os-cell">
-                      {part.refs.map((r, idx) => (
-                        <span key={`${r.osNumber}-${idx}`} className="os-badge">
-                          #{r.osNumber}
-                        </span>
-                      ))}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        </div>
 
-        <div className="parts-summary-footer">
-          <div className="summary-stats">
-            <div className="stat-card">
-              <span className="stat-label">Total de Peças Distintas</span>
-              <span className="stat-value">{consolidatedParts.length}</span>
-            </div>
-            <div className="stat-card">
-              <span className="stat-label">Quantidade Total</span>
-              <span className="stat-value">{totalQty}</span>
-            </div>
-            <div className="stat-card">
-              <span className="stat-label">OSs Relacionadas</span>
-              <span className="stat-value">{uniqueOSCount}</span>
-            </div>
+        <div className="parts-filter-group">
+          <button 
+            className="parts-select-all-btn"
+            onClick={handleSelectAll}
+          >
+            {selectAll ? '❌ Desmarcar Todas' : '✓ Selecionar Todas'}
+          </button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="parts-stats">
+        <div className="parts-stat-card">
+          <div className="parts-stat-icon">📦</div>
+          <div className="parts-stat-content">
+            <div className="parts-stat-value">{consolidatedParts.length}</div>
+            <div className="parts-stat-label">Peças Distintas</div>
+          </div>
+        </div>
+        <div className="parts-stat-card">
+          <div className="parts-stat-icon">🔢</div>
+          <div className="parts-stat-content">
+            <div className="parts-stat-value">{consolidatedParts.reduce((s, p) => s + p.quantity, 0)}</div>
+            <div className="parts-stat-label">Quantidade Total</div>
+          </div>
+        </div>
+        <div className="parts-stat-card">
+          <div className="parts-stat-icon">📋</div>
+          <div className="parts-stat-content">
+            <div className="parts-stat-value">{new Set(consolidatedParts.flatMap(p => p.refs.map(r => r.osNumber))).size}</div>
+            <div className="parts-stat-label">OSs Relacionadas</div>
+          </div>
+        </div>
+        <div className="parts-stat-card highlight">
+          <div className="parts-stat-icon">✓</div>
+          <div className="parts-stat-content">
+            <div className="parts-stat-value">{selectedParts.size}</div>
+            <div className="parts-stat-label">Selecionadas</div>
           </div>
         </div>
       </div>
 
-      {isPrinting && (
-        <div className="print-only parts-print-view">
-          <div className="print-header">
-            <h1>📦 Resumo de Peças para Pedido</h1>
-            <p className="print-date">Data: {new Date().toLocaleDateString('pt-BR')}</p>
-          </div>
-
-          <div className="print-info">
-            <p><strong>Status incluídos:</strong> Orçamento e Aprovado</p>
-            <p><strong>Total de peças distintas:</strong> {consolidatedParts.length}</p>
-            <p><strong>Quantidade total:</strong> {totalQty}</p>
-          </div>
-
-          <table className="print-table">
+      {/* Table */}
+      {consolidatedParts.length === 0 ? (
+        <div className="parts-empty-state">
+          <div className="parts-empty-icon">📦</div>
+          <h3>Nenhuma peça encontrada</h3>
+          <p>Não há peças em OSs com os filtros selecionados</p>
+        </div>
+      ) : (
+        <div className="parts-table-wrapper">
+          <table className="parts-table">
             <thead>
               <tr>
-                <th style={{ width: '30%' }}>Peça</th>
-                <th style={{ width: '8%' }}>Qtd</th>
-                <th style={{ width: '25%' }}>Cliente</th>
-                <th style={{ width: '10%' }}>OS</th>
-                <th style={{ width: '27%' }}>Fornecedor</th>
+                <th className="parts-th-checkbox">
+                  <input 
+                    type="checkbox" 
+                    checked={selectAll}
+                    onChange={handleSelectAll}
+                    className="parts-checkbox-header"
+                  />
+                </th>
+                <th className="parts-th-name">Peça</th>
+                <th className="parts-th-qty">Qtd</th>
+                <th className="parts-th-client">Cliente</th>
+                <th className="parts-th-os">OS</th>
+                <th className="parts-th-status">Status</th>
               </tr>
             </thead>
             <tbody>
               {consolidatedParts.map((part) => (
-                <tr key={`print-${part.description}`}>
-                  <td className="print-part-name">{part.description}</td>
-                  <td className="print-quantity">{part.quantity}</td>
-                  <td className="print-client">
+                <tr 
+                  key={part.description} 
+                  className={`parts-row ${part.selected ? 'selected' : ''}`}
+                  onClick={() => handleTogglePart(part.description)}
+                >
+                  <td className="parts-td-checkbox">
+                    <input 
+                      type="checkbox" 
+                      checked={part.selected}
+                      onChange={() => handleTogglePart(part.description)}
+                      className="parts-checkbox"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </td>
+                  <td className="parts-td-name">{part.description}</td>
+                  <td className="parts-td-qty">
+                    <span className="parts-qty-badge">{part.quantity}</span>
+                  </td>
+                  <td className="parts-td-client">
                     {Array.from(new Set(part.refs.map(r => r.clientName))).join(', ')}
                   </td>
-                  <td className="print-os">
-                    {part.refs.map(r => `#${r.osNumber}`).join(', ')}
+                  <td className="parts-td-os">
+                    {part.refs.map((r, idx) => (
+                      <span key={`${r.osNumber}-${idx}`} className="parts-os-badge">
+                        #{r.osNumber}
+                      </span>
+                    ))}
                   </td>
-                  <td className="print-supplier">_______________________________</td>
+                  <td className="parts-td-status">
+                    {Array.from(new Set(part.refs.map(r => r.status))).map((status, idx) => (
+                      <span 
+                        key={idx} 
+                        className={`parts-status-badge ${status.toLowerCase()}`}
+                      >
+                        {status === 'ORCAMENTO' ? '📋 Orçamento' : '✅ Aprovado'}
+                      </span>
+                    ))}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
-
-          <div className="print-footer">
-            <p><strong>Observações:</strong></p>
-            <div className="print-notes-area">
-              _______________________________________________________________________________
-              <br />
-              _______________________________________________________________________________
-              <br />
-              _______________________________________________________________________________
-            </div>
-            <p className="print-signature">
-              <strong>Responsável:</strong> _____________________________ <strong>Data:</strong> ____/____/________
-            </p>
-          </div>
         </div>
       )}
-    </>
+
+      {/* Print View (Hidden on screen) */}
+      <div className="parts-print-container">
+        <div className="parts-print-header">
+          <h1>📦 RESUMO DE PEÇAS PARA PEDIDO</h1>
+          <div className="parts-print-date">
+            <strong>Data:</strong> {new Date().toLocaleDateString('pt-BR', { 
+              day: '2-digit', 
+              month: '2-digit', 
+              year: 'numeric' 
+            })}
+          </div>
+        </div>
+
+        <div className="parts-print-info">
+          <div><strong>Total de peças:</strong> {partsToDisplay.length} distintas ({totalQty} unidades)</div>
+          <div><strong>OSs relacionadas:</strong> {uniqueOSCount}</div>
+          <div><strong>Status:</strong> {statusFilter === 'ALL' ? 'Orçamento + Aprovado' : statusFilter === 'ORCAMENTO' ? 'Orçamento' : 'Aprovado'}</div>
+        </div>
+
+        <table className="parts-print-table">
+          <thead>
+            <tr>
+              <th style={{ width: '5%' }}>☐</th>
+              <th style={{ width: '35%' }}>PEÇA</th>
+              <th style={{ width: '8%' }}>QTD</th>
+              <th style={{ width: '22%' }}>CLIENTE</th>
+              <th style={{ width: '10%' }}>OS</th>
+              <th style={{ width: '20%' }}>FORNECEDOR</th>
+            </tr>
+          </thead>
+          <tbody>
+            {partsToDisplay.map((part, idx) => (
+              <tr key={`print-${part.description}-${idx}`}>
+                <td className="parts-print-checkbox">☐</td>
+                <td className="parts-print-name">{part.description}</td>
+                <td className="parts-print-qty">{part.quantity}</td>
+                <td className="parts-print-client">
+                  {Array.from(new Set(part.refs.map(r => r.clientName))).join(', ')}
+                </td>
+                <td className="parts-print-os">
+                  {part.refs.map(r => `#${r.osNumber}`).join(', ')}
+                </td>
+                <td className="parts-print-supplier">__________________</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="parts-print-footer">
+          <div className="parts-print-notes">
+            <strong>OBSERVAÇÕES:</strong>
+            <div className="parts-print-lines">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="parts-print-line">_________________________________________________________________________________</div>
+              ))}
+            </div>
+          </div>
+          
+          <div className="parts-print-signature">
+            <div className="parts-print-sig-line">
+              <strong>RESPONSÁVEL:</strong> _________________________________
+            </div>
+            <div className="parts-print-sig-line">
+              <strong>DATA PEDIDO:</strong> ____/____/________ <strong>PREVISÃO ENTREGA:</strong> ____/____/________
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };

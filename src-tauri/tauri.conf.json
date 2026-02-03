@@ -20,6 +20,8 @@
       }
     ],
     "security": {
+      "csp": null,
+      "dangerousDisableAssetCspModification": true,
       "assetProtocol": {
         "enable": true,
         "scope": {

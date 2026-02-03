@@ -15,6 +15,7 @@ const FinancialPage = lazy(() => import('./pages/FinancialPage').then(m => ({ de
 const WorkshopPage = lazy(() => import('./pages/WorkshopPage').then(m => ({ default: m.WorkshopPage })));
 const CRMPage = lazy(() => import('./pages/CRMPage').then(m => ({ default: m.CRMPage })));
 const ProcessPage = lazy(() => import('./pages/ProcessPage').then(m => ({ default: m.ProcessPage })));
+const PartsPage = lazy(() => import('./pages/PartsPage').then(m => ({ default: m.PartsPage })));
 const ConfigPage = lazy(() => import('./pages/ConfigPage').then(m => ({ default: m.ConfigPage })));
 const OSModal = lazy(() => import('./modals/OSModal').then(m => ({ default: m.OSModal })));
 const EntryModal = lazy(() => import('./modals/EntryModal').then(m => ({ default: m.EntryModal })));
@@ -41,7 +42,7 @@ function AppContent() {
   const finance = useFinance();
   
   const [currentTheme, setCurrentTheme] = useState<'dark' | 'pastel'>('dark');
-  const [activeTab, setActiveTab] = useState<'FINANCEIRO' | 'OFICINA' | 'PROCESSOS' | 'CLIENTES' | 'CONFIG'>('OFICINA');
+  const [activeTab, setActiveTab] = useState<'FINANCEIRO' | 'OFICINA' | 'PROCESSOS' | 'CLIENTES' | 'PECAS' | 'CONFIG'>('OFICINA');
   const [showConfetti, setShowConfetti] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
@@ -629,6 +630,7 @@ function AppContent() {
             {activeTab === 'OFICINA' && <WorkshopPage workOrders={workOrders} isLoading={isLoading} formatMoney={Money.format} onNewOS={() => { setEditingOS(null); setIsModalOpen(true); }} onStatusChange={handleUpdateStatus} kanbanActions={{ onRegress: (id) => { const os = workOrders.find(o => o.id === id); if (os) handleUpdateStatus(id, os.status === 'FINALIZADO' ? 'EM_SERVICO' : os.status === 'EM_SERVICO' ? 'APROVADO' : 'ORCAMENTO'); }, onAdvance: (id) => { const os = workOrders.find(o => o.id === id); if (os) handleUpdateStatus(id, os.status === 'ORCAMENTO' ? 'APROVADO' : os.status === 'APROVADO' ? 'EM_SERVICO' : 'FINALIZADO'); }, onEdit: (os) => { setEditingOS(os); setIsModalOpen(true); }, onChecklist: (os) => { setChecklistOS(os); setIsChecklistOpen(true); }, onPrint: handlePrintOS, onDelete: (os) => setPendingAction({ type: 'DELETE_OS', data: os }), onArchive: (os) => setPendingAction({ type: 'ARCHIVE_OS', data: os }), onRestore: (os) => handleUpdateStatus(os.id, 'ORCAMENTO'), onQuickFinish: (id) => handleUpdateStatus(id, 'FINALIZADO') }} />}
             {activeTab === 'PROCESSOS' && <ProcessPage workOrders={workOrders} onOpenNew={() => { setEditingOS(null); setIsModalOpen(true); }} onUpdateStatus={handleUpdateStatus} />}
             {activeTab === 'CLIENTES' && <CRMPage clients={clients} workOrders={workOrders} isLoading={isLoading} formatMoney={Money.format} onSaveClient={handleSaveClient} onOpenOS={handleOpenOSFromCRM} />}
+            {activeTab === 'PECAS' && <PartsPage workOrders={workOrders} isLoading={isLoading} />}
             {activeTab === 'CONFIG' && <ConfigPage settings={settings} setSettings={setSettings} currentTheme={currentTheme} setCurrentTheme={setCurrentTheme} onBackup={handleGoogleDriveBackup} isBackuping={isBackuping} driveStatus={driveStatus} onImportData={handleImportData} onOpenDatabase={() => setIsDatabaseModalOpen(true)} />}
           </Suspense>
         </main>

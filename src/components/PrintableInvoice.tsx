@@ -1,13 +1,39 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { WorkOrder, WorkshopSettings, STATUS_LABELS } from '../types';
 
 interface PrintableInvoiceProps {
   data: WorkOrder | null;
   settings: WorkshopSettings;
   formatMoney: (val: number) => string;
+  onPrintComplete?: () => void;
 }
 
-export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settings, formatMoney }) => {
+export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settings, formatMoney, onPrintComplete }) => {
+  
+  // 🖨️ DISPARA IMPRESSÃO AUTOMATICAMENTE QUANDO DATA ESTIVER DISPONÍVEL
+  useEffect(() => {
+    if (!data) return;
+    
+    console.log('📄 PrintableInvoice renderizado, iniciando impressão...');
+    
+    // Aguarda renderização completa antes de imprimir
+    const timer = setTimeout(() => {
+      console.log('🖨️ Chamando window.print()...');
+      window.print();
+      
+      // Listener para detectar fim da impressão
+      const handleAfterPrint = () => {
+        console.log('✅ Impressão concluída!');
+        if (onPrintComplete) onPrintComplete();
+        window.removeEventListener('afterprint', handleAfterPrint);
+      };
+      
+      window.addEventListener('afterprint', handleAfterPrint);
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, [data, onPrintComplete]);
+  
   if (!data) return null;
 
   const formatDate = (dateString: string) => {

@@ -7,9 +7,9 @@ import { updateClientCascading, updateCatalogItemCascading } from './services/ca
 import { uploadToDrive } from './services/googleDrive';
 import { Sidebar } from './components/Sidebar';
 import { Confetti } from './components/ui/Confetti';
-import { PrintableInvoice } from './components/PrintableInvoice';
 import { ToastContainer, ToastMessage, ToastType } from './components/ui/ToastContainer';
 import { LoadingSkeleton } from './components/ui/LoadingSkeleton';
+import { printOS } from './utils/printOS'; // 🆕 NOVA FUNÇÃO DE IMPRESSÃO
 
 const FinancialPage = lazy(() => import('./pages/FinancialPage').then(m => ({ default: m.FinancialPage })));
 const WorkshopPage = lazy(() => import('./pages/WorkshopPage').then(m => ({ default: m.WorkshopPage })));
@@ -56,7 +56,6 @@ function AppContent() {
   const [editingOS, setEditingOS] = useState<WorkOrder | null>(null);
   const [editingEntry, setEditingEntry] = useState<LedgerEntry | null>(null);
   const [checklistOS, setChecklistOS] = useState<WorkOrder | null>(null);
-  const [printingOS, setPrintingOS] = useState<WorkOrder | null>(null);
   const [deleteModalInfo, setDeleteModalInfo] = useState<{ isOpen: boolean; entry: LedgerEntry | null }>({ isOpen: false, entry: null });
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [isBackuping, setIsBackuping] = useState(false);
@@ -68,7 +67,6 @@ function AppContent() {
     const migrateOldWorkOrders = () => {
       let updated = false;
       const newWorkOrders = workOrders.map(os => {
-        // Se a OS está finalizada mas não tem paymentDate, seta como createdAt
         if (os.status === 'FINALIZADO' && !os.paymentDate) {
           console.log(`🔄 Migrando OS #${os.osNumber}: paymentDate = createdAt`);
           updated = true;
@@ -84,18 +82,16 @@ function AppContent() {
       }
     };
 
-    // Executa migração após carregar dados
     if (!isLoading && workOrders.length > 0) {
       migrateOldWorkOrders();
     }
-  }, [isLoading]); // Só executa quando o loading terminar
+  }, [isLoading]);
 
   // 🔧 MIGRAÇÃO: Atualiza lançamentos de receitas sem paymentDate
   useEffect(() => {
     const migrateLedgerEntries = () => {
       let updated = false;
       const newLedger = ledger.map(entry => {
-        // Se é receita (CREDIT) e não tem paymentDate, verifica se tem OS vinculada
         if (entry.type === 'CREDIT' && !entry.paymentDate) {
           const linkedOS = workOrders.find(os => os.financialId === entry.id);
           if (linkedOS && linkedOS.paymentDate) {
@@ -113,27 +109,10 @@ function AppContent() {
       }
     };
 
-    // Executa após migração de OSs
     if (!isLoading && ledger.length > 0 && workOrders.length > 0) {
       migrateLedgerEntries();
     }
   }, [isLoading, workOrders]);
-
-  // 🖨️ LISTENER GLOBAL PARA AFTERPRINT - Garante limpeza confiável
-  useEffect(() => {
-    const handleAfterPrint = () => {
-      console.log('✅ Evento afterprint disparado, limpando estado...');
-      setPrintingOS(null);
-      // Restaura título padrão
-      document.title = 'Oficina ERP';
-    };
-    
-    window.addEventListener('afterprint', handleAfterPrint);
-    
-    return () => {
-      window.removeEventListener('afterprint', handleAfterPrint);
-    };
-  }, []);
 
   const addToast = (message: string, type: ToastType = 'info') => {
     const id = crypto.randomUUID();
@@ -147,7 +126,6 @@ function AppContent() {
   const handleGoogleDriveBackup = async () => {
     if (isBackuping) return;
     
-    // 🆕 NOVA VALIDAÇÃO: Verifica se API Key e Token estão configurados
     if (!settings.googleApiKey || settings.googleApiKey.trim() === "") {
       addToast("⚠️ Configure a Google API Key nas configurações.", "error");
       return;
@@ -169,7 +147,6 @@ function AppContent() {
       const timestamp = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}-${String(now.getMinutes()).padStart(2,'0')}`;
       const filename = `backup_oficina_${timestamp}.json`;
 
-      // 🆕 AGORA USA settings.googleApiKey
       await uploadToDrive(filename, content, settings.googleDriveToken, settings.googleApiKey);
       setDriveStatus('success');
       addToast("Backup salvo!", "success");
@@ -188,7 +165,6 @@ function AppContent() {
     const os = workOrders.find(o => o.id === osId);
     if (!os || os.status === newStatus) return;
 
-    // 📅 LÓGICA DE PAYMENTDATE
     const isBecomingFinalized = newStatus === 'FINALIZADO' && os.status !== 'FINALIZADO';
     const isLeavingFinalized = os.status === 'FINALIZADO' && newStatus !== 'FINALIZADO';
 
@@ -205,12 +181,10 @@ function AppContent() {
       
       const updates: Partial<WorkOrder> = { status: newStatus };
       
-      // 🆕 Setar paymentDate ao finalizar
       if (isBecomingFinalized) {
         updates.paymentDate = new Date().toISOString();
       }
       
-      // ❌ Limpar paymentDate ao sair de finalizado
       if (isLeavingFinalized) {
         updates.paymentDate = undefined;
       }
@@ -230,7 +204,6 @@ function AppContent() {
     setCatalogServices(prev => learnCatalogItems(prev, data.services));
 
     if (editingOS) {
-      // 🔧 AGORA PASSA PUBLICNOTES
       const updated = updateWorkOrderData(
         editingOS, 
         data.osNumber, 
@@ -241,7 +214,7 @@ function AppContent() {
         data.parts, 
         data.services, 
         data.createdAt,
-        data.publicNotes // 🔧 ADICIONA PUBLICNOTES
+        data.publicNotes
       );
       setWorkOrders(prev => prev.map(o => o.id === editingOS.id ? updated : o));
       
@@ -250,7 +223,6 @@ function AppContent() {
       }
       addToast("OS atualizada!", "success");
     } else {
-      // 🔧 NOVA OS TAMBÉM PRECISA DE PUBLICNOTES
       const newOS = {
         id: crypto.randomUUID(),
         osNumber: data.osNumber,
@@ -263,7 +235,7 @@ function AppContent() {
         services: data.services,
         total: data.parts.reduce((a: number, b: any) => a + b.price, 0) + data.services.reduce((a: number, b: any) => a + b.price, 0),
         createdAt: data.createdAt || new Date().toISOString(),
-        publicNotes: data.publicNotes || '' // 🔧 ADICIONA PUBLICNOTES
+        publicNotes: data.publicNotes || ''
       };
       setWorkOrders(prev => [...prev, newOS]);
       addToast("Nova OS criada!", "success");
@@ -300,7 +272,6 @@ function AppContent() {
     }
   };
 
-  // 🆕 NOVA FUNÇÃO: Marcar/desmarcar pagamento
   const handleTogglePayment = (entryId: string) => {
     const entry = ledger.find(e => e.id === entryId);
     if (!entry || entry.type !== 'CREDIT') return;
@@ -308,14 +279,12 @@ function AppContent() {
     const now = new Date().toISOString();
     const newPaymentDate = entry.paymentDate ? undefined : now;
 
-    // Atualiza o ledger
     setLedger(prev => prev.map(e => 
       e.id === entryId 
         ? { ...e, paymentDate: newPaymentDate }
         : e
     ));
 
-    // Se tem OS vinculada, atualiza também
     const linkedOS = workOrders.find(os => os.financialId === entryId);
     if (linkedOS) {
       setWorkOrders(prev => prev.map(os => 
@@ -343,7 +312,6 @@ function AppContent() {
     setDeleteModalInfo({ isOpen: false, entry: null });
   };
 
-  // 👥 SALVAR CLIENTE (CRM)
   const handleSaveClient = (updatedClient: Client) => {
     const oldClient = clients.find(c => c.id === updatedClient.id);
     setClients(prev => prev.find(c => c.id === updatedClient.id) ? prev.map(c => c.id === updatedClient.id ? updatedClient : c) : [...prev, updatedClient]);
@@ -357,7 +325,6 @@ function AppContent() {
     }
   };
 
-  // 🛠️ SALVAR ITEM DO CATÁLOGO (PEÇAS/SERVIÇOS)
   const handleSaveCatalogItem = (updatedItem: CatalogItem, type: 'part' | 'service') => {
     let oldItem: CatalogItem | undefined;
     if (type === 'part') {
@@ -452,36 +419,11 @@ function AppContent() {
     setActiveTab('OFICINA');
   };
 
-  // 🖨️ SOLUÇÃO ROBUSTA - Usa requestAnimationFrame duplo sem timeouts problemáticos
+  // 🖨️ NOVA FUNÇÃO DE IMPRESSÃO - Usa iframe em vez de componente React
   const handlePrintOS = (os: WorkOrder) => {
     console.log('🖨️ Iniciando impressão da OS #' + os.osNumber);
-    
-    // Sanitiza nome para PDF
-    const sanitize = (str: string) => str
-      .replace(/[^a-zA-Z0-9\s-]/g, '')
-      .replace(/\s+/g, '_')
-      .substring(0, 30);
-
-    const clientName = sanitize(os.clientName);
-    const vehicle = sanitize(os.vehicle.split(' - ')[0]);
-    const pdfTitle = `OS-${os.osNumber}_${clientName}_${vehicle}`;
-    
-    // Define título do PDF
-    document.title = pdfTitle;
-    
-    // Atualiza estado para renderizar componente de impressão
-    setPrintingOS(os);
-    
-    // ✅ SOLUÇÃO: Usa requestAnimationFrame DUPLO para garantir renderização completa
-    // Primeiro frame: React processa o setState
-    requestAnimationFrame(() => {
-      // Segundo frame: O DOM já foi atualizado com o novo conteúdo
-      requestAnimationFrame(() => {
-        console.log('🖨️ Componente renderizado, disparando window.print()');
-        window.print();
-        // O listener afterprint no useEffect cuidará da limpeza
-      });
-    });
+    addToast(`Imprimindo OS #${os.osNumber}...`, 'info');
+    printOS(os, settings);
   };
 
   const executePendingAction = () => {
@@ -503,7 +445,6 @@ function AppContent() {
       const os = pendingAction.data;
       console.log('💰 FINISH_OS_FINANCIAL:', os);
       
-      // ✅ AGORA ABRE O MODAL BONITO ao invés de confirm() feio
       setPendingInstallmentOS(os);
       setIsInstallmentChoiceOpen(true);
       setPendingAction(null);
@@ -573,7 +514,6 @@ function AppContent() {
     setPendingAction(null);
   };
 
-  // 🆕 NOVA FUNÇÃO: Lidar com resposta do ChoiceModal
   const handleInstallmentChoice = (wantsInstallment: boolean) => {
     if (!pendingInstallmentOS) return;
 
@@ -589,8 +529,8 @@ function AppContent() {
         pendingInstallmentOS.total, 
         'CREDIT', 
         pendingInstallmentOS.createdAt,
-        undefined, // groupId
-        paymentDate // 🔧 PASSA DATA DE PAGAMENTO
+        undefined,
+        paymentDate
       );
       setLedger(prev => [entry, ...prev]);
       setWorkOrders(prev => prev.map(o => 
@@ -661,16 +601,8 @@ function AppContent() {
         {isExportModalOpen && <ExportModal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} ledger={ledger} workOrders={workOrders} defaultPath={settings.exportPath} Money={Money} SoundFX={{ success: () => addToast("Sucesso!", "success"), error: () => addToast("Erro", "error") }} />}
         {isChecklistOpen && <ChecklistModal isOpen={isChecklistOpen} onClose={() => setIsChecklistOpen(false)} onSave={(data) => { if (checklistOS) setWorkOrders(p => p.map(o => o.id === checklistOS.id ? { ...o, checklist: data } : o)); setIsChecklistOpen(false); }} os={checklistOS} />}
         
-        {/* 🖨️ COMPONENTE DE IMPRESSÃO - Sempre presente, controlado por printingOS */}
-        <PrintableInvoice 
-          data={printingOS} 
-          settings={settings} 
-          formatMoney={Money.format}
-        />
-        
         {deleteModalInfo.isOpen && <DeleteConfirmationModal isOpen={deleteModalInfo.isOpen} onClose={() => setDeleteModalInfo({ isOpen: false, entry: null })} onConfirmSingle={confirmDeleteSingle} onConfirmGroup={confirmDeleteGroup} isGroup={!!deleteModalInfo.entry?.groupId} />}
         
-        {/* 🆕 NOVO MODAL BONITO DE PARCELAMENTO */}
         {isInstallmentChoiceOpen && pendingInstallmentOS && (
           <ChoiceModal
             isOpen={isInstallmentChoiceOpen}

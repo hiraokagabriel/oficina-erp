@@ -436,45 +436,25 @@ function AppContent() {
     setActiveTab('OFICINA');
   };
 
-  // 🖨️ FUNÇÃO CORRIGIDA PARA IMPRIMIR PDF COM NOME AUTOMÁTICO
+  // 🖨️ FUNÇÃO SIMPLIFICADA - PrintableInvoice agora controla a impressão
   const handlePrintOS = (os: WorkOrder) => {
-    // Remove caracteres especiais e espaços para criar nome de arquivo válido
+    // Sanitiza nome para PDF
     const sanitize = (str: string) => str
-      .replace(/[^a-zA-Z0-9\s-]/g, '') // Remove caracteres especiais
-      .replace(/\s+/g, '_') // Substitui espaços por underscore
-      .substring(0, 30); // Limita tamanho
+      .replace(/[^a-zA-Z0-9\s-]/g, '')
+      .replace(/\s+/g, '_')
+      .substring(0, 30);
 
     const clientName = sanitize(os.clientName);
-    const vehicle = sanitize(os.vehicle.split(' - ')[0]); // Pega apenas modelo sem placa
-    const newTitle = `OS-${os.osNumber}_${clientName}_${vehicle}`;
+    const vehicle = sanitize(os.vehicle.split(' - ')[0]);
+    document.title = `OS-${os.osNumber}_${clientName}_${vehicle}`;
     
-    // Salva título original
-    const originalTitle = document.title;
-    
-    // Muda para o novo título
-    document.title = newTitle;
-    
-    // Define printingOS e aguarda renderização com timeout AUMENTADO
     setPrintingOS(os);
-    
-    // 🔧 CORREÇÃO: Timeout aumentado para 500ms + aguarda evento afterprint
-    setTimeout(() => {
-      window.print();
-      
-      // Listener para detectar quando a impressão terminar
-      const afterPrint = () => {
-        document.title = originalTitle;
-        setPrintingOS(null); // Limpa o estado
-        window.removeEventListener('afterprint', afterPrint);
-      };
-      
-      window.addEventListener('afterprint', afterPrint);
-      
-      // Fallback: restaura título após 2 segundos se o evento não disparar
-      setTimeout(() => {
-        document.title = originalTitle;
-      }, 2000);
-    }, 500); // 🔧 AUMENTADO DE 100ms PARA 500ms
+  };
+
+  // Callback para quando a impressão terminar
+  const handlePrintComplete = () => {
+    console.log('✅ Impressão completada, limpando estado...');
+    setPrintingOS(null);
   };
 
   const executePendingAction = () => {
@@ -653,7 +633,15 @@ function AppContent() {
         {isDatabaseModalOpen && <DatabaseModal isOpen={isDatabaseModalOpen} onClose={() => setIsDatabaseModalOpen(false)} clients={clients} catalogParts={catalogParts} catalogServices={catalogServices} onSaveClient={handleSaveClient} onDeleteClient={(id) => setClients(p => p.filter(c => c.id !== id))} onSaveCatalogItem={handleSaveCatalogItem} onDeleteCatalogItem={(id, type) => type === 'part' ? setCatalogParts(p => p.filter(x => x.id !== id)) : setCatalogServices(p => p.filter(x => x.id !== id))} formatMoney={Money.format} />}
         {isExportModalOpen && <ExportModal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} ledger={ledger} workOrders={workOrders} defaultPath={settings.exportPath} Money={Money} SoundFX={{ success: () => addToast("Sucesso!", "success"), error: () => addToast("Erro", "error") }} />}
         {isChecklistOpen && <ChecklistModal isOpen={isChecklistOpen} onClose={() => setIsChecklistOpen(false)} onSave={(data) => { if (checklistOS) setWorkOrders(p => p.map(o => o.id === checklistOS.id ? { ...o, checklist: data } : o)); setIsChecklistOpen(false); }} os={checklistOS} />}
-        <PrintableInvoice data={printingOS} settings={settings} formatMoney={Money.format} />
+        
+        {/* 🖨️ COMPONENTE DE IMPRESSÃO COM CALLBACK */}
+        <PrintableInvoice 
+          data={printingOS} 
+          settings={settings} 
+          formatMoney={Money.format}
+          onPrintComplete={handlePrintComplete}
+        />
+        
         {deleteModalInfo.isOpen && <DeleteConfirmationModal isOpen={deleteModalInfo.isOpen} onClose={() => setDeleteModalInfo({ isOpen: false, entry: null })} onConfirmSingle={confirmDeleteSingle} onConfirmGroup={confirmDeleteGroup} isGroup={!!deleteModalInfo.entry?.groupId} />}
         
         {/* 🆕 NOVO MODAL BONITO DE PARCELAMENTO */}

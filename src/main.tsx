@@ -11,6 +11,8 @@ import "./styles-crm-timeline.css";
 import "./styles-scrollbar.css";
 // PARTS PAGE STYLES
 import "./styles-parts.css";
+// PARTS PAGE PRINT STYLES (SEPARADO)
+import "./styles-parts-print.css";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

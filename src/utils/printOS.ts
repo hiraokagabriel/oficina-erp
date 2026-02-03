@@ -279,7 +279,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings) {
         .invoice-footer {
           margin-top: 40px;
           padding-top: 20px;
-          border-top: 2px solid #000;
+          border-top: 1px dashed #000; /* ✂️ Linha tracejada */
           page-break-inside: avoid;
         }
         

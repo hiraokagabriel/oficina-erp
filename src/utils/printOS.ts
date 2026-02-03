@@ -11,8 +11,11 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings) {
     return new Date(dateString).toLocaleDateString('pt-BR');
   };
 
+  // 🔧 CORREÇÃO: O sistema armazena valores como centavos (inteiros)
+  // Exemplo: 15000 centavos = R$ 150,00
   const formatMoney = (val: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+    const valueInReais = val / 100; // Converte centavos para reais
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valueInReais);
   };
 
   const subtotalParts = data.parts.reduce((acc, item) => acc + item.price, 0);

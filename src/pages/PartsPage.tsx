@@ -6,70 +6,41 @@ interface PartsPageProps {
   isLoading: boolean;
 }
 
-type OSPartRef = { osNumber: number; status: OSStatus };
+type OSPartRef = { osNumber: number; status: OSStatus; clientName: string };
 
 interface PartWithMetadata {
   description: string;
   quantity: number;
   refs: OSPartRef[];
-  checked: boolean;
-  supplier: string;
 }
 
 export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) => {
-  const [partsData, setPartsData] = useState<Map<string, { checked: boolean; supplier: string }>>(new Map());
   const [isPrinting, setIsPrinting] = useState(false);
 
   const consolidatedParts = useMemo(() => {
     const relevantOrders = workOrders.filter(os => os.status === 'ORCAMENTO' || os.status === 'APROVADO');
 
-    const partsMap = new Map<string, Omit<PartWithMetadata, 'checked' | 'supplier'>>();
+    const partsMap = new Map<string, PartWithMetadata>();
 
     relevantOrders.forEach(os => {
       os.parts.forEach(part => {
         const existing = partsMap.get(part.description);
         if (existing) {
           existing.quantity += 1;
-          existing.refs.push({ osNumber: os.osNumber, status: os.status });
+          existing.refs.push({ osNumber: os.osNumber, status: os.status, clientName: os.clientName });
         } else {
           partsMap.set(part.description, {
             description: part.description,
             quantity: 1,
-            refs: [{ osNumber: os.osNumber, status: os.status }]
+            refs: [{ osNumber: os.osNumber, status: os.status, clientName: os.clientName }]
           });
         }
       });
     });
 
     return Array.from(partsMap.values())
-      .map(p => {
-        const persisted = partsData.get(p.description);
-        return {
-          ...p,
-          checked: persisted?.checked ?? false,
-          supplier: persisted?.supplier ?? ''
-        };
-      })
       .sort((a, b) => a.description.localeCompare(b.description));
-  }, [workOrders, partsData]);
-
-  const handleCheckToggle = (description: string) => {
-    setPartsData(prev => {
-      const next = new Map(prev);
-      const current = next.get(description);
-      next.set(description, { checked: !(current?.checked ?? false), supplier: current?.supplier ?? '' });
-      return next;
-    });
-  };
-
-  const handleSupplierChange = (description: string, supplier: string) => {
-    setPartsData(prev => {
-      const next = new Map(prev);
-      const current = next.get(description);
-      next.set(description, { checked: current?.checked ?? false, supplier });
-      return next;
-    });
-  };
+  }, [workOrders]);
 
   const handlePrint = () => {
     setIsPrinting(true);
@@ -117,41 +88,26 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
             <table className="parts-summary-table">
               <thead>
                 <tr>
-                  <th style={{ width: '50px' }}>✓</th>
-                  <th style={{ width: '40%' }}>Peça</th>
+                  <th style={{ width: '35%' }}>Peça</th>
                   <th style={{ width: '80px' }}>Qtd</th>
-                  <th style={{ width: '160px' }}>OS / Status</th>
-                  <th style={{ width: '25%' }}>Fornecedor</th>
+                  <th style={{ width: '30%' }}>Cliente</th>
+                  <th style={{ width: '100px' }}>OS</th>
                 </tr>
               </thead>
               <tbody>
                 {consolidatedParts.map((part) => (
                   <tr key={part.description}>
-                    <td className="checkbox-cell">
-                      <input
-                        type="checkbox"
-                        checked={part.checked}
-                        onChange={() => handleCheckToggle(part.description)}
-                        className="part-checkbox"
-                      />
-                    </td>
                     <td className="part-name">{part.description}</td>
                     <td className="quantity-cell">{part.quantity}</td>
+                    <td className="client-cell">
+                      {Array.from(new Set(part.refs.map(r => r.clientName))).join(', ')}
+                    </td>
                     <td className="os-cell">
                       {part.refs.map((r, idx) => (
                         <span key={`${r.osNumber}-${idx}`} className="os-badge">
-                          #{r.osNumber} {r.status === 'ORCAMENTO' ? '(Orç)' : '(Apr)'}
+                          #{r.osNumber}
                         </span>
                       ))}
-                    </td>
-                    <td className="supplier-cell">
-                      <input
-                        type="text"
-                        value={part.supplier}
-                        onChange={(e) => handleSupplierChange(part.description, e.target.value)}
-                        placeholder="Digite o fornecedor"
-                        className="supplier-input"
-                      />
                     </td>
                   </tr>
                 ))}
@@ -194,28 +150,25 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
           <table className="print-table">
             <thead>
               <tr>
-                <th style={{ width: '40px' }}>☐</th>
-                <th style={{ width: '40%' }}>Peça</th>
-                <th style={{ width: '60px' }}>Qtd</th>
-                <th style={{ width: '20%' }}>OS / Status</th>
-                <th style={{ width: '30%' }}>Fornecedor</th>
+                <th style={{ width: '30%' }}>Peça</th>
+                <th style={{ width: '8%' }}>Qtd</th>
+                <th style={{ width: '25%' }}>Cliente</th>
+                <th style={{ width: '10%' }}>OS</th>
+                <th style={{ width: '27%' }}>Fornecedor</th>
               </tr>
             </thead>
             <tbody>
               {consolidatedParts.map((part) => (
                 <tr key={`print-${part.description}`}>
-                  <td className="print-checkbox">☐</td>
                   <td className="print-part-name">{part.description}</td>
                   <td className="print-quantity">{part.quantity}</td>
-                  <td className="print-os-status">
-                    {part.refs.map((r, idx) => (
-                      <div key={`${r.osNumber}-${idx}`} className="print-os-line">
-                        <span>#{r.osNumber}</span>
-                        <span className="print-status-indicator">{r.status === 'ORCAMENTO' ? '(Orç)' : '(Apr)'}</span>
-                      </div>
-                    ))}
+                  <td className="print-client">
+                    {Array.from(new Set(part.refs.map(r => r.clientName))).join(', ')}
                   </td>
-                  <td className="print-supplier">{part.supplier || '_______________________________'}</td>
+                  <td className="print-os">
+                    {part.refs.map(r => `#${r.osNumber}`).join(', ')}
+                  </td>
+                  <td className="print-supplier">_______________________________</td>
                 </tr>
               ))}
             </tbody>

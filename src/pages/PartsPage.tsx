@@ -138,7 +138,6 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
           .print-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 25px;
             font-size: 9pt;
           }
           
@@ -167,43 +166,6 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
           .print-qty {
             text-align: center;
             font-weight: bold;
-          }
-          
-          .print-footer {
-            margin-top: 30px;
-            page-break-inside: avoid;
-          }
-          
-          .print-notes {
-            margin-bottom: 20px;
-          }
-          
-          .print-notes strong {
-            font-size: 11pt;
-            display: block;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-          }
-          
-          .print-line {
-            margin: 6px 0;
-            border-bottom: 1px solid #000;
-            padding-bottom: 2px;
-          }
-          
-          .print-signature {
-            display: flex;
-            justify-content: space-between;
-            gap: 30px;
-            margin-top: 20px;
-            border-top: 2px solid #000;
-            padding-top: 15px;
-          }
-          
-          .print-sig-line {
-            flex: 1;
-            font-size: 10pt;
-            padding: 8px 0;
           }
           
           @page {
@@ -250,25 +212,6 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
             `).join('')}
           </tbody>
         </table>
-
-        <div class="print-footer">
-          <div class="print-notes">
-            <strong>OBSERVAÇÕES:</strong>
-            <div class="print-line">_________________________________________________________________________________</div>
-            <div class="print-line">_________________________________________________________________________________</div>
-            <div class="print-line">_________________________________________________________________________________</div>
-            <div class="print-line">_________________________________________________________________________________</div>
-          </div>
-          
-          <div class="print-signature">
-            <div class="print-sig-line">
-              <strong>RESPONSÁVEL:</strong> _________________________________
-            </div>
-            <div class="print-sig-line">
-              <strong>DATA PEDIDO:</strong> ____/____/________ <strong>PREVISÃO ENTREGA:</strong> ____/____/________
-            </div>
-          </div>
-        </div>
       </body>
       </html>
     `;

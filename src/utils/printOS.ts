@@ -32,7 +32,6 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings) {
   const subtotalServices = data.services.reduce((acc, item) => acc + item.price, 0);
 
   // 🆕 Gera nome dinâmico do arquivo com OS, cliente, veículo e placa
-  // Formato: OS_{numero}_Cliente_{nome}_Veiculo_{carro}_Placa_{placa}
   const osNumber = data.osNumber || 'SN';
   const clientName = sanitizeForFilename(data.clientName || 'Cliente');
   
@@ -41,8 +40,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings) {
     data.vehicle ? data.vehicle.split(' ').slice(0, 2).join(' ') : 'Veiculo'
   );
   
-  // Extrai placa, assumindo formato comum brasileiro (ex: "ABC-1234" ou "ABC1D23")
-  // Se não tiver placa no campo vehicle, busca padrão de placa na string
+  // Extrai placa
   let licensePlate = 'SemPlaca';
   if (data.vehicle) {
     const plateMatch = data.vehicle.match(/[A-Z]{3}[-]?[0-9][A-Z0-9][0-9]{2}/i);
@@ -312,7 +310,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings) {
         .invoice-footer {
           margin-top: 40px;
           padding-top: 20px;
-          border-top: 1px dashed #000; /* ✂️ Linha tracejada */
+          border-top: 1px dashed #000;
           page-break-inside: avoid;
         }
         
@@ -329,7 +327,6 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings) {
           text-align: center;
         }
         
-        /* Espaço para assinatura: 17mm */
         .sign-space {
           height: 17mm;
           border-bottom: 1px solid #000;
@@ -373,7 +370,6 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings) {
           color: #8B5CF6;
         }
         
-        /* Evita quebra de página em elementos críticos */
         .invoice-header,
         .invoice-meta-grid,
         .invoice-total-block {
@@ -383,9 +379,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings) {
     </head>
     <body>
       <div class="page-container">
-        <!-- CONTEÚDO PRINCIPAL -->
         <div class="page-content">
-          <!-- CABEÇALHO -->
           <header class="invoice-header">
             <div class="invoice-col supplier-col">
               <h4 class="label-sm">PRESTADOR DE SERVIÇO</h4>
@@ -394,12 +388,10 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings) {
               <p>${settings.cnpj || 'CNPJ não informado'}</p>
               ${settings.technician ? `<p>Téc. Resp: ${settings.technician}</p>` : ''}
             </div>
-
             <div class="invoice-logo-area">
               <h1 class="invoice-main-title">ORDEM DE SERVIÇO</h1>
               <div class="invoice-logo-circle">AM</div>
             </div>
-
             <div class="invoice-col client-col">
               <h4 class="label-sm">CLIENTE</h4>
               <h2 class="client-name">${data.clientName}</h2>
@@ -410,10 +402,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings) {
               </div>
             </div>
           </header>
-
           <hr class="divider" />
-
-          <!-- DADOS DA OS -->
           <div class="invoice-meta-grid">
             <div class="meta-item">
               <span class="label-sm">NÚMERO OS</span>
@@ -428,10 +417,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings) {
               <span class="meta-value status-print">${STATUS_LABELS[data.status]}</span>
             </div>
           </div>
-
           <hr class="divider" />
-
-          <!-- PEÇAS -->
           <div class="table-section">
             <h3 class="section-title">PEÇAS E MATERIAIS</h3>
             <table class="invoice-items-table">
@@ -458,8 +444,6 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings) {
               <span class="subtotal-value">${formatMoney(subtotalParts)}</span>
             </div>
           </div>
-
-          <!-- SERVIÇOS -->
           <div class="table-section">
             <h3 class="section-title">MÃO DE OBRA E SERVIÇOS</h3>
             <table class="invoice-items-table">
@@ -486,16 +470,12 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings) {
               <span class="subtotal-value">${formatMoney(subtotalServices)}</span>
             </div>
           </div>
-
-          <!-- TOTAL GERAL -->
           <div class="invoice-total-block">
             <div class="total-line">
               <span class="label-total">TOTAL GERAL</span>
               <span class="value-total">${formatMoney(data.total)}</span>
             </div>
           </div>
-
-          <!-- OBSERVAÇÕES -->
           ${data.publicNotes && data.publicNotes.trim() !== '' ? `
             <div class="table-section" style="border-top: 1px solid #eee; padding-top: 10px">
               <h3 class="section-title" style="margin-bottom: 5px">OBSERVAÇÕES / GARANTIA</h3>
@@ -505,8 +485,6 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings) {
             </div>
           ` : ''}
         </div>
-
-        <!-- 🖊️ RODAPÉ - table-footer-group repete automaticamente -->
         <div class="page-footer">
           <div class="invoice-footer">
             <div class="signature-area">
@@ -521,7 +499,6 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings) {
                 <span class="sign-label">Cliente</span>
               </div>
             </div>
-
             <div class="footer-text-block">
               <p class="declaration-text">
                 Declaro ter recebido os serviços e produtos acima descritos em perfeito estado.
@@ -533,49 +510,31 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings) {
           </div>
         </div>
       </div>
+      <script>
+        // 🔧 Aguarda carregamento completo e imprime automaticamente
+        window.onload = function() {
+          setTimeout(function() {
+            window.print();
+          }, 250);
+        };
+      </script>
     </body>
     </html>
   `;
 
-  // Criar iframe invisível
-  const iframe = document.createElement('iframe');
-  iframe.style.position = 'absolute';
-  iframe.style.width = '0';
-  iframe.style.height = '0';
-  iframe.style.border = 'none';
-  iframe.style.visibility = 'hidden';
-  document.body.appendChild(iframe);
-
-  // Escrever conteúdo no iframe
-  const doc = iframe.contentWindow?.document;
-  if (doc) {
-    doc.open();
-    doc.write(printContent);
-    doc.close();
-
-    // 🔧 Define o título do documento explicitamente após carregar
-    doc.title = documentTitle;
-
-    // Aguardar carregar e imprimir
-    iframe.contentWindow?.focus();
-    setTimeout(() => {
-      try {
-        // 🔧 Define título novamente imediatamente antes de imprimir
-        if (iframe.contentWindow) {
-          iframe.contentWindow.document.title = documentTitle;
-        }
-        iframe.contentWindow?.print();
-      } catch (err) {
-        console.error('Erro ao imprimir:', err);
-        alert('Erro ao abrir janela de impressão. Tente novamente.');
-      }
-      // Remover iframe após impressão
-      setTimeout(() => {
-        document.body.removeChild(iframe);
-      }, 100);
-    }, 250);
+  // 🆕 Abre nova janela para impressão (mais robusto que iframe)
+  const printWindow = window.open('', '_blank', 'width=800,height=600');
+  
+  if (printWindow) {
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    
+    // 🔧 Define título explicitamente
+    printWindow.document.title = documentTitle;
+    
+    console.log(`🖨️ Janela de impressão aberta: ${documentTitle}`);
   } else {
-    console.error('Não foi possível acessar o documento do iframe');
-    document.body.removeChild(iframe);
+    console.error('❌ Erro: Pop-up bloqueado pelo navegador');
+    alert('Por favor, permita pop-ups para imprimir. Verifique as configurações do navegador.');
   }
 }

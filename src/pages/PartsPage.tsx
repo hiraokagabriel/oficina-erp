@@ -90,7 +90,7 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const day = String(today.getDate()).padStart(2, '0');
     const dateStr = `${year}-${month}-${day}`;
-    const dateDisplay = today.toLocaleDateString('pt-BR'); // Para exibição no documento
+    const dateDisplay = today.toLocaleDateString('pt-BR');
     const documentTitle = `Pecas_${dateStr}`;
 
     const printContent = `
@@ -221,39 +221,32 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
             `).join('')}
           </tbody>
         </table>
+        <script>
+          // 🔧 Aguarda carregamento completo e imprime automaticamente
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+            }, 250);
+          };
+        </script>
       </body>
       </html>
     `;
 
-    // Criar iframe invisível
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'absolute';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = 'none';
-    document.body.appendChild(iframe);
-
-    // Escrever conteúdo no iframe
-    const doc = iframe.contentWindow?.document;
-    if (doc) {
-      doc.open();
-      doc.write(printContent);
-      doc.close();
-
-      // 🔧 Define o título do documento explicitamente após carregar
-      doc.title = documentTitle;
-
-      // Aguardar carregar e imprimir
-      iframe.contentWindow?.focus();
-      setTimeout(() => {
-        // 🔧 Define título novamente imediatamente antes de imprimir
-        if (iframe.contentWindow) {
-          iframe.contentWindow.document.title = documentTitle;
-        }
-        iframe.contentWindow?.print();
-        // Remover iframe após impressão
-        setTimeout(() => document.body.removeChild(iframe), 100);
-      }, 250);
+    // 🆕 Abre nova janela para impressão (mais robusto que iframe)
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      
+      // 🔧 Define título explicitamente
+      printWindow.document.title = documentTitle;
+      
+      console.log(`🖨️ Janela de impressão aberta: ${documentTitle}`);
+    } else {
+      console.error('❌ Erro: Pop-up bloqueado pelo navegador');
+      alert('Por favor, permita pop-ups para imprimir. Verifique as configurações do navegador.');
     }
   };
 

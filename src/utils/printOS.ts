@@ -510,36 +510,61 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings) {
           </div>
         </div>
       </div>
-      <script>
-        // 🔧 Aguarda carregamento completo e imprime automaticamente
-        window.onload = function() {
-          setTimeout(function() {
-            window.print();
-            // Fecha janela após impressão (opcional)
-            // window.onafterprint = function() { window.close(); };
-          }, 250);
-        };
-      </script>
     </body>
     </html>
   `;
 
-  // 🆕 Cria Blob URL (não é bloqueado como pop-up)
-  const blob = new Blob([printContent], { type: 'text/html' });
-  const blobURL = URL.createObjectURL(blob);
-  
-  // Abre em nova aba
-  const printWindow = window.open(blobURL, '_blank');
-  
-  if (printWindow) {
-    console.log(`🖨️ Impressão aberta: ${documentTitle}`);
-    
-    // Limpa o blob URL após uso
+  // 🔧 SOLUÇÃO PARA AMBIENTES NATIVOS (Electron/Tauri)
+  // Cria iframe invisível
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'absolute';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = 'none';
+  iframe.style.visibility = 'hidden';
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentWindow?.document;
+  if (doc) {
+    doc.open();
+    doc.write(printContent);
+    doc.close();
+
+    // 🔧 FORÇA O TÍTULO MÚLTIPLAS VEZES
+    const setTitle = () => {
+      if (iframe.contentWindow) {
+        iframe.contentWindow.document.title = documentTitle;
+      }
+    };
+
+    // Define título imediatamente
+    setTitle();
+
+    // Aguarda carregamento e define novamente
+    iframe.contentWindow?.addEventListener('load', () => {
+      setTitle();
+    });
+
+    // Imprime após delay maior para garantir título aplicado
     setTimeout(() => {
-      URL.revokeObjectURL(blobURL);
-    }, 1000);
+      setTitle(); // Define mais uma vez antes de imprimir
+      
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        console.log(`🖨️ Imprimindo: ${documentTitle}`);
+      } catch (err) {
+        console.error('Erro ao imprimir:', err);
+        alert('Erro ao abrir janela de impressão.');
+      }
+
+      // Remove iframe após impressão
+      setTimeout(() => {
+        document.body.removeChild(iframe);
+      }, 500);
+    }, 500); // Delay aumentado para ambientes nativos
   } else {
-    console.error('❌ Erro ao abrir janela de impressão');
-    alert('Não foi possível abrir a janela de impressão. Verifique as configurações do navegador.');
+    console.error('Não foi possível acessar o documento do iframe');
+    document.body.removeChild(iframe);
   }
 }

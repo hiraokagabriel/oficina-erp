@@ -152,6 +152,7 @@ const KanbanColumn = React.memo(
 export const KanbanBoard = React.memo<KanbanBoardProps>(
   ({ workOrders, isLoading, onStatusChange, actions, formatMoney, showArchived = false }) => {
     const [searchTerm, setSearchTerm] = useState('');
+    const [technicianFilter, setTechnicianFilter] = useState<'ALL' | 'NONE' | string>('ALL');
     const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
 
     const sensors = useSensors(
@@ -163,18 +164,49 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
       useSensor(KeyboardSensor)
     );
 
+    const technicianStats = useMemo(() => {
+      const map = new Map<string, number>();
+      let noneCount = 0;
+
+      workOrders.forEach(os => {
+        const t = (os.technician || '').trim();
+        if (!t) {
+          noneCount++;
+          return;
+        }
+        map.set(t, (map.get(t) || 0) + 1);
+      });
+
+      const list = Array.from(map.entries())
+        .sort((a, b) => a[0].localeCompare(b[0], 'pt-BR', { sensitivity: 'base' }))
+        .map(([name, count]) => ({ name, count }));
+
+      return { noneCount, list };
+    }, [workOrders]);
+
     const filteredWorkOrders = useMemo(() => {
-      if (!searchTerm) return workOrders;
+      let base = workOrders;
+
+      if (technicianFilter !== 'ALL') {
+        if (technicianFilter === 'NONE') {
+          base = base.filter(os => !(os.technician || '').trim());
+        } else {
+          base = base.filter(os => (os.technician || '').trim() === technicianFilter);
+        }
+      }
+
+      if (!searchTerm) return base;
 
       const term = searchTerm.toLowerCase();
-      return workOrders.filter(
+      return base.filter(
         (os) =>
           os.clientName.toLowerCase().includes(term) ||
           os.vehicle.toLowerCase().includes(term) ||
           os.osNumber.toString().includes(term) ||
-          (os.clientPhone && os.clientPhone.includes(term))
+          (os.clientPhone && os.clientPhone.includes(term)) ||
+          ((os.technician || '').toLowerCase().includes(term))
       );
-    }, [workOrders, searchTerm]);
+    }, [workOrders, searchTerm, technicianFilter]);
 
     const activeWorkOrder = useMemo(
       () => workOrders.find((os) => os.id === activeId),
@@ -198,7 +230,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
       const overId = over.id as string;
 
       const validStatuses: OSStatus[] = ['ORCAMENTO', 'APROVADO', 'EM_SERVICO', 'FINALIZADO', 'ARQUIVADO'];
-      
+
       let newStatus: OSStatus | null = null;
 
       if (validStatuses.includes(overId as OSStatus)) {
@@ -215,7 +247,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
       }
 
       const workOrder = workOrders.find((wo) => wo.id === orderId);
-      
+
       if (!workOrder) {
         return;
       }
@@ -261,6 +293,22 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
               </button>
             )}
           </div>
+
+          <div style={{ minWidth: 220 }}>
+            <select
+              className="form-input"
+              value={technicianFilter}
+              onChange={(e) => setTechnicianFilter(e.target.value)}
+              title="Filtrar por técnico"
+            >
+              <option value="ALL">Todos os técnicos</option>
+              <option value="NONE">Sem técnico ({technicianStats.noneCount})</option>
+              {technicianStats.list.map(t => (
+                <option key={t.name} value={t.name}>{t.name} ({t.count})</option>
+              ))}
+            </select>
+          </div>
+
           <div className="filter-stats">
             Mostrando <strong>{filteredWorkOrders.length}</strong> de {workOrders.length} ordens
           </div>

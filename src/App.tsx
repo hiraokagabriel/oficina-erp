@@ -28,7 +28,7 @@ const InstallmentModal = lazy(() => import('./modals/InstallmentModal').then(m =
 const ChoiceModal = lazy(() => import('./modals/ChoiceModal').then(m => ({ default: m.ChoiceModal })));
 
 import { SoundFX } from './utils/audio';
-import { Money, createEntry, updateWorkOrderData, learnClientData, learnCatalogItems } from './utils/helpers';
+import { Money, createEntry, updateWorkOrderData, learnClientData, learnCatalogItems, learnTechnician } from './utils/helpers';
 import { LedgerEntry, WorkOrder, Client, CatalogItem, OSStatus } from './types';
 
 interface PendingAction {
@@ -38,9 +38,27 @@ interface PendingAction {
 }
 
 function AppContent() {
-  const { ledger, setLedger, workOrders, setWorkOrders, clients, setClients, catalogParts, setCatalogParts, catalogServices, setCatalogServices, settings, setSettings, isLoading, isSaving } = useDatabase();
+  const {
+    ledger,
+    setLedger,
+    workOrders,
+    setWorkOrders,
+    clients,
+    setClients,
+    catalogParts,
+    setCatalogParts,
+    catalogServices,
+    setCatalogServices,
+    catalogTechnicians,
+    setCatalogTechnicians,
+    settings,
+    setSettings,
+    isLoading,
+    isSaving
+  } = useDatabase();
+
   const finance = useFinance();
-  
+
   const [currentTheme, setCurrentTheme] = useState<'dark' | 'pastel'>('dark');
   const [activeTab, setActiveTab] = useState<'FINANCEIRO' | 'OFICINA' | 'PROCESSOS' | 'CLIENTES' | 'PECAS' | 'CONFIG'>('OFICINA');
   const [showConfetti, setShowConfetti] = useState(false);
@@ -74,7 +92,7 @@ function AppContent() {
         }
         return os;
       });
-      
+
       if (updated) {
         console.log('✅ Migração de OSs antigas concluída!');
         setWorkOrders(newWorkOrders);
@@ -102,7 +120,7 @@ function AppContent() {
         }
         return entry;
       });
-      
+
       if (updated) {
         console.log('✅ Migração de lançamentos concluída!');
         setLedger(newLedger);
@@ -113,6 +131,23 @@ function AppContent() {
       migrateLedgerEntries();
     }
   }, [isLoading, workOrders]);
+
+  // 🆕 MIGRAÇÃO: settings.technician (legado) -> catalogTechnicians
+  useEffect(() => {
+    if (isLoading) return;
+
+    const legacyTech = (settings as any)?.technician;
+    if (!legacyTech || typeof legacyTech !== 'string' || legacyTech.trim() === '') return;
+
+    const name = legacyTech.trim();
+    setCatalogTechnicians(prev => learnTechnician(prev, name));
+
+    setSettings(prev => {
+      const copy: any = { ...prev };
+      delete copy.technician;
+      return copy;
+    });
+  }, [isLoading, settings]);
 
   const addToast = (message: string, type: ToastType = 'info') => {
     const id = crypto.randomUUID();
@@ -125,12 +160,12 @@ function AppContent() {
 
   const handleGoogleDriveBackup = async () => {
     if (isBackuping) return;
-    
+
     if (!settings.googleApiKey || settings.googleApiKey.trim() === "") {
       addToast("⚠️ Configure a Google API Key nas configurações.", "error");
       return;
     }
-    
+
     if (!settings.googleDriveToken || settings.googleDriveToken.trim() === "") {
       addToast("⚠️ Configure o Token de Acesso do Google Drive.", "error");
       return;
@@ -141,10 +176,10 @@ function AppContent() {
     addToast("Criando backup...", "info");
 
     try {
-      const fullDb = { ledger, workOrders, clients, catalogParts, catalogServices, settings };
+      const fullDb = { ledger, workOrders, clients, catalogParts, catalogServices, catalogTechnicians, settings };
       const content = JSON.stringify(fullDb, null, 2);
       const now = new Date();
-      const timestamp = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}-${String(now.getMinutes()).padStart(2,'0')}`;
+      const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
       const filename = `backup_oficina_${timestamp}.json`;
 
       await uploadToDrive(filename, content, settings.googleDriveToken, settings.googleApiKey);
@@ -178,20 +213,20 @@ function AppContent() {
 
     setWorkOrders(prev => prev.map(o => {
       if (o.id !== osId) return o;
-      
+
       const updates: Partial<WorkOrder> = { status: newStatus };
-      
+
       if (isBecomingFinalized) {
         updates.paymentDate = new Date().toISOString();
       }
-      
+
       if (isLeavingFinalized) {
         updates.paymentDate = undefined;
       }
-      
+
       return { ...o, ...updates };
     }));
-    
+
     SoundFX.pop();
   };
 
@@ -199,31 +234,38 @@ function AppContent() {
     const duplicate = workOrders.find(o => o.osNumber === data.osNumber && o.id !== editingOS?.id);
     if (duplicate && !confirm(`OS #${data.osNumber} duplicada. Continuar?`)) return;
 
-    setClients(prev => learnClientData(prev, data.clientName, data.vehicle, data.plate || '', data.clientPhone, data.clientNotes || ''));
+    setClients(prev => learnClientData(prev, data.clientName, data.vehicleModelOnly || data.vehicle, data.plate || '', data.clientPhone, data.clientNotes || ''));
     setCatalogParts(prev => learnCatalogItems(prev, data.parts));
     setCatalogServices(prev => learnCatalogItems(prev, data.services));
 
+    const technicianName = (data.technician || '').trim();
+    if (technicianName) {
+      setCatalogTechnicians(prev => learnTechnician(prev, technicianName));
+    }
+
     if (editingOS) {
-      const updated = updateWorkOrderData(
-        editingOS, 
-        data.osNumber, 
-        data.vehicle, 
-        data.clientName, 
-        data.clientPhone, 
-        data.mileage, 
-        data.parts, 
-        data.services, 
+      const updatedBase = updateWorkOrderData(
+        editingOS,
+        data.osNumber,
+        data.vehicle,
+        data.clientName,
+        data.clientPhone,
+        data.mileage,
+        data.parts,
+        data.services,
         data.createdAt,
         data.publicNotes
       );
+
+      const updated: WorkOrder = { ...updatedBase, technician: technicianName || undefined };
       setWorkOrders(prev => prev.map(o => o.id === editingOS.id ? updated : o));
-      
+
       if (updated.financialId) {
         setLedger(prev => prev.map(e => e.id === updated.financialId ? { ...e, effectiveDate: updated.createdAt, amount: updated.total, description: `Receita OS #${data.osNumber} - ${data.clientName}` } : e));
       }
       addToast("OS atualizada!", "success");
     } else {
-      const newOS = {
+      const newOS: WorkOrder = {
         id: crypto.randomUUID(),
         osNumber: data.osNumber,
         vehicle: data.vehicle,
@@ -235,7 +277,8 @@ function AppContent() {
         services: data.services,
         total: data.parts.reduce((a: number, b: any) => a + b.price, 0) + data.services.reduce((a: number, b: any) => a + b.price, 0),
         createdAt: data.createdAt || new Date().toISOString(),
-        publicNotes: data.publicNotes || ''
+        publicNotes: data.publicNotes || '',
+        technician: technicianName || undefined,
       };
       setWorkOrders(prev => [...prev, newOS]);
       addToast("Nova OS criada!", "success");
@@ -279,16 +322,16 @@ function AppContent() {
     const now = new Date().toISOString();
     const newPaymentDate = entry.paymentDate ? undefined : now;
 
-    setLedger(prev => prev.map(e => 
-      e.id === entryId 
+    setLedger(prev => prev.map(e =>
+      e.id === entryId
         ? { ...e, paymentDate: newPaymentDate }
         : e
     ));
 
     const linkedOS = workOrders.find(os => os.financialId === entryId);
     if (linkedOS) {
-      setWorkOrders(prev => prev.map(os => 
-        os.id === linkedOS.id 
+      setWorkOrders(prev => prev.map(os =>
+        os.id === linkedOS.id
           ? { ...os, paymentDate: newPaymentDate }
           : os
       ));
@@ -299,13 +342,13 @@ function AppContent() {
   };
 
   const handleRequestDeleteEntry = (entry: LedgerEntry) => setDeleteModalInfo({ isOpen: true, entry });
-  
+
   const confirmDeleteSingle = () => {
     if (deleteModalInfo.entry) finance.deleteEntry(deleteModalInfo.entry.id);
     addToast("Excluído.", "info");
     setDeleteModalInfo({ isOpen: false, entry: null });
   };
-  
+
   const confirmDeleteGroup = () => {
     if (deleteModalInfo.entry?.groupId) finance.deleteGroup(deleteModalInfo.entry.groupId);
     addToast("Série excluída.", "info");
@@ -347,20 +390,20 @@ function AppContent() {
     console.log('🚀 ===== INÍCIO PARCELAMENTO =====');
     console.log('installmentOS:', installmentOS);
     console.log('config:', config);
-    
+
     const newEntries: LedgerEntry[] = [];
     const baseDate = new Date(config.firstPaymentDate);
     const groupId = config.groupId;
-    
+
     for (let i = 0; i < config.installments; i++) {
       const dueDate = new Date(baseDate);
       dueDate.setMonth(dueDate.getMonth() + i);
-      
+
       const isLastInstallment = i === config.installments - 1;
       const amount = isLastInstallment ? config.lastInstallmentAmount : config.installmentAmount;
-      
+
       console.log(`  Parcela ${i + 1}/${config.installments}: ${Money.format(amount)} (${isLastInstallment ? 'Última' : 'Normal'})`);
-      
+
       newEntries.push({
         id: crypto.randomUUID(),
         description: `${config.description} - Parcela ${i + 1}/${config.installments}`,
@@ -376,40 +419,40 @@ function AppContent() {
         dueDate: dueDate.toISOString()
       });
     }
-    
+
     console.log(`✅ ${newEntries.length} entradas criadas`);
     setLedger(prev => [...newEntries, ...prev]);
-    
+
     if (installmentOS) {
       console.log(`🔄 Atualizando OS #${installmentOS.osNumber} (ID: ${installmentOS.id})`);
       console.log(`  Status atual: ${installmentOS.status}`);
       console.log(`  Novo status: FINALIZADO`);
       console.log(`  FinancialId: ${newEntries[0].id}`);
       console.log(`  📅 PaymentDate: ${new Date().toISOString()}`);
-      
-      setWorkOrders(prev => prev.map(o => 
-        o.id === installmentOS.id 
-          ? { 
-              ...o, 
+
+      setWorkOrders(prev => prev.map(o =>
+        o.id === installmentOS.id
+          ? {
+              ...o,
               status: 'FINALIZADO' as OSStatus,
-              financialId: newEntries[0].id, 
-              paymentMethod: 'INSTALLMENT', 
+              financialId: newEntries[0].id,
+              paymentMethod: 'INSTALLMENT',
               installmentConfig: config,
               paymentDate: new Date().toISOString()
-            } 
+            }
           : o
       ));
-      
+
       addToast(`OS #${installmentOS.osNumber} finalizada!`, "success");
       setShowConfetti(true);
     } else {
       console.error('❌ installmentOS é NULL!');
     }
-    
+
     addToast(`Parcelamento criado! ${config.installments}x`, "success");
     setIsInstallmentModalOpen(false);
     setInstallmentOS(null);
-    
+
     console.log('🏁 ===== FIM PARCELAMENTO =====');
   };
 
@@ -444,7 +487,7 @@ function AppContent() {
     if (pendingAction.type === 'FINISH_OS_FINANCIAL') {
       const os = pendingAction.data;
       console.log('💰 FINISH_OS_FINANCIAL:', os);
-      
+
       setPendingInstallmentOS(os);
       setIsInstallmentChoiceOpen(true);
       setPendingAction(null);
@@ -454,26 +497,26 @@ function AppContent() {
     if (pendingAction.type === 'RESTORE_FINANCIAL') {
       const os = pendingAction.data;
       console.log('🔙 RESTORE_FINANCIAL:', os);
-      
+
       const financialEntry = ledger.find(e => e.id === os.financialId);
-      
+
       if (financialEntry) {
         const groupToDelete = financialEntry.groupId || financialEntry.installmentGroupId;
-        
+
         if (groupToDelete) {
           console.log(`🗑️ Removendo TODAS as parcelas do grupo: ${groupToDelete}`);
-          const parcelsToRemove = ledger.filter(e => 
+          const parcelsToRemove = ledger.filter(e =>
             e.groupId === groupToDelete || e.installmentGroupId === groupToDelete
           );
           console.log(`  Total de parcelas a remover: ${parcelsToRemove.length}`);
           parcelsToRemove.forEach(p => {
             console.log(`    - ${p.description}: ${Money.format(p.amount)}`);
           });
-          
-          setLedger(prev => prev.filter(e => 
+
+          setLedger(prev => prev.filter(e =>
             e.groupId !== groupToDelete && e.installmentGroupId !== groupToDelete
           ));
-          
+
           addToast(`${parcelsToRemove.length} parcelas removidas.`, "info");
         } else {
           console.log('💵 Removendo pagamento único');
@@ -483,20 +526,20 @@ function AppContent() {
       } else {
         console.warn('⚠️ FinancialId não encontrado no ledger');
       }
-      
-      setWorkOrders(prev => prev.map(o => 
-        o.id === os.id 
-          ? { 
-              ...o, 
-              status: 'EM_SERVICO' as OSStatus, 
+
+      setWorkOrders(prev => prev.map(o =>
+        o.id === os.id
+          ? {
+              ...o,
+              status: 'EM_SERVICO' as OSStatus,
               financialId: undefined,
               paymentMethod: undefined,
               installmentConfig: undefined,
               paymentDate: undefined
-            } 
+            }
           : o
       ));
-      
+
       addToast("OS reaberta.", "success");
     }
 
@@ -507,6 +550,7 @@ function AppContent() {
       setClients(parsed.clients || []);
       setCatalogParts(parsed.catalogParts || []);
       setCatalogServices(parsed.catalogServices || []);
+      setCatalogTechnicians(parsed.catalogTechnicians || []);
       if (parsed.settings) setSettings(parsed.settings);
       addToast("Dados importados!", "success");
     }
@@ -525,22 +569,22 @@ function AppContent() {
       console.log('❌ Usuário escolheu NÃO parcelar - pagamento único');
       const paymentDate = new Date().toISOString();
       const entry = createEntry(
-        `Receita OS #${pendingInstallmentOS.osNumber} - ${pendingInstallmentOS.clientName}`, 
-        pendingInstallmentOS.total, 
-        'CREDIT', 
+        `Receita OS #${pendingInstallmentOS.osNumber} - ${pendingInstallmentOS.clientName}`,
+        pendingInstallmentOS.total,
+        'CREDIT',
         pendingInstallmentOS.createdAt,
         undefined,
         paymentDate
       );
       setLedger(prev => [entry, ...prev]);
-      setWorkOrders(prev => prev.map(o => 
-        o.id === pendingInstallmentOS.id 
-          ? { 
-              ...o, 
-              status: 'FINALIZADO' as OSStatus, 
+      setWorkOrders(prev => prev.map(o =>
+        o.id === pendingInstallmentOS.id
+          ? {
+              ...o,
+              status: 'FINALIZADO' as OSStatus,
               financialId: entry.id,
               paymentDate: paymentDate
-            } 
+            }
           : o
       ));
       addToast("OS Finalizada!", "success");
@@ -594,15 +638,15 @@ function AppContent() {
       </div>
 
       <Suspense fallback={null}>
-        {isModalOpen && <OSModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveOSModal} editingOS={editingOS} clients={clients} catalogParts={catalogParts} catalogServices={catalogServices} nextOSNumber={workOrders.length > 0 ? Math.max(...workOrders.map(o => o.osNumber)) + 1 : 1} isSaving={isSaving} formatMoney={Money.format} />}
+        {isModalOpen && <OSModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveOSModal} editingOS={editingOS} clients={clients} catalogParts={catalogParts} catalogServices={catalogServices} catalogTechnicians={catalogTechnicians} nextOSNumber={workOrders.length > 0 ? Math.max(...workOrders.map(o => o.osNumber)) + 1 : 1} isSaving={isSaving} formatMoney={Money.format} />}
         {isEntryModalOpen && <EntryModal isOpen={isEntryModalOpen} onClose={() => { setIsEntryModalOpen(false); setEditingEntry(null); }} onSave={handleSaveEntryModal} initialData={editingEntry} />}
         {isInstallmentModalOpen && installmentOS && <InstallmentModal isOpen={isInstallmentModalOpen} onClose={() => { setIsInstallmentModalOpen(false); setInstallmentOS(null); }} totalAmount={installmentOS.total} description={`OS #${installmentOS.osNumber} - ${installmentOS.clientName}`} onConfirm={handleInstallmentConfirm} />}
         {isDatabaseModalOpen && <DatabaseModal isOpen={isDatabaseModalOpen} onClose={() => setIsDatabaseModalOpen(false)} clients={clients} catalogParts={catalogParts} catalogServices={catalogServices} onSaveClient={handleSaveClient} onDeleteClient={(id) => setClients(p => p.filter(c => c.id !== id))} onSaveCatalogItem={handleSaveCatalogItem} onDeleteCatalogItem={(id, type) => type === 'part' ? setCatalogParts(p => p.filter(x => x.id !== id)) : setCatalogServices(p => p.filter(x => x.id !== id))} formatMoney={Money.format} />}
         {isExportModalOpen && <ExportModal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} ledger={ledger} workOrders={workOrders} defaultPath={settings.exportPath} Money={Money} SoundFX={{ success: () => addToast("Sucesso!", "success"), error: () => addToast("Erro", "error") }} />}
         {isChecklistOpen && <ChecklistModal isOpen={isChecklistOpen} onClose={() => setIsChecklistOpen(false)} onSave={(data) => { if (checklistOS) setWorkOrders(p => p.map(o => o.id === checklistOS.id ? { ...o, checklist: data } : o)); setIsChecklistOpen(false); }} os={checklistOS} />}
-        
+
         {deleteModalInfo.isOpen && <DeleteConfirmationModal isOpen={deleteModalInfo.isOpen} onClose={() => setDeleteModalInfo({ isOpen: false, entry: null })} onConfirmSingle={confirmDeleteSingle} onConfirmGroup={confirmDeleteGroup} isGroup={!!deleteModalInfo.entry?.groupId} />}
-        
+
         {isInstallmentChoiceOpen && pendingInstallmentOS && (
           <ChoiceModal
             isOpen={isInstallmentChoiceOpen}
@@ -618,7 +662,7 @@ function AppContent() {
             icon="💰"
           />
         )}
-        
+
         {pendingAction && <ConfirmationModal isOpen={!!pendingAction} onClose={() => setPendingAction(null)} onConfirm={executePendingAction} title={pendingAction?.type === 'DELETE_OS' ? 'Excluir OS?' : pendingAction?.type === 'ARCHIVE_OS' ? 'Arquivar OS?' : pendingAction?.type === 'FINISH_OS_FINANCIAL' ? 'OS Finalizada' : pendingAction?.type === 'RESTORE_FINANCIAL' ? 'Reabrir OS?' : pendingAction?.type === 'IMPORT_DATA' ? 'Importar?' : 'Confirmar'} message={pendingAction?.type === 'DELETE_OS' ? 'Removerá a OS e lançamento financeiro.' : pendingAction?.type === 'ARCHIVE_OS' ? 'A OS sairá do quadro Kanban.' : pendingAction?.type === 'FINISH_OS_FINANCIAL' ? `Lançar ${Money.format(pendingAction.data?.total || 0)} nas Receitas?` : pendingAction?.type === 'RESTORE_FINANCIAL' ? 'Removerá o lançamento financeiro.' : pendingAction?.type === 'IMPORT_DATA' ? 'Substituir todos os dados?' : 'Tem certeza?'} confirmText={pendingAction?.type === 'DELETE_OS' ? 'Excluir' : pendingAction?.type === 'IMPORT_DATA' ? 'Substituir' : 'Confirmar'} confirmColor={pendingAction?.type === 'DELETE_OS' || pendingAction?.type === 'RESTORE_FINANCIAL' ? 'danger' : 'primary'} />}
       </Suspense>
     </>

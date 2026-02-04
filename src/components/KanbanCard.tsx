@@ -82,31 +82,31 @@ export const KanbanCard = React.memo(({
 
   const openWhatsApp = async () => {
     if (!os.clientPhone) return;
-    
+
     let cleanPhone = os.clientPhone.replace(/\D/g, '');
     if (cleanPhone.startsWith('55')) cleanPhone = cleanPhone.substring(2);
-    
+
     if (cleanPhone.length < 10) {
       alert(`Telefone inválido: ${os.clientPhone}\n\nPrecisa ter pelo menos 10 dígitos (DDD + número)`);
       return;
     }
-    
+
     const message = encodeURIComponent(
       `Olá ${os.clientName}, tudo bem?\n\nEstamos entrando em contato da oficina sobre a OS #${os.osNumber} do seu ${os.vehicle}.`
     );
-    
+
     const whatsappUrl = `https://wa.me/55${cleanPhone}?text=${message}`;
-    
+
     if (window.electron?.shell?.openExternal) {
       await window.electron.shell.openExternal(whatsappUrl);
       return;
     }
-    
+
     if (window.__TAURI__?.shell?.open) {
       await window.__TAURI__.shell.open(whatsappUrl);
       return;
     }
-    
+
     const newWindow = window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
     if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
       try {
@@ -241,11 +241,11 @@ export const KanbanCard = React.memo(({
             <span className="os-number">#{os.osNumber}</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span className="os-price">{formatMoney(os.total)}</span>
-              
+
               {os.profitMargin !== undefined && os.profitMargin > 0 && (
-                <span 
-                  style={{ 
-                    fontSize: '0.7rem', 
+                <span
+                  style={{
+                    fontSize: '0.7rem',
                     color: getProfitMarginColor(os.profitMargin).color,
                     fontWeight: 'bold',
                     padding: '2px 4px',
@@ -271,12 +271,18 @@ export const KanbanCard = React.memo(({
 
           <div className="os-client" style={{ marginBottom: 4, marginTop: 8 }}>{os.clientName}</div>
           <div className="os-vehicle" style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{os.vehicle}</div>
-          
+
+          {!!(os.technician || '').trim() && (
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4 }}>
+              🔧 {os.technician}
+            </div>
+          )}
+
           {os.clientPhone && (
-            <div 
-              style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
                 gap: 6,
                 marginTop: 8,
                 paddingTop: 8,
@@ -290,8 +296,8 @@ export const KanbanCard = React.memo(({
           )}
 
           {shouldShowHoverEffects && (
-            <div 
-              style={{ 
+            <div
+              style={{
                 display: 'flex',
                 gap: 6,
                 marginTop: 12,
@@ -300,10 +306,10 @@ export const KanbanCard = React.memo(({
                 animation: 'slideUpFade 0.25s cubic-bezier(0.4, 0, 0.2, 1)'
               }}
             >
-              <button 
-                title="Editar OS" 
+              <button
+                title="Editar OS"
                 onClick={(e) => {
-                  e.stopPropagation(); 
+                  e.stopPropagation();
                   actions.onEdit(os);
                 }}
                 style={{
@@ -336,10 +342,10 @@ export const KanbanCard = React.memo(({
               </button>
 
               {os.clientPhone && (
-                <button 
-                  title="WhatsApp Rápido" 
+                <button
+                  title="WhatsApp Rápido"
                   onClick={(e) => {
-                    e.stopPropagation(); 
+                    e.stopPropagation();
                     openWhatsApp();
                   }}
                   style={{

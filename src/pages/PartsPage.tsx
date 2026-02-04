@@ -100,56 +100,14 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
         <meta charset="UTF-8">
         <title>${documentTitle}</title>
         <style>
-          * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-          }
-          
-          body {
-            font-family: Arial, sans-serif;
-            padding: 20px;
-            background: white;
-            color: black;
-          }
-          
-          .print-header {
-            text-align: center;
-            margin-bottom: 25px;
-            border-bottom: 3px solid #000;
-            padding-bottom: 12px;
-          }
-          
-          .print-header h1 {
-            font-size: 22pt;
-            font-weight: bold;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-          }
-          
-          .print-date {
-            font-size: 11pt;
-          }
-          
-          .print-info {
-            margin-bottom: 20px;
-            padding: 10px;
-            background: #f5f5f5;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-          }
-          
-          .print-info div {
-            margin: 4px 0;
-            font-size: 10pt;
-          }
-          
-          .print-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 9pt;
-          }
-          
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: Arial, sans-serif; padding: 20px; background: white; color: black; }
+          .print-header { text-align: center; margin-bottom: 25px; border-bottom: 3px solid #000; padding-bottom: 12px; }
+          .print-header h1 { font-size: 22pt; font-weight: bold; margin-bottom: 10px; text-transform: uppercase; }
+          .print-date { font-size: 11pt; }
+          .print-info { margin-bottom: 20px; padding: 10px; background: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; }
+          .print-info div { margin: 4px 0; font-size: 10pt; }
+          .print-table { width: 100%; border-collapse: collapse; font-size: 9pt; }
           .print-table th {
             background: #e0e0e0;
             border: 2px solid #000;
@@ -159,44 +117,22 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
             font-size: 10pt;
             text-transform: uppercase;
           }
-          
-          .print-table td {
-            border: 1px solid #666;
-            padding: 8px 6px;
-            vertical-align: top;
-          }
-          
-          .print-checkbox {
-            text-align: center;
-            font-size: 16pt;
-            font-weight: bold;
-          }
-          
-          .print-qty {
-            text-align: center;
-            font-weight: bold;
-          }
-          
-          @page {
-            size: A4;
-            margin: 15mm;
-          }
+          .print-table td { border: 1px solid #666; padding: 8px 6px; vertical-align: top; }
+          .print-checkbox { text-align: center; font-size: 16pt; font-weight: bold; }
+          .print-qty { text-align: center; font-weight: bold; }
+          @page { size: A4; margin: 15mm; }
         </style>
       </head>
       <body>
         <div class="print-header">
           <h1>📦 RESUMO DE PEÇAS PARA PEDIDO</h1>
-          <div class="print-date">
-            <strong>Data:</strong> ${dateDisplay}
-          </div>
+          <div class="print-date"><strong>Data:</strong> ${dateDisplay}</div>
         </div>
-
         <div class="print-info">
           <div><strong>Total de peças:</strong> ${partsToDisplay.length} distintas (${totalQty} unidades)</div>
           <div><strong>OSs relacionadas:</strong> ${uniqueOSCount}</div>
           <div><strong>Status:</strong> ${statusFilter === 'ALL' ? 'Orçamento + Aprovado' : statusFilter === 'ORCAMENTO' ? 'Orçamento' : 'Aprovado'}</div>
         </div>
-
         <table class="print-table">
           <thead>
             <tr>
@@ -221,37 +157,47 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
             `).join('')}
           </tbody>
         </table>
-        <script>
-          // 🔧 Aguarda carregamento completo e imprime automaticamente
-          window.onload = function() {
-            setTimeout(function() {
-              window.print();
-              // Fecha janela após impressão (opcional)
-              // window.onafterprint = function() { window.close(); };
-            }, 250);
-          };
-        </script>
       </body>
       </html>
     `;
 
-    // 🆕 Cria Blob URL (não é bloqueado como pop-up)
-    const blob = new Blob([printContent], { type: 'text/html' });
-    const blobURL = URL.createObjectURL(blob);
-    
-    // Abre em nova aba
-    const printWindow = window.open(blobURL, '_blank');
-    
-    if (printWindow) {
-      console.log(`🖨️ Impressão aberta: ${documentTitle}`);
-      
-      // Limpa o blob URL após uso
+    // 🔧 SOLUÇÃO DEFINITIVA PARA AMBIENTES NATIVOS (Electron/Tauri)
+    const originalTitle = document.title;
+    document.title = documentTitle;
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'absolute';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    iframe.style.visibility = 'hidden';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (doc) {
+      doc.open();
+      doc.write(printContent);
+      doc.close();
+
+      iframe.contentWindow?.focus();
       setTimeout(() => {
-        URL.revokeObjectURL(blobURL);
-      }, 1000);
+        try {
+          iframe.contentWindow?.print();
+          console.log(`🖨️ Imprimindo: ${documentTitle}`);
+        } catch (err) {
+          console.error('Erro ao imprimir:', err);
+          alert('Erro ao abrir janela de impressão.');
+        }
+        
+        setTimeout(() => {
+          document.body.removeChild(iframe);
+          document.title = originalTitle;
+        }, 500);
+      }, 250);
     } else {
-      console.error('❌ Erro ao abrir janela de impressão');
-      alert('Não foi possível abrir a janela de impressão. Verifique as configurações do navegador.');
+      console.error('Não foi possível acessar o documento do iframe');
+      document.body.removeChild(iframe);
+      document.title = originalTitle;
     }
   };
 
@@ -272,7 +218,6 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
 
   return (
     <div className="parts-page-container">
-      {/* Header */}
       <div className="parts-header">
         <div className="parts-header-left">
           <h1 className="parts-title">📦 Resumo de Peças</h1>
@@ -288,8 +233,6 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
           </button>
         </div>
       </div>
-
-      {/* Filters */}
       <div className="parts-filters">
         <div className="parts-filter-group">
           <label className="parts-filter-label">Filtrar por Status:</label>
@@ -314,7 +257,6 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
             </button>
           </div>
         </div>
-
         <div className="parts-filter-group">
           <button 
             className="parts-select-all-btn"
@@ -324,8 +266,6 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
           </button>
         </div>
       </div>
-
-      {/* Stats */}
       <div className="parts-stats">
         <div className="parts-stat-card">
           <div className="parts-stat-icon">📦</div>
@@ -356,8 +296,6 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
           </div>
         </div>
       </div>
-
-      {/* Table */}
       {consolidatedParts.length === 0 ? (
         <div className="parts-empty-state">
           <div className="parts-empty-icon">📦</div>

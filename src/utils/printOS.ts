@@ -1,5 +1,16 @@
 import { WorkOrder, WorkshopSettings, STATUS_LABELS } from '../types';
 
+// 🆕 Função auxiliar para sanitizar strings para nomes de arquivo
+function sanitizeForFilename(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+    .replace(/[^a-zA-Z0-9]/g, '_') // Substitui caracteres especiais por underscore
+    .replace(/_+/g, '_') // Remove underscores duplicados
+    .replace(/^_|_$/g, '') // Remove underscores no início e fim
+    .substring(0, 50); // Limita tamanho
+}
+
 export function printOS(data: WorkOrder, settings: WorkshopSettings) {
   if (!data) {
     console.error('Dados da OS não fornecidos para impressão');
@@ -20,12 +31,34 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings) {
   const subtotalParts = data.parts.reduce((acc, item) => acc + item.price, 0);
   const subtotalServices = data.services.reduce((acc, item) => acc + item.price, 0);
 
+  // 🆕 Gera nome dinâmico do arquivo com OS, cliente, veículo e placa
+  // Formato: OS_{numero}_Cliente_{nome}_Veiculo_{carro}_Placa_{placa}
+  const osNumber = data.osNumber || 'SN';
+  const clientName = sanitizeForFilename(data.clientName || 'Cliente');
+  
+  // Extrai modelo do veículo (ex: "Fiat Uno 2015" -> "Fiat_Uno")
+  const vehicleModel = sanitizeForFilename(
+    data.vehicle ? data.vehicle.split(' ').slice(0, 2).join(' ') : 'Veiculo'
+  );
+  
+  // Extrai placa, assumindo formato comum brasileiro (ex: "ABC-1234" ou "ABC1D23")
+  // Se não tiver placa no campo vehicle, busca padrão de placa na string
+  let licensePlate = 'SemPlaca';
+  if (data.vehicle) {
+    const plateMatch = data.vehicle.match(/[A-Z]{3}[-]?[0-9][A-Z0-9][0-9]{2}/i);
+    if (plateMatch) {
+      licensePlate = sanitizeForFilename(plateMatch[0]);
+    }
+  }
+  
+  const documentTitle = `OS_${osNumber}_${clientName}_${vehicleModel}_${licensePlate}`;
+
   const printContent = `
     <!DOCTYPE html>
     <html lang="pt-BR">
     <head>
       <meta charset="UTF-8">
-      <title>OS #${data.osNumber} - ${data.clientName}</title>
+      <title>${documentTitle}</title>
       <style>
         /* RESET */
         * {

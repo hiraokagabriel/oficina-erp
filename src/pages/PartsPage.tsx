@@ -84,12 +84,17 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
     const totalQty = partsToDisplay.reduce((sum, p) => sum + p.quantity, 0);
     const uniqueOSCount = new Set(partsToDisplay.flatMap(p => p.refs.map(r => r.osNumber))).size;
 
+    // 🆕 Gera nome dinâmico do arquivo com a data de hoje
+    const today = new Date();
+    const dateStr = today.toLocaleDateString('pt-BR').replace(/\//g, '-');
+    const documentTitle = `Pecas-${dateStr}`;
+
     const printContent = `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="UTF-8">
-        <title>Resumo de Peças</title>
+        <title>${documentTitle}</title>
         <style>
           * {
             margin: 0;
@@ -178,7 +183,7 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
         <div class="print-header">
           <h1>📦 RESUMO DE PEÇAS PARA PEDIDO</h1>
           <div class="print-date">
-            <strong>Data:</strong> ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+            <strong>Data:</strong> ${dateStr}
           </div>
         </div>
 

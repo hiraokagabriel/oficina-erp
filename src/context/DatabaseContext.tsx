@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { LedgerEntry, WorkOrder, Client, CatalogItem, WorkshopSettings, DatabaseSchema } from '../types';
+import { LedgerEntry, WorkOrder, Client, CatalogItem, Technician, WorkshopSettings, DatabaseSchema } from '../types';
 
 interface DatabaseContextData {
   ledger: LedgerEntry[];
@@ -13,6 +13,8 @@ interface DatabaseContextData {
   setCatalogParts: React.Dispatch<React.SetStateAction<CatalogItem[]>>;
   catalogServices: CatalogItem[];
   setCatalogServices: React.Dispatch<React.SetStateAction<CatalogItem[]>>;
+  catalogTechnicians: Technician[]; // 🆕 NOVO
+  setCatalogTechnicians: React.Dispatch<React.SetStateAction<Technician[]>>; // 🆕 NOVO
   settings: WorkshopSettings;
   setSettings: React.Dispatch<React.SetStateAction<WorkshopSettings>>;
   isLoading: boolean;
@@ -29,20 +31,19 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [clients, setClients] = useState<Client[]>([]);
   const [catalogParts, setCatalogParts] = useState<CatalogItem[]>([]);
   const [catalogServices, setCatalogServices] = useState<CatalogItem[]>([]);
+  const [catalogTechnicians, setCatalogTechnicians] = useState<Technician[]>([]); // 🆕 NOVO
   const [settings, setSettings] = useState<WorkshopSettings>({ 
     name: "OFICINA", 
     cnpj: "", 
     address: "", 
-    technician: "", 
     exportPath: "", 
     googleDriveToken: "",
-    googleApiKey: "" // 🆕 ADICIONADO
+    googleApiKey: ""
   });
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   
-  // NOVO: Referência para evitar saves desnecessários durante o load
   const isInitialLoad = useRef(true);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -61,13 +62,13 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setClients(parsed.clients || []);
           setCatalogParts(parsed.catalogParts || []);
           setCatalogServices(parsed.catalogServices || []);
+          setCatalogTechnicians(parsed.catalogTechnicians || []); // 🆕 NOVO
           setSettings(parsed.settings || settings);
         }
       } catch (e) {
         console.error("Erro ao carregar banco:", e);
       } finally {
         setIsLoading(false);
-        // Aguarda um pouco antes de permitir saves automáticos
         setTimeout(() => {
           isInitialLoad.current = false;
         }, 500);
@@ -78,36 +79,39 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Auto-Save OTIMIZADO com debounce de 3 segundos
   useEffect(() => {
-    // Não salva durante o load inicial
     if (isInitialLoad.current || isLoading) return;
-    
-    // Não salva se não houver dados
     if (workOrders.length === 0 && clients.length === 0 && ledger.length === 0) return;
 
-    // Limpa timeout anterior
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
 
-    // NOVO DEBOUNCE: 3 segundos (ao invés de 1.5s)
     saveTimeoutRef.current = setTimeout(async () => {
       setIsSaving(true);
       try {
-        const fullDb: DatabaseSchema = { ledger, workOrders, clients, catalogParts, catalogServices, settings };
+        const fullDb: DatabaseSchema = { 
+          ledger, 
+          workOrders, 
+          clients, 
+          catalogParts, 
+          catalogServices, 
+          catalogTechnicians, // 🆕 NOVO
+          settings 
+        };
         await invoke('save_database_atomic', { filepath: dbPath, content: JSON.stringify(fullDb) });
       } catch (e) {
         console.error("Erro ao salvar:", e);
       } finally {
         setIsSaving(false);
       }
-    }, 3000); // Aumentado de 1500ms para 3000ms
+    }, 3000);
 
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [ledger, workOrders, clients, catalogParts, catalogServices, settings, dbPath, isLoading]);
+  }, [ledger, workOrders, clients, catalogParts, catalogServices, catalogTechnicians, settings, dbPath, isLoading]); // 🆕 Adicionado catalogTechnicians
 
   return (
     <DatabaseContext.Provider value={{
@@ -116,6 +120,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       clients, setClients,
       catalogParts, setCatalogParts,
       catalogServices, setCatalogServices,
+      catalogTechnicians, setCatalogTechnicians, // 🆕 NOVO
       settings, setSettings,
       isLoading, isSaving
     }}>

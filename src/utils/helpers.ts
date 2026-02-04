@@ -1,4 +1,4 @@
-import { CatalogItem, Client, LedgerEntry, WorkOrder, OrderItem } from '../types';
+import { CatalogItem, Client, LedgerEntry, WorkOrder, OrderItem, Technician } from '../types';
 
 // --- GERAÇÃO DE ID ---
 export const generateId = (): string => {
@@ -168,7 +168,7 @@ export const updateWorkOrderData = (
   parts: CatalogItem[],
   services: CatalogItem[],
   dateString?: string,
-  publicNotes?: string // 🔧 NOVO PARÂMETRO
+  publicNotes?: string
 ): WorkOrder => {
   const subParts = parts.reduce((a, b) => a + b.price, 0);
   const subServices = services.reduce((a, b) => a + b.price, 0);
@@ -199,7 +199,7 @@ export const updateWorkOrderData = (
     profit: financials.profit,
     profitMargin: financials.profitMargin,
     createdAt: finalDate,
-    publicNotes: publicNotes !== undefined ? publicNotes : original.publicNotes // 🔧 PRESERVA PUBLICNOTES
+    publicNotes: publicNotes !== undefined ? publicNotes : original.publicNotes
   };
 };
 
@@ -262,4 +262,27 @@ export const learnCatalogItems = (
   });
 
   return updatedCatalog;
+};
+
+// 🆕 NOVO: Aprendizado de Técnicos
+export const learnTechnician = (
+  currentTechnicians: Technician[],
+  technicianName: string
+): Technician[] => {
+  const normalizedName = technicianName.trim();
+  if (!normalizedName) return currentTechnicians;
+
+  const exists = currentTechnicians.find(t => t.name.toLowerCase() === normalizedName.toLowerCase());
+  
+  if (exists) {
+    return currentTechnicians;
+  }
+
+  return [
+    ...currentTechnicians,
+    {
+      id: generateId(),
+      name: normalizedName
+    }
+  ];
 };

@@ -553,10 +553,17 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings) {
     doc.write(printContent);
     doc.close();
 
+    // 🔧 Define o título do documento explicitamente após carregar
+    doc.title = documentTitle;
+
     // Aguardar carregar e imprimir
     iframe.contentWindow?.focus();
     setTimeout(() => {
       try {
+        // 🔧 Define título novamente imediatamente antes de imprimir
+        if (iframe.contentWindow) {
+          iframe.contentWindow.document.title = documentTitle;
+        }
         iframe.contentWindow?.print();
       } catch (err) {
         console.error('Erro ao imprimir:', err);

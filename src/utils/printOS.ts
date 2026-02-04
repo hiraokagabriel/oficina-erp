@@ -514,7 +514,13 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings) {
     </html>
   `;
 
-  // 🔧 SOLUÇÃO PARA AMBIENTES NATIVOS (Electron/Tauri)
+  // 🔧 SOLUÇÃO DEFINITIVA PARA AMBIENTES NATIVOS (Electron/Tauri)
+  // Salva título original da janela principal
+  const originalTitle = document.title;
+  
+  // Muda título da janela PRINCIPAL temporariamente
+  document.title = documentTitle;
+
   // Cria iframe invisível
   const iframe = document.createElement('iframe');
   iframe.style.position = 'absolute';
@@ -530,41 +536,25 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings) {
     doc.write(printContent);
     doc.close();
 
-    // 🔧 FORÇA O TÍTULO MÚLTIPLAS VEZES
-    const setTitle = () => {
-      if (iframe.contentWindow) {
-        iframe.contentWindow.document.title = documentTitle;
-      }
-    };
-
-    // Define título imediatamente
-    setTitle();
-
-    // Aguarda carregamento e define novamente
-    iframe.contentWindow?.addEventListener('load', () => {
-      setTitle();
-    });
-
-    // Imprime após delay maior para garantir título aplicado
+    iframe.contentWindow?.focus();
     setTimeout(() => {
-      setTitle(); // Define mais uma vez antes de imprimir
-      
       try {
-        iframe.contentWindow?.focus();
         iframe.contentWindow?.print();
         console.log(`🖨️ Imprimindo: ${documentTitle}`);
       } catch (err) {
         console.error('Erro ao imprimir:', err);
         alert('Erro ao abrir janela de impressão.');
       }
-
-      // Remove iframe após impressão
+      
+      // Remove iframe e restaura título após impressão
       setTimeout(() => {
         document.body.removeChild(iframe);
+        document.title = originalTitle;
       }, 500);
-    }, 500); // Delay aumentado para ambientes nativos
+    }, 250);
   } else {
     console.error('Não foi possível acessar o documento do iframe');
     document.body.removeChild(iframe);
+    document.title = originalTitle;
   }
 }

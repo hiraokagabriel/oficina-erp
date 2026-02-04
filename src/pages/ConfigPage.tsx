@@ -10,7 +10,6 @@ interface ConfigPageProps {
   onImportData: (content: string) => void;
   isBackuping: boolean;
   driveStatus: 'idle' | 'success' | 'error';
-  // NOVA PROP
   onOpenDatabase: () => void;
 }
 
@@ -40,13 +39,13 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
   return (
     <div className="config-container" style={{ maxWidth: 1000, margin: '0 auto' }}>
       
-      {/* SEÇÃO 0: GERENCIAMENTO DE CADASTROS (NOVO) */}
+      {/* SEÇÃO 0: GERENCIAMENTO DE CADASTROS */}
       <div className="card" style={{ borderLeft: '4px solid var(--primary)', background: 'var(--bg-panel)' }}>
         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
             <div>
                 <h3 style={{marginTop:0}}>🗂️ Banco de Dados e Cadastros</h3>
                 <p style={{marginBottom:0, color:'var(--text-muted)'}}>
-                    Gerencie manualmente seus clientes, veículos, peças e serviços.
+                    Gerencie manualmente seus clientes, veículos, peças, serviços e técnicos.
                 </p>
             </div>
             <button className="btn" onClick={onOpenDatabase} style={{padding: '12px 24px', fontSize: '1rem'}}>
@@ -76,11 +75,6 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
         <div className="form-group">
           <label className="form-label">Endereço</label>
           <input className="form-input" value={settings.address} onChange={(e) => handleChange('address', e.target.value)} />
-        </div>
-        
-        <div className="form-group">
-          <label className="form-label">Técnico Responsável</label>
-          <input className="form-input" value={settings.technician} onChange={(e) => handleChange('technician', e.target.value)} />
         </div>
       </div>
 

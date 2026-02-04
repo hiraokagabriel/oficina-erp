@@ -226,6 +226,8 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
           window.onload = function() {
             setTimeout(function() {
               window.print();
+              // Fecha janela após impressão (opcional)
+              // window.onafterprint = function() { window.close(); };
             }, 250);
           };
         </script>
@@ -233,20 +235,23 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
       </html>
     `;
 
-    // 🆕 Abre nova janela para impressão (mais robusto que iframe)
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    // 🆕 Cria Blob URL (não é bloqueado como pop-up)
+    const blob = new Blob([printContent], { type: 'text/html' });
+    const blobURL = URL.createObjectURL(blob);
+    
+    // Abre em nova aba
+    const printWindow = window.open(blobURL, '_blank');
     
     if (printWindow) {
-      printWindow.document.write(printContent);
-      printWindow.document.close();
+      console.log(`🖨️ Impressão aberta: ${documentTitle}`);
       
-      // 🔧 Define título explicitamente
-      printWindow.document.title = documentTitle;
-      
-      console.log(`🖨️ Janela de impressão aberta: ${documentTitle}`);
+      // Limpa o blob URL após uso
+      setTimeout(() => {
+        URL.revokeObjectURL(blobURL);
+      }, 1000);
     } else {
-      console.error('❌ Erro: Pop-up bloqueado pelo navegador');
-      alert('Por favor, permita pop-ups para imprimir. Verifique as configurações do navegador.');
+      console.error('❌ Erro ao abrir janela de impressão');
+      alert('Não foi possível abrir a janela de impressão. Verifique as configurações do navegador.');
     }
   };
 

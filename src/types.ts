@@ -35,6 +35,7 @@ export interface WorkOrder {
   paymentDate?: string; // Data do pagamento
   paymentMethod?: 'SINGLE' | 'INSTALLMENT';
   installmentConfig?: any;
+  technician?: string; // 🆕 NOVO: Técnico responsável pela OS
 }
 
 export type OSStatus = 'ORCAMENTO' | 'APROVADO' | 'EM_SERVICO' | 'FINALIZADO' | 'ARQUIVADO';
@@ -67,6 +68,12 @@ export interface CatalogItem {
   cost?: number; // NOVO: custo de aquisição
 }
 
+// 🆕 NOVO: Catálogo de Técnicos
+export interface Technician {
+  id: string;
+  name: string;
+}
+
 export interface OrderItem {
   id: string;
   description: string;
@@ -78,9 +85,10 @@ export interface WorkshopSettings {
   name: string;
   cnpj: string;
   address: string;
-  technician: string;
+  // technician foi REMOVIDO daqui
   exportPath: string;
   googleDriveToken: string;
+  googleApiKey?: string;
 }
 
 export interface DatabaseSchema {
@@ -89,6 +97,7 @@ export interface DatabaseSchema {
   clients: Client[];
   catalogParts: CatalogItem[];
   catalogServices: CatalogItem[];
+  catalogTechnicians: Technician[]; // 🆕 NOVO
   settings: WorkshopSettings;
 }
 

@@ -386,7 +386,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings) {
               <h2 class="company-name">${settings.name || 'NOME DA OFICINA'}</h2>
               <p>${settings.address || 'Endereço não informado'}</p>
               <p>${settings.cnpj || 'CNPJ não informado'}</p>
-              ${settings.technician ? `<p>Téc. Resp: ${settings.technician}</p>` : ''}
+              ${data.technician ? `<p>Téc. Resp: ${data.technician}</p>` : ''}
             </div>
             <div class="invoice-logo-area">
               <h1 class="invoice-main-title">ORDEM DE SERVIÇO</h1>
@@ -490,7 +490,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings) {
             <div class="signature-area">
               <div class="signature-block">
                 <div class="sign-space"></div>
-                <span class="sign-name">${settings.name || 'Oficina'}</span>
+                <span class="sign-name">${data.technician || settings.name || 'Oficina'}</span>
                 <span class="sign-label">Responsável Técnico</span>
               </div>
               <div class="signature-block">

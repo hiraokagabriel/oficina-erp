@@ -240,9 +240,16 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
       doc.write(printContent);
       doc.close();
 
+      // 🔧 Define o título do documento explicitamente após carregar
+      doc.title = documentTitle;
+
       // Aguardar carregar e imprimir
       iframe.contentWindow?.focus();
       setTimeout(() => {
+        // 🔧 Define título novamente imediatamente antes de imprimir
+        if (iframe.contentWindow) {
+          iframe.contentWindow.document.title = documentTitle;
+        }
         iframe.contentWindow?.print();
         // Remover iframe após impressão
         setTimeout(() => document.body.removeChild(iframe), 100);

@@ -74,11 +74,39 @@ export interface Technician {
   name: string;
 }
 
+// 🆕 Issue #41: Tipos para categorização de peças
+export type PartCategory =
+  | 'MOTOR'
+  | 'FREIO'
+  | 'SUSPENSAO'
+  | 'ELETRICA'
+  | 'TRANSMISSAO'
+  | 'AR_CONDICIONADO'
+  | 'CARROCERIA'
+  | 'OUTROS';
+
+export interface PartCategoryMeta {
+  label: string;
+  color: string;
+}
+
+export const PART_CATEGORY_META: Record<PartCategory, PartCategoryMeta> = {
+  MOTOR:           { label: 'Motor',           color: '#E53935' },
+  FREIO:           { label: 'Freio',           color: '#FB8C00' },
+  SUSPENSAO:       { label: 'Suspensão',       color: '#FDD835' },
+  ELETRICA:        { label: 'Elétrica',        color: '#1E88E5' },
+  TRANSMISSAO:     { label: 'Transmissão',     color: '#8E24AA' },
+  AR_CONDICIONADO: { label: 'Ar-condicionado', color: '#00ACC1' },
+  CARROCERIA:      { label: 'Carroceria',      color: '#43A047' },
+  OUTROS:          { label: 'Outros',          color: '#757575' },
+};
+
 export interface OrderItem {
   id: string;
   description: string;
   price: number;
   cost?: number; // NOVO: custo de aquisição/interno
+  category?: PartCategory; // 🆕 Issue #41: categoria da peça (opcional)
 }
 
 export interface WorkshopSettings {

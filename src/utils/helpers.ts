@@ -248,6 +248,14 @@ export const learnClientData = (
   }
 };
 
+/**
+ * Aprende itens do catálogo a partir de uma OS salva.
+ *
+ * Regras (Issue #42):
+ *  - Item novo → adiciona com todos os campos, incluindo category
+ *  - Item existente sem category + novo item com category → grava a category
+ *  - Item existente já com category → NÃO sobrescreve (primeira categoria vence)
+ */
 export const learnCatalogItems = (
   currentCatalog: CatalogItem[],
   newItems: CatalogItem[]
@@ -255,9 +263,19 @@ export const learnCatalogItems = (
   const updatedCatalog = [...currentCatalog];
 
   newItems.forEach(item => {
-    const exists = updatedCatalog.find(c => c.description.toLowerCase() === item.description.toLowerCase());
-    if (!exists) {
+    const existingIdx = updatedCatalog.findIndex(
+      c => c.description.toLowerCase() === item.description.toLowerCase()
+    );
+
+    if (existingIdx === -1) {
+      // Item novo: adiciona completo (já traz category se definida)
       updatedCatalog.push({ ...item });
+    } else {
+      // Item existente: aprende category somente se ainda não tem uma
+      const existing = updatedCatalog[existingIdx];
+      if (!existing.category && item.category) {
+        updatedCatalog[existingIdx] = { ...existing, category: item.category };
+      }
     }
   });
 

@@ -13,6 +13,8 @@ import "./styles-scrollbar.css";
 import "./styles-parts.css";
 // PARTS PAGE PRINT STYLES (SEPARADO)
 import "./styles-parts-print.css";
+// 🆕 PART CATEGORY STYLES — Issue #41
+import "./styles-part-categories.css";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

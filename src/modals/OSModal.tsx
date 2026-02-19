@@ -412,7 +412,7 @@ export const OSModal: React.FC<OSModalProps> = ({
               </div>
             </div>
 
-            {/* 🆕 Issue #41: Linha de nova peça com custom dropdown de categoria */}
+            {/* Linha de nova peça */}
             <div className="item-row" style={{ borderBottom: '2px dashed var(--info)', paddingBottom: 10, marginBottom: 10 }}>
               <input
                 ref={partInputRef}
@@ -430,7 +430,6 @@ export const OSModal: React.FC<OSModalProps> = ({
                 ))}
               </datalist>
 
-              {/* 🆕 Issue #41: Custom dropdown de categoria (sem lista feia do browser) */}
               <PartCategorySelect
                 value={tempPart.category}
                 onChange={cat => setTempPart({ ...tempPart, category: cat })}
@@ -464,38 +463,31 @@ export const OSModal: React.FC<OSModalProps> = ({
             <div style={{ maxHeight: 250, overflowY: 'auto' }}>
               {groupedParts.map(({ category: cat, items }) => (
                 <div key={cat}>
-                  {/* Cabeçalho leve do grupo */}
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '3px 0 3px 8px',
-                    marginTop: 6,
-                    marginBottom: 2,
-                    borderLeft: `3px solid ${PART_CATEGORY_META[cat].color}`,
-                    fontSize: '0.68rem',
-                    fontWeight: 'bold',
-                    color: PART_CATEGORY_META[cat].color,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.06em',
-                    opacity: 0.85
-                  }}>
+
+                  {/*
+                   * Cabeçalho do grupo:
+                   * className="category-group-header" + --category-color no style.
+                   * Toda a aparência (borda, cor, fonte) vive em styles-part-categories.css.
+                   */}
+                  <div
+                    className="category-group-header"
+                    style={{ '--category-color': PART_CATEGORY_META[cat].color } as React.CSSProperties}
+                  >
                     {PART_CATEGORY_META[cat].label}
                   </div>
 
                   {items.map(({ part: p, idx: i }) => (
                     <div key={p.id} style={{ marginBottom: showCostColumn ? '12px' : '0' }}>
-                      {/* 🆕 Issue #41: Borda esquerda colorida */}
+                      {/*
+                       * Linha de peça:
+                       * className="item-row part-row" + --category-color no style.
+                       * A borda esquerda colorida vive em styles-part-categories.css.
+                       */}
                       <div
-                        className="item-row"
+                        className="item-row part-row"
                         style={{
-                          borderLeft: `3px solid ${
-                            p.category
-                              ? PART_CATEGORY_META[p.category].color
-                              : PART_CATEGORY_META['OUTROS'].color
-                          }`,
-                          paddingLeft: 8
-                        }}
+                          '--category-color': PART_CATEGORY_META[p.category ?? 'OUTROS'].color
+                        } as React.CSSProperties}
                       >
                         <input
                           className="form-input"
@@ -504,7 +496,6 @@ export const OSModal: React.FC<OSModalProps> = ({
                           style={{ flex: 2 }}
                         />
 
-                        {/* 🆕 Issue #41: Custom dropdown inline de categoria */}
                         <PartCategorySelect
                           value={p.category ?? ''}
                           onChange={cat => updateItem(parts, setParts, i, 'category', cat || undefined, catalogParts)}

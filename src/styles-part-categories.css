@@ -1,0 +1,51 @@
+/* ============================================================================
+   🆕 Issue #41 — PART CATEGORY STYLES
+   Usa a CSS custom property `--category-color` definida inline pelo
+   componente pai, mantendo as regras visuais centralizadas em CSS.
+   ============================================================================ */
+
+/* Linha de peça com borda esquerda colorida pela categoria */
+.part-row {
+  border-left: 3px solid var(--category-color, var(--border-color)) !important;
+  padding-left: 8px;
+  transition: border-left-color var(--transition-fast, 150ms ease);
+}
+
+/* Cabeçalho leve do grupo de categoria na listagem da OS */
+.category-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0 3px 8px;
+  margin-top: 6px;
+  margin-bottom: 2px;
+  border-left: 3px solid var(--category-color, var(--border-color));
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: var(--category-color, var(--text-muted));
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.85;
+  user-select: none;
+}
+
+/* Ponto colorido decorativo dentro do cabeçalho */
+.category-group-header::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: var(--category-color, var(--text-muted));
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+/* Garante que bordas e fundos coloridos imprimam corretamente */
+@media print {
+  .part-row,
+  .category-group-header {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

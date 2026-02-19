@@ -104,7 +104,7 @@ export const PartCategorySelect: React.FC<PartCategorySelectProps> = ({
         </span>
       </button>
 
-      {/* Floating dropdown panel com glassmorphism */}
+      {/* Floating dropdown panel — cinza escuro + blur forte */}
       {open && (
         <div
           style={{
@@ -114,23 +114,27 @@ export const PartCategorySelect: React.FC<PartCategorySelectProps> = ({
             zIndex: 9999,
             minWidth: '160px',
             width: '100%',
-            /* 🎀 Glassmorphism: usa as variáveis do design system */
-            background: 'var(--glass-bg)',
-            border: '1px solid var(--glass-border)',
-            backdropFilter: 'var(--glass-blur)',
-            WebkitBackdropFilter: 'var(--glass-blur)',
+            /*
+             * Cinza escuro bem opaco para o painel se destacar claramente,
+             * com blur de 24px atuando sobre o que fica atrás.
+             * O alpha 0.96 garante contraste total enquanto o blur ainda
+             * é perceptível nas bordas semi-transparentes.
+             */
+            background: 'rgba(8, 12, 24, 0.96)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
+            border: '1px solid rgba(148, 163, 184, 0.15)',
             borderRadius: 'var(--radius-lg)',
-            /* Sombra reforçada para destacar do conteúdo atrás */
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(168, 85, 247, 0.08)',
+            boxShadow: '0 12px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(168, 85, 247, 0.1)',
             overflow: 'hidden',
             animation: 'scaleUp 120ms cubic-bezier(0.175, 0.885, 0.32, 1.275)',
             transformOrigin: 'top center',
           }}
         >
-          {/* Linha de brilho no topo (igual ao modal-content::before do design system) */}
+          {/* Linha de brilho no topo */}
           <div style={{
             height: 1,
-            background: 'linear-gradient(90deg, transparent, rgba(168, 85, 247, 0.35), transparent)',
+            background: 'linear-gradient(90deg, transparent, rgba(168, 85, 247, 0.4), transparent)',
             flexShrink: 0,
           }} />
 
@@ -212,7 +216,7 @@ const DropdownOption: React.FC<DropdownOptionProps> = ({
         gap: 8,
         borderLeft: `3px solid ${borderLeftColor}`,
         borderBottom: hasBorderBottom
-          ? '1px solid var(--glass-border)'
+          ? '1px solid rgba(148, 163, 184, 0.1)'
           : undefined,
         background: bg,
         color: textColor,

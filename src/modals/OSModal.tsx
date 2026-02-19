@@ -205,6 +205,10 @@ export const OSModal: React.FC<OSModalProps> = ({
       if (match) {
         newList[index].price = match.price;
         newList[index].cost = match.cost || 0;
+        // 🆕 Issue #42: auto-fill category se o item ainda não tem uma
+        if (match.category && !newList[index].category) {
+          newList[index].category = match.category;
+        }
       }
     }
     setList(newList);
@@ -254,7 +258,9 @@ export const OSModal: React.FC<OSModalProps> = ({
       ...tempPart,
       description: val,
       price: match ? (match.price / 100).toString() : tempPart.price,
-      cost: match ? ((match.cost || 0) / 100).toString() : tempPart.cost
+      cost: match ? ((match.cost || 0) / 100).toString() : tempPart.cost,
+      // 🆕 Issue #42: auto-fill categoria aprendida do catálogo
+      category: match?.category ?? tempPart.category
     });
   };
 

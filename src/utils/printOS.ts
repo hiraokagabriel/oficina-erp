@@ -1,7 +1,13 @@
-import { WorkOrder, WorkshopSettings, STATUS_LABELS } from '../types';
+import { WorkOrder, WorkshopSettings, STATUS_LABELS, PartCategory, PART_CATEGORY_META } from '../types';
 
 // Variante de impressão: CLIENT = via do cliente (assina o mecânico), SHOP = via da oficina (assina o cliente)
 export type PrintVariant = 'CLIENT' | 'SHOP';
+
+// 🆕 Issue #41 — Ordem de exibição das categorias na impressão
+const CATEGORY_ORDER: PartCategory[] = [
+  'MOTOR', 'FREIO', 'SUSPENSAO', 'ELETRICA',
+  'TRANSMISSAO', 'AR_CONDICIONADO', 'CARROCERIA', 'OUTROS'
+];
 
 // 🆕 Função auxiliar para sanitizar strings para nomes de arquivo
 function sanitizeForFilename(text: string): string {
@@ -61,10 +67,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
     : variant === 'SHOP' ? ' — VIA DA OFICINA'
     : '';
 
-  // Bloco de assinatura:
-  // CLIENT → só mecânico assina (cliente leva)
-  // SHOP   → só cliente assina  (oficina retém)
-  // undefined → ambos (comportamento original)
+  // Bloco de assinatura
   const signatureBlock = (() => {
     const mechBlock = `
       <div class="signature-block">
@@ -80,10 +83,82 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
         <span class="sign-label">Cliente</span>
       </div>`;
 
-    if (variant === 'CLIENT') return mechBlock;   // Via do cliente: mecânico assina
-    if (variant === 'SHOP')   return clientBlock; // Via da oficina: cliente assina
-    return mechBlock + clientBlock;               // Padrão: ambos
+    if (variant === 'CLIENT') return mechBlock;
+    if (variant === 'SHOP')   return clientBlock;
+    return mechBlock + clientBlock;
   })();
+
+  // ─────────────────────────────────────────────────────────────────
+  // 🆕 Issue #41 — Renderização de peças agrupadas por categoria
+  // Comportamento:
+  //   • Se NENHUMA peça tiver categoria → lista plana original
+  //   • Se alguma tiver → cabeçalho colorido por grupo + borda esquerda
+  // ─────────────────────────────────────────────────────────────────
+  const buildPartsHtml = (): string => {
+    if (data.parts.length === 0) {
+      return '<tr><td colspan="2" style="font-style: italic; color: #999; padding: 15px 0">Nenhuma peça utilizada.</td></tr>';
+    }
+
+    const hasCategories = data.parts.some(p => p.category);
+
+    // Fallback: lista plana sem agrupamento
+    if (!hasCategories) {
+      return data.parts.map(item => `
+        <tr>
+          <td>${item.description}</td>
+          <td class="text-right">${formatMoney(item.price)}</td>
+        </tr>
+      `).join('');
+    }
+
+    // Agrupa peças por categoria (sem categoria → OUTROS)
+    const groups: Partial<Record<PartCategory, typeof data.parts>> = {};
+    data.parts.forEach(p => {
+      const cat: PartCategory = p.category ?? 'OUTROS';
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat]!.push(p);
+    });
+
+    return CATEGORY_ORDER
+      .filter(cat => groups[cat] && groups[cat]!.length > 0)
+      .map(cat => {
+        const meta  = PART_CATEGORY_META[cat];
+        const items = groups[cat]!;
+
+        // Linha de cabeçalho do grupo
+        const headerRow = `
+          <tr>
+            <td colspan="2" style="
+              padding: 4px 8px 4px 10px;
+              font-size: 0.62rem;
+              font-weight: 800;
+              text-transform: uppercase;
+              letter-spacing: 0.07em;
+              color: ${meta.color};
+              background-color: ${meta.color}1a;
+              border-left: 3px solid ${meta.color};
+              border-bottom: 1px solid ${meta.color}44;
+              border-top: 2px solid transparent;
+            ">
+              ${meta.label}
+            </td>
+          </tr>`;
+
+        // Linhas de peças do grupo com borda esquerda colorida
+        const itemRows = items.map(item => `
+          <tr>
+            <td style="
+              border-left: 3px solid ${meta.color};
+              padding-left: 10px;
+            ">${item.description}</td>
+            <td class="text-right">${formatMoney(item.price)}</td>
+          </tr>
+        `).join('');
+
+        return headerRow + itemRows;
+      })
+      .join('');
+  };
 
   const printContent = `
     <!DOCTYPE html>
@@ -352,15 +427,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
                 </tr>
               </thead>
               <tbody>
-                ${data.parts.length === 0
-                  ? '<tr><td colspan="2" style="font-style: italic; color: #999; padding: 15px 0">Nenhuma peça utilizada.</td></tr>'
-                  : data.parts.map(item => `
-                    <tr>
-                      <td>${item.description}</td>
-                      <td class="text-right">${formatMoney(item.price)}</td>
-                    </tr>
-                  `).join('')
-                }
+                ${buildPartsHtml()}
               </tbody>
             </table>
             <div class="subtotal-row">

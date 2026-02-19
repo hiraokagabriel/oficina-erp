@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Client, CatalogItem, Technician } from '../types';
+import { Client, CatalogItem, Technician, PartCategory, PART_CATEGORY_META } from '../types';
+import { PartCategorySelect } from '../components/PartCategorySelect';
 
 interface DatabaseModalProps {
   isOpen: boolean;
@@ -137,6 +138,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                 <label className="form-label">Descrição</label>
                 <input className="form-input" value={editingItem.description} onChange={e => setEditingItem({...editingItem, description: e.target.value})} />
              </div>
+
              <div className="form-group">
                 <label className="form-label">Preço Padrão</label>
                 <input 
@@ -146,6 +148,28 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                     onChange={e => setEditingItem({...editingItem, price: Math.round(parseFloat(e.target.value) * 100)})} 
                 />
              </div>
+
+             {/* 🆕 Issue #42: categoria editável diretamente no catálogo (apenas para peças) */}
+             {activeTab === 'PARTS' && (
+               <div className="form-group">
+                 <label className="form-label">Categoria</label>
+                 <PartCategorySelect
+                   value={editingItem.category ?? ''}
+                   onChange={cat => setEditingItem({ ...editingItem, category: cat || undefined })}
+                   style={{ width: '100%' }}
+                 />
+                 {editingItem.category && (
+                   <div style={{
+                     marginTop: 6,
+                     fontSize: '0.75rem',
+                     color: PART_CATEGORY_META[editingItem.category].color,
+                     fontWeight: 'bold'
+                   }}>
+                     ● {PART_CATEGORY_META[editingItem.category].label} selecionado
+                   </div>
+                 )}
+               </div>
+             )}
 
              <div className="modal-actions">
                 <button className="btn-secondary" onClick={() => setEditingItem(null)}>Cancelar</button>
@@ -273,7 +297,22 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                                         <strong>👨‍🔧 {item.name}</strong>
                                     </div>
                                 ) : (
-                                    item.description
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <span>{item.description}</span>
+                                        {/* 🆕 Issue #42: badge de categoria na listagem de peças */}
+                                        {activeTab === 'PARTS' && item.category && (
+                                          <span style={{
+                                            fontSize: '0.68rem',
+                                            fontWeight: 800,
+                                            textTransform: 'uppercase',
+                                            color: PART_CATEGORY_META[item.category as PartCategory].color,
+                                            letterSpacing: '0.04em',
+                                            opacity: 0.85
+                                          }}>
+                                            ● {PART_CATEGORY_META[item.category as PartCategory].label}
+                                          </span>
+                                        )}
+                                    </div>
                                 )}
                             </td>
                             <td style={{textAlign:'right'}}>

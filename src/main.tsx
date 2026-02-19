@@ -15,6 +15,8 @@ import "./styles-parts.css";
 import "./styles-parts-print.css";
 // 🆕 PART CATEGORY STYLES — Issue #41
 import "./styles-part-categories.css";
+// 🆕 CHECKLIST STYLES — Issue #43
+import "./styles-checklist.css";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

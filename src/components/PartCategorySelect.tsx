@@ -104,7 +104,7 @@ export const PartCategorySelect: React.FC<PartCategorySelectProps> = ({
         </span>
       </button>
 
-      {/* Floating dropdown panel */}
+      {/* Floating dropdown panel com glassmorphism */}
       {open && (
         <div
           style={{
@@ -114,15 +114,26 @@ export const PartCategorySelect: React.FC<PartCategorySelectProps> = ({
             zIndex: 9999,
             minWidth: '160px',
             width: '100%',
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--border-color)',
+            /* 🎀 Glassmorphism: usa as variáveis do design system */
+            background: 'var(--glass-bg)',
+            border: '1px solid var(--glass-border)',
+            backdropFilter: 'var(--glass-blur)',
+            WebkitBackdropFilter: 'var(--glass-blur)',
             borderRadius: 'var(--radius-lg)',
-            boxShadow: 'var(--shadow-xl)',
+            /* Sombra reforçada para destacar do conteúdo atrás */
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(168, 85, 247, 0.08)',
             overflow: 'hidden',
             animation: 'scaleUp 120ms cubic-bezier(0.175, 0.885, 0.32, 1.275)',
             transformOrigin: 'top center',
           }}
         >
+          {/* Linha de brilho no topo (igual ao modal-content::before do design system) */}
+          <div style={{
+            height: 1,
+            background: 'linear-gradient(90deg, transparent, rgba(168, 85, 247, 0.35), transparent)',
+            flexShrink: 0,
+          }} />
+
           {/* Clear / sem categoria */}
           <DropdownOption
             isActive={value === ''}
@@ -175,7 +186,7 @@ const DropdownOption: React.FC<DropdownOptionProps> = ({
   const bg = highlighted
     ? showDot
       ? `${color}1a`
-      : 'rgba(168, 85, 247, 0.1)'
+      : 'rgba(168, 85, 247, 0.12)'
     : 'transparent';
 
   const textColor = highlighted
@@ -201,7 +212,7 @@ const DropdownOption: React.FC<DropdownOptionProps> = ({
         gap: 8,
         borderLeft: `3px solid ${borderLeftColor}`,
         borderBottom: hasBorderBottom
-          ? '1px solid var(--border-color)'
+          ? '1px solid var(--glass-border)'
           : undefined,
         background: bg,
         color: textColor,

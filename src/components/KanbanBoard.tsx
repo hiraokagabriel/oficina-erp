@@ -30,6 +30,8 @@ interface KanbanBoardProps {
     onEdit: (os: WorkOrder) => void;
     onChecklist: (os: WorkOrder) => void;
     onPrint: (os: WorkOrder) => void;
+    onPrintClient?: (os: WorkOrder) => void;
+    onPrintShop?: (os: WorkOrder) => void;
     onDelete: (os: WorkOrder) => void;
     onAdvance: (id: string) => void;
     onArchive?: (os: WorkOrder) => void;

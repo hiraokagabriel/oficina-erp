@@ -29,6 +29,8 @@ interface KanbanCardProps {
     onEdit: (os: WorkOrder) => void;
     onChecklist: (os: WorkOrder) => void;
     onPrint: (os: WorkOrder) => void;
+    onPrintClient?: (os: WorkOrder) => void;
+    onPrintShop?: (os: WorkOrder) => void;
     onDelete: (os: WorkOrder) => void;
     onAdvance: (id: string) => void;
     onArchive?: (os: WorkOrder) => void;
@@ -131,14 +133,26 @@ export const KanbanCard = React.memo(({
         label: 'Checklist de Inspeção',
         onClick: () => actions.onChecklist(os)
       },
+      { divider: true },
       {
         icon: '🖨️',
-        label: 'Imprimir OS',
+        label: 'Imprimir OS (ambas assinaturas)',
         onClick: () => actions.onPrint(os)
+      },
+      {
+        icon: '🧾',
+        label: 'Imprimir via do cliente',
+        onClick: () => (actions.onPrintClient ? actions.onPrintClient(os) : actions.onPrint(os))
+      },
+      {
+        icon: '🏬',
+        label: 'Imprimir via da oficina',
+        onClick: () => (actions.onPrintShop ? actions.onPrintShop(os) : actions.onPrint(os))
       }
     ];
 
     if (os.clientPhone) {
+      items.push({ divider: true });
       items.push({
         icon: '💬',
         label: 'Enviar WhatsApp',
@@ -259,10 +273,7 @@ export const KanbanCard = React.memo(({
               )}
 
               {shouldShowHoverEffects && (
-                <div style={{
-                  animation: 'fadeInScale 0.2s ease',
-                  marginLeft: 4
-                }}>
+                <div style={{ animation: 'fadeInScale 0.2s ease', marginLeft: 4 }}>
                   <ActionMenu items={menuItems} buttonSize={28} />
                 </div>
               )}
@@ -308,10 +319,7 @@ export const KanbanCard = React.memo(({
             >
               <button
                 title="Editar OS"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  actions.onEdit(os);
-                }}
+                onClick={(e) => { e.stopPropagation(); actions.onEdit(os); }}
                 style={{
                   flex: 1,
                   padding: '8px 12px',
@@ -329,14 +337,8 @@ export const KanbanCard = React.memo(({
                   transition: 'all 0.2s ease',
                   boxShadow: '0 2px 8px rgba(130, 87, 230, 0.3)'
                 }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(130, 87, 230, 0.4)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(130, 87, 230, 0.3)';
-                }}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(130, 87, 230, 0.4)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(130, 87, 230, 0.3)'; }}
               >
                 ✏️ Editar
               </button>
@@ -344,10 +346,7 @@ export const KanbanCard = React.memo(({
               {os.clientPhone && (
                 <button
                   title="WhatsApp Rápido"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openWhatsApp();
-                  }}
+                  onClick={(e) => { e.stopPropagation(); openWhatsApp(); }}
                   style={{
                     flex: 1,
                     padding: '8px 12px',
@@ -365,14 +364,8 @@ export const KanbanCard = React.memo(({
                     transition: 'all 0.2s ease',
                     boxShadow: '0 2px 8px rgba(37, 211, 102, 0.3)'
                   }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(37, 211, 102, 0.4)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(37, 211, 102, 0.3)';
-                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(37, 211, 102, 0.4)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(37, 211, 102, 0.3)'; }}
                 >
                   💬 WhatsApp
                 </button>
@@ -393,25 +386,12 @@ export const KanbanCard = React.memo(({
 
       <style>{`
         @keyframes fadeInScale {
-          from {
-            opacity: 0;
-            transform: scale(0.8);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
+          from { opacity: 0; transform: scale(0.8); }
+          to   { opacity: 1; transform: scale(1);   }
         }
-
         @keyframes slideUpFade {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+          from { opacity: 0; transform: translateY(10px); }
+          to   { opacity: 1; transform: translateY(0);    }
         }
       `}</style>
     </>

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { WorkOrder, Client, OrderItem, CatalogItem, Technician, PartCategory, PART_CATEGORY_META } from '../types';
 import { getLocalDateString } from '../utils/helpers';
 import { MarginIndicator } from '../components/MarginIndicator';
+import { PartCategorySelect } from '../components/PartCategorySelect';
 
 interface OSModalProps {
   isOpen: boolean;
@@ -47,17 +48,16 @@ export const OSModal: React.FC<OSModalProps> = ({
   const [parts, setParts] = useState<OrderItem[]>([]);
   const [services, setServices] = useState<OrderItem[]>([]);
   const [showCostColumn, setShowCostColumn] = useState(false);
-  const [minMargin, setMinMargin] = useState(70); // 🆕 Margem mínima configurável
+  const [minMargin, setMinMargin] = useState(70);
 
   // --- ESTADOS TEMPORÁRIOS ---
-  // 🆕 Issue #41: inclui campo category na nova peça
   const [tempPart, setTempPart] = useState({ description: '', price: '', cost: '', category: '' as PartCategory | '' });
   const [tempService, setTempService] = useState({ description: '', price: '', cost: '' });
 
   const toFloat = (val: number) => val / 100;
   const fromFloat = (val: number) => Math.round(val * 100);
 
-  // --- 🆕 CÁLCULOS FINANCEIROS MEMOIZADOS ---
+  // --- CÁLCULOS FINANCEIROS MEMOIZADOS ---
   const partsTotal = useMemo(() => parts.reduce((acc, i) => acc + i.price, 0), [parts]);
   const servicesTotal = useMemo(() => services.reduce((acc, i) => acc + i.price, 0), [services]);
   const partsCost = useMemo(() => parts.reduce((acc, i) => acc + (i.cost || 0), 0), [parts]);
@@ -74,7 +74,6 @@ export const OSModal: React.FC<OSModalProps> = ({
     return (profit / totalCost) * 100;
   }, [profit, totalCost]);
 
-  // 🆕 Valor mínimo sugerido para atingir a margem desejada
   const minSuggestedRevenue = useMemo(() => {
     if (totalCost === 0) return 0;
     return totalCost / (1 - minMargin / 100);
@@ -218,7 +217,6 @@ export const OSModal: React.FC<OSModalProps> = ({
       if (!tempPart.description) return;
       const priceVal = parseFloat(tempPart.price.replace(',', '.')) || 0;
       const costVal = parseFloat(tempPart.cost.replace(',', '.')) || 0;
-      // 🆕 Issue #41: inclui category na nova peça
       const newItem: OrderItem = {
         id: crypto.randomUUID(),
         description: tempPart.description,
@@ -377,7 +375,7 @@ export const OSModal: React.FC<OSModalProps> = ({
 
         <hr style={{ borderColor: 'var(--border)', margin: '20px 0', opacity: 0.3 }} />
 
-        {/* 🆕 Configuração de margem mínima */}
+        {/* Configuração de margem mínima */}
         {showCostColumn && (
           <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', backgroundColor: 'rgba(130, 87, 230, 0.05)', borderRadius: '6px' }}>
             <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--primary)' }}>Margem Mínima Desejada:</label>
@@ -414,7 +412,7 @@ export const OSModal: React.FC<OSModalProps> = ({
               </div>
             </div>
 
-            {/* 🆕 Issue #41: Linha de nova peça com select de categoria */}
+            {/* 🆕 Issue #41: Linha de nova peça com custom dropdown de categoria */}
             <div className="item-row" style={{ borderBottom: '2px dashed var(--info)', paddingBottom: 10, marginBottom: 10 }}>
               <input
                 ref={partInputRef}
@@ -432,24 +430,12 @@ export const OSModal: React.FC<OSModalProps> = ({
                 ))}
               </datalist>
 
-              {/* 🆕 Issue #41: Select de categoria na nova peça */}
-              <select
-                className="form-input"
+              {/* 🆕 Issue #41: Custom dropdown de categoria (sem lista feia do browser) */}
+              <PartCategorySelect
                 value={tempPart.category}
-                onChange={e => setTempPart({ ...tempPart, category: e.target.value as PartCategory | '' })}
-                onKeyDown={handlePartKeyDown}
-                style={{
-                  flex: 0.8,
-                  fontSize: '0.78rem',
-                  color: tempPart.category ? PART_CATEGORY_META[tempPart.category as PartCategory].color : 'var(--text-muted)',
-                  borderLeft: tempPart.category ? `3px solid ${PART_CATEGORY_META[tempPart.category as PartCategory].color}` : undefined
-                }}
-              >
-                <option value="">Categoria...</option>
-                {(Object.keys(PART_CATEGORY_META) as PartCategory[]).map(cat => (
-                  <option key={cat} value={cat}>{PART_CATEGORY_META[cat].label}</option>
-                ))}
-              </select>
+                onChange={cat => setTempPart({ ...tempPart, category: cat })}
+                style={{ flex: 0.8 }}
+              />
 
               {showCostColumn && (
                 <input
@@ -474,7 +460,7 @@ export const OSModal: React.FC<OSModalProps> = ({
               />
             </div>
 
-            {/* 🆕 Issue #41: Listagem de peças agrupada por categoria */}
+            {/* 🆕 Issue #41: Listagem agrupada por categoria */}
             <div style={{ maxHeight: 250, overflowY: 'auto' }}>
               {groupedParts.map(({ category: cat, items }) => (
                 <div key={cat}>
@@ -499,11 +485,15 @@ export const OSModal: React.FC<OSModalProps> = ({
 
                   {items.map(({ part: p, idx: i }) => (
                     <div key={p.id} style={{ marginBottom: showCostColumn ? '12px' : '0' }}>
-                      {/* 🆕 Issue #41: Borda esquerda colorida conforme categoria */}
+                      {/* 🆕 Issue #41: Borda esquerda colorida */}
                       <div
                         className="item-row"
                         style={{
-                          borderLeft: `3px solid ${p.category ? PART_CATEGORY_META[p.category].color : PART_CATEGORY_META['OUTROS'].color}`,
+                          borderLeft: `3px solid ${
+                            p.category
+                              ? PART_CATEGORY_META[p.category].color
+                              : PART_CATEGORY_META['OUTROS'].color
+                          }`,
                           paddingLeft: 8
                         }}
                       >
@@ -514,22 +504,13 @@ export const OSModal: React.FC<OSModalProps> = ({
                           style={{ flex: 2 }}
                         />
 
-                        {/* 🆕 Issue #41: Select inline para alterar categoria de peça existente */}
-                        <select
-                          className="form-input"
+                        {/* 🆕 Issue #41: Custom dropdown inline de categoria */}
+                        <PartCategorySelect
                           value={p.category ?? ''}
-                          onChange={e => updateItem(parts, setParts, i, 'category', (e.target.value as PartCategory) || undefined, catalogParts)}
-                          style={{
-                            flex: 0.7,
-                            fontSize: '0.72rem',
-                            color: p.category ? PART_CATEGORY_META[p.category].color : 'var(--text-muted)'
-                          }}
-                        >
-                          <option value="">—</option>
-                          {(Object.keys(PART_CATEGORY_META) as PartCategory[]).map(c => (
-                            <option key={c} value={c}>{PART_CATEGORY_META[c].label}</option>
-                          ))}
-                        </select>
+                          onChange={cat => updateItem(parts, setParts, i, 'category', cat || undefined, catalogParts)}
+                          style={{ flex: 0.7 }}
+                          placeholder="—"
+                        />
 
                         {showCostColumn && (
                           <input
@@ -560,7 +541,6 @@ export const OSModal: React.FC<OSModalProps> = ({
                         </button>
                       </div>
 
-                      {/* 🆕 Indicador de Margem */}
                       {showCostColumn && p.cost && p.cost > 0 && (
                         <MarginIndicator
                           cost={p.cost}
@@ -677,7 +657,6 @@ export const OSModal: React.FC<OSModalProps> = ({
                     </button>
                   </div>
 
-                  {/* 🆕 Indicador de Margem */}
                   {showCostColumn && s.cost && s.cost > 0 && (
                     <MarginIndicator
                       cost={s.cost}
@@ -695,7 +674,7 @@ export const OSModal: React.FC<OSModalProps> = ({
           </div>
         </div>
 
-        {/* 🆕 ANÁLISE FINANCEIRA / HUB DE ROI */}
+        {/* ANÁLISE FINANCEIRA */}
         {showCostColumn && (
           <div style={{
             marginTop: 20,
@@ -713,32 +692,21 @@ export const OSModal: React.FC<OSModalProps> = ({
                   {formatMoney(totalRevenue)}
                 </div>
               </div>
-
               <div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Custo Total</div>
                 <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--warning)' }}>
                   {formatMoney(totalCost)}
                 </div>
               </div>
-
               <div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Lucro Bruto</div>
-                <div style={{
-                  fontSize: '1.1rem',
-                  fontWeight: 'bold',
-                  color: profit >= 0 ? 'var(--success)' : 'var(--danger)'
-                }}>
+                <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
                   {formatMoney(profit)}
                 </div>
               </div>
-
               <div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ROI</div>
-                <div style={{
-                  fontSize: '1.1rem',
-                  fontWeight: 'bold',
-                  color: roi >= 0 ? 'var(--success)' : 'var(--danger)'
-                }}>
+                <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: roi >= 0 ? 'var(--success)' : 'var(--danger)' }}>
                   {roi.toFixed(1)}%
                 </div>
               </div>
@@ -748,7 +716,6 @@ export const OSModal: React.FC<OSModalProps> = ({
               Margem de Lucro: <strong style={{ color: 'var(--primary)' }}>{profitMargin.toFixed(1)}%</strong>
             </div>
 
-            {/* 🆕 RESUMO GERAL - VALOR MÍNIMO SUGERIDO */}
             {totalCost > 0 && (
               <div style={{
                 marginTop: 16,
@@ -766,21 +733,15 @@ export const OSModal: React.FC<OSModalProps> = ({
                       {formatMoney(Math.round(minSuggestedRevenue))}
                     </div>
                   </div>
-
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
                       {revenueDifference >= 0 ? 'Acima do mínimo' : 'Abaixo do mínimo'}
                     </div>
-                    <div style={{
-                      fontSize: '1.1rem',
-                      fontWeight: 'bold',
-                      color: revenueDifference >= 0 ? '#22c55e' : '#ef4444'
-                    }}>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: revenueDifference >= 0 ? '#22c55e' : '#ef4444' }}>
                       {revenueDifference >= 0 ? '+' : ''}{formatMoney(Math.round(revenueDifference))}
                     </div>
                   </div>
                 </div>
-
                 {profitMargin < minMargin && (
                   <div style={{ fontSize: '0.75rem', color: '#ef4444', fontWeight: 'bold', marginTop: 8 }}>
                     ⚠️ Esta OS está abaixo da margem mínima desejada. Considere ajustar os preços.

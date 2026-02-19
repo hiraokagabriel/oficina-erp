@@ -671,7 +671,18 @@ function AppContent() {
           formatMoney={Money.format}
         />}
         {isExportModalOpen && <ExportModal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} ledger={ledger} workOrders={workOrders} defaultPath={settings.exportPath} Money={Money} SoundFX={{ success: () => addToast('Sucesso!', 'success'), error: () => addToast('Erro', 'error') }} />}
-        {isChecklistOpen && <ChecklistModal isOpen={isChecklistOpen} onClose={() => setIsChecklistOpen(false)} onSave={(data) => { if (checklistOS) setWorkOrders(p => p.map(o => o.id === checklistOS.id ? { ...o, checklist: data } : o)); setIsChecklistOpen(false); }} os={checklistOS} />}
+
+        {/* ✅ Issue #43: ChecklistModal com settings para impressão */}
+        {isChecklistOpen && <ChecklistModal
+          isOpen={isChecklistOpen}
+          onClose={() => setIsChecklistOpen(false)}
+          onSave={(data) => {
+            if (checklistOS) setWorkOrders(p => p.map(o => o.id === checklistOS.id ? { ...o, checklist: data } : o));
+            setIsChecklistOpen(false);
+          }}
+          os={checklistOS}
+          settings={settings}
+        />}
 
         {deleteModalInfo.isOpen && <DeleteConfirmationModal isOpen={deleteModalInfo.isOpen} onClose={() => setDeleteModalInfo({ isOpen: false, entry: null })} onConfirmSingle={confirmDeleteSingle} onConfirmGroup={confirmDeleteGroup} isGroup={!!deleteModalInfo.entry?.groupId} />}
 

@@ -29,7 +29,7 @@ const ChoiceModal = lazy(() => import('./modals/ChoiceModal').then(m => ({ defau
 
 import { SoundFX } from './utils/audio';
 import { Money, createEntry, updateWorkOrderData, learnClientData, learnCatalogItems, learnTechnician } from './utils/helpers';
-import { LedgerEntry, WorkOrder, Client, CatalogItem, OSStatus } from './types';
+import { LedgerEntry, WorkOrder, Client, CatalogItem, OSStatus, Technician } from './types';
 
 interface PendingAction {
   type: 'DELETE_OS' | 'ARCHIVE_OS' | 'FINISH_OS_FINANCIAL' | 'RESTORE_FINANCIAL' | 'IMPORT_DATA';
@@ -386,6 +386,16 @@ function AppContent() {
     }
   };
 
+  // 🆕 Handler para salvar/criar técnico no DatabaseModal
+  const handleSaveTechnician = (tech: Technician) => {
+    setCatalogTechnicians(prev =>
+      prev.find(t => t.id === tech.id)
+        ? prev.map(t => t.id === tech.id ? tech : t)
+        : [...prev, tech]
+    );
+    addToast('Técnico salvo!', 'success');
+  };
+
   const handleInstallmentConfirm = (config: any) => {
     console.log('🚀 ===== INÍCIO PARCELAMENTO =====');
     console.log('installmentOS:', installmentOS);
@@ -464,7 +474,7 @@ function AppContent() {
     printOS(os, settings);
   };
 
-  // 🧾 Impressão via do cliente: só assina o mecânico
+  // 🧧 Impressão via do cliente: só assina o mecânico
   const handlePrintOSClient = (os: WorkOrder) => {
     addToast(`Imprimindo via do cliente - OS #${os.osNumber}...`, 'info');
     printOS(os, settings, 'CLIENT');
@@ -645,7 +655,21 @@ function AppContent() {
         {isModalOpen && <OSModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveOSModal} editingOS={editingOS} clients={clients} catalogParts={catalogParts} catalogServices={catalogServices} catalogTechnicians={catalogTechnicians} nextOSNumber={workOrders.length > 0 ? Math.max(...workOrders.map(o => o.osNumber)) + 1 : 1} isSaving={isSaving} formatMoney={Money.format} />}
         {isEntryModalOpen && <EntryModal isOpen={isEntryModalOpen} onClose={() => { setIsEntryModalOpen(false); setEditingEntry(null); }} onSave={handleSaveEntryModal} initialData={editingEntry} />}
         {isInstallmentModalOpen && installmentOS && <InstallmentModal isOpen={isInstallmentModalOpen} onClose={() => { setIsInstallmentModalOpen(false); setInstallmentOS(null); }} totalAmount={installmentOS.total} description={`OS #${installmentOS.osNumber} - ${installmentOS.clientName}`} onConfirm={handleInstallmentConfirm} />}
-        {isDatabaseModalOpen && <DatabaseModal isOpen={isDatabaseModalOpen} onClose={() => setIsDatabaseModalOpen(false)} clients={clients} catalogParts={catalogParts} catalogServices={catalogServices} onSaveClient={handleSaveClient} onDeleteClient={(id) => setClients(p => p.filter(c => c.id !== id))} onSaveCatalogItem={handleSaveCatalogItem} onDeleteCatalogItem={(id, type) => type === 'part' ? setCatalogParts(p => p.filter(x => x.id !== id)) : setCatalogServices(p => p.filter(x => x.id !== id))} formatMoney={Money.format} />}
+        {isDatabaseModalOpen && <DatabaseModal
+          isOpen={isDatabaseModalOpen}
+          onClose={() => setIsDatabaseModalOpen(false)}
+          clients={clients}
+          catalogParts={catalogParts}
+          catalogServices={catalogServices}
+          catalogTechnicians={catalogTechnicians}
+          onSaveClient={handleSaveClient}
+          onDeleteClient={(id) => setClients(p => p.filter(c => c.id !== id))}
+          onSaveCatalogItem={handleSaveCatalogItem}
+          onDeleteCatalogItem={(id, type) => type === 'part' ? setCatalogParts(p => p.filter(x => x.id !== id)) : setCatalogServices(p => p.filter(x => x.id !== id))}
+          onSaveTechnician={handleSaveTechnician}
+          onDeleteTechnician={(id) => setCatalogTechnicians(p => p.filter(t => t.id !== id))}
+          formatMoney={Money.format}
+        />}
         {isExportModalOpen && <ExportModal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} ledger={ledger} workOrders={workOrders} defaultPath={settings.exportPath} Money={Money} SoundFX={{ success: () => addToast('Sucesso!', 'success'), error: () => addToast('Erro', 'error') }} />}
         {isChecklistOpen && <ChecklistModal isOpen={isChecklistOpen} onClose={() => setIsChecklistOpen(false)} onSave={(data) => { if (checklistOS) setWorkOrders(p => p.map(o => o.id === checklistOS.id ? { ...o, checklist: data } : o)); setIsChecklistOpen(false); }} os={checklistOS} />}
 

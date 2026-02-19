@@ -65,7 +65,8 @@ export interface CatalogItem {
   id: string;
   description: string;
   price: number;
-  cost?: number; // NOVO: custo de aquisição
+  cost?: number;       // custo de aquisição
+  category?: PartCategory; // 🆕 Issue #42: categoria aprendida automaticamente
 }
 
 // 🆕 NOVO: Catálogo de Técnicos
@@ -105,7 +106,7 @@ export interface OrderItem {
   id: string;
   description: string;
   price: number;
-  cost?: number; // NOVO: custo de aquisição/interno
+  cost?: number;         // custo de aquisição/interno
   category?: PartCategory; // 🆕 Issue #41: categoria da peça (opcional)
 }
 

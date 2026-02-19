@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { WorkOrder, Client, OrderItem, CatalogItem, Technician } from '../types';
+import { WorkOrder, Client, OrderItem, CatalogItem, Technician, PartCategory, PART_CATEGORY_META } from '../types';
 import { getLocalDateString } from '../utils/helpers';
 import { MarginIndicator } from '../components/MarginIndicator';
 
@@ -16,6 +16,12 @@ interface OSModalProps {
   isSaving: boolean;
   formatMoney: (val: number) => string;
 }
+
+// 🆕 Issue #41: Ordem de exibição das categorias
+const CATEGORY_ORDER: PartCategory[] = [
+  'MOTOR', 'FREIO', 'SUSPENSAO', 'ELETRICA',
+  'TRANSMISSAO', 'AR_CONDICIONADO', 'CARROCERIA', 'OUTROS'
+];
 
 export const OSModal: React.FC<OSModalProps> = ({
   isOpen, onClose, onSave, editingOS, clients, catalogParts, catalogServices, catalogTechnicians, nextOSNumber, isSaving, formatMoney
@@ -44,7 +50,8 @@ export const OSModal: React.FC<OSModalProps> = ({
   const [minMargin, setMinMargin] = useState(70); // 🆕 Margem mínima configurável
 
   // --- ESTADOS TEMPORÁRIOS ---
-  const [tempPart, setTempPart] = useState({ description: '', price: '', cost: '' });
+  // 🆕 Issue #41: inclui campo category na nova peça
+  const [tempPart, setTempPart] = useState({ description: '', price: '', cost: '', category: '' as PartCategory | '' });
   const [tempService, setTempService] = useState({ description: '', price: '', cost: '' });
 
   const toFloat = (val: number) => val / 100;
@@ -76,6 +83,19 @@ export const OSModal: React.FC<OSModalProps> = ({
   const revenueDifference = useMemo(() => {
     return totalRevenue - minSuggestedRevenue;
   }, [totalRevenue, minSuggestedRevenue]);
+
+  // 🆕 Issue #41: Agrupamento de peças por categoria
+  const groupedParts = useMemo(() => {
+    const groups: Partial<Record<PartCategory, { part: OrderItem; idx: number }[]>> = {};
+    parts.forEach((p, idx) => {
+      const cat: PartCategory = p.category ?? 'OUTROS';
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat]!.push({ part: p, idx });
+    });
+    return CATEGORY_ORDER
+      .filter(cat => groups[cat] && groups[cat]!.length > 0)
+      .map(cat => ({ category: cat, items: groups[cat]! }));
+  }, [parts]);
 
   // --- LISTAS OTIMIZADAS ---
   const suggestedParts = useMemo(() => {
@@ -198,14 +218,16 @@ export const OSModal: React.FC<OSModalProps> = ({
       if (!tempPart.description) return;
       const priceVal = parseFloat(tempPart.price.replace(',', '.')) || 0;
       const costVal = parseFloat(tempPart.cost.replace(',', '.')) || 0;
+      // 🆕 Issue #41: inclui category na nova peça
       const newItem: OrderItem = {
         id: crypto.randomUUID(),
         description: tempPart.description,
         price: fromFloat(priceVal),
-        cost: fromFloat(costVal)
+        cost: fromFloat(costVal),
+        category: tempPart.category || undefined
       };
       setParts(prev => [...prev, newItem]);
-      setTempPart({ description: '', price: '', cost: '' });
+      setTempPart({ description: '', price: '', cost: '', category: '' });
       if (e.shiftKey) serviceInputRef.current?.focus(); else partInputRef.current?.focus();
     }
   };
@@ -231,6 +253,7 @@ export const OSModal: React.FC<OSModalProps> = ({
   const handleTempPartChange = (val: string) => {
     const match = catalogParts.find(c => c.description.toLowerCase() === val.toLowerCase());
     setTempPart({
+      ...tempPart,
       description: val,
       price: match ? (match.price / 100).toString() : tempPart.price,
       cost: match ? ((match.cost || 0) / 100).toString() : tempPart.cost
@@ -391,6 +414,7 @@ export const OSModal: React.FC<OSModalProps> = ({
               </div>
             </div>
 
+            {/* 🆕 Issue #41: Linha de nova peça com select de categoria */}
             <div className="item-row" style={{ borderBottom: '2px dashed var(--info)', paddingBottom: 10, marginBottom: 10 }}>
               <input
                 ref={partInputRef}
@@ -407,6 +431,25 @@ export const OSModal: React.FC<OSModalProps> = ({
                   <option key={idx} value={cp.description}>{formatMoney(cp.price)}</option>
                 ))}
               </datalist>
+
+              {/* 🆕 Issue #41: Select de categoria na nova peça */}
+              <select
+                className="form-input"
+                value={tempPart.category}
+                onChange={e => setTempPart({ ...tempPart, category: e.target.value as PartCategory | '' })}
+                onKeyDown={handlePartKeyDown}
+                style={{
+                  flex: 0.8,
+                  fontSize: '0.78rem',
+                  color: tempPart.category ? PART_CATEGORY_META[tempPart.category as PartCategory].color : 'var(--text-muted)',
+                  borderLeft: tempPart.category ? `3px solid ${PART_CATEGORY_META[tempPart.category as PartCategory].color}` : undefined
+                }}
+              >
+                <option value="">Categoria...</option>
+                {(Object.keys(PART_CATEGORY_META) as PartCategory[]).map(cat => (
+                  <option key={cat} value={cat}>{PART_CATEGORY_META[cat].label}</option>
+                ))}
+              </select>
 
               {showCostColumn && (
                 <input
@@ -431,58 +474,106 @@ export const OSModal: React.FC<OSModalProps> = ({
               />
             </div>
 
+            {/* 🆕 Issue #41: Listagem de peças agrupada por categoria */}
             <div style={{ maxHeight: 250, overflowY: 'auto' }}>
-              {parts.map((p, i) => (
-                <div key={p.id} style={{ marginBottom: showCostColumn ? '12px' : '0' }}>
-                  <div className="item-row">
-                    <input
-                      className="form-input"
-                      value={p.description}
-                      onChange={e => updateItem(parts, setParts, i, 'description', e.target.value, catalogParts)}
-                      style={{ flex: 2 }}
-                    />
-
-                    {showCostColumn && (
-                      <input
-                        className="form-input"
-                        type="number"
-                        value={toFloat(p.cost || 0)}
-                        onChange={e => updateItem(parts, setParts, i, 'cost', fromFloat(parseFloat(e.target.value) || 0), catalogParts)}
-                        style={{ flex: 0.8, fontSize: '0.85rem', backgroundColor: 'rgba(255,152,0,0.1)' }}
-                        placeholder="Custo"
-                        title="Custo interno de aquisição"
-                      />
-                    )}
-
-                    <input
-                      className="form-input"
-                      type="number"
-                      value={toFloat(p.price)}
-                      onChange={e => updateItem(parts, setParts, i, 'price', fromFloat(parseFloat(e.target.value) || 0), catalogParts)}
-                      style={{ flex: 1 }}
-                    />
-
-                    <button
-                      className="btn-icon danger"
-                      onClick={() => setParts(parts.filter((_, idx) => idx !== i))}
-                      tabIndex={-1}
-                    >
-                      x
-                    </button>
+              {groupedParts.map(({ category: cat, items }) => (
+                <div key={cat}>
+                  {/* Cabeçalho leve do grupo */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '3px 0 3px 8px',
+                    marginTop: 6,
+                    marginBottom: 2,
+                    borderLeft: `3px solid ${PART_CATEGORY_META[cat].color}`,
+                    fontSize: '0.68rem',
+                    fontWeight: 'bold',
+                    color: PART_CATEGORY_META[cat].color,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                    opacity: 0.85
+                  }}>
+                    {PART_CATEGORY_META[cat].label}
                   </div>
 
-                  {/* 🆕 Indicador de Margem */}
-                  {showCostColumn && p.cost && p.cost > 0 && (
-                    <MarginIndicator
-                      cost={p.cost}
-                      price={p.price}
-                      formatMoney={formatMoney}
-                      minMarginPercent={minMargin}
-                      onSuggestPrice={(suggestedPrice) => {
-                        updateItem(parts, setParts, i, 'price', suggestedPrice, catalogParts);
-                      }}
-                    />
-                  )}
+                  {items.map(({ part: p, idx: i }) => (
+                    <div key={p.id} style={{ marginBottom: showCostColumn ? '12px' : '0' }}>
+                      {/* 🆕 Issue #41: Borda esquerda colorida conforme categoria */}
+                      <div
+                        className="item-row"
+                        style={{
+                          borderLeft: `3px solid ${p.category ? PART_CATEGORY_META[p.category].color : PART_CATEGORY_META['OUTROS'].color}`,
+                          paddingLeft: 8
+                        }}
+                      >
+                        <input
+                          className="form-input"
+                          value={p.description}
+                          onChange={e => updateItem(parts, setParts, i, 'description', e.target.value, catalogParts)}
+                          style={{ flex: 2 }}
+                        />
+
+                        {/* 🆕 Issue #41: Select inline para alterar categoria de peça existente */}
+                        <select
+                          className="form-input"
+                          value={p.category ?? ''}
+                          onChange={e => updateItem(parts, setParts, i, 'category', (e.target.value as PartCategory) || undefined, catalogParts)}
+                          style={{
+                            flex: 0.7,
+                            fontSize: '0.72rem',
+                            color: p.category ? PART_CATEGORY_META[p.category].color : 'var(--text-muted)'
+                          }}
+                        >
+                          <option value="">—</option>
+                          {(Object.keys(PART_CATEGORY_META) as PartCategory[]).map(c => (
+                            <option key={c} value={c}>{PART_CATEGORY_META[c].label}</option>
+                          ))}
+                        </select>
+
+                        {showCostColumn && (
+                          <input
+                            className="form-input"
+                            type="number"
+                            value={toFloat(p.cost || 0)}
+                            onChange={e => updateItem(parts, setParts, i, 'cost', fromFloat(parseFloat(e.target.value) || 0), catalogParts)}
+                            style={{ flex: 0.8, fontSize: '0.85rem', backgroundColor: 'rgba(255,152,0,0.1)' }}
+                            placeholder="Custo"
+                            title="Custo interno de aquisição"
+                          />
+                        )}
+
+                        <input
+                          className="form-input"
+                          type="number"
+                          value={toFloat(p.price)}
+                          onChange={e => updateItem(parts, setParts, i, 'price', fromFloat(parseFloat(e.target.value) || 0), catalogParts)}
+                          style={{ flex: 1 }}
+                        />
+
+                        <button
+                          className="btn-icon danger"
+                          onClick={() => setParts(parts.filter((_, idx) => idx !== i))}
+                          tabIndex={-1}
+                        >
+                          x
+                        </button>
+                      </div>
+
+                      {/* 🆕 Indicador de Margem */}
+                      {showCostColumn && p.cost && p.cost > 0 && (
+                        <MarginIndicator
+                          cost={p.cost}
+                          price={p.price}
+                          formatMoney={formatMoney}
+                          minMarginPercent={minMargin}
+                          onSuggestPrice={(suggestedPrice) => {
+                            updateItem(parts, setParts, i, 'price', suggestedPrice, catalogParts);
+                          }}
+                        />
+                      )}
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>

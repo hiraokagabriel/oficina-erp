@@ -8,15 +8,17 @@ import {
   createEmptyChecklist,
   migrateChecklist,
 } from '../types';
+import { printChecklist } from '../utils/printChecklist';
 
 interface ChecklistModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (data: ChecklistSchema) => void;
   os: WorkOrder | null;
+  settings?: any;
 }
 
-export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose, onSave, os }) => {
+export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose, onSave, os, settings }) => {
   const [checklist, setChecklist] = useState<ChecklistSchema>(createEmptyChecklist());
   const [addingItemTo, setAddingItemTo] = useState<string | null>(null);
   const [newItemLabel, setNewItemLabel] = useState('');
@@ -35,8 +37,8 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
     }
   }, [isOpen, os]);
 
-  useEffect(() => { if (addingItemTo) newItemInputRef.current?.focus(); }, [addingItemTo]);
-  useEffect(() => { if (addingCategory) newCatInputRef.current?.focus(); }, [addingCategory]);
+  useEffect(() => { if (addingItemTo)   newItemInputRef.current?.focus(); }, [addingItemTo]);
+  useEffect(() => { if (addingCategory) newCatInputRef.current?.focus();  }, [addingCategory]);
 
   if (!isOpen || !os) return null;
 
@@ -104,6 +106,14 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
     onClose();
   };
 
+  const handlePrint = () => {
+    if (settings) {
+      printChecklist(os, checklist, settings);
+    } else {
+      window.print();
+    }
+  };
+
   // Conta itens por status para o resumo do topo
   const counts = checklist.categories
     .flatMap(c => c.items)
@@ -150,7 +160,6 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
           {checklist.categories.map(cat => (
             <div key={cat.id} className="checklist-category">
 
-              {/* Cabeçalho da categoria */}
               <div className="checklist-category-header">
                 <span>{cat.label}</span>
                 {cat.custom && (
@@ -163,7 +172,6 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
                 )}
               </div>
 
-              {/* Itens */}
               <ul className="checklist-items">
                 {cat.items.map(item => {
                   const meta = INSPECTION_STATUS_META[item.status];
@@ -192,7 +200,6 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
                 )}
               </ul>
 
-              {/* Adicionar item */}
               {addingItemTo === cat.id ? (
                 <div className="add-item-row">
                   <input
@@ -258,7 +265,7 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
 
         {/* ====== AÇÕES ====== */}
         <div className="modal-actions checklist-actions">
-          <button className="btn-ghost checklist-print-btn" onClick={() => window.print()} title="Imprimir vistoria">
+          <button className="btn-ghost checklist-print-btn" onClick={handlePrint} title="Imprimir vistoria">
             &#128424; Imprimir
           </button>
           <div style={{ flex: 1 }} />

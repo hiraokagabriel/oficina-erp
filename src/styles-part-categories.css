@@ -49,3 +49,54 @@
     print-color-adjust: exact;
   }
 }
+
+
+/* ============================================================================
+   fix #44 — PartCategorySelect: estilos do painel flutuante
+   Separados em classes CSS para que o tema Ultraviolet Dawn possa sobrescrever
+   sem depender de inline styles no componente React.
+   ============================================================================ */
+
+/* Painel flutuante — tema escuro (default) */
+.pcs-dropdown {
+  background: rgba(8, 12, 24, 0.96);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(168, 85, 247, 0.1);
+}
+
+/* Linha de brilho no topo do painel — tema escuro */
+.pcs-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(168, 85, 247, 0.4),
+    transparent
+  );
+}
+
+/* ---- Ultraviolet Dawn (tema claro) — fix #44 ---- */
+[data-theme="pastel"] .pcs-dropdown {
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.1),
+    0 0 0 1px rgba(108, 142, 239, 0.15);
+}
+
+[data-theme="pastel"] .pcs-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(108, 142, 239, 0.45),
+    transparent
+  );
+}
+
+/* Variáveis usadas dentro de DropdownOption no tema claro */
+[data-theme="pastel"] {
+  --pcs-divider:        rgba(0, 0, 0, 0.06);
+  --text-secondary:     var(--text-muted, #6b7280);
+  --color-primary-400:  var(--primary, #6C8EEF);
+}

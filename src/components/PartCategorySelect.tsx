@@ -104,9 +104,15 @@ export const PartCategorySelect: React.FC<PartCategorySelectProps> = ({
         </span>
       </button>
 
-      {/* Floating dropdown panel — cinza escuro + blur forte */}
+      {/*
+       * Floating dropdown panel.
+       * Background, border e shadow vivem em .pcs-dropdown (styles-part-categories.css)
+       * para que o tema Ultraviolet Dawn possa sobrescrever sem tocar no JS.
+       * fix #44
+       */}
       {open && (
         <div
+          className="pcs-dropdown"
           style={{
             position: 'absolute',
             top: 'calc(100% + 6px)',
@@ -114,29 +120,16 @@ export const PartCategorySelect: React.FC<PartCategorySelectProps> = ({
             zIndex: 9999,
             minWidth: '160px',
             width: '100%',
-            /*
-             * Cinza escuro bem opaco para o painel se destacar claramente,
-             * com blur de 24px atuando sobre o que fica atrás.
-             * O alpha 0.96 garante contraste total enquanto o blur ainda
-             * é perceptível nas bordas semi-transparentes.
-             */
-            background: 'rgba(8, 12, 24, 0.96)',
             backdropFilter: 'blur(24px)',
             WebkitBackdropFilter: 'blur(24px)',
-            border: '1px solid rgba(148, 163, 184, 0.15)',
             borderRadius: 'var(--radius-lg)',
-            boxShadow: '0 12px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(168, 85, 247, 0.1)',
             overflow: 'hidden',
             animation: 'scaleUp 120ms cubic-bezier(0.175, 0.885, 0.32, 1.275)',
             transformOrigin: 'top center',
           }}
         >
-          {/* Linha de brilho no topo */}
-          <div style={{
-            height: 1,
-            background: 'linear-gradient(90deg, transparent, rgba(168, 85, 247, 0.4), transparent)',
-            flexShrink: 0,
-          }} />
+          {/* Linha de brilho no topo — cor também via CSS (.pcs-shimmer) */}
+          <div className="pcs-shimmer" style={{ height: 1, flexShrink: 0 }} />
 
           {/* Clear / sem categoria */}
           <DropdownOption
@@ -196,8 +189,8 @@ const DropdownOption: React.FC<DropdownOptionProps> = ({
   const textColor = highlighted
     ? showDot
       ? color
-      : 'var(--color-primary-400)'
-    : 'var(--text-secondary)';
+      : 'var(--color-primary-400, var(--primary, #6C8EEF))'
+    : 'var(--text-secondary, var(--text-muted))';
 
   const borderLeftColor =
     showDot && highlighted ? color : 'transparent';
@@ -215,8 +208,9 @@ const DropdownOption: React.FC<DropdownOptionProps> = ({
         alignItems: 'center',
         gap: 8,
         borderLeft: `3px solid ${borderLeftColor}`,
+        /* Divisor usa variável CSS para o tema claro poder sobrescrever (fix #44) */
         borderBottom: hasBorderBottom
-          ? '1px solid rgba(148, 163, 184, 0.1)'
+          ? '1px solid var(--pcs-divider, rgba(148, 163, 184, 0.1))'
           : undefined,
         background: bg,
         color: textColor,

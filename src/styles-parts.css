@@ -544,3 +544,118 @@
     print-color-adjust: exact;
   }
 }
+
+
+/* ===================================
+   fix #45 — ULTRAVIOLET DAWN (pastel)
+   Substitui todos os fallbacks escuros
+   (#1a1a2e, #16213e, #0f1729, #ffffff)
+   pelas variáveis semânticas do tema.
+   =================================== */
+
+[data-theme="pastel"] .parts-page-container {
+  background: var(--bg, #f5f0ff);
+}
+
+[data-theme="pastel"] .parts-loading {
+  color: var(--text-muted, #6b7280);
+}
+
+/* Título e subtítulo */
+[data-theme="pastel"] .parts-title {
+  color: var(--text, #1a1a2e);
+}
+[data-theme="pastel"] .parts-subtitle {
+  color: var(--text-muted, #6b7280);
+}
+
+/* Filtros */
+[data-theme="pastel"] .parts-filters {
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.08));
+}
+[data-theme="pastel"] .parts-filter-label {
+  color: var(--text, #1a1a2e);
+}
+[data-theme="pastel"] .parts-filter-btn {
+  background: var(--surface, #ffffff);
+  color: var(--text-muted, #6b7280);
+  border: 2px solid var(--border, rgba(0, 0, 0, 0.1));
+}
+[data-theme="pastel"] .parts-filter-btn:hover {
+  background: rgba(108, 142, 239, 0.08);
+  color: var(--text, #1a1a2e);
+  border-color: var(--primary, #6C8EEF);
+}
+[data-theme="pastel"] .parts-filter-btn.active {
+  /* mantém o gradiente roxo — funciona em ambos os temas */
+  color: #fff;
+  border-color: #667eea;
+}
+
+/* Cards de estatísticas */
+[data-theme="pastel"] .parts-stat-card {
+  background: var(--surface, #ffffff);
+  border-color: var(--border, rgba(0, 0, 0, 0.08));
+}
+[data-theme="pastel"] .parts-stat-card:hover {
+  border-color: var(--primary, #6C8EEF);
+}
+[data-theme="pastel"] .parts-stat-card.highlight {
+  background: rgba(108, 142, 239, 0.06);
+  border-color: var(--primary, #6C8EEF);
+}
+[data-theme="pastel"] .parts-stat-value {
+  color: var(--text, #1a1a2e);
+}
+[data-theme="pastel"] .parts-stat-label {
+  color: var(--text-muted, #6b7280);
+}
+
+/* Tabela */
+[data-theme="pastel"] .parts-table-wrapper {
+  background: var(--surface, #ffffff);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+[data-theme="pastel"] .parts-table thead {
+  background: rgba(108, 142, 239, 0.07);
+}
+[data-theme="pastel"] .parts-table th {
+  color: var(--text, #1a1a2e);
+  border-bottom-color: var(--primary, #6C8EEF);
+}
+[data-theme="pastel"] .parts-table td {
+  color: var(--text, #1a1a2e);
+}
+[data-theme="pastel"] .parts-table tbody tr {
+  border-bottom-color: var(--border, rgba(0, 0, 0, 0.06));
+}
+[data-theme="pastel"] .parts-table tbody tr:hover {
+  background: rgba(108, 142, 239, 0.05);
+}
+[data-theme="pastel"] .parts-table tbody tr.selected {
+  background: rgba(108, 142, 239, 0.1);
+  border-left-color: var(--primary, #6C8EEF);
+}
+[data-theme="pastel"] .parts-td-client {
+  color: var(--text-muted, #6b7280);
+}
+
+/* Badges */
+[data-theme="pastel"] .parts-os-badge {
+  background: rgba(108, 142, 239, 0.1);
+  color: var(--primary, #6C8EEF);
+  border-color: rgba(108, 142, 239, 0.3);
+}
+
+/* Estado vazio */
+[data-theme="pastel"] .parts-empty-state {
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.08));
+}
+[data-theme="pastel"] .parts-empty-state h3 {
+  color: var(--text, #1a1a2e);
+}
+[data-theme="pastel"] .parts-empty-state p {
+  color: var(--text-muted, #6b7280);
+}

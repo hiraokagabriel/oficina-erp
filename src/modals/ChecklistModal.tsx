@@ -147,7 +147,8 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
         <div className="checklist-legend">
           {(Object.entries(INSPECTION_STATUS_META) as [InspectionStatus, { label: string; color: string; emoji: string }][]).map(([key, meta]) => (
             <span key={key} className="legend-item">
-              <span style={{ color: meta.color, fontSize: '1rem' }}>{meta.emoji}</span>
+              {/* Bolinha CSS pura — sem emoji */}
+              <span className="legend-dot" style={{ backgroundColor: meta.color }} />
               <span>{meta.label}</span>
               {counts[key] ? <strong style={{ color: meta.color }}>({counts[key]})</strong> : null}
             </span>
@@ -182,7 +183,11 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
                       onClick={() => cycleStatus(cat.id, item.id)}
                       title="Clique para alterar status"
                     >
-                      <span className="status-dot" style={{ color: meta.color }}>{meta.emoji}</span>
+                      {/* Círculo CSS puro — sem emoji, sem bullet do <li> */}
+                      <span
+                        className="status-dot"
+                        style={{ backgroundColor: meta.color }}
+                      />
                       <span className="item-label">{item.label}</span>
                       {item.custom && (
                         <button

@@ -86,8 +86,17 @@
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   color: var(--text-muted);
+}
+
+/* Bolinha da legenda — círculo CSS puro */
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
 }
 
 .legend-hint {
@@ -145,6 +154,7 @@
 }
 
 .checklist-item {
+  list-style: none;         /* garante que o <li> não mostre bullet */
   display: flex;
   align-items: center;
   gap: 7px;
@@ -155,6 +165,12 @@
   color: var(--text);
   transition: background 0.12s;
   user-select: none;
+}
+
+/* Remove o ::marker do <li> em todos os browsers */
+.checklist-item::marker {
+  content: none;
+  display: none;
 }
 
 .checklist-item:hover {
@@ -169,10 +185,14 @@
 .checklist-item.status-attention:hover { background: rgba(251, 140,   0, 0.18); }
 .checklist-item.status-urgent:hover    { background: rgba(229,  57,  53, 0.18); }
 
+/* Bolinha de status — círculo CSS puro, sem emoji */
 .status-dot {
-  font-size: 0.85rem;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
   flex-shrink: 0;
-  line-height: 1;
+  display: inline-block;
+  transition: background-color 0.15s;
 }
 
 .item-label {
@@ -320,6 +340,9 @@
   .checklist-item.status-ok        { background: #e8f5e9 !important; }
   .checklist-item.status-attention { background: #fff3e0 !important; }
   .checklist-item.status-urgent    { background: #ffebee !important; }
+
+  /* Bolinhas com cores sólidas na impressão */
+  .status-dot { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
   .checklist-notes-section {
     border-top: 1px solid #ccc;

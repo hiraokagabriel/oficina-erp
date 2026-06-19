@@ -496,36 +496,20 @@ input[type=number] {
   body, #root, .app-container { background: white !important; }
   body > *, #root > *, .app-container > * { display: none !important; }
 
+  /*
+   * CORREÇÃO CRÍTICA: position:fixed removia o elemento do fluxo de
+   * documento, causando a 1ª página em branco. Agora usamos
+   * position:static para que o conteúdo ocupe espaço real e a
+   * paginação funcione corretamente.
+   */
   .printable-invoice {
     display: block !important;
-    position: fixed !important;
-    top: 0; left: 0;
-    width: 100%; height: auto;
+    position: static !important;
+    width: 100%;
     background: white !important;
     color: black !important;
     font-family: 'Inter', Arial, sans-serif;
     font-size: 10pt;
-  }
-
-  .invoice-layout-table { width: 100%; border-collapse: collapse; }
-  .invoice-content-cell { padding: 0; vertical-align: top; }
-  .footer-space-cell { padding: 0; }
-
-  .footer-space, .invoice-fixed-footer {
-    height: 180px;
-  }
-
-  .footer-space { display: block; width: 100%; }
-
-  .invoice-fixed-footer {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    padding: 0 15mm 10mm 15mm;
-    box-sizing: border-box;
-    background-color: #FFFFFF;
-    z-index: 9999;
   }
 
   .invoice-header {
@@ -649,6 +633,24 @@ input[type=number] {
   .total-line { text-align: right; }
   .label-total { font-size: 0.9rem; letter-spacing: 1px; color: #8B5CF6; font-weight: 700; margin-right: 15px; }
   .value-total { font-weight: 900; color: #000; font-size: 1.8rem; line-height: 1; }
+
+  /*
+   * RODAPÉ: removido position:fixed (que o duplicava em todas as páginas
+   * de forma sobreposta). Agora é um bloco normal no fluxo do documento,
+   * com page-break-inside:avoid para não ser cortado no meio.
+   */
+  .invoice-fixed-footer {
+    margin-top: 40px;
+    padding-top: 0;
+    background: white;
+    page-break-inside: avoid;
+  }
+
+  /* Espaçador que havia sido usado para compensar o footer fixo: não é mais necessário */
+  .footer-space { display: none; }
+  .invoice-layout-table { display: contents; }
+  .invoice-content-cell { display: contents; }
+  .footer-space-cell { display: none; }
 
   .signature-area { 
     display: flex; justify-content: space-between; 

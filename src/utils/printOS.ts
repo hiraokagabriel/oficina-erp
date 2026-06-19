@@ -53,7 +53,6 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
     }
   }
 
-  // Sufixo no título do documento conforme a via
   const variantSuffix =
     variant === 'CLIENT' ? '_ViaCliente'
     : variant === 'SHOP' ? '_ViaOficina'
@@ -61,13 +60,11 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
 
   const documentTitle = `OS_${osNumber}_${clientName}_${vehicleModel}_${licensePlate}${variantSuffix}`;
 
-  // Rótulo exibido no cabeçalho da OS conforme a via
   const viaLabel =
     variant === 'CLIENT' ? ' — VIA DO CLIENTE'
     : variant === 'SHOP' ? ' — VIA DA OFICINA'
     : '';
 
-  // Bloco de assinatura
   const signatureBlock = (() => {
     const mechBlock = `
       <div class="signature-block">
@@ -89,29 +86,34 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
   })();
 
   // ─────────────────────────────────────────────────────────────────
-  // 🆕 Issue #41 — Renderização de peças agrupadas por categoria
-  // Comportamento:
-  //   • Se NENHUMA peça tiver categoria → lista plana original
-  //   • Se alguma tiver → cabeçalho colorido por grupo + borda esquerda
+  // Renderização de peças agrupadas por categoria.
+  // Cada grupo é uma <table> independente com <thead> que se repete
+  // automaticamente em quebras de página (display: table-header-group).
   // ─────────────────────────────────────────────────────────────────
   const buildPartsHtml = (): string => {
     if (data.parts.length === 0) {
-      return '<tr><td colspan="2" style="font-style: italic; color: #999; padding: 15px 0">Nenhuma peça utilizada.</td></tr>';
+      return `<table class="invoice-items-table">
+        <tbody>
+          <tr><td colspan="2" style="font-style:italic;color:#999;padding:15px 0">Nenhuma peça utilizada.</td></tr>
+        </tbody>
+      </table>`;
     }
 
     const hasCategories = data.parts.some(p => p.category);
 
-    // Fallback: lista plana sem agrupamento
     if (!hasCategories) {
-      return data.parts.map(item => `
+      const rows = data.parts.map(item => `
         <tr>
           <td>${item.description}</td>
           <td class="text-right">${formatMoney(item.price)}</td>
         </tr>
       `).join('');
+      return `<table class="invoice-items-table"><thead><tr>
+        <th style="width:75%;text-align:left">ITEM / DESCRIÇÃO</th>
+        <th style="width:25%;text-align:right">VALOR</th>
+      </tr></thead><tbody>${rows}</tbody></table>`;
     }
 
-    // Agrupa peças por categoria (sem categoria → OUTROS)
     const groups: Partial<Record<PartCategory, typeof data.parts>> = {};
     data.parts.forEach(p => {
       const cat: PartCategory = p.category ?? 'OUTROS';
@@ -119,46 +121,121 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
       groups[cat]!.push(p);
     });
 
+    // Cada categoria vira uma <table> própria.
+    // O <thead> com o cabeçalho colorido é repetido automaticamente
+    // pelo browser/PDF quando a tabela quebra de página.
     return CATEGORY_ORDER
       .filter(cat => groups[cat] && groups[cat]!.length > 0)
       .map(cat => {
         const meta  = PART_CATEGORY_META[cat];
         const items = groups[cat]!;
 
-        // Linha de cabeçalho do grupo
-        const headerRow = `
-          <tr>
-            <td colspan="2" style="
-              padding: 4px 8px 4px 10px;
-              font-size: 0.62rem;
-              font-weight: 800;
-              text-transform: uppercase;
-              letter-spacing: 0.07em;
-              color: ${meta.color};
-              background-color: ${meta.color}1a;
-              border-left: 3px solid ${meta.color};
-              border-bottom: 1px solid ${meta.color}44;
-              border-top: 2px solid transparent;
-            ">
-              ${meta.label}
-            </td>
-          </tr>`;
-
-        // Linhas de peças do grupo com borda esquerda colorida
         const itemRows = items.map(item => `
           <tr>
-            <td style="
-              border-left: 3px solid ${meta.color};
-              padding-left: 10px;
-            ">${item.description}</td>
+            <td style="border-left:3px solid ${meta.color};padding-left:10px">${item.description}</td>
             <td class="text-right">${formatMoney(item.price)}</td>
           </tr>
         `).join('');
 
-        return headerRow + itemRows;
+        return `
+          <table class="invoice-items-table category-block" style="margin-bottom:0">
+            <thead>
+              <tr>
+                <th colspan="2" class="category-group-header" style="
+                  padding:4px 8px 4px 10px;
+                  font-size:0.62rem;
+                  font-weight:800;
+                  text-transform:uppercase;
+                  letter-spacing:0.07em;
+                  color:${meta.color};
+                  background-color:${meta.color}1a;
+                  border-left:3px solid ${meta.color};
+                  border-bottom:1px solid ${meta.color}44;
+                  text-align:left;
+                ">${meta.label}</th>
+              </tr>
+              <tr class="col-header-row">
+                <th style="width:75%;text-align:left">ITEM / DESCRIÇÃO</th>
+                <th style="width:25%;text-align:right">VALOR</th>
+              </tr>
+            </thead>
+            <tbody>${itemRows}</tbody>
+          </table>
+        `;
       })
       .join('');
   };
+
+  // ─────────────────────────────────────────────────────────────────
+  // PÁGINA 1 — TERMOS E CONDIÇÕES
+  // ─────────────────────────────────────────────────────────────────
+  const termsPageHtml = `
+    <div class="terms-page">
+      <div style="text-align:center;margin-bottom:16px">
+        <div class="invoice-logo-circle" style="margin:0 auto 10px auto">AM</div>
+        <h1 style="font-size:1rem;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin:0">${settings.name || 'OFICINA MECÂNICA'}</h1>
+        <p style="font-size:0.65rem;color:#888;letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-top:2px">TERMOS E CONDIÇÕES DE SERVIÇO</p>
+      </div>
+
+      <hr class="divider" />
+
+      <div class="terms-body">
+
+        <div class="terms-clause">
+          <h3>1. AUTORIZAÇÃO DE SERVIÇO</h3>
+          <p>O cliente autoriza a execução dos serviços descritos nesta Ordem de Serviço, tendo sido previamente informado sobre os procedimentos, peças a serem utilizadas e valores estimados. A assinatura desta OS representa ciência e aceite integral dos termos aqui descritos.</p>
+        </div>
+
+        <div class="terms-clause">
+          <h3>2. ORÇAMENTO E APROVAÇÃO</h3>
+          <p>O orçamento aprovado pelo cliente é válido por 5 (cinco) dias úteis. A elaboração do orçamento técnico tem custo de <strong>R$ 150,00</strong>, referente à mão de obra de diagnóstico e avaliação. Este valor será <strong>integralmente abatido</strong> do valor final caso o cliente aprove e execute o serviço na oficina. Em caso de não aprovação, o valor será cobrado na íntegra. Caso durante a execução do serviço sejam identificados problemas adicionais, o cliente será consultado antes de qualquer serviço extra ser realizado. Serviços não autorizados não serão cobrados.</p>
+        </div>
+
+        <div class="terms-clause">
+          <h3>3. PRAZO DE ENTREGA</h3>
+          <p>O prazo de entrega informado é estimado e pode sofrer alterações em razão de disponibilidade de peças, complexidade do serviço ou fatores externos. O cliente será notificado prontamente em caso de alteração no prazo.</p>
+        </div>
+
+        <div class="terms-clause">
+          <h3>4. GARANTIA DOS SERVIÇOS</h3>
+          <p>Os serviços prestados possuem garantia de <strong>90 (noventa) dias</strong> a partir da data de entrega do veículo, conforme o Código de Defesa do Consumidor (Lei n.º 8.078/1990). A garantia cobre exclusivamente os serviços executados e peças fornecidas pela oficina, ficando excluídos danos causados por mau uso, acidentes, modificações externas ou falta de manutenção pelo cliente.</p>
+        </div>
+
+        <div class="terms-clause">
+          <h3>5. PEÇAS E MATERIAIS</h3>
+          <p>As peças fornecidas pela oficina são originais ou de qualidade equivalente, devidamente documentadas. O cliente poderá optar por fornecer suas próprias peças, desde que em conformidade técnica, sendo a garantia do serviço limitada neste caso. Caso o cliente opte por fornecer suas próprias peças, será cobrada uma taxa de <strong>R$ 15,00 por dia</strong> referente ao período em que o veículo permanecer na oficina aguardando a entrega das peças pelo cliente. Peças substituídas ficarão à disposição do cliente por até 24 horas após a entrega.</p>
+        </div>
+
+        <div class="terms-clause">
+          <h3>6. RESPONSABILIDADE SOBRE O VEÍCULO</h3>
+          <p>A oficina não se responsabiliza por objetos pessoais deixados no interior do veículo, danos pré-existentes não documentados na entrada ou problemas decorrentes de desgaste natural não relacionado ao serviço contratado.</p>
+        </div>
+
+        <div class="terms-clause">
+          <h3>7. ARMAZENAGEM</h3>
+          <p>Após a conclusão do serviço e notificação ao cliente, o veículo poderá ser armazenado por até <strong>3 (três) dias úteis</strong> sem custo adicional. Após esse prazo, poderá ser cobrada taxa de armazenagem de R$ 50,00 por dia.</p>
+        </div>
+
+        <div class="terms-clause">
+          <h3>8. PAGAMENTO</h3>
+          <p>O pagamento deverá ser efetuado na retirada do veículo, nas condições acordadas no orçamento. O veículo somente será liberado após a quitação integral dos serviços prestados, conforme art. 578 do Código Civil (direito de retenção).</p>
+        </div>
+
+        <div class="terms-clause">
+          <h3>9. DADOS PESSOAIS (LGPD)</h3>
+          <p>Os dados pessoais coletados são utilizados exclusivamente para fins de prestação de serviço, emissão de documentos fiscais e comunicação com o cliente, em conformidade com a Lei Geral de Proteção de Dados (Lei n.º 13.709/2018).</p>
+        </div>
+
+        <div class="terms-clause">
+          <h3>10. FORO</h3>
+          <p>Fica eleito o foro da comarca de <strong>São Paulo – SP</strong> para dirimir quaisquer controvérsias decorrentes desta relação de consumo.</p>
+        </div>
+      </div>
+
+      <hr class="divider" style="margin-top:16px" />
+      <p style="font-size:7.5pt;color:#888;text-align:center">${settings.name || ''} &nbsp;|&nbsp; ${settings.address || ''} &nbsp;|&nbsp; ${settings.cnpj || ''}</p>
+    </div>
+  `;
 
   const printContent = `
     <!DOCTYPE html>
@@ -167,20 +244,9 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
       <meta charset="UTF-8">
       <title>${documentTitle}</title>
       <style>
-        * {
-          margin: 0;
-          padding: 0;
-          box-sizing: border-box;
-        }
-        @page {
-          size: A4;
-          margin: 15mm;
-        }
-        html, body {
-          height: 100%;
-          margin: 0;
-          padding: 0;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        @page { size: A4; margin: 15mm; }
+        html, body { height: 100%; margin: 0; padding: 0; }
         body {
           font-family: 'Inter', Arial, sans-serif;
           background: #FFFFFF;
@@ -190,11 +256,31 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
         }
-        .page-container {
-          display: table;
-          width: 100%;
-          height: 100%;
+
+        /* ── PÁGINA DE TERMOS ── */
+        .terms-page {
+          page-break-after: always;
+          break-after: page;
+          padding-top: 10px;
         }
+        .terms-body { margin-top: 12px; }
+        .terms-clause { margin-bottom: 10px; }
+        .terms-clause h3 {
+          font-size: 0.68rem;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: #8B5CF6;
+          margin-bottom: 3px;
+        }
+        .terms-clause p {
+          font-size: 0.78rem;
+          color: #222;
+          line-height: 1.55;
+        }
+
+        /* ── ESTRUTURA PRINCIPAL ── */
+        .page-container { display: table; width: 100%; height: 100%; }
         .page-header  { display: table-header-group; }
         .page-content { display: table-row-group; }
         .page-footer  { display: table-footer-group; page-break-inside: avoid; }
@@ -291,11 +377,16 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
           display: inline-block;
           padding-bottom: 2px;
         }
+
+        /* ── TABELAS DE ITENS ── */
         .invoice-items-table {
           width: 100%;
           border-collapse: collapse;
           margin-bottom: 5px;
         }
+        /* thead repete em cada página automaticamente */
+        .invoice-items-table thead { display: table-header-group; }
+        .invoice-items-table tbody { display: table-row-group; }
         .invoice-items-table th {
           padding: 6px 0;
           border-bottom: 1px solid #bbb;
@@ -303,6 +394,13 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
           color: #444;
           text-transform: uppercase;
           font-weight: 700;
+        }
+        /* col-header-row (linha ITEM/VALOR): visível só quando o
+           cabeçalho colorido já foi repetido pelo break */
+        .col-header-row th {
+          font-size: 0.65rem;
+          color: #666;
+          border-bottom: 1px solid #ccc;
         }
         .invoice-items-table td {
           padding: 6px 0;
@@ -344,7 +442,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
           font-size: 1.8rem;
           line-height: 1;
         }
-        .table-section { margin-top: 30px; page-break-inside: avoid; }
+        .table-section { margin-top: 30px; }
         .invoice-footer {
           margin-top: 40px;
           padding-top: 20px;
@@ -376,6 +474,9 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
       </style>
     </head>
     <body>
+
+      ${termsPageHtml}
+
       <div class="page-container">
         <div class="page-content">
           <header class="invoice-header">
@@ -395,7 +496,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
               <h4 class="label-sm">CLIENTE</h4>
               <h2 class="client-name">${data.clientName}</h2>
               <p>${data.clientPhone}</p>
-              <div style="margin-top: 8px">
+              <div style="margin-top:8px">
                 <p><strong>Veículo:</strong> ${data.vehicle}</p>
                 <p><strong>KM:</strong> ${data.mileage}</p>
               </div>
@@ -417,36 +518,28 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
             </div>
           </div>
           <hr class="divider" />
+
           <div class="table-section">
             <h3 class="section-title">PEÇAS E MATERIAIS</h3>
-            <table class="invoice-items-table">
-              <thead>
-                <tr>
-                  <th style="width: 75%; text-align: left">ITEM / DESCRIÇÃO</th>
-                  <th style="width: 25%; text-align: right">VALOR</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${buildPartsHtml()}
-              </tbody>
-            </table>
+            ${buildPartsHtml()}
             <div class="subtotal-row">
               <span>Subtotal Peças:</span>
               <span class="subtotal-value">${formatMoney(subtotalParts)}</span>
             </div>
           </div>
+
           <div class="table-section">
             <h3 class="section-title">MÃO DE OBRA E SERVIÇOS</h3>
             <table class="invoice-items-table">
               <thead>
                 <tr>
-                  <th style="width: 75%; text-align: left">DESCRIÇÃO DO SERVIÇO</th>
-                  <th style="width: 25%; text-align: right">VALOR</th>
+                  <th style="width:75%;text-align:left">DESCRIÇÃO DO SERVIÇO</th>
+                  <th style="width:25%;text-align:right">VALOR</th>
                 </tr>
               </thead>
               <tbody>
                 ${data.services.length === 0
-                  ? '<tr><td colspan="2" style="font-style: italic; color: #999; padding: 15px 0">Nenhum serviço registrado.</td></tr>'
+                  ? '<tr><td colspan="2" style="font-style:italic;color:#999;padding:15px 0">Nenhum serviço registrado.</td></tr>'
                   : data.services.map(item => `
                     <tr>
                       <td>${item.description}</td>
@@ -461,21 +554,24 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
               <span class="subtotal-value">${formatMoney(subtotalServices)}</span>
             </div>
           </div>
+
           <div class="invoice-total-block">
             <div class="total-line">
               <span class="label-total">TOTAL GERAL</span>
               <span class="value-total">${formatMoney(data.total)}</span>
             </div>
           </div>
+
           ${data.publicNotes && data.publicNotes.trim() !== '' ? `
-            <div class="table-section" style="border-top: 1px solid #eee; padding-top: 10px">
-              <h3 class="section-title" style="margin-bottom: 5px">OBSERVAÇÕES / GARANTIA</h3>
-              <div style="font-size: 10pt; line-height: 1.4; white-space: pre-wrap; color: #333">
+            <div class="table-section" style="border-top:1px solid #eee;padding-top:10px">
+              <h3 class="section-title" style="margin-bottom:5px">OBSERVAÇÕES / GARANTIA</h3>
+              <div style="font-size:10pt;line-height:1.4;white-space:pre-wrap;color:#333">
                 ${data.publicNotes}
               </div>
             </div>
           ` : ''}
         </div>
+
         <div class="page-footer">
           <div class="invoice-footer">
             <div class="signature-area">
@@ -492,6 +588,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
           </div>
         </div>
       </div>
+
     </body>
     </html>
   `;

@@ -121,9 +121,6 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
       groups[cat]!.push(p);
     });
 
-    // Cada categoria vira uma <table> própria.
-    // O <thead> com o cabeçalho colorido é repetido automaticamente
-    // pelo browser/PDF quando a tabela quebra de página.
     return CATEGORY_ORDER
       .filter(cat => groups[cat] && groups[cat]!.length > 0)
       .map(cat => {
@@ -171,13 +168,13 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
   // ─────────────────────────────────────────────────────────────────
   const termsPageHtml = `
     <div class="terms-page">
-      <div style="text-align:center;margin-bottom:16px">
-        <div class="invoice-logo-circle" style="margin:0 auto 10px auto">AM</div>
+      <div style="text-align:center;margin-bottom:10px">
+        <div class="invoice-logo-circle" style="width:40px;height:40px;font-size:1.1rem;margin:0 auto 8px auto">AM</div>
         <h1 style="font-size:1rem;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin:0">${settings.name || 'OFICINA MECÂNICA'}</h1>
         <p style="font-size:0.65rem;color:#888;letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-top:2px">TERMOS E CONDIÇÕES DE SERVIÇO</p>
       </div>
 
-      <hr class="divider" />
+      <hr class="divider terms-divider" />
 
       <div class="terms-body">
 
@@ -226,13 +223,13 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
           <p>Os dados pessoais coletados são utilizados exclusivamente para fins de prestação de serviço, emissão de documentos fiscais e comunicação com o cliente, em conformidade com a Lei Geral de Proteção de Dados (Lei n.º 13.709/2018).</p>
         </div>
 
-        <div class="terms-clause">
+        <div class="terms-clause" style="margin-bottom:0">
           <h3>10. FORO</h3>
           <p>Fica eleito o foro da comarca de <strong>São Paulo – SP</strong> para dirimir quaisquer controvérsias decorrentes desta relação de consumo.</p>
         </div>
       </div>
 
-      <hr class="divider" style="margin-top:16px" />
+      <hr class="divider terms-divider" style="margin-top:10px" />
       <p style="font-size:7.5pt;color:#888;text-align:center">${settings.name || ''} &nbsp;|&nbsp; ${settings.address || ''} &nbsp;|&nbsp; ${settings.cnpj || ''}</p>
     </div>
   `;
@@ -261,23 +258,25 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
         .terms-page {
           page-break-after: always;
           break-after: page;
-          padding-top: 10px;
+          padding-top: 8px;
         }
-        .terms-body { margin-top: 12px; }
-        .terms-clause { margin-bottom: 10px; }
+        .terms-body { margin-top: 8px; }
+        .terms-clause { margin-bottom: 7px; }
         .terms-clause h3 {
-          font-size: 0.68rem;
+          font-size: 0.65rem;
           font-weight: 800;
           text-transform: uppercase;
-          letter-spacing: 0.06em;
+          letter-spacing: 0.05em;
           color: #8B5CF6;
-          margin-bottom: 3px;
+          margin-bottom: 2px;
         }
         .terms-clause p {
-          font-size: 0.78rem;
+          font-size: 0.76rem;
           color: #222;
-          line-height: 1.55;
+          line-height: 1.45;
         }
+        /* divider mais compacto dentro dos termos */
+        .terms-divider { margin: 10px 0 !important; }
 
         /* ── ESTRUTURA PRINCIPAL ── */
         .page-container { display: table; width: 100%; height: 100%; }
@@ -384,7 +383,6 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
           border-collapse: collapse;
           margin-bottom: 5px;
         }
-        /* thead repete em cada página automaticamente */
         .invoice-items-table thead { display: table-header-group; }
         .invoice-items-table tbody { display: table-row-group; }
         .invoice-items-table th {
@@ -395,8 +393,6 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
           text-transform: uppercase;
           font-weight: 700;
         }
-        /* col-header-row (linha ITEM/VALOR): visível só quando o
-           cabeçalho colorido já foi repetido pelo break */
         .col-header-row th {
           font-size: 0.65rem;
           color: #666;

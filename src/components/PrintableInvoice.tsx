@@ -83,63 +83,85 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
 
               <hr className="divider" />
 
-              {/* --- 3. TABELA DE PEÇAS --- */}
-              <div className="table-section">
-                <h3 className="section-title">PEÇAS E MATERIAIS</h3>
-                <table className="invoice-items-table">
-                  <thead>
+              {/* --- 3. TABELA DE PEÇAS ---
+                  Estrutura como <table> permitindo quebra de página com cabeçalho repetido.
+                  O <thead> com o título da categoria e os cabeçalhos de coluna é repetido
+                  automaticamente pelo browser a cada nova página (display: table-header-group).
+              */}
+              <table className="invoice-category-table">
+                <thead>
+                  <tr>
+                    <th colSpan={2} className="category-title-cell">
+                      PEÇAS E MATERIAIS
+                    </th>
+                  </tr>
+                  <tr className="category-col-header">
+                    <th style={{ width: '75%', textAlign: 'left' }}>ITEM / DESCRIÇÃO</th>
+                    <th style={{ width: '25%', textAlign: 'right' }}>VALOR</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.parts.length === 0 ? (
                     <tr>
-                      <th style={{ width: '75%', textAlign: 'left' }}>ITEM / DESCRIÇÃO</th>
-                      <th style={{ width: '25%', textAlign: 'right' }}>VALOR</th>
+                      <td colSpan={2} style={{ fontStyle: 'italic', color: '#999', padding: '15px 0' }}>
+                        Nenhuma peça utilizada.
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {data.parts.length === 0 ? (
-                       <tr><td colSpan={2} style={{fontStyle:'italic', color:'#999', padding: '15px 0'}}>Nenhuma peça utilizada.</td></tr>
-                    ) : (
-                        data.parts.map((item, index) => (
-                        <tr key={index}>
-                            <td>{item.description}</td>
-                            <td className="text-right">{formatMoney(item.price)}</td>
-                        </tr>
-                        ))
-                    )}
-                  </tbody>
-                </table>
-                <div className="subtotal-row">
-                    <span>Subtotal Peças:</span>
-                    <span className="subtotal-value">{formatMoney(subtotalParts)}</span>
-                </div>
-              </div>
+                  ) : (
+                    data.parts.map((item, index) => (
+                      <tr key={index}>
+                        <td>{item.description}</td>
+                        <td className="text-right">{formatMoney(item.price)}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr className="category-subtotal-row">
+                    <td>Subtotal Peças:</td>
+                    <td className="text-right subtotal-value">{formatMoney(subtotalParts)}</td>
+                  </tr>
+                </tfoot>
+              </table>
 
-              {/* --- 4. TABELA DE SERVIÇOS --- */}
-              <div className="table-section" style={{ marginTop: '30px' }}>
-                <h3 className="section-title">MÃO DE OBRA E SERVIÇOS</h3>
-                <table className="invoice-items-table">
-                  <thead>
+              {/* --- 4. TABELA DE SERVIÇOS ---
+                  Mesma estratégia: <thead> com título repetível por página.
+              */}
+              <table className="invoice-category-table" style={{ marginTop: '20px' }}>
+                <thead>
+                  <tr>
+                    <th colSpan={2} className="category-title-cell">
+                      MÃO DE OBRA E SERVIÇOS
+                    </th>
+                  </tr>
+                  <tr className="category-col-header">
+                    <th style={{ width: '75%', textAlign: 'left' }}>DESCRIÇÃO DO SERVIÇO</th>
+                    <th style={{ width: '25%', textAlign: 'right' }}>VALOR</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.services.length === 0 ? (
                     <tr>
-                      <th style={{ width: '75%', textAlign: 'left' }}>DESCRIÇÃO DO SERVIÇO</th>
-                      <th style={{ width: '25%', textAlign: 'right' }}>VALOR</th>
+                      <td colSpan={2} style={{ fontStyle: 'italic', color: '#999', padding: '15px 0' }}>
+                        Nenhum serviço registrado.
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {data.services.length === 0 ? (
-                       <tr><td colSpan={2} style={{fontStyle:'italic', color:'#999', padding: '15px 0'}}>Nenhum serviço registrado.</td></tr>
-                    ) : (
-                        data.services.map((item, index) => (
-                        <tr key={index}>
-                            <td>{item.description}</td>
-                            <td className="text-right">{formatMoney(item.price)}</td>
-                        </tr>
-                        ))
-                    )}
-                  </tbody>
-                </table>
-                <div className="subtotal-row">
-                    <span>Subtotal Serviços:</span>
-                    <span className="subtotal-value">{formatMoney(subtotalServices)}</span>
-                </div>
-              </div>
+                  ) : (
+                    data.services.map((item, index) => (
+                      <tr key={index}>
+                        <td>{item.description}</td>
+                        <td className="text-right">{formatMoney(item.price)}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr className="category-subtotal-row">
+                    <td>Subtotal Serviços:</td>
+                    <td className="text-right subtotal-value">{formatMoney(subtotalServices)}</td>
+                  </tr>
+                </tfoot>
+              </table>
 
               {/* --- 5. TOTAL GERAL --- */}
               <div className="invoice-total-block">
@@ -149,7 +171,7 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
                  </div>
               </div>
 
-              {/* --- 6. OBSERVAÇÕES (NOVO) --- */}
+              {/* --- 6. OBSERVAÇÕES --- */}
               {data.publicNotes && data.publicNotes.trim() !== '' && (
                   <div className="table-section" style={{ marginTop: '30px', borderTop: '1px solid #eee', paddingTop: '10px' }}>
                     <h3 className="section-title" style={{ marginBottom: '5px' }}>OBSERVAÇÕES / GARANTIA</h3>

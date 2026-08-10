@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Client, CatalogItem } from '../types';
+import { Client, CatalogItem, Technician, PartCategory, PART_CATEGORY_META } from '../types';
+import { PartCategorySelect } from '../components/PartCategorySelect';
 
 interface DatabaseModalProps {
   isOpen: boolean;
@@ -7,19 +8,22 @@ interface DatabaseModalProps {
   clients: Client[];
   catalogParts: CatalogItem[];
   catalogServices: CatalogItem[];
-  // Funções de CRUD que virão do App.tsx
+  catalogTechnicians: Technician[];
   onSaveClient: (client: Client) => void;
   onDeleteClient: (id: string) => void;
   onSaveCatalogItem: (item: CatalogItem, type: 'part' | 'service') => void;
   onDeleteCatalogItem: (id: string, type: 'part' | 'service') => void;
+  onSaveTechnician: (technician: Technician) => void;
+  onDeleteTechnician: (id: string) => void;
   formatMoney: (val: number) => string;
 }
 
-type Tab = 'CLIENTS' | 'PARTS' | 'SERVICES';
+type Tab = 'CLIENTS' | 'PARTS' | 'SERVICES' | 'TECHNICIANS';
 
 export const DatabaseModal: React.FC<DatabaseModalProps> = ({
-  isOpen, onClose, clients, catalogParts, catalogServices,
-  onSaveClient, onDeleteClient, onSaveCatalogItem, onDeleteCatalogItem, formatMoney
+  isOpen, onClose, clients, catalogParts, catalogServices, catalogTechnicians,
+  onSaveClient, onDeleteClient, onSaveCatalogItem, onDeleteCatalogItem, 
+  onSaveTechnician, onDeleteTechnician, formatMoney
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>('CLIENTS');
   const [searchTerm, setSearchTerm] = useState('');
@@ -27,6 +31,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
   // Estados de Edição
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [editingItem, setEditingItem] = useState<CatalogItem | null>(null);
+  const [editingTechnician, setEditingTechnician] = useState<Technician | null>(null);
 
   // --- FILTROS & PERFORMANCE ---
   const filteredList = useMemo(() => {
@@ -35,16 +40,20 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
     
     if (activeTab === 'CLIENTS') list = clients;
     else if (activeTab === 'PARTS') list = catalogParts;
-    else list = catalogServices;
+    else if (activeTab === 'SERVICES') list = catalogServices;
+    else list = catalogTechnicians;
 
     // Filtra e limita a 50 itens para performance máxima
     return list.filter((item: any) => {
         if (activeTab === 'CLIENTS') {
             return item.name.toLowerCase().includes(term) || item.phone.includes(term);
         }
+        if (activeTab === 'TECHNICIANS') {
+            return item.name.toLowerCase().includes(term);
+        }
         return item.description.toLowerCase().includes(term);
     }).slice(0, 50);
-  }, [activeTab, searchTerm, clients, catalogParts, catalogServices]);
+  }, [activeTab, searchTerm, clients, catalogParts, catalogServices, catalogTechnicians]);
 
   // --- HANDLERS CLIENTES ---
   const handleAddVehicle = () => {
@@ -129,6 +138,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                 <label className="form-label">Descrição</label>
                 <input className="form-input" value={editingItem.description} onChange={e => setEditingItem({...editingItem, description: e.target.value})} />
              </div>
+
              <div className="form-group">
                 <label className="form-label">Preço Padrão</label>
                 <input 
@@ -138,6 +148,28 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                     onChange={e => setEditingItem({...editingItem, price: Math.round(parseFloat(e.target.value) * 100)})} 
                 />
              </div>
+
+             {/* 🆕 Issue #42: categoria editável diretamente no catálogo (apenas para peças) */}
+             {activeTab === 'PARTS' && (
+               <div className="form-group">
+                 <label className="form-label">Categoria</label>
+                 <PartCategorySelect
+                   value={editingItem.category ?? ''}
+                   onChange={cat => setEditingItem({ ...editingItem, category: cat || undefined })}
+                   style={{ width: '100%' }}
+                 />
+                 {editingItem.category && (
+                   <div style={{
+                     marginTop: 6,
+                     fontSize: '0.75rem',
+                     color: PART_CATEGORY_META[editingItem.category].color,
+                     fontWeight: 'bold'
+                   }}>
+                     ● {PART_CATEGORY_META[editingItem.category].label} selecionado
+                   </div>
+                 )}
+               </div>
+             )}
 
              <div className="modal-actions">
                 <button className="btn-secondary" onClick={() => setEditingItem(null)}>Cancelar</button>
@@ -151,7 +183,45 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
       );
   }
 
-  // 3. TELA PRINCIPAL (LISTAGEM)
+  // 3. EDITOR DE TÉCNICO
+  if (editingTechnician) {
+      return (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+             <h2 className="modal-title">{editingTechnician.id ? 'Editar Técnico' : 'Novo Técnico'}</h2>
+             
+             <div className="form-group">
+                <label className="form-label">Nome do Técnico</label>
+                <input 
+                    className="form-input" 
+                    value={editingTechnician.name} 
+                    onChange={e => setEditingTechnician({...editingTechnician, name: e.target.value})} 
+                    placeholder="Ex: Carlos Silva"
+                    autoFocus
+                />
+             </div>
+
+             <div className="modal-actions">
+                <button className="btn-secondary" onClick={() => setEditingTechnician(null)}>Cancelar</button>
+                <button 
+                    className="btn" 
+                    onClick={() => { 
+                        if (editingTechnician.name.trim()) {
+                            onSaveTechnician(editingTechnician); 
+                            setEditingTechnician(null);
+                        }
+                    }}
+                    disabled={!editingTechnician.name.trim()}
+                >
+                    Salvar
+                </button>
+            </div>
+          </div>
+        </div>
+      );
+  }
+
+  // 4. TELA PRINCIPAL (LISTAGEM)
   if (!isOpen) return null;
 
   return (
@@ -164,10 +234,11 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
         </div>
 
         {/* ABAS */}
-        <div style={{display:'flex', gap:10, marginBottom:15, borderBottom:'1px solid var(--border)', paddingBottom:10}}>
-            <button className={`btn ${activeTab === 'CLIENTS' ? '' : 'btn-ghost'}`} onClick={() => setActiveTab('CLIENTS')}>👥 Clientes & Veículos</button>
-            <button className={`btn ${activeTab === 'PARTS' ? '' : 'btn-ghost'}`} onClick={() => setActiveTab('PARTS')}>🔧 Catálogo de Peças</button>
-            <button className={`btn ${activeTab === 'SERVICES' ? '' : 'btn-ghost'}`} onClick={() => setActiveTab('SERVICES')}>🛠️ Catálogo de Serviços</button>
+        <div style={{display:'flex', gap:10, marginBottom:15, borderBottom:'1px solid var(--border)', paddingBottom:10, flexWrap:'wrap'}}>
+            <button className={`btn ${activeTab === 'CLIENTS' ? '' : 'btn-ghost'}`} onClick={() => setActiveTab('CLIENTS')}>👥 Clientes</button>
+            <button className={`btn ${activeTab === 'PARTS' ? '' : 'btn-ghost'}`} onClick={() => setActiveTab('PARTS')}>🔧 Peças</button>
+            <button className={`btn ${activeTab === 'SERVICES' ? '' : 'btn-ghost'}`} onClick={() => setActiveTab('SERVICES')}>🛠️ Serviços</button>
+            <button className={`btn ${activeTab === 'TECHNICIANS' ? '' : 'btn-ghost'}`} onClick={() => setActiveTab('TECHNICIANS')}>👨‍🔧 Técnicos</button>
         </div>
 
         {/* BUSCA E NOVO */}
@@ -180,8 +251,13 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                 autoFocus
             />
             <button className="btn" onClick={() => {
-                if (activeTab === 'CLIENTS') setEditingClient({ id: crypto.randomUUID(), name: '', phone: '', vehicles: [], notes: '' });
-                else setEditingItem({ id: crypto.randomUUID(), description: '', price: 0 });
+                if (activeTab === 'CLIENTS') {
+                    setEditingClient({ id: crypto.randomUUID(), name: '', phone: '', vehicles: [], notes: '' });
+                } else if (activeTab === 'TECHNICIANS') {
+                    setEditingTechnician({ id: crypto.randomUUID(), name: '' });
+                } else {
+                    setEditingItem({ id: crypto.randomUUID(), description: '', price: 0 });
+                }
             }}>+ Novo</button>
         </div>
 
@@ -190,8 +266,16 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
             <table className="data-table">
                 <thead>
                     <tr>
-                        <th style={{textAlign:'left'}}>{activeTab === 'CLIENTS' ? 'Nome / Veículos' : 'Descrição'}</th>
-                        <th style={{textAlign:'right', width:150}}>{activeTab === 'CLIENTS' ? 'Contato' : 'Preço'}</th>
+                        <th style={{textAlign:'left'}}>
+                            {activeTab === 'CLIENTS' ? 'Nome / Veículos' : 
+                             activeTab === 'TECHNICIANS' ? 'Nome do Técnico' : 
+                             'Descrição'}
+                        </th>
+                        <th style={{textAlign:'right', width:150}}>
+                            {activeTab === 'CLIENTS' ? 'Contato' : 
+                             activeTab === 'TECHNICIANS' ? '' : 
+                             'Preço'}
+                        </th>
                         <th style={{textAlign:'center', width:100}}>Ações</th>
                     </tr>
                 </thead>
@@ -208,21 +292,51 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                                                 : 'Sem veículos'}
                                         </div>
                                     </div>
+                                ) : activeTab === 'TECHNICIANS' ? (
+                                    <div>
+                                        <strong>👨‍🔧 {item.name}</strong>
+                                    </div>
                                 ) : (
-                                    item.description
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <span>{item.description}</span>
+                                        {/* 🆕 Issue #42: badge de categoria na listagem de peças */}
+                                        {activeTab === 'PARTS' && item.category && (
+                                          <span style={{
+                                            fontSize: '0.68rem',
+                                            fontWeight: 800,
+                                            textTransform: 'uppercase',
+                                            color: PART_CATEGORY_META[item.category as PartCategory].color,
+                                            letterSpacing: '0.04em',
+                                            opacity: 0.85
+                                          }}>
+                                            ● {PART_CATEGORY_META[item.category as PartCategory].label}
+                                          </span>
+                                        )}
+                                    </div>
                                 )}
                             </td>
                             <td style={{textAlign:'right'}}>
-                                {activeTab === 'CLIENTS' ? item.phone : formatMoney(item.price)}
+                                {activeTab === 'CLIENTS' ? item.phone : 
+                                 activeTab === 'TECHNICIANS' ? '' : 
+                                 formatMoney(item.price)}
                             </td>
                             <td style={{textAlign:'center'}}>
-                                <button className="btn-icon" title="Editar" onClick={() => activeTab === 'CLIENTS' ? setEditingClient({...item}) : setEditingItem({...item})}>✏️</button>
+                                <button 
+                                    className="btn-icon" 
+                                    title="Editar" 
+                                    onClick={() => {
+                                        if (activeTab === 'CLIENTS') setEditingClient({...item});
+                                        else if (activeTab === 'TECHNICIANS') setEditingTechnician({...item});
+                                        else setEditingItem({...item});
+                                    }}
+                                >✏️</button>
                                 <button 
                                     className="btn-icon danger" 
                                     title="Excluir" 
                                     onClick={() => {
                                         if(confirm("Tem certeza? Esta ação é irreversível.")) {
                                             if (activeTab === 'CLIENTS') onDeleteClient(item.id);
+                                            else if (activeTab === 'TECHNICIANS') onDeleteTechnician(item.id);
                                             else onDeleteCatalogItem(item.id, activeTab === 'PARTS' ? 'part' : 'service');
                                         }
                                     }}

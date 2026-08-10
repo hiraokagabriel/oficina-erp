@@ -1,0 +1,102 @@
+/* ============================================================================
+   🆕 Issue #41 — PART CATEGORY STYLES
+   Usa a CSS custom property `--category-color` definida inline pelo
+   componente pai, mantendo as regras visuais centralizadas em CSS.
+   ============================================================================ */
+
+/* Linha de peça com borda esquerda colorida pela categoria */
+.part-row {
+  border-left: 3px solid var(--category-color, var(--border-color)) !important;
+  padding-left: 8px;
+  transition: border-left-color var(--transition-fast, 150ms ease);
+}
+
+/* Cabeçalho leve do grupo de categoria na listagem da OS */
+.category-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0 3px 8px;
+  margin-top: 6px;
+  margin-bottom: 2px;
+  border-left: 3px solid var(--category-color, var(--border-color));
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: var(--category-color, var(--text-muted));
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.85;
+  user-select: none;
+}
+
+/* Ponto colorido decorativo dentro do cabeçalho */
+.category-group-header::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: var(--category-color, var(--text-muted));
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+/* Garante que bordas e fundos coloridos imprimam corretamente */
+@media print {
+  .part-row,
+  .category-group-header {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+
+/* ============================================================================
+   fix #44 — PartCategorySelect: estilos do painel flutuante
+   Separados em classes CSS para que o tema Ultraviolet Dawn possa sobrescrever
+   sem depender de inline styles no componente React.
+   ============================================================================ */
+
+/* Painel flutuante — tema escuro (default) */
+.pcs-dropdown {
+  background: rgba(8, 12, 24, 0.96);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(168, 85, 247, 0.1);
+}
+
+/* Linha de brilho no topo do painel — tema escuro */
+.pcs-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(168, 85, 247, 0.4),
+    transparent
+  );
+}
+
+/* ---- Ultraviolet Dawn (tema claro) — fix #44 ---- */
+[data-theme="pastel"] .pcs-dropdown {
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.1),
+    0 0 0 1px rgba(108, 142, 239, 0.15);
+}
+
+[data-theme="pastel"] .pcs-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(108, 142, 239, 0.45),
+    transparent
+  );
+}
+
+/* Variáveis usadas dentro de DropdownOption no tema claro */
+[data-theme="pastel"] {
+  --pcs-divider:        rgba(0, 0, 0, 0.06);
+  --text-secondary:     var(--text-muted, #6b7280);
+  --color-primary-400:  var(--primary, #6C8EEF);
+}

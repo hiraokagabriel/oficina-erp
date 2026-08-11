@@ -79,8 +79,21 @@ function AppContent() {
   const [isBackuping, setIsBackuping] = useState(false);
   const [driveStatus, setDriveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
-  // 🆕 MIGRAÇÃO: Atualiza OSs finalizadas antigas com paymentDate
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('oficina.sidebarCollapsed');
+      if (raw === 'true') setIsSidebarCollapsed(true);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('oficina.sidebarCollapsed', isSidebarCollapsed ? 'true' : 'false');
+    } catch {}
+  }, [isSidebarCollapsed]);
+
   useEffect(() => {
     const migrateOldWorkOrders = () => {
       let updated = false;
@@ -105,7 +118,6 @@ function AppContent() {
     }
   }, [isLoading]);
 
-  // 🔧 MIGRAÇÃO: Atualiza lançamentos de receitas sem paymentDate
   useEffect(() => {
     const migrateLedgerEntries = () => {
       let updated = false;
@@ -130,9 +142,8 @@ function AppContent() {
     if (!isLoading && ledger.length > 0 && workOrders.length > 0) {
       migrateLedgerEntries();
     }
-  }, [isLoading, workOrders]);
+  }, [isLoading, ledger.length, workOrders.length]);
 
-  // 🆕 MIGRAÇÃO: settings.technician (legado) -> catalogTechnicians
   useEffect(() => {
     if (isLoading) return;
 
@@ -147,7 +158,7 @@ function AppContent() {
       delete copy.technician;
       return copy;
     });
-  }, [isLoading, settings]);
+  }, [isLoading]);
 
   const addToast = (message: string, type: ToastType = 'info') => {
     const id = crypto.randomUUID();
@@ -207,7 +218,7 @@ function AppContent() {
       setPendingAction({ type: 'FINISH_OS_FINANCIAL', data: os });
       return;
     } else if (isLeavingFinalized && os.financialId) {
-      setPendingAction({ type: 'RESTORE_FINANCIAL', data: os });
+      setPendingAction({ type: 'RESTORE_FINancial', data: os });
       return;
     }
 
@@ -302,7 +313,8 @@ function AppContent() {
   const handleEditEntry = (id: string) => {
     const linkedOS = workOrders.find(o => o.financialId === id);
     if (linkedOS) {
-      if (confirm(`Este lançamento pertence à OS #${linkedOS.osNumber}.\nAbrir OS?`)) {
+      if (confirm(`Este lançamento pertence à OS #${linkedOS.osNumber}.
+Abrir OS?`)) {
         setEditingOS(linkedOS);
         setIsModalOpen(true);
       }
@@ -386,7 +398,6 @@ function AppContent() {
     }
   };
 
-  // 🆕 Handler para salvar/criar técnico no DatabaseModal
   const handleSaveTechnician = (tech: Technician) => {
     setCatalogTechnicians(prev =>
       prev.find(t => t.id === tech.id)
@@ -468,19 +479,16 @@ function AppContent() {
     setActiveTab('OFICINA');
   };
 
-  // 🖨️ Impressão padrão (ambas assinaturas - comportamento original)
   const handlePrintOS = (os: WorkOrder) => {
     addToast(`Imprimindo OS #${os.osNumber}...`, 'info');
     printOS(os, settings);
   };
 
-  // 🧧 Impressão via do cliente: só assina o mecânico
   const handlePrintOSClient = (os: WorkOrder) => {
     addToast(`Imprimindo via do cliente - OS #${os.osNumber}...`, 'info');
     printOS(os, settings, 'CLIENT');
   };
 
-  // 🏬 Impressão via da oficina: só assina o cliente
   const handlePrintOSShop = (os: WorkOrder) => {
     addToast(`Imprimindo via da oficina - OS #${os.osNumber}...`, 'info');
     printOS(os, settings, 'SHOP');
@@ -637,59 +645,261 @@ function AppContent() {
       <ToastContainer toasts={toasts} removeToast={removeToast} />
 
       <div className="app-container">
-        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+        <Sidebar
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
+        />
 
         <main className="main-content">
           <Suspense fallback={<LoadingSkeleton type="page" />}>
-            {activeTab === 'FINANCEIRO' && <FinancialPage isLoading={isLoading} kpiData={finance.kpiData} chartDataFluxo={finance.chartFluxo} chartDataPie={finance.chartPie} ledger={finance.filteredLedger} Money={Money} onOpenExport={() => setIsExportModalOpen(true)} onOpenEntry={() => { setEditingEntry(null); setIsEntryModalOpen(true); }} onEditEntry={handleEditEntry} onDeleteEntry={handleRequestDeleteEntry} onTogglePayment={handleTogglePayment} selectedMonth={finance.selectedMonth} onMonthChange={finance.setSelectedMonth} viewMode={finance.viewMode} setViewMode={finance.setViewMode} filterType={finance.filterType} setFilterType={finance.setFilterType} />}
-            {activeTab === 'OFICINA' && <WorkshopPage workOrders={workOrders} isLoading={isLoading} formatMoney={Money.format} onNewOS={() => { setEditingOS(null); setIsModalOpen(true); }} onStatusChange={handleUpdateStatus} kanbanActions={{ onRegress: (id) => { const os = workOrders.find(o => o.id === id); if (os) handleUpdateStatus(id, os.status === 'FINALIZADO' ? 'AGUARDANDO_PAGAMENTO' : os.status === 'AGUARDANDO_PAGAMENTO' ? 'EM_SERVICO' : os.status === 'EM_SERVICO' ? 'APROVADO' : 'ORCAMENTO'); }, onAdvance: (id) => { const os = workOrders.find(o => o.id === id); if (os) handleUpdateStatus(id, os.status === 'ORCAMENTO' ? 'APROVADO' : os.status === 'APROVADO' ? 'EM_SERVICO' : os.status === 'EM_SERVICO' ? 'AGUARDANDO_PAGAMENTO' : 'FINALIZADO'); }, onEdit: (os) => { setEditingOS(os); setIsModalOpen(true); }, onChecklist: (os) => { setChecklistOS(os); setIsChecklistOpen(true); }, onPrint: handlePrintOS, onPrintClient: handlePrintOSClient, onPrintShop: handlePrintOSShop, onDelete: (os) => setPendingAction({ type: 'DELETE_OS', data: os }), onArchive: (os) => setPendingAction({ type: 'ARCHIVE_OS', data: os }), onRestore: (os) => handleUpdateStatus(os.id, 'ORCAMENTO'), onQuickFinish: (id) => handleUpdateStatus(id, 'FINALIZADO') }} />}
-            {activeTab === 'PROCESSOS' && <ProcessPage workOrders={workOrders} onOpenNew={() => { setEditingOS(null); setIsModalOpen(true); }} onUpdateStatus={handleUpdateStatus} />}
-            {activeTab === 'CLIENTES' && <CRMPage clients={clients} workOrders={workOrders} isLoading={isLoading} formatMoney={Money.format} onSaveClient={handleSaveClient} onOpenOS={handleOpenOSFromCRM} />}
-            {activeTab === 'PECAS' && <PartsPage workOrders={workOrders} isLoading={isLoading} />}
-            {activeTab === 'CONFIG' && <ConfigPage settings={settings} setSettings={setSettings} currentTheme={currentTheme} setCurrentTheme={setCurrentTheme} onBackup={handleGoogleDriveBackup} isBackuping={isBackuping} driveStatus={driveStatus} onImportData={handleImportData} onOpenDatabase={() => setIsDatabaseModalOpen(true)} />}
+            {activeTab === 'FINANCEIRO' && (
+              <FinancialPage
+                isLoading={isLoading}
+                kpiData={finance.kpiData}
+                chartDataFluxo={finance.chartFluxo}
+                chartDataPie={finance.chartPie}
+                ledger={finance.filteredLedger}
+                Money={Money}
+                onOpenExport={() => setIsExportModalOpen(true)}
+                onOpenEntry={() => {
+                  setEditingEntry(null);
+                  setIsEntryModalOpen(true);
+                }}
+                onEditEntry={handleEditEntry}
+                onDeleteEntry={handleRequestDeleteEntry}
+                onTogglePayment={handleTogglePayment}
+                selectedMonth={finance.selectedMonth}
+                onMonthChange={finance.setSelectedMonth}
+                viewMode={finance.viewMode}
+                setViewMode={finance.setViewMode}
+                filterType={finance.filterType}
+                setFilterType={finance.setFilterType}
+              />
+            )}
+
+            {activeTab === 'OFICINA' && (
+              <WorkshopPage
+                workOrders={workOrders}
+                isLoading={isLoading}
+                formatMoney={Money.format}
+                onNewOS={() => {
+                  setEditingOS(null);
+                  setIsModalOpen(true);
+                }}
+                onStatusChange={handleUpdateStatus}
+                kanbanActions={{
+                  onRegress: (id) => {
+                    const os = workOrders.find(o => o.id === id);
+                    if (!os) return;
+                    const nextStatus: OSStatus =
+                      os.status === 'FINALIZADO'
+                        ? 'AGUARDANDO_PAGAMENTO'
+                        : os.status === 'AGUARDANDO_PAGAMENTO'
+                        ? 'EM_SERVICO'
+                        : os.status === 'EM_SERVICO'
+                        ? 'APROVADO'
+                        : 'ORCAMENTO';
+                    handleUpdateStatus(id, nextStatus);
+                  },
+                  onAdvance: (id) => {
+                    const os = workOrders.find(o => o.id === id);
+                    if (!os) return;
+                    const nextStatus: OSStatus =
+                      os.status === 'ORCAMENTO'
+                        ? 'APROVADO'
+                        : os.status === 'APROVADO'
+                        ? 'EM_SERVICO'
+                        : os.status === 'EM_SERVICO'
+                        ? 'AGUARDANDO_PAGAMENTO'
+                        : 'FINALIZADO';
+                    handleUpdateStatus(id, nextStatus);
+                  },
+                  onEdit: (os) => {
+                    setEditingOS(os);
+                    setIsModalOpen(true);
+                  },
+                  onChecklist: (os) => {
+                    setChecklistOS(os);
+                    setIsChecklistOpen(true);
+                  },
+                  onPrint: handlePrintOS,
+                  onPrintClient: handlePrintOSClient,
+                  onPrintShop: handlePrintOSShop,
+                  onDelete: (os) => setPendingAction({ type: 'DELETE_OS', data: os }),
+                  onArchive: (os) => setPendingAction({ type: 'ARCHIVE_OS', data: os }),
+                  onRestore: (os) => handleUpdateStatus(os.id, 'ORCAMENTO'),
+                  onQuickFinish: (id) => handleUpdateStatus(id, 'FINALIZADO'),
+                }}
+              />
+            )}
+
+            {activeTab === 'PROCESSOS' && (
+              <ProcessPage
+                workOrders={workOrders}
+                onOpenNew={() => {
+                  setEditingOS(null);
+                  setIsModalOpen(true);
+                }}
+                onUpdateStatus={handleUpdateStatus}
+              />
+            )}
+
+            {activeTab === 'CLIENTES' && (
+              <CRMPage
+                clients={clients}
+                workOrders={workOrders}
+                isLoading={isLoading}
+                formatMoney={Money.format}
+                onSaveClient={handleSaveClient}
+                onOpenOS={handleOpenOSFromCRM}
+              />
+            )}
+
+            {activeTab === 'PECAS' && (
+              <PartsPage
+                workOrders={workOrders}
+                isLoading={isLoading}
+              />
+            )}
+
+            {activeTab === 'CONFIG' && (
+              <ConfigPage
+                settings={settings}
+                setSettings={setSettings}
+                currentTheme={currentTheme}
+                setCurrentTheme={setCurrentTheme}
+                onBackup={handleGoogleDriveBackup}
+                isBackuping={isBackuping}
+                driveStatus={driveStatus}
+                onImportData={handleImportData}
+                onOpenDatabase={() => setIsDatabaseModalOpen(true)}
+              />
+            )}
           </Suspense>
         </main>
       </div>
 
       <Suspense fallback={null}>
-        {isModalOpen && <OSModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveOSModal} editingOS={editingOS} clients={clients} catalogParts={catalogParts} catalogServices={catalogServices} catalogTechnicians={catalogTechnicians} nextOSNumber={workOrders.length > 0 ? Math.max(...workOrders.map(o => o.osNumber)) + 1 : 1} isSaving={isSaving} formatMoney={Money.format} />}
-        {isEntryModalOpen && <EntryModal isOpen={isEntryModalOpen} onClose={() => { setIsEntryModalOpen(false); setEditingEntry(null); }} onSave={handleSaveEntryModal} initialData={editingEntry} />}
-        {isInstallmentModalOpen && installmentOS && <InstallmentModal isOpen={isInstallmentModalOpen} onClose={() => { setIsInstallmentModalOpen(false); setInstallmentOS(null); }} totalAmount={installmentOS.total} description={`OS #${installmentOS.osNumber} - ${installmentOS.clientName}`} onConfirm={handleInstallmentConfirm} />}
-        {isDatabaseModalOpen && <DatabaseModal
-          isOpen={isDatabaseModalOpen}
-          onClose={() => setIsDatabaseModalOpen(false)}
-          clients={clients}
-          catalogParts={catalogParts}
-          catalogServices={catalogServices}
-          catalogTechnicians={catalogTechnicians}
-          onSaveClient={handleSaveClient}
-          onDeleteClient={(id) => setClients(p => p.filter(c => c.id !== id))}
-          onSaveCatalogItem={handleSaveCatalogItem}
-          onDeleteCatalogItem={(id, type) => type === 'part' ? setCatalogParts(p => p.filter(x => x.id !== id)) : setCatalogServices(p => p.filter(x => x.id !== id))}
-          onSaveTechnician={handleSaveTechnician}
-          onDeleteTechnician={(id) => setCatalogTechnicians(p => p.filter(t => t.id !== id))}
-          formatMoney={Money.format}
-        />}
-        {isExportModalOpen && <ExportModal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} ledger={ledger} workOrders={workOrders} defaultPath={settings.exportPath} Money={Money} SoundFX={{ success: () => addToast('Sucesso!', 'success'), error: () => addToast('Erro', 'error') }} />}
+        {isModalOpen && (
+          <OSModal
+            isOpen={isModalOpen}
+            onClose={() => setIsModalOpen(false)}
+            onSave={handleSaveOSModal}
+            editingOS={editingOS}
+            clients={clients}
+            catalogParts={catalogParts}
+            catalogServices={catalogServices}
+            catalogTechnicians={catalogTechnicians}
+            nextOSNumber={
+              workOrders.length > 0
+                ? Math.max(...workOrders.map(o => o.osNumber)) + 1
+                : 1
+            }
+            isSaving={isSaving}
+            formatMoney={Money.format}
+          />
+        )}
 
-        {/* ✅ Issue #43: ChecklistModal com settings para impressão */}
-        {isChecklistOpen && <ChecklistModal
-          isOpen={isChecklistOpen}
-          onClose={() => setIsChecklistOpen(false)}
-          onSave={(data) => {
-            if (checklistOS) setWorkOrders(p => p.map(o => o.id === checklistOS.id ? { ...o, checklist: data } : o));
-            setIsChecklistOpen(false);
-          }}
-          os={checklistOS}
-          settings={settings}
-        />}
+        {isEntryModalOpen && (
+          <EntryModal
+            isOpen={isEntryModalOpen}
+            onClose={() => {
+              setIsEntryModalOpen(false);
+              setEditingEntry(null);
+            }}
+            onSave={handleSaveEntryModal}
+            initialData={editingEntry}
+          />
+        )}
 
-        {deleteModalInfo.isOpen && <DeleteConfirmationModal isOpen={deleteModalInfo.isOpen} onClose={() => setDeleteModalInfo({ isOpen: false, entry: null })} onConfirmSingle={confirmDeleteSingle} onConfirmGroup={confirmDeleteGroup} isGroup={!!deleteModalInfo.entry?.groupId} />}
+        {isInstallmentModalOpen && installmentOS && (
+          <InstallmentModal
+            isOpen={isInstallmentModalOpen}
+            onClose={() => {
+              setIsInstallmentModalOpen(false);
+              setInstallmentOS(null);
+            }}
+            totalAmount={installmentOS.total}
+            description={`OS #${installmentOS.osNumber} - ${installmentOS.clientName}`}
+            onConfirm={handleInstallmentConfirm}
+          />
+        )}
+
+        {isDatabaseModalOpen && (
+          <DatabaseModal
+            isOpen={isDatabaseModalOpen}
+            onClose={() => setIsDatabaseModalOpen(false)}
+            clients={clients}
+            catalogParts={catalogParts}
+            catalogServices={catalogServices}
+            catalogTechnicians={catalogTechnicians}
+            onSaveClient={handleSaveClient}
+            onDeleteClient={(id) => setClients(p => p.filter(c => c.id !== id))}
+            onSaveCatalogItem={handleSaveCatalogItem}
+            onDeleteCatalogItem={(id, type) =>
+              type === 'part'
+                ? setCatalogParts(p => p.filter(x => x.id !== id))
+                : setCatalogServices(p => p.filter(x => x.id !== id))
+            }
+            onSaveTechnician={handleSaveTechnician}
+            onDeleteTechnician={(id) =>
+              setCatalogTechnicians(p => p.filter(t => t.id !== id))
+            }
+            formatMoney={Money.format}
+          />
+        )}
+
+        {isExportModalOpen && (
+          <ExportModal
+            isOpen={isExportModalOpen}
+            onClose={() => setIsExportModalOpen(false)}
+            ledger={ledger}
+            workOrders={workOrders}
+            defaultPath={settings.exportPath}
+            Money={Money}
+            SoundFX={{
+              success: () => addToast('Sucesso!', 'success'),
+              error: () => addToast('Erro', 'error'),
+            }}
+          />
+        )}
+
+        {isChecklistOpen && (
+          <ChecklistModal
+            isOpen={isChecklistOpen}
+            onClose={() => setIsChecklistOpen(false)}
+            onSave={(data) => {
+              if (checklistOS) {
+                setWorkOrders(p =>
+                  p.map(o => (o.id === checklistOS.id ? { ...o, checklist: data } : o))
+                );
+              }
+              setIsChecklistOpen(false);
+            }}
+            os={checklistOS}
+            settings={settings}
+          />
+        )}
+
+        {deleteModalInfo.isOpen && (
+          <DeleteConfirmationModal
+            isOpen={deleteModalInfo.isOpen}
+            onClose={() => setDeleteModalInfo({ isOpen: false, entry: null })}
+            onConfirmSingle={confirmDeleteSingle}
+            onConfirmGroup={confirmDeleteGroup}
+            isGroup={!!deleteModalInfo.entry?.groupId}
+          />
+        )}
 
         {isInstallmentChoiceOpen && pendingInstallmentOS && (
           <ChoiceModal
             isOpen={isInstallmentChoiceOpen}
-            onClose={() => { setIsInstallmentChoiceOpen(false); setPendingInstallmentOS(null); }}
+            onClose={() => {
+              setIsInstallmentChoiceOpen(false);
+              setPendingInstallmentOS(null);
+            }}
             onYes={() => handleInstallmentChoice(true)}
             onNo={() => handleInstallmentChoice(false)}
             title="Deseja Parcelar?"
@@ -702,7 +912,52 @@ function AppContent() {
           />
         )}
 
-        {pendingAction && <ConfirmationModal isOpen={!!pendingAction} onClose={() => setPendingAction(null)} onConfirm={executePendingAction} title={pendingAction?.type === 'DELETE_OS' ? 'Excluir OS?' : pendingAction?.type === 'ARCHIVE_OS' ? 'Arquivar OS?' : pendingAction?.type === 'FINISH_OS_FINANCIAL' ? 'OS Finalizada' : pendingAction?.type === 'RESTORE_FINANCIAL' ? 'Reabrir OS?' : pendingAction?.type === 'IMPORT_DATA' ? 'Importar?' : 'Confirmar'} message={pendingAction?.type === 'DELETE_OS' ? 'Removerá a OS e lançamento financeiro.' : pendingAction?.type === 'ARCHIVE_OS' ? 'A OS sairá do quadro Kanban.' : pendingAction?.type === 'FINISH_OS_FINANCIAL' ? `Lançar ${Money.format(pendingAction.data?.total || 0)} nas Receitas?` : pendingAction?.type === 'RESTORE_FINANCIAL' ? 'Removerá o lançamento financeiro.' : pendingAction?.type === 'IMPORT_DATA' ? 'Substituir todos os dados?' : 'Tem certeza?'} confirmText={pendingAction?.type === 'DELETE_OS' ? 'Excluir' : pendingAction?.type === 'IMPORT_DATA' ? 'Substituir' : 'Confirmar'} confirmColor={pendingAction?.type === 'DELETE_OS' || pendingAction?.type === 'RESTORE_FINANCIAL' ? 'danger' : 'primary'} />}
+        {pendingAction && (
+          <ConfirmationModal
+            isOpen={!!pendingAction}
+            onClose={() => setPendingAction(null)}
+            onConfirm={executePendingAction}
+            title={
+              pendingAction?.type === 'DELETE_OS'
+                ? 'Excluir OS?'
+                : pendingAction?.type === 'ARCHIVE_OS'
+                ? 'Arquivar OS?'
+                : pendingAction?.type === 'FINISH_OS_FINANCIAL'
+                ? 'OS Finalizada'
+                : pendingAction?.type === 'RESTORE_FINANCIAL'
+                ? 'Reabrir OS?'
+                : pendingAction?.type === 'IMPORT_DATA'
+                ? 'Importar?'
+                : 'Confirmar'
+            }
+            message={
+              pendingAction?.type === 'DELETE_OS'
+                ? 'Removerá a OS e lançamento financeiro.'
+                : pendingAction?.type === 'ARCHIVE_OS'
+                ? 'A OS sairá do quadro Kanban.'
+                : pendingAction?.type === 'FINISH_OS_FINANCIAL'
+                ? `Lançar ${Money.format(pendingAction.data?.total || 0)} nas Receitas?`
+                : pendingAction?.type === 'RESTORE_FINANCIAL'
+                ? 'Removerá o lançamento financeiro.'
+                : pendingAction?.type === 'IMPORT_DATA'
+                ? 'Substituir todos os dados?'
+                : 'Tem certeza?'
+            }
+            confirmText={
+              pendingAction?.type === 'DELETE_OS'
+                ? 'Excluir'
+                : pendingAction?.type === 'IMPORT_DATA'
+                ? 'Substituir'
+                : 'Confirmar'
+            }
+            confirmColor={
+              pendingAction?.type === 'DELETE_OS' ||
+              pendingAction?.type === 'RESTORE_FINANCIAL'
+                ? 'danger'
+                : 'primary'
+            }
+          />
+        )}
       </Suspense>
     </>
   );

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { WorkOrder, OSStatus, STATUS_LABELS } from '../types';
 import { KanbanCard } from '../components/KanbanCard';
 import { DroppableColumn } from './DroppableColumn';
@@ -272,6 +272,23 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
       setActiveId(null);
     };
 
+    const scrollRef = useRef<HTMLDivElement | null>(null);
+    const [columnWidth, setColumnWidth] = useState<number | null>(null);
+
+    useEffect(() => {
+      if (!scrollRef.current) return;
+      const firstColumn = scrollRef.current.querySelector('.kanban-column') as HTMLDivElement | null;
+      if (firstColumn) {
+        setColumnWidth(firstColumn.offsetWidth + 24); // largura + gap
+      }
+    }, [filteredWorkOrders.length, showArchived]);
+
+    const handleStepScroll = (direction: 'left' | 'right') => {
+      if (!scrollRef.current || !columnWidth) return;
+      const delta = direction === 'left' ? -columnWidth : columnWidth;
+      scrollRef.current.scrollBy({ left: delta, behavior: 'smooth' });
+    };
+
     if (isLoading) {
       return (
         <div className="kanban-board">
@@ -284,8 +301,10 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
       );
     }
 
+    const showArrows = !showArchived;
+
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
         <div className="kanban-filter-bar">
           <div className="search-wrapper">
             <span className="search-icon">🔍</span>
@@ -331,6 +350,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
           onDragCancel={handleDragCancel}
         >
           <div
+            ref={scrollRef}
             className="kanban-board"
             style={{
               display: 'flex',
@@ -338,6 +358,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
               height: '100%',
               overflowX: showArchived ? 'hidden' : 'auto',
               overflowY: 'hidden',
+              scrollSnapType: showArchived ? 'none' : 'x mandatory',
             }}
           >
             {showArchived ? (
@@ -349,39 +370,111 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
               />
             ) : (
               <>
-                <KanbanColumn
-                  status="ORCAMENTO"
-                  workOrders={filteredWorkOrders}
-                  actions={actions}
-                  formatMoney={formatMoney}
-                />
-                <KanbanColumn
-                  status="APROVADO"
-                  workOrders={filteredWorkOrders}
-                  actions={actions}
-                  formatMoney={formatMoney}
-                />
-                <KanbanColumn
-                  status="EM_SERVICO"
-                  workOrders={filteredWorkOrders}
-                  actions={actions}
-                  formatMoney={formatMoney}
-                />
-                <KanbanColumn
-                  status="AGUARDANDO_PAGAMENTO"
-                  workOrders={filteredWorkOrders}
-                  actions={actions}
-                  formatMoney={formatMoney}
-                />
-                <KanbanColumn
-                  status="FINALIZADO"
-                  workOrders={filteredWorkOrders}
-                  actions={actions}
-                  formatMoney={formatMoney}
-                />
+                <div style={{ scrollSnapAlign: 'start' }}>
+                  <KanbanColumn
+                    status="ORCAMENTO"
+                    workOrders={filteredWorkOrders}
+                    actions={actions}
+                    formatMoney={formatMoney}
+                  />
+                </div>
+                <div style={{ scrollSnapAlign: 'start' }}>
+                  <KanbanColumn
+                    status="APROVADO"
+                    workOrders={filteredWorkOrders}
+                    actions={actions}
+                    formatMoney={formatMoney}
+                  />
+                </div>
+                <div style={{ scrollSnapAlign: 'start' }}>
+                  <KanbanColumn
+                    status="EM_SERVICO"
+                    workOrders={filteredWorkOrders}
+                    actions={actions}
+                    formatMoney={formatMoney}
+                  />
+                </div>
+                <div style={{ scrollSnapAlign: 'start' }}>
+                  <KanbanColumn
+                    status="AGUARDANDO_PAGAMENTO"
+                    workOrders={filteredWorkOrders}
+                    actions={actions}
+                    formatMoney={formatMoney}
+                  />
+                </div>
+                <div style={{ scrollSnapAlign: 'start' }}>
+                  <KanbanColumn
+                    status="FINALIZADO"
+                    workOrders={filteredWorkOrders}
+                    actions={actions}
+                    formatMoney={formatMoney}
+                  />
+                </div>
               </>
             )}
           </div>
+
+          {showArrows && (
+            <>
+              <button
+                type="button"
+                onClick={() => handleStepScroll('left')}
+                style={{
+                  position: 'absolute',
+                  left: 8,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  width: 36,
+                  height: 64,
+                  borderRadius: 999,
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  background: 'rgba(15,15,20,0.35)',
+                  color: '#E0E0E0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  backdropFilter: 'blur(6px)',
+                  boxShadow: '0 6px 18px rgba(0,0,0,0.6)',
+                  opacity: 0.9,
+                  transition: 'opacity 0.2s ease, transform 0.2s ease',
+                  zIndex: 50,
+                }}
+                title="Painel anterior"
+              >
+                ◀
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleStepScroll('right')}
+                style={{
+                  position: 'absolute',
+                  right: 8,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  width: 36,
+                  height: 64,
+                  borderRadius: 999,
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  background: 'rgba(15,15,20,0.35)',
+                  color: '#E0E0E0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  backdropFilter: 'blur(6px)',
+                  boxShadow: '0 6px 18px rgba(0,0,0,0.6)',
+                  opacity: 0.9,
+                  transition: 'opacity 0.2s ease, transform 0.2s ease',
+                  zIndex: 50,
+                }}
+                title="Próximo painel"
+              >
+                ▶
+              </button>
+            </>
+          )}
 
           <DragOverlay>
             {activeWorkOrder && (

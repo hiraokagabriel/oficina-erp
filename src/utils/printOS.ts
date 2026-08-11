@@ -571,6 +571,26 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
           border-top: 1px dashed #000;
         }
 
+        .summary-notes {
+          margin-top: 25px;
+          padding-top: 15px;
+          border-top: 1px solid #eee;
+        }
+        .summary-notes-title {
+          font-size: 0.7rem;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          color: #F59E0B;
+          margin-bottom: 5px;
+        }
+        .summary-notes-body {
+          font-size: 0.8rem;
+          color: #333;
+          line-height: 1.4;
+          white-space: pre-wrap;
+        }
+
         .invoice-header,
         .invoice-meta-grid { page-break-inside: avoid; }
       </style>
@@ -708,6 +728,14 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
             </p>
           </div>
         </div>
+        ${data.publicNotes && data.publicNotes.trim() !== '' ? `
+          <div class="summary-notes">
+            <h3 class="summary-notes-title">Observações da OS / Garantia</h3>
+            <div class="summary-notes-body">
+              ${data.publicNotes}
+            </div>
+          </div>
+        ` : ''}
         <hr class="divider terms-divider" style="margin-top:20px" />
         <p style="font-size:7.5pt;color:#888;text-align:center">${settings.name || ''} &nbsp;|&nbsp; ${settings.address || ''} &nbsp;|&nbsp; ${settings.cnpj || ''}</p>
       </div>

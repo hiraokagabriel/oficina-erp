@@ -265,7 +265,8 @@ function AppContent() {
         data.parts,
         data.services,
         data.createdAt,
-        data.publicNotes
+        data.publicNotes,
+        data.advanceAmount,
       );
 
       const updated: WorkOrder = { ...updatedBase, technician: technicianName || undefined };
@@ -290,6 +291,7 @@ function AppContent() {
         createdAt: data.createdAt || new Date().toISOString(),
         publicNotes: data.publicNotes || '',
         technician: technicianName || undefined,
+        advanceAmount: typeof data.advanceAmount === 'number' ? data.advanceAmount : undefined,
       };
       setWorkOrders(prev => [...prev, newOS]);
       addToast('Nova OS criada!', 'success');

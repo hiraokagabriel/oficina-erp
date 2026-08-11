@@ -238,14 +238,14 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
     </div>
 
     <div class="labor-page">
-      <div style="text-align:center;margin-bottom:10px">
-        <h1 style="font-size:0.95rem;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin:0">MÃO DE OBRA</h1>
-        <p style="font-size:0.65rem;color:#888;letter-spacing:1.5px;font-weight:700;text-transform:uppercase;margin-top:2px">Nota técnica sobre tempos de mão de obra</p>
+      <div style="text-align:center;margin-bottom:10px;margin-top:20px">
+        <h1 style="font-size:1.05rem;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin:0">MÃO DE OBRA</h1>
+        <p style="font-size:0.7rem;color:#888;letter-spacing:1.5px;font-weight:700;text-transform:uppercase;margin-top:4px">Nota técnica sobre tempos de mão de obra</p>
       </div>
 
       <hr class="divider terms-divider" />
 
-      <div class="labor-body">
+      <div class="labor-body" style="margin-top:14px;margin-bottom:18px">
         <p>
           <strong>Observação técnica sobre tempos de mão de obra:</strong>
           Os tempos de execução apresentados nesta ficha técnica possuem caráter referencial e padronizador,
@@ -293,8 +293,8 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
         </p>
       </div>
 
-      <hr class="divider terms-divider" style="margin-top:10px" />
-      <p style="font-size:7.5pt;color:#888;text-align:center">${settings.name || ''} &nbsp;|&nbsp; ${settings.address || ''} &nbsp;|&nbsp; ${settings.cnpj || ''}</p>
+      <hr class="divider terms-divider" style="margin-top:12px;margin-bottom:12px" />
+      <p style="font-size:8pt;color:#888;text-align:center;margin-top:4px">${settings.name || ''} &nbsp;|&nbsp; ${settings.address || ''} &nbsp;|&nbsp; ${settings.cnpj || ''}</p>
     </div>
   `;
 

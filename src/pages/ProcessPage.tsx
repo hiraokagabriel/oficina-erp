@@ -90,13 +90,17 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
       ORCAMENTO: { count: 0, total: 0 },
       APROVADO: { count: 0, total: 0 },
       EM_SERVICO: { count: 0, total: 0 },
+      AGUARDANDO_PAGAMENTO: { count: 0, total: 0 },
       FINALIZADO: { count: 0, total: 0 },
-      ARQUIVADO: { count: 0, total: 0 }
+      ARQUIVADO: { count: 0, total: 0 },
     };
 
     filteredOrders.forEach(os => {
-      groups[os.status].count++;
-      groups[os.status].total += os.total;
+      const group = groups[os.status];
+      if (group) {
+        group.count++;
+        group.total += os.total;
+      }
     });
 
     return groups;
@@ -134,6 +138,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
       ORCAMENTO: { bg: 'rgba(0, 188, 212, 0.1)', border: 'var(--info)', text: 'var(--info)' },
       APROVADO: { bg: 'rgba(251, 169, 76, 0.1)', border: 'var(--warning)', text: 'var(--warning)' },
       EM_SERVICO: { bg: 'rgba(130, 87, 230, 0.1)', border: 'var(--primary)', text: 'var(--primary)' },
+      AGUARDANDO_PAGAMENTO: { bg: 'rgba(255, 152, 0, 0.1)', border: 'var(--warning)', text: 'var(--warning)' },
       FINALIZADO: { bg: 'rgba(4, 211, 97, 0.1)', border: 'var(--success)', text: 'var(--success)' },
       ARQUIVADO: { bg: 'rgba(160, 160, 160, 0.1)', border: 'var(--text-muted)', text: 'var(--text-muted)' }
     };
@@ -145,7 +150,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
     return <span style={{ marginLeft: 5 }}>{sortDirection === 'asc' ? '⬆️' : '⬇️'}</span>;
   };
 
-  const allStatuses: OSStatus[] = ['ORCAMENTO', 'APROVADO', 'EM_SERVICO', 'FINALIZADO', 'ARQUIVADO'];
+  const allStatuses: OSStatus[] = ['ORCAMENTO', 'APROVADO', 'EM_SERVICO', 'AGUARDANDO_PAGAMENTO', 'FINALIZADO', 'ARQUIVADO'];
 
   return (
     <div>

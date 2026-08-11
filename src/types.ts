@@ -38,12 +38,19 @@ export interface WorkOrder {
   technician?: string; // 🆕 Técnico responsável pela OS
 }
 
-export type OSStatus = 'ORCAMENTO' | 'APROVADO' | 'EM_SERVICO' | 'FINALIZADO' | 'ARQUIVADO';
+export type OSStatus =
+  | 'ORCAMENTO'
+  | 'APROVADO'
+  | 'EM_SERVICO'
+  | 'AGUARDANDO_PAGAMENTO'
+  | 'FINALIZADO'
+  | 'ARQUIVADO';
 
 export const STATUS_LABELS: Record<OSStatus, string> = {
   ORCAMENTO: 'Orçamento',
   APROVADO: 'Aprovado',
   EM_SERVICO: 'Em Serviço',
+  AGUARDANDO_PAGAMENTO: 'Aguardando Pagamento',
   FINALIZADO: 'Finalizado',
   ARQUIVADO: 'Arquivado'
 };

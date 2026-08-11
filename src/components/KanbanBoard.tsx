@@ -1,22 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import {
-  DndContext,
-  closestCorners,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-  DragOverlay,
-  DragStartEvent,
-  UniqueIdentifier,
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
 import { WorkOrder, OSStatus, STATUS_LABELS } from '../types';
-import { KanbanCard } from './KanbanCard';
+import { KanbanCard } from '../components/KanbanCard';
 import { DroppableColumn } from './DroppableColumn';
 import { usePagination } from '../hooks/usePagination';
 import { InfiniteScroll } from './InfiniteScroll';
@@ -42,11 +26,30 @@ interface KanbanBoardProps {
   showArchived?: boolean;
 }
 
+// ...restante dos imports DnD
+import {
+  DndContext,
+  closestCorners,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  UniqueIdentifier,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+
 const EmptyState = React.memo(({ status }: { status: OSStatus }) => {
   const messages: Record<OSStatus, { icon: string; text: string }> = {
     ORCAMENTO: { icon: '📝', text: 'Sem orçamentos pendentes' },
     APROVADO: { icon: '✅', text: 'Nada aprovado aguardando' },
     EM_SERVICO: { icon: '🔧', text: 'Nenhum veículo no elevador' },
+    AGUARDANDO_PAGAMENTO: { icon: '💳', text: 'Nenhuma OS aguardando pagamento' },
     FINALIZADO: { icon: '🏁', text: 'Nenhuma OS finalizada hoje' },
     ARQUIVADO: { icon: '📦', text: 'Lixeira vazia. Nenhuma OS arquivada.' },
   };
@@ -100,10 +103,11 @@ const KanbanColumn = React.memo(
     });
 
     const colColorMap: Record<OSStatus, string> = {
-      ORCAMENTO: 'var(--info)',
-      APROVADO: 'var(--warning)',
-      EM_SERVICO: 'var(--primary)',
-      FINALIZADO: 'var(--success)',
+      ORCAMENTO: '#00bcd4',            // azul claro (info)
+      APROVADO: '#ffd34d',            // amarelo claro (warning)
+      EM_SERVICO: '#caa400',          // mostarda forte (primary)
+      AGUARDANDO_PAGAMENTO: '#ff9800',// laranja cobrança
+      FINALIZADO: '#04d361',          // verde sucesso
       ARQUIVADO: 'var(--text-muted)',
     };
 
@@ -112,13 +116,16 @@ const KanbanColumn = React.memo(
     return (
       <div
         className="kanban-column"
-        style={{ borderTop: `4px solid ${colColorMap[status]}` }}
+        style={{
+          borderTop: `4px solid ${colColorMap[status]}`,
+          boxShadow: '0 6px 20px rgba(0,0,0,0.45)',
+        }}
       >
         <div className="kanban-header">
           {STATUS_LABELS[status]}
           <span
             style={{
-              background: 'rgba(0,0,0,0.05)',
+              background: 'rgba(0,0,0,0.12)',
               padding: '2px 8px',
               borderRadius: 10,
             }}
@@ -231,7 +238,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
       const orderId = active.id as string;
       const overId = over.id as string;
 
-      const validStatuses: OSStatus[] = ['ORCAMENTO', 'APROVADO', 'EM_SERVICO', 'FINALIZADO', 'ARQUIVADO'];
+      const validStatuses: OSStatus[] = ['ORCAMENTO', 'APROVADO', 'EM_SERVICO', 'AGUARDANDO_PAGAMENTO', 'FINALIZADO', 'ARQUIVADO'];
 
       let newStatus: OSStatus | null = null;
 
@@ -268,7 +275,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
     if (isLoading) {
       return (
         <div className="kanban-board">
-          {[1, 2, 3, 4].map((i) => (
+          {[1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="kanban-column">
               <div className="skeleton skeleton-block" />
             </div>
@@ -326,7 +333,11 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
           <div
             className="kanban-board"
             style={{
-              gridTemplateColumns: showArchived ? '1fr' : 'repeat(4, 1fr)',
+              display: 'flex',
+              gap: 24,
+              height: '100%',
+              overflowX: showArchived ? 'hidden' : 'auto',
+              overflowY: 'hidden',
             }}
           >
             {showArchived ? (
@@ -352,6 +363,12 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
                 />
                 <KanbanColumn
                   status="EM_SERVICO"
+                  workOrders={filteredWorkOrders}
+                  actions={actions}
+                  formatMoney={formatMoney}
+                />
+                <KanbanColumn
+                  status="AGUARDANDO_PAGAMENTO"
                   workOrders={filteredWorkOrders}
                   actions={actions}
                   formatMoney={formatMoney}

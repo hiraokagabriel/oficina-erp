@@ -11,7 +11,7 @@ export interface LedgerEntry {
   installmentGroupId?: string;
   isPaid?: boolean;
   dueDate?: string;
-  paymentDate?: string; // Data efetiva do pagamento
+  paymentDate?: string;
 }
 
 export interface WorkOrder {
@@ -25,18 +25,18 @@ export interface WorkOrder {
   parts: OrderItem[];
   services: OrderItem[];
   total: number;
-  totalCost?: number; // custo total interno
-  profit?: number; // lucro bruto
-  profitMargin?: number; // margem de lucro em %
+  totalCost?: number;
+  profit?: number;
+  profitMargin?: number;
   createdAt: string;
   financialId?: string;
   checklist?: ChecklistSchema;
   publicNotes?: string;
-  paymentDate?: string; // Data do pagamento
+  paymentDate?: string;
   paymentMethod?: 'SINGLE' | 'INSTALLMENT';
-  installmentConfig?: any;
-  technician?: string; // 🆕 Técnico responsável pela OS
-  advanceAmount?: number; // 🆕 Valor adiantado pelo cliente (em centavos). Opcional.
+  installmentConfig?: InstallmentConfig;
+  technician?: string;
+  advanceAmount?: number;
 }
 
 export type OSStatus =
@@ -53,12 +53,12 @@ export const STATUS_LABELS: Record<OSStatus, string> = {
   EM_SERVICO: 'Em Serviço',
   AGUARDANDO_PAGAMENTO: 'Aguardando Pagamento',
   FINALIZADO: 'Finalizado',
-  ARQUIVADO: 'Arquivado'
+  ARQUIVADO: 'Arquivado',
 };
 
 export const MONTH_NAMES = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
 ];
 
 export interface Client {
@@ -67,23 +67,26 @@ export interface Client {
   phone: string;
   notes?: string;
   vehicles: { model: string; plate: string }[];
+  totalSpent?: number;
+  serviceCount?: number;
+  lastServiceDate?: string;
+  averageTicket?: number;
+  vipStatus?: boolean;
 }
 
 export interface CatalogItem {
   id: string;
   description: string;
   price: number;
-  cost?: number;           // custo de aquisição
-  category?: PartCategory; // 🆕 Issue #42: categoria aprendida automaticamente
+  cost?: number;
+  category?: PartCategory;
 }
 
-// 🆕 Catálogo de Técnicos
 export interface Technician {
   id: string;
   name: string;
 }
 
-// 🆕 Issue #41: Tipos para categorização de peças
 export type PartCategory =
   | 'MOTOR'
   | 'FREIO'
@@ -114,8 +117,18 @@ export interface OrderItem {
   id: string;
   description: string;
   price: number;
-  cost?: number;           // custo de aquisição/interno
-  category?: PartCategory; // 🆕 Issue #41: categoria da peça (opcional)
+  cost?: number;
+  category?: PartCategory;
+}
+
+export interface InstallmentConfig {
+  totalAmount: number;
+  installments: number;
+  installmentAmount: number;
+  lastInstallmentAmount: number;
+  firstPaymentDate: string;
+  groupId: string;
+  description: string;
 }
 
 export interface WorkshopSettings {
@@ -133,21 +146,12 @@ export interface DatabaseSchema {
   clients: Client[];
   catalogParts: CatalogItem[];
   catalogServices: CatalogItem[];
-  catalogTechnicians: Technician[]; // 🆕
+  catalogTechnicians: Technician[];
   settings: WorkshopSettings;
 }
 
-// ════════════════════════════════════════════════════════════════
-// 🆕 Issue #43 — Checklist de Inspeção Mecânica (Passo 1)
-// ════════════════════════════════════════════════════════════════
-
-/**
- * Status de inspeção de cada item.
- * Ciclo ao clicar: pending → ok → attention → urgent → pending
- */
 export type InspectionStatus = 'pending' | 'ok' | 'attention' | 'urgent';
 
-/** Metadados de exibição para cada status */
 export const INSPECTION_STATUS_META: Record<
   InspectionStatus,
   { label: string; color: string; emoji: string }
@@ -158,7 +162,6 @@ export const INSPECTION_STATUS_META: Record<
   urgent:    { label: 'Urgente!',          color: '#E53935', emoji: '🔴' },
 };
 
-/** Ciclo de status ao clicar */
 export const NEXT_INSPECTION_STATUS: Record<InspectionStatus, InspectionStatus> = {
   pending:   'ok',
   ok:        'attention',
@@ -166,41 +169,28 @@ export const NEXT_INSPECTION_STATUS: Record<InspectionStatus, InspectionStatus> 
   urgent:    'pending',
 };
 
-/** Um item individual dentro de uma categoria de inspeção */
 export interface InspectionItem {
   id: string;
   label: string;
   status: InspectionStatus;
   note?: string;
-  /** true = adicionado manualmente pelo usuário (pode ser excluído) */
   custom?: boolean;
 }
 
-/** Uma categoria de inspeção (ex: Motor, Freios) com seus itens */
 export interface InspectionCategory {
   id: string;
   label: string;
   items: InspectionItem[];
-  /** true = adicionada manualmente pelo usuário (pode ser excluída) */
   custom?: boolean;
 }
 
-/** Schema principal do checklist — armazenado em WorkOrder.checklist */
 export interface ChecklistSchema {
-  /** Km registrados na entrada do veículo */
   mileageIn?: number;
-  /** Categorias de inspeção com itens e status */
   categories: InspectionCategory[];
-  /** Observações gerais */
   notes: string;
-  /** ISO timestamp da inspeção */
   inspectedAt?: string;
 }
 
-/**
- * 14 categorias / ~73 itens portados do Checklist-Veicular.html
- * Usados para gerar um checklist em branco.
- */
 export const DEFAULT_CHECKLIST_CATEGORIES: Omit<InspectionCategory, 'id'>[] = [
   {
     label: 'Motor',
@@ -347,7 +337,6 @@ export const DEFAULT_CHECKLIST_CATEGORIES: Omit<InspectionCategory, 'id'>[] = [
   },
 ];
 
-/** Instancia um checklist em branco com as 14 categorias padrão */
 export function createEmptyChecklist(mileageIn = 0): ChecklistSchema {
   return {
     mileageIn,
@@ -361,12 +350,24 @@ export function createEmptyChecklist(mileageIn = 0): ChecklistSchema {
   };
 }
 
-/**
- * Migra checklist legado (schema antigo: fuelLevel/tires/notes)
- * para o novo modelo de categorias, preservando as observações.
- */
 export function migrateChecklist(raw: any): ChecklistSchema {
   if (raw && Array.isArray(raw.categories)) return raw as ChecklistSchema;
   const base = createEmptyChecklist(raw?.mileageIn ?? 0);
   return { ...base, notes: raw?.notes ?? '' };
+}
+
+export interface CRMTopClient {
+  client: Client;
+  totalSpent: number;
+  serviceCount: number;
+  rank: number;
+}
+
+export interface CRMStats {
+  totalClients: number;
+  vipClients: Client[];
+  monthlyRevenue: number;
+  pendingServices: number;
+  averageTicket: number;
+  topClients: CRMTopClient[];
 }

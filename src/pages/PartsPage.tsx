@@ -81,10 +81,7 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
     }
 
     const partsToDisplay = consolidatedParts.filter(p => p.selected);
-    const totalQty = partsToDisplay.reduce((sum, p) => sum + p.quantity, 0);
-    const uniqueOSCount = new Set(partsToDisplay.flatMap(p => p.refs.map(r => r.osNumber))).size;
 
-    // 🆕 Gera nome dinâmico do arquivo com a data de hoje no formato AAAA-MM-DD
     const today = new Date();
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, '0');
@@ -92,6 +89,9 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
     const dateStr = `${year}-${month}-${day}`;
     const dateDisplay = today.toLocaleDateString('pt-BR');
     const documentTitle = `Pecas_${dateStr}`;
+
+    const totalQtyPrint = partsToDisplay.reduce((sum, p) => sum + p.quantity, 0);
+    const uniqueOSCountPrint = new Set(partsToDisplay.flatMap(p => p.refs.map(r => r.osNumber))).size;
 
     const printContent = `
       <!DOCTYPE html>
@@ -129,8 +129,8 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
           <div class="print-date"><strong>Data:</strong> ${dateDisplay}</div>
         </div>
         <div class="print-info">
-          <div><strong>Total de peças:</strong> ${partsToDisplay.length} distintas (${totalQty} unidades)</div>
-          <div><strong>OSs relacionadas:</strong> ${uniqueOSCount}</div>
+          <div><strong>Total de peças:</strong> ${partsToDisplay.length} distintas (${totalQtyPrint} unidades)</div>
+          <div><strong>OSs relacionadas:</strong> ${uniqueOSCountPrint}</div>
           <div><strong>Status:</strong> ${statusFilter === 'ALL' ? 'Orçamento + Aprovado' : statusFilter === 'ORCAMENTO' ? 'Orçamento' : 'Aprovado'}</div>
         </div>
         <table class="print-table">
@@ -161,7 +161,6 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
       </html>
     `;
 
-    // 🔧 SOLUÇÃO DEFINITIVA PARA AMBIENTES NATIVOS (Electron/Tauri)
     const originalTitle = document.title;
     document.title = documentTitle;
 
@@ -183,7 +182,6 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
       setTimeout(() => {
         try {
           iframe.contentWindow?.print();
-          console.log(`🖨️ Imprimindo: ${documentTitle}`);
         } catch (err) {
           console.error('Erro ao imprimir:', err);
           alert('Erro ao abrir janela de impressão.');
@@ -202,8 +200,6 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
   };
 
   const partsToDisplay = consolidatedParts.filter(p => selectedParts.size === 0 || p.selected);
-  const totalQty = partsToDisplay.reduce((sum, p) => sum + p.quantity, 0);
-  const uniqueOSCount = new Set(partsToDisplay.flatMap(p => p.refs.map(r => r.osNumber))).size;
 
   if (isLoading) {
     return (

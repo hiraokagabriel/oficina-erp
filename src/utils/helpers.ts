@@ -1,17 +1,11 @@
 import { CatalogItem, Client, LedgerEntry, WorkOrder, OrderItem, Technician } from '../types';
 
-// --- GERAÇÃO DE ID ---
 export const generateId = (): string => {
   return typeof crypto !== 'undefined' && crypto.randomUUID 
     ? crypto.randomUUID() 
     : Math.random().toString(36).substring(2) + Date.now().toString(36);
 };
 
-// --- DATE HELPER ---
-/**
- * Retorna a data atual do computador no formato YYYY-MM-DD (padrão para input type="date")
- * Usa o fuso horário local, não UTC, garantindo que a data seja sempre a mesma do sistema do usuário
- */
 export const getLocalDateString = (): string => {
   const now = new Date();
   const year = now.getFullYear();
@@ -20,7 +14,6 @@ export const getLocalDateString = (): string => {
   return `${year}-${month}-${day}`;
 };
 
-// --- MONEY HELPER ---
 export const Money = {
   fromFloat: (amount: number): number => Math.round(amount * 100),
   toFloat: (cents: number): number => cents / 100,
@@ -31,8 +24,6 @@ export const Money = {
     }).format(cents / 100);
   }
 };
-
-// --- LEDGER (FINANCEIRO) ---
 
 export const createEntry = (
   description: string,
@@ -49,7 +40,6 @@ export const createEntry = (
     type,
     effectiveDate: dateString ? new Date(dateString).toISOString() : new Date().toISOString(),
     createdAt: new Date().toISOString(),
-    history: [],
     groupId,
     paymentDate: paymentDate ? new Date(paymentDate).toISOString() : undefined
   };
@@ -66,24 +56,14 @@ export const updateEntryAmount = (
   
   if (oldAmount === newAmount) return entry;
 
-  const newHistory = [...(entry.history || [])];  
-  newHistory.push({
-    timestamp: new Date().toISOString(),
-    note: `Alterado de ${Money.format(oldAmount)} para ${Money.format(newAmount)} por ${user}. Motivo: ${reason}`
-  });
+  console.log(`Alteração de valor: ${Money.format(oldAmount)} → ${Money.format(newAmount)} (${user}) Motivo: ${reason}`);
 
   return {
     ...entry,
     amount: newAmount,
-    history: newHistory
   };
 };
 
-// --- CÁLCULOS DE ROI ---
-
-/**
- * Calcula o custo total, lucro bruto, margem de lucro e ROI de uma OS
- */
 export const calculateFinancials = (
   parts: OrderItem[],
   services: OrderItem[]
@@ -108,8 +88,6 @@ export const calculateFinancials = (
 
   return { totalRevenue, totalCost, profit, profitMargin, roi };
 };
-
-// --- WORK ORDER (OS) ---
 
 export const createWorkOrder = (
   osNumber: number,
@@ -205,8 +183,6 @@ export const updateWorkOrderData = (
   };
 };
 
-// --- APRENDIZADO DE DADOS (CATÁLOGO E CLIENTES) ---
-
 export const learnClientData = (
   currentClients: Client[],
   name: string,
@@ -250,14 +226,6 @@ export const learnClientData = (
   }
 };
 
-/**
- * Aprende itens do catálogo a partir de uma OS salva.
- *
- * Regras (Issue #42):
- *  - Item novo → adiciona com todos os campos, incluindo category
- *  - Item existente sem category + novo item com category → grava a category
- *  - Item existente já com category → NÃO sobrescreve (primeira categoria vence)
- */
 export const learnCatalogItems = (
   currentCatalog: CatalogItem[],
   newItems: CatalogItem[]
@@ -270,10 +238,8 @@ export const learnCatalogItems = (
     );
 
     if (existingIdx === -1) {
-      // Item novo: adiciona completo (já traz category se definida)
       updatedCatalog.push({ ...item });
     } else {
-      // Item existente: aprende category somente se ainda não tem uma
       const existing = updatedCatalog[existingIdx];
       if (!existing.category && item.category) {
         updatedCatalog[existingIdx] = { ...existing, category: item.category };
@@ -284,7 +250,6 @@ export const learnCatalogItems = (
   return updatedCatalog;
 };
 
-// 🆕 NOVO: Aprendizado de Técnicos
 export const learnTechnician = (
   currentTechnicians: Technician[],
   technicianName: string

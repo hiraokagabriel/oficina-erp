@@ -5,10 +5,9 @@ interface PrintableInvoiceProps {
   data: WorkOrder | null;
   settings: WorkshopSettings;
   formatMoney: (val: number) => string;
-  onPrintComplete?: () => void;
 }
 
-export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settings, formatMoney, onPrintComplete }) => {
+export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settings, formatMoney }) => {
   
   if (!data) return null;
 
@@ -22,12 +21,6 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
 
   return (
     <div className="printable-invoice">
-
-      {/* ===================================================
-          PÁGINA 1 — TERMOS E CONDIÇÕES DE SERVIÇO
-          page-break-after: always garante que a OS começa
-          sempre numa página nova, independente do tamanho.
-      =================================================== */}
       <div className="terms-page">
         <div className="terms-header">
           <div className="terms-logo-area">
@@ -40,7 +33,6 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
         <hr className="divider" />
 
         <div className="terms-body">
-
           <div className="terms-clause">
             <h3>1. AUTORIZAÇÃO DE SERVIÇO</h3>
             <p>O cliente autoriza a execução dos serviços descritos nesta Ordem de Serviço, tendo sido previamente informado sobre os procedimentos, peças a serem utilizadas e valores estimados. A assinatura desta OS representa ciência e aceite integral dos termos aqui descritos.</p>
@@ -101,23 +93,16 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
         </div>
       </div>
 
-      {/* ===================================================
-          PÁGINA 2+ — ORDEM DE SERVIÇO
-      =================================================== */}
       <table className="invoice-layout-table">
-        
         <tbody>
           <tr>
             <td className="invoice-content-cell">
-              
-              {/* --- 1. CABEÇALHO --- */}
               <header className="invoice-header">
                 <div className="invoice-col supplier-col">
                   <h4 className="label-sm">PRESTADOR DE SERVIÇO</h4>
                   <h2 className="company-name">{settings.name || "NOME DA OFICINA"}</h2>
                   <p>{settings.address || "Endereço não informado"}</p>
                   <p>{settings.cnpj || "CNPJ não informado"}</p>
-                  <p>{settings.technician && `Téc. Resp: ${settings.technician}`}</p>
                 </div>
 
                 <div className="invoice-logo-area">
@@ -138,7 +123,6 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
 
               <hr className="divider" />
 
-              {/* --- 2. DADOS DA OS --- */}
               <div className="invoice-meta-grid">
                 <div className="meta-item">
                   <span className="label-sm">NÚMERO OS</span>
@@ -156,7 +140,6 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
 
               <hr className="divider" />
 
-              {/* --- 3. TABELA DE PEÇAS --- */}
               <table className="invoice-category-table">
                 <thead>
                   <tr>
@@ -193,7 +176,6 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
                 </tfoot>
               </table>
 
-              {/* --- 4. TABELA DE SERVIÇOS --- */}
               <table className="invoice-category-table" style={{ marginTop: '20px' }}>
                 <thead>
                   <tr>
@@ -230,7 +212,6 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
                 </tfoot>
               </table>
 
-              {/* --- 5. TOTAL GERAL --- */}
               <div className="invoice-total-block">
                  <div className="total-line">
                     <span className="label-total">TOTAL GERAL</span>
@@ -238,7 +219,6 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
                  </div>
               </div>
 
-              {/* --- 6. OBSERVAÇÕES --- */}
               {data.publicNotes && data.publicNotes.trim() !== '' && (
                   <div className="table-section" style={{ marginTop: '30px', borderTop: '1px solid #eee', paddingTop: '10px' }}>
                     <h3 className="section-title" style={{ marginBottom: '5px' }}>OBSERVAÇÕES / GARANTIA</h3>
@@ -252,7 +232,6 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
           </tr>
         </tbody>
 
-        {/* --- RODAPÉ FANTASMA (Reserva Espaço) --- */}
         <tfoot>
           <tr>
             <td className="footer-space-cell">
@@ -262,7 +241,6 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
         </tfoot>
       </table>
 
-      {/* --- RODAPÉ FIXO REAL --- */}
       <div className="invoice-fixed-footer">
           <div className="signature-area">
              <div className="signature-block">
@@ -286,7 +264,6 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ data, settin
              </p>
           </div>
       </div>
-
     </div>
   );
 };

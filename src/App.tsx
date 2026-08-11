@@ -101,7 +101,6 @@ function AppContent() {
       let updated = false;
       const newWorkOrders = workOrders.map(os => {
         if (os.status === 'FINALIZADO' && !os.paymentDate) {
-          console.log(`🔄 Migrando OS #${os.osNumber}: paymentDate = createdAt`);
           updated = true;
           return { ...os, paymentDate: os.createdAt };
         }
@@ -109,7 +108,6 @@ function AppContent() {
       });
 
       if (updated) {
-        console.log('✅ Migração de OSs antigas concluída!');
         setWorkOrders(newWorkOrders);
         addToast('OSs antigas atualizadas!', 'success');
       }
@@ -127,7 +125,6 @@ function AppContent() {
         if (entry.type === 'CREDIT' && !entry.paymentDate) {
           const linkedOS = workOrders.find(os => os.financialId === entry.id);
           if (linkedOS && linkedOS.paymentDate) {
-            console.log(`💵 Migrando lançamento ${entry.description}: paymentDate da OS`);
             updated = true;
             return { ...entry, paymentDate: linkedOS.paymentDate };
           }
@@ -136,7 +133,6 @@ function AppContent() {
       });
 
       if (updated) {
-        console.log('✅ Migração de lançamentos concluída!');
         setLedger(newLedger);
       }
     };
@@ -199,7 +195,6 @@ function AppContent() {
       setDriveStatus('success');
       addToast('Backup salvo!', 'success');
     } catch (e: any) {
-      console.error('Erro:', e);
       setDriveStatus('error');
       addToast(e.message || 'Erro no backup.', 'error');
     } finally {
@@ -220,7 +215,7 @@ function AppContent() {
       setPendingAction({ type: 'FINISH_OS_FINANCIAL', data: os });
       return;
     } else if (isLeavingFinalized && os.financialId) {
-      setPendingAction({ type: 'RESTORE_FINancial', data: os });
+      setPendingAction({ type: 'RESTORE_FINANCIAL', data: os });
       return;
     }
 
@@ -280,7 +275,7 @@ function AppContent() {
       addToast('OS atualizada!', 'success');
     } else {
       const newOS: WorkOrder = {
-        id: crypto.randomUUID(),
+        id: generateId(),
         osNumber: data.osNumber,
         vehicle: data.vehicle,
         clientName: data.clientName,
@@ -412,10 +407,6 @@ Abrir OS?`)) {
   };
 
   const handleInstallmentConfirm = (config: any) => {
-    console.log('🚀 ===== INÍCIO PARCELAMENTO =====');
-    console.log('installmentOS:', installmentOS);
-    console.log('config:', config);
-
     const newEntries: LedgerEntry[] = [];
     const baseDate = new Date(config.firstPaymentDate);
     const groupId = config.groupId;
@@ -426,8 +417,6 @@ Abrir OS?`)) {
 
       const isLastInstallment = i === config.installments - 1;
       const amount = isLastInstallment ? config.lastInstallmentAmount : config.installmentAmount;
-
-      console.log(`  Parcela ${i + 1}/${config.installments}: ${Money.format(amount)} (${isLastInstallment ? 'Última' : 'Normal'})`);
 
       newEntries.push({
         id: crypto.randomUUID(),
@@ -441,16 +430,13 @@ Abrir OS?`)) {
         totalInstallments: config.installments,
         installmentGroupId: groupId,
         isPaid: false,
-        dueDate: dueDate.toISOString()
+        dueDate: dueDate.toISOString(),
       });
     }
 
-    console.log(`✅ ${newEntries.length} entradas criadas`);
     setLedger(prev => [...newEntries, ...prev]);
 
     if (installmentOS) {
-      console.log(`🔄 Atualizando OS #${installmentOS.osNumber} (ID: ${installmentOS.id})`);
-
       setWorkOrders(prev => prev.map(o =>
         o.id === installmentOS.id
           ? {
@@ -459,22 +445,18 @@ Abrir OS?`)) {
               financialId: newEntries[0].id,
               paymentMethod: 'INSTALLMENT',
               installmentConfig: config,
-              paymentDate: undefined
+              paymentDate: undefined,
             }
           : o
       ));
 
       addToast(`OS #${installmentOS.osNumber} aguardando pagamento`, 'success');
       setShowConfetti(true);
-    } else {
-      console.error('❌ installmentOS é NULL!');
     }
 
     addToast(`Parcelamento criado! ${config.installments}x`, 'success');
     setIsInstallmentModalOpen(false);
     setInstallmentOS(null);
-
-    console.log('🏁 ===== FIM PARCELAMENTO =====');
   };
 
   const handleOpenOSFromCRM = (os: WorkOrder) => {
@@ -515,7 +497,6 @@ Abrir OS?`)) {
 
     if (pendingAction.type === 'FINISH_OS_FINANCIAL') {
       const os = pendingAction.data;
-      console.log('💰 FINISH_OS_FINANCIAL:', os);
 
       setPendingInstallmentOS(os);
       setIsInstallmentChoiceOpen(true);
@@ -525,7 +506,6 @@ Abrir OS?`)) {
 
     if (pendingAction.type === 'RESTORE_FINANCIAL') {
       const os = pendingAction.data;
-      console.log('🔙 RESTORE_FINANCIAL:', os);
 
       const financialEntry = ledger.find(e => e.id === os.financialId);
 
@@ -533,11 +513,9 @@ Abrir OS?`)) {
         const groupToDelete = financialEntry.groupId || financialEntry.installmentGroupId;
 
         if (groupToDelete) {
-          console.log(`🗑️ Removendo TODAS as parcelas do grupo: ${groupToDelete}`);
           const parcelsToRemove = ledger.filter(e =>
             e.groupId === groupToDelete || e.installmentGroupId === groupToDelete
           );
-          console.log(`  Total de parcelas a remover: ${parcelsToRemove.length}`);
 
           setLedger(prev => prev.filter(e =>
             e.groupId !== groupToDelete && e.installmentGroupId !== groupToDelete
@@ -545,12 +523,9 @@ Abrir OS?`)) {
 
           addToast(`${parcelsToRemove.length} parcelas removidas.`, 'info');
         } else {
-          console.log('💵 Removendo pagamento único');
           setLedger(prev => prev.filter(e => e.id !== os.financialId));
           addToast('Lançamento removido.', 'info');
         }
-      } else {
-        console.warn('⚠️ FinancialId não encontrado no ledger');
       }
 
       setWorkOrders(prev => prev.map(o =>
@@ -561,7 +536,7 @@ Abrir OS?`)) {
               financialId: undefined,
               paymentMethod: undefined,
               installmentConfig: undefined,
-              paymentDate: undefined
+              paymentDate: undefined,
             }
           : o
       ));
@@ -588,11 +563,9 @@ Abrir OS?`)) {
     if (!pendingInstallmentOS) return;
 
     if (wantsInstallment) {
-      console.log('✅ Usuário escolheu PARCELAR');
       setInstallmentOS(pendingInstallmentOS);
       setIsInstallmentModalOpen(true);
     } else {
-      console.log('❌ Usuário escolheu NÃO parcelar - pagamento único');
       const paymentDate = new Date().toISOString();
       const entry = createEntry(
         `Receita OS #${pendingInstallmentOS.osNumber} - ${pendingInstallmentOS.clientName}`,
@@ -609,7 +582,7 @@ Abrir OS?`)) {
               ...o,
               status: 'FINALIZADO' as OSStatus,
               financialId: entry.id,
-              paymentDate: paymentDate
+              paymentDate: paymentDate,
             }
           : o
       ));
@@ -729,8 +702,6 @@ Abrir OS?`)) {
                     setIsChecklistOpen(true);
                   },
                   onPrint: handlePrintOS,
-                  onPrintClient: handlePrintOSClient,
-                  onPrintShop: handlePrintOSShop,
                   onDelete: (os) => setPendingAction({ type: 'DELETE_OS', data: os }),
                   onArchive: (os) => setPendingAction({ type: 'ARCHIVE_OS', data: os }),
                   onRestore: (os) => handleUpdateStatus(os.id, 'ORCAMENTO'),

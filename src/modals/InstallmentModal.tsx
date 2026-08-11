@@ -1,11 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { InstallmentConfig } from '../types';
 import { Money } from '../utils/helpers';
+
+export interface InstallmentConfig {
+  totalAmount: number;
+  installments: number;
+  installmentAmount: number;
+  lastInstallmentAmount: number;
+  firstPaymentDate: string;
+  groupId: string;
+  description: string;
+}
 
 interface InstallmentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  totalAmount: number; // Já em centavos!
+  totalAmount: number;
   description: string;
   onConfirm: (config: InstallmentConfig) => void;
 }
@@ -22,33 +31,18 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
     new Date().toISOString().split('T')[0]
   );
 
-  // ✅ FIX: Cálculo DIRETO em centavos - sem conversão!
   const calculateInstallments = (totalInCents: number, count: number) => {
-    console.log(`📊 Calculando ${totalInCents} centavos em ${count} parcelas`);
-    
-    // Valor base por parcela (arredondado para baixo em centavos)
     const baseValueInCents = Math.floor(totalInCents / count);
-    
-    // Resto em centavos
-    const remainder = totalInCents - (baseValueInCents * count);
-    
-    // Última parcela absorve o resto
+    const remainder = totalInCents - baseValueInCents * count;
     const lastInstallmentAmount = baseValueInCents + remainder;
-    
-    // Validação
-    const total = (baseValueInCents * (count - 1)) + lastInstallmentAmount;
+    const total = baseValueInCents * (count - 1) + lastInstallmentAmount;
     const isValid = total === totalInCents;
-    
-    console.log(`  Base: ${baseValueInCents}¢ (${Money.format(baseValueInCents)})`);
-    console.log(`  Resto: ${remainder}¢`);
-    console.log(`  Última: ${lastInstallmentAmount}¢ (${Money.format(lastInstallmentAmount)})`);
-    console.log(`  Soma: ${total}¢ | Original: ${totalInCents}¢ | Válido: ${isValid ? '✅' : '❌'}`);
-    
+
     return {
       normalInstallmentAmount: baseValueInCents,
-      lastInstallmentAmount: lastInstallmentAmount,
+      lastInstallmentAmount,
       installmentsCount: count,
-      isValid: isValid
+      isValid,
     };
   };
 
@@ -62,13 +56,6 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
   }, [isOpen]);
 
   const handleConfirm = () => {
-    console.log('🚀 Confirmando parcelamento:', {
-      totalAmount,
-      installments,
-      normalValue: installmentCalc.normalInstallmentAmount,
-      lastValue: installmentCalc.lastInstallmentAmount
-    });
-    
     const config: InstallmentConfig = {
       totalAmount,
       installments,
@@ -76,7 +63,7 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
       lastInstallmentAmount: installmentCalc.lastInstallmentAmount,
       firstPaymentDate,
       groupId: crypto.randomUUID(),
-      description
+      description,
     };
     onConfirm(config);
     onClose();
@@ -87,7 +74,7 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
   const generateInstallmentDates = () => {
     const dates = [];
     const baseDate = new Date(firstPaymentDate);
-    
+
     for (let i = 0; i < installments; i++) {
       const date = new Date(baseDate);
       date.setMonth(date.getMonth() + i);

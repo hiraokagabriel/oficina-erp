@@ -54,7 +54,9 @@ function AppContent() {
     settings,
     setSettings,
     isLoading,
-    isSaving
+    isSaving,
+    dbPath,
+    setDbPath,
   } = useDatabase();
 
   const finance = useFinance();
@@ -777,6 +779,8 @@ Abrir OS?`)) {
                 driveStatus={driveStatus}
                 onImportData={handleImportData}
                 onOpenDatabase={() => setIsDatabaseModalOpen(true)}
+                dbPath={dbPath}
+                setDbPath={setDbPath}
               />
             )}
           </Suspense>

@@ -11,10 +11,12 @@ interface ConfigPageProps {
   isBackuping: boolean;
   driveStatus: 'idle' | 'success' | 'error';
   onOpenDatabase: () => void;
+  dbPath: string;
+  setDbPath: (path: string) => void;
 }
 
 export const ConfigPage: React.FC<ConfigPageProps> = ({
-  settings, setSettings, currentTheme, setCurrentTheme, onBackup, onImportData, isBackuping, driveStatus, onOpenDatabase
+  settings, setSettings, currentTheme, setCurrentTheme, onBackup, onImportData, isBackuping, driveStatus, onOpenDatabase, dbPath, setDbPath
 }) => {
 
   const handleChange = (field: keyof WorkshopSettings, value: string) => {
@@ -36,6 +38,10 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
     e.target.value = '';
   };
 
+  const handleDbPathChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setDbPath(e.target.value);
+  };
+
   return (
     <div className="config-container" style={{ maxWidth: 1000, margin: '0 auto' }}>
       
@@ -47,6 +53,18 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
                 <p style={{marginBottom:0, color:'var(--text-muted)'}}>
                     Gerencie manualmente seus clientes, veículos, peças, serviços e técnicos.
                 </p>
+                <div className="form-group" style={{ marginTop: 12 }}>
+                  <label className="form-label">📁 Local do arquivo de dados (database.json)</label>
+                  <input
+                    className="form-input"
+                    value={dbPath}
+                    onChange={handleDbPathChange}
+                    placeholder="Ex: C:\\OficinaData\\database.json"
+                  />
+                  <small style={{ color: 'var(--text-muted)', marginTop: 5, display: 'block' }}>
+                    Altere aqui o caminho onde o arquivo com todos os dados da oficina é lido e salvo. A mudança é lembrada automaticamente.
+                  </small>
+                </div>
             </div>
             <button className="btn" onClick={onOpenDatabase} style={{padding: '12px 24px', fontSize: '1rem'}}>
                 📂 Abrir Gerenciador

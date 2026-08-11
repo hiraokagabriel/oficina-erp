@@ -13,25 +13,27 @@ interface DatabaseContextData {
   setCatalogParts: React.Dispatch<React.SetStateAction<CatalogItem[]>>;
   catalogServices: CatalogItem[];
   setCatalogServices: React.Dispatch<React.SetStateAction<CatalogItem[]>>;
-  catalogTechnicians: Technician[]; // 🆕 NOVO
-  setCatalogTechnicians: React.Dispatch<React.SetStateAction<Technician[]>>; // 🆕 NOVO
+  catalogTechnicians: Technician[];
+  setCatalogTechnicians: React.Dispatch<React.SetStateAction<Technician[]>>;
   settings: WorkshopSettings;
   setSettings: React.Dispatch<React.SetStateAction<WorkshopSettings>>;
   isLoading: boolean;
   isSaving: boolean;
+  dbPath: string;
+  setDbPath: React.Dispatch<React.SetStateAction<string>>;
 }
 
 const DatabaseContext = createContext<DatabaseContextData>({} as DatabaseContextData);
 
 export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [dbPath] = useState(() => localStorage.getItem("oficina_db_path") || "C:\\OficinaData\\database.json");
+  const [dbPath, setDbPath] = useState(() => localStorage.getItem("oficina_db_path") || "C:\\OficinaData\\database.json");
   
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [catalogParts, setCatalogParts] = useState<CatalogItem[]>([]);
   const [catalogServices, setCatalogServices] = useState<CatalogItem[]>([]);
-  const [catalogTechnicians, setCatalogTechnicians] = useState<Technician[]>([]); // 🆕 NOVO
+  const [catalogTechnicians, setCatalogTechnicians] = useState<Technician[]>([]);
   const [settings, setSettings] = useState<WorkshopSettings>({ 
     name: "OFICINA", 
     cnpj: "", 
@@ -47,7 +49,14 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const isInitialLoad = useRef(true);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load Inicial
+  useEffect(() => {
+    try {
+      localStorage.setItem("oficina_db_path", dbPath);
+    } catch (e) {
+      console.error("Erro ao salvar dbPath no localStorage:", e);
+    }
+  }, [dbPath]);
+
   useEffect(() => {
     async function load() {
       setIsLoading(true);
@@ -56,13 +65,13 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       try {
         const data = await invoke<string>('load_database', { filepath: dbPath });
         if (data && data.trim()) {
-          const parsed = JSON.parse(data);
+          const parsed: DatabaseSchema = JSON.parse(data);
           setLedger(parsed.ledger || []);
           setWorkOrders(parsed.workOrders || []);
           setClients(parsed.clients || []);
           setCatalogParts(parsed.catalogParts || []);
           setCatalogServices(parsed.catalogServices || []);
-          setCatalogTechnicians(parsed.catalogTechnicians || []); // 🆕 NOVO
+          setCatalogTechnicians(parsed.catalogTechnicians || []);
           setSettings(parsed.settings || settings);
         }
       } catch (e) {
@@ -77,7 +86,6 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     load();
   }, [dbPath]);
 
-  // Auto-Save OTIMIZADO com debounce de 3 segundos
   useEffect(() => {
     if (isInitialLoad.current || isLoading) return;
     if (workOrders.length === 0 && clients.length === 0 && ledger.length === 0) return;
@@ -95,7 +103,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           clients, 
           catalogParts, 
           catalogServices, 
-          catalogTechnicians, // 🆕 NOVO
+          catalogTechnicians, 
           settings 
         };
         await invoke('save_database_atomic', { filepath: dbPath, content: JSON.stringify(fullDb) });
@@ -111,7 +119,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [ledger, workOrders, clients, catalogParts, catalogServices, catalogTechnicians, settings, dbPath, isLoading]); // 🆕 Adicionado catalogTechnicians
+  }, [ledger, workOrders, clients, catalogParts, catalogServices, catalogTechnicians, settings, dbPath, isLoading]);
 
   return (
     <DatabaseContext.Provider value={{
@@ -120,9 +128,10 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       clients, setClients,
       catalogParts, setCatalogParts,
       catalogServices, setCatalogServices,
-      catalogTechnicians, setCatalogTechnicians, // 🆕 NOVO
+      catalogTechnicians, setCatalogTechnicians,
       settings, setSettings,
-      isLoading, isSaving
+      isLoading, isSaving,
+      dbPath, setDbPath,
     }}>
       {children}
     </DatabaseContext.Provider>

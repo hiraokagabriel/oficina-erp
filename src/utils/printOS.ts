@@ -232,6 +232,66 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
       <hr class="divider terms-divider" style="margin-top:10px" />
       <p style="font-size:7.5pt;color:#888;text-align:center">${settings.name || ''} &nbsp;|&nbsp; ${settings.address || ''} &nbsp;|&nbsp; ${settings.cnpj || ''}</p>
     </div>
+
+    <div class="labor-page">
+      <div style="text-align:center;margin-bottom:10px">
+        <h1 style="font-size:0.95rem;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin:0">MÃO DE OBRA</h1>
+        <p style="font-size:0.65rem;color:#888;letter-spacing:1.5px;font-weight:700;text-transform:uppercase;margin-top:2px">Nota técnica sobre tempos de mão de obra</p>
+      </div>
+
+      <hr class="divider terms-divider" />
+
+      <div class="labor-body">
+        <p>
+          <strong>Observação técnica sobre tempos de mão de obra:</strong>
+          Os tempos de execução apresentados nesta ficha técnica possuem caráter referencial e padronizador,
+          tendo sido estruturados com base em tabelas tempárias, catálogos de tempo de serviço e guias técnicos
+          de mão de obra adotados no setor de reparação automotiva no Brasil e no exterior.
+        </p>
+        <p>
+          Como fundamento nacional, foram consideradas referências institucionais do sistema SINDIREPA,
+          incluindo tabelas de tempos de serviços automotivos e catálogos tempários utilizados como parâmetro
+          para elaboração de orçamentos, controle de produtividade e padronização de processos em oficinas
+          independentes.
+        </p>
+        <p>
+          No âmbito internacional, foram observados guias técnicos de mercado amplamente utilizados, como
+          os sistemas de labor times da Mitchell 1 e os Estimated Work Times da MOTOR Information Systems,
+          ambos reconhecidos pela padronização de tempos operacionais e pela aplicação em ambientes
+          profissionais de reparação e estimativa técnica.
+        </p>
+        <p>
+          Os tempos aqui indicados devem ser compreendidos como tempo padrão de operação em condições
+          normais de execução, considerando profissional qualificado, ferramental compatível, estrutura técnica
+          adequada e ausência de intercorrências excepcionais. Em conformidade com a prática do setor, esses
+          tempos não representam garantia absoluta de duração cronológica real, pois podem variar conforme
+          marca, modelo, motorização, grau de acesso ao componente, estado de conservação do veículo, nível de
+          corrosão, presença de adaptações anteriores, qualidade de reparos preexistentes e disponibilidade de
+          equipamentos específicos.
+        </p>
+        <p>
+          Também devem ser observadas eventuais sobreposições de operações, tempos combinados, necessidades
+          de diagnóstico adicional, testes finais, reaprendizados eletrônicos, programação de módulos e
+          procedimentos complementares exigidos por fabricantes ou pelas condições particulares do veículo
+          atendido.
+        </p>
+        <p>
+          Para fins de composição de orçamento, os tempos podem ser aplicados segundo o sistema de hora
+          centesimal, metodologia amplamente adotada em catálogos tempários brasileiros, na qual a hora
+          técnica é dividida em cem partes iguais para facilitar a soma das operações e a multiplicação direta
+          pelo valor do homem-hora praticado pela empresa.
+        </p>
+        <p>
+          Assim, esta ficha técnica deve ser utilizada como instrumento de referência técnica e comercial, apto a
+          promover maior uniformidade nos orçamentos, transparência na relação com o cliente e coerência na
+          formação de preços, sem afastar a necessidade de avaliação individual de cada veículo e de cada ordem
+          de serviço.
+        </p>
+      </div>
+
+      <hr class="divider terms-divider" style="margin-top:10px" />
+      <p style="font-size:7.5pt;color:#888;text-align:center">${settings.name || ''} &nbsp;|&nbsp; ${settings.address || ''} &nbsp;|&nbsp; ${settings.cnpj || ''}</p>
+    </div>
   `;
 
   const printContent = `
@@ -254,13 +314,18 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
           print-color-adjust: exact;
         }
 
-        /* ── PÁGINA DE TERMOS ── */
+        /* ── PÁGINAS DE TEXTO FIXO ── */
         .terms-page {
           page-break-after: always;
           break-after: page;
           padding-top: 8px;
         }
-        .terms-body { margin-top: 8px; }
+        .labor-page {
+          page-break-after: always;
+          break-after: page;
+          padding-top: 8px;
+        }
+        .terms-body, .labor-body { margin-top: 8px; }
         .terms-clause { margin-bottom: 7px; }
         .terms-clause h3 {
           font-size: 0.65rem;
@@ -270,12 +335,13 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
           color: #8B5CF6;
           margin-bottom: 2px;
         }
-        .terms-clause p {
+        .terms-clause p, .labor-body p {
           font-size: 0.76rem;
           color: #222;
           line-height: 1.45;
+          margin-bottom: 6px;
         }
-        /* divider mais compacto dentro dos termos */
+        /* divider mais compacto dentro dos textos fixos */
         .terms-divider { margin: 10px 0 !important; }
 
         /* ── ESTRUTURA PRINCIPAL ── */

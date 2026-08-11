@@ -332,7 +332,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
           font-weight: 800;
           text-transform: uppercase;
           letter-spacing: 0.05em;
-          color: #8B5CF6;
+          color: #F59E0B;
           margin-bottom: 2px;
         }
         .terms-clause p, .labor-body p {
@@ -399,7 +399,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
           font-weight: 700;
           text-transform: uppercase;
           letter-spacing: 1px;
-          color: #8B5CF6;
+          color: #F59E0B;
           text-align: center;
           margin-top: 2px;
         }
@@ -432,13 +432,13 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
           border-radius: 4px;
         }
         .section-title {
-          color: #8B5CF6;
+          color: #F59E0B;
           font-size: 0.7rem;
           font-weight: 800;
           text-transform: uppercase;
           letter-spacing: 1px;
           margin: 0 0 5px 0;
-          border-bottom: 2px solid #8B5CF6;
+          border-bottom: 2px solid #F59E0B;
           display: inline-block;
           padding-bottom: 2px;
         }
@@ -494,7 +494,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
         .label-total {
           font-size: 0.9rem;
           letter-spacing: 1px;
-          color: #8B5CF6;
+          color: #F59E0B;
           font-weight: 700;
           margin-right: 15px;
         }
@@ -528,7 +528,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
           font-weight: 800;
           letter-spacing: 2px;
           text-transform: uppercase;
-          color: #8B5CF6;
+          color: #F59E0B;
         }
         .invoice-header,
         .invoice-meta-grid,

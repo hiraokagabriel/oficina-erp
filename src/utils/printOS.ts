@@ -164,7 +164,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
   };
 
   // ─────────────────────────────────────────────────────────────────
-  // PÁGINA 1 — TERMOS E CONDIÇÕES
+  // PÁGINA 1 — TERMOS E CONDIÇÕES + MÃO DE OBRA (texto)
   // ─────────────────────────────────────────────────────────────────
   const termsPageHtml = `
     <div class="terms-page">
@@ -325,6 +325,10 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
           break-after: page;
           padding-top: 8px;
         }
+        .summary-page {
+          page-break-before: always;
+          padding-top: 20px;
+        }
         .terms-body, .labor-body { margin-top: 8px; }
         .terms-clause { margin-bottom: 7px; }
         .terms-clause h3 {
@@ -343,6 +347,57 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
         }
         /* divider mais compacto dentro dos textos fixos */
         .terms-divider { margin: 10px 0 !important; }
+
+        /* ── RESUMO DA OS ── */
+        .summary-header {
+          text-align: center;
+          margin-bottom: 12px;
+        }
+        .summary-title {
+          font-size: 0.9rem;
+          font-weight: 900;
+          text-transform: uppercase;
+          letter-spacing: 1.5px;
+          margin: 0;
+        }
+        .summary-subtitle {
+          font-size: 0.7rem;
+          color: #666;
+          margin-top: 3px;
+        }
+        .summary-grid {
+          display: flex;
+          justify-content: space-between;
+          gap: 16px;
+          margin-top: 18px;
+        }
+        .summary-card {
+          flex: 1;
+          border: 1px solid #ddd;
+          border-radius: 6px;
+          padding: 10px 12px;
+        }
+        .summary-card-total {
+          border-color: #F59E0B;
+          box-shadow: 0 0 0 1px #F59E0B1a;
+        }
+        .summary-label {
+          display: block;
+          font-size: 0.7rem;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          color: #666;
+          margin-bottom: 4px;
+        }
+        .summary-value {
+          font-size: 1rem;
+          font-weight: 700;
+        }
+        .summary-total {
+          font-size: 1.3rem;
+          font-weight: 900;
+          color: #F59E0B;
+        }
 
         /* ── ESTRUTURA PRINCIPAL ── */
         .page-container { display: table; width: 100%; height: 100%; }
@@ -617,24 +672,6 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
             </div>
           </div>
 
-          <div class="invoice-total-block">
-            <div class="total-line">
-              <span class="label-total">TOTAL GERAL</span>
-              <span class="value-total">${formatMoney(data.total)}</span>
-            </div>
-          </div>
-
-          ${data.publicNotes && data.publicNotes.trim() !== '' ? `
-            <div class="table-section" style="border-top:1px solid #eee;padding-top:10px">
-              <h3 class="section-title" style="margin-bottom:5px">OBSERVAÇÕES / GARANTIA</h3>
-              <div style="font-size:10pt;line-height:1.4;white-space:pre-wrap;color:#333">
-                ${data.publicNotes}
-              </div>
-            </div>
-          ` : ''}
-        </div>
-
-        <div class="page-footer">
           <div class="invoice-footer">
             <div class="signature-area">
               ${signatureBlock}
@@ -649,6 +686,32 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
             </div>
           </div>
         </div>
+
+        <div class="page-footer"></div>
+      </div>
+
+      <div class="summary-page">
+        <div class="summary-header">
+          <h1 class="summary-title">Resumo da Ordem de Serviço</h1>
+          <p class="summary-subtitle">OS #${data.osNumber} &nbsp;•&nbsp; ${data.clientName}</p>
+        </div>
+        <hr class="divider" />
+        <div class="summary-grid">
+          <div class="summary-card">
+            <span class="summary-label">Subtotal Peças</span>
+            <span class="summary-value">${formatMoney(subtotalParts)}</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-label">Subtotal Serviços</span>
+            <span class="summary-value">${formatMoney(subtotalServices)}</span>
+          </div>
+          <div class="summary-card summary-card-total">
+            <span class="summary-label">Total Geral</span>
+            <span class="summary-total">${formatMoney(data.total)}</span>
+          </div>
+        </div>
+        <hr class="divider terms-divider" style="margin-top:20px" />
+        <p style="font-size:7.5pt;color:#888;text-align:center">${settings.name || ''} &nbsp;|&nbsp; ${settings.address || ''} &nbsp;|&nbsp; ${settings.cnpj || ''}</p>
       </div>
 
     </body>

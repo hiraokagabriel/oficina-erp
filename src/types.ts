@@ -36,6 +36,7 @@ export interface WorkOrder {
   paymentMethod?: 'SINGLE' | 'INSTALLMENT';
   installmentConfig?: any;
   technician?: string; // 🆕 Técnico responsável pela OS
+  advanceAmount?: number; // 🆕 Valor adiantado pelo cliente (em centavos). Opcional.
 }
 
 export type OSStatus =

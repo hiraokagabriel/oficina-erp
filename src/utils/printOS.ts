@@ -85,6 +85,10 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
     return mechBlock + clientBlock;
   })();
 
+  const advanceAmount = typeof data.advanceAmount === 'number' ? data.advanceAmount : 0;
+  const hasAdvance = advanceAmount > 0;
+  const remainingAmount = hasAdvance ? Math.max(data.total - advanceAmount, 0) : data.total;
+
   // ─────────────────────────────────────────────────────────────────
   // Renderização de peças agrupadas por categoria.
   // Cada grupo é uma <table> independente com <thead> que se repete
@@ -398,6 +402,14 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
           font-weight: 900;
           color: #F59E0B;
         }
+        .summary-advance-row {
+          margin-top: 12px;
+          font-size: 0.8rem;
+          color: #333;
+        }
+        .summary-advance-row strong {
+          font-weight: 700;
+        }
 
         /* ── ESTRUTURA PRINCIPAL ── */
         .page-container { display: table; width: 100%; height: 100%; }
@@ -498,7 +510,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
           padding-bottom: 2px;
         }
 
-        /* ── TABELAS DE ITENS ── */
+        /* ── TABELAS de ITENS ── */
         .invoice-items-table {
           width: 100%;
           border-collapse: collapse;
@@ -715,6 +727,12 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
             <span class="summary-total">${formatMoney(data.total)}</span>
           </div>
         </div>
+        ${hasAdvance ? `
+          <div class="summary-advance-row">
+            Valor adiantado: <strong>${formatMoney(advanceAmount)}</strong> &nbsp;•&nbsp;
+            Restante a pagar: <strong>${formatMoney(remainingAmount)}</strong>
+          </div>
+        ` : ''}
         <div class="summary-signature">
           <div class="signature-area">
             ${signatureBlock}

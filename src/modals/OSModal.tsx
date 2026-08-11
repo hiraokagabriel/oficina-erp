@@ -44,6 +44,7 @@ export const OSModal: React.FC<OSModalProps> = ({
   const [vehicle, setVehicle] = useState("");
   const [plate, setPlate] = useState("");
   const [mileage, setMileage] = useState("");
+  const [advanceAmountDisplay, setAdvanceAmountDisplay] = useState(""); // 🆕 Campo de adiantamento (em reais, string)
 
   const [parts, setParts] = useState<OrderItem[]>([]);
   const [services, setServices] = useState<OrderItem[]>([]);
@@ -143,6 +144,13 @@ export const OSModal: React.FC<OSModalProps> = ({
       setNotes(client?.notes || "");
       setPublicNotes(editingOS.publicNotes || "");
 
+      // 🆕 Pré-preencher adiantamento (se existir na OS) em reais
+      setAdvanceAmountDisplay(
+        typeof editingOS.advanceAmount === 'number' && editingOS.advanceAmount > 0
+          ? (editingOS.advanceAmount / 100).toString()
+          : ""
+      );
+
       const sep = editingOS.vehicle.lastIndexOf(" - ");
       if (sep > 0) {
         setVehicle(editingOS.vehicle.substring(0, sep));
@@ -168,6 +176,7 @@ export const OSModal: React.FC<OSModalProps> = ({
       setMileage("");
       setParts([]);
       setServices([]);
+      setAdvanceAmountDisplay("");
     }
     setTimeout(() => clientInputRef.current?.focus(), 100);
   }, [isOpen, editingOS, nextOSNumber]);
@@ -279,6 +288,14 @@ export const OSModal: React.FC<OSModalProps> = ({
     if (isNaN(numOS)) { alert("Número OS inválido."); return; }
     const fullVehicle = plate ? `${vehicle} - ${plate.toUpperCase()}` : vehicle;
 
+    const advanceAmount = (() => {
+      const trimmed = advanceAmountDisplay.trim();
+      if (!trimmed) return undefined;
+      const val = parseFloat(trimmed.replace(',', '.'));
+      if (isNaN(val) || val <= 0) return undefined;
+      return fromFloat(val);
+    })();
+
     onSave({
       osNumber: numOS,
       createdAt: date,
@@ -293,7 +310,8 @@ export const OSModal: React.FC<OSModalProps> = ({
       parts: parts.filter(p => p.description.trim() !== ""),
       services: services.filter(s => s.description.trim() !== ""),
       publicNotes,
-      technician: technician.trim() || undefined
+      technician: technician.trim() || undefined,
+      advanceAmount,
     });
   };
 
@@ -309,7 +327,7 @@ export const OSModal: React.FC<OSModalProps> = ({
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [isOpen, clientName, vehicle, parts, services, osNumber, publicNotes, technician]);
+  }, [isOpen, clientName, vehicle, parts, services, osNumber, publicNotes, technician, advanceAmountDisplay]);
 
   if (!isOpen) return null;
 
@@ -355,6 +373,23 @@ export const OSModal: React.FC<OSModalProps> = ({
             <input className="form-input" list="tech_list" value={technician} onChange={e => setTechnician(e.target.value)} />
             <datalist id="tech_list">{suggestedTechnicians.map(t => <option key={t.id} value={t.name} />)}</datalist>
           </div>
+        </div>
+
+        {/* Campo sutil de adiantamento */}
+        <div className="form-group" style={{ marginTop: 8 }}>
+          <label className="form-label">💵 Valor adiantado (Opcional)</label>
+          <input
+            className="form-input"
+            type="number"
+            min="0"
+            step="0.01"
+            value={advanceAmountDisplay}
+            onChange={e => setAdvanceAmountDisplay(e.target.value)}
+            placeholder="Ex: 200,00"
+          />
+          <small style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+            Use apenas se o cliente já deixou algum valor adiantado. Deixe vazio se não houver adiantamento.
+          </small>
         </div>
 
         <div className="form-group">

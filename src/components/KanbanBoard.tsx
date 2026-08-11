@@ -119,6 +119,9 @@ const KanbanColumn = React.memo(
         style={{
           borderTop: `4px solid ${colColorMap[status]}`,
           boxShadow: '0 6px 20px rgba(0,0,0,0.45)',
+          flex: '0 0 360px',
+          minWidth: 360,
+          maxWidth: 360,
         }}
       >
         <div className="kanban-header">
@@ -274,6 +277,8 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
 
     const scrollRef = useRef<HTMLDivElement | null>(null);
     const [columnWidth, setColumnWidth] = useState<number | null>(null);
+    const [canScrollLeft, setCanScrollLeft] = useState(false);
+    const [canScrollRight, setCanScrollRight] = useState(false);
 
     useEffect(() => {
       if (!scrollRef.current) return;
@@ -281,6 +286,24 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
       if (firstColumn) {
         setColumnWidth(firstColumn.offsetWidth + 24); // largura + gap
       }
+    }, [filteredWorkOrders.length, showArchived]);
+
+    useEffect(() => {
+      if (!scrollRef.current || showArchived) return;
+
+      const el = scrollRef.current;
+      const updateScrollFlags = () => {
+        const { scrollLeft, scrollWidth, clientWidth } = el;
+        const tolerance = 8;
+        setCanScrollLeft(scrollLeft > tolerance);
+        setCanScrollRight(scrollLeft < scrollWidth - clientWidth - tolerance);
+      };
+
+      updateScrollFlags();
+      el.addEventListener('scroll', updateScrollFlags);
+      return () => {
+        el.removeEventListener('scroll', updateScrollFlags);
+      };
     }, [filteredWorkOrders.length, showArchived]);
 
     const handleStepScroll = (direction: 'left' | 'right') => {
@@ -416,63 +439,67 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
 
           {showArrows && (
             <>
-              <button
-                type="button"
-                onClick={() => handleStepScroll('left')}
-                style={{
-                  position: 'absolute',
-                  left: 8,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  width: 36,
-                  height: 64,
-                  borderRadius: 999,
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  background: 'rgba(15,15,20,0.35)',
-                  color: '#E0E0E0',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  backdropFilter: 'blur(6px)',
-                  boxShadow: '0 6px 18px rgba(0,0,0,0.6)',
-                  opacity: 0.9,
-                  transition: 'opacity 0.2s ease, transform 0.2s ease',
-                  zIndex: 50,
-                }}
-                title="Painel anterior"
-              >
-                ◀
-              </button>
+              {canScrollLeft && (
+                <button
+                  type="button"
+                  onClick={() => handleStepScroll('left')}
+                  style={{
+                    position: 'absolute',
+                    left: 8,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    width: 36,
+                    height: 64,
+                    borderRadius: 999,
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    background: 'rgba(15,15,20,0.35)',
+                    color: '#E0E0E0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    backdropFilter: 'blur(6px)',
+                    boxShadow: '0 6px 18px rgba(0,0,0,0.6)',
+                    opacity: 0.9,
+                    transition: 'opacity 0.2s ease, transform 0.2s ease',
+                    zIndex: 50,
+                  }}
+                  title="Painel anterior"
+                >
+                  ◀
+                </button>
+              )}
 
-              <button
-                type="button"
-                onClick={() => handleStepScroll('right')}
-                style={{
-                  position: 'absolute',
-                  right: 8,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  width: 36,
-                  height: 64,
-                  borderRadius: 999,
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  background: 'rgba(15,15,20,0.35)',
-                  color: '#E0E0E0',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  backdropFilter: 'blur(6px)',
-                  boxShadow: '0 6px 18px rgba(0,0,0,0.6)',
-                  opacity: 0.9,
-                  transition: 'opacity 0.2s ease, transform 0.2s ease',
-                  zIndex: 50,
-                }}
-                title="Próximo painel"
-              >
-                ▶
-              </button>
+              {canScrollRight && (
+                <button
+                  type="button"
+                  onClick={() => handleStepScroll('right')}
+                  style={{
+                    position: 'absolute',
+                    right: 8,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    width: 36,
+                    height: 64,
+                    borderRadius: 999,
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    background: 'rgba(15,15,20,0.35)',
+                    color: '#E0E0E0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    backdropFilter: 'blur(6px)',
+                    boxShadow: '0 6px 18px rgba(0,0,0,0.6)',
+                    opacity: 0.9,
+                    transition: 'opacity 0.2s ease, transform 0.2s ease',
+                    zIndex: 50,
+                  }}
+                  title="Próximo painel"
+                >
+                  ▶
+                </button>
+              )}
             </>
           )}
 

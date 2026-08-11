@@ -80,7 +80,13 @@ body {
   padding: 24px; 
   z-index: 100; 
   box-shadow: 5px 0 20px var(--shadow-color); 
-  transition: 0.5s; 
+  transition: width 0.3s ease, padding 0.3s ease; 
+}
+
+/* Sidebar retrátil (modo compacto: apenas ícones) */
+.sidebar.sidebar-collapsed {
+  width: 80px;
+  padding: 24px 12px;
 }
 
 [data-theme="pastel"] .sidebar {

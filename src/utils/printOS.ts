@@ -137,6 +137,10 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
         return `
           <table class="invoice-items-table category-block" style="margin-bottom:0">
             <thead>
+              <tr class="col-header-row">
+                <th style="width:75%;text-align:left">ITEM / DESCRIÇÃO</th>
+                <th style="width:25%;text-align:right">VALOR</th>
+              </tr>
               <tr>
                 <th colspan="2" class="category-group-header" style="
                   padding:4px 8px 4px 10px;
@@ -150,10 +154,6 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
                   border-bottom:1px solid ${meta.color}44;
                   text-align:left;
                 ">${meta.label}</th>
-              </tr>
-              <tr class="col-header-row">
-                <th style="width:75%;text-align:left">ITEM / DESCRIÇÃO</th>
-                <th style="width:25%;text-align:right">VALOR</th>
               </tr>
             </thead>
             <tbody>${itemRows}</tbody>

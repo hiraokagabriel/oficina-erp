@@ -7,11 +7,6 @@ import { ActionMenu } from './ActionMenu';
 
 declare global {
   interface Window {
-    electron?: {
-      shell: {
-        openExternal: (url: string) => Promise<void>;
-      };
-    };
     __TAURI__?: {
       shell: {
         open: (url: string) => Promise<void>;
@@ -98,11 +93,6 @@ export const KanbanCard = React.memo(({
     );
 
     const whatsappUrl = `https://wa.me/55${cleanPhone}?text=${message}`;
-
-    if (window.electron?.shell?.openExternal) {
-      await window.electron.shell.openExternal(whatsappUrl);
-      return;
-    }
 
     if (window.__TAURI__?.shell?.open) {
       await window.__TAURI__.shell.open(whatsappUrl);

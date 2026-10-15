@@ -3,14 +3,9 @@ import { Client, WorkOrder, STATUS_LABELS } from '../types';
 import { CRMDashboard } from '../components/CRMDashboard';
 import { ClientEditModal } from '../modals/ClientEditModal';
 
-// ✅ Declarações globais para Electron/Tauri
+// ✅ Declaração global do Tauri
 declare global {
   interface Window {
-    electron?: {
-      shell: {
-        openExternal: (url: string) => Promise<void>;
-      };
-    };
     __TAURI__?: {
       shell: {
         open: (url: string) => Promise<void>;
@@ -96,7 +91,7 @@ export const CRMPage: React.FC<CRMPageProps> = ({
       };
   };
 
-  // ✅ OTIMIZADO PARA .EXE: Abrir WhatsApp com suporte Electron/Tauri
+  // ✅ OTIMIZADO PARA .EXE: Abrir WhatsApp com suporte Tauri
   const openWhatsApp = async (phone: string, clientName: string) => {
     console.log('📱 ===== ABERTURA WHATSAPP =====');
     console.log('Telefone original:', phone);
@@ -124,20 +119,7 @@ export const CRMPage: React.FC<CRMPageProps> = ({
     console.log('URL final:', whatsappUrl);
     console.log('Telefone com código do país: +55' + cleanPhone);
     
-    // MÉTODO 1: Electron
-    if (window.electron?.shell?.openExternal) {
-      console.log('🚀 Ambiente detectado: ELECTRON (.exe)');
-      console.log('✅ Usando electron.shell.openExternal()...');
-      try {
-        await window.electron.shell.openExternal(whatsappUrl);
-        console.log('✅ WhatsApp aberto via Electron!');
-        return;
-      } catch (error) {
-        console.error('❌ Erro no Electron:', error);
-      }
-    }
-    
-    // MÉTODO 2: Tauri
+    // MÉTODO 1: Tauri
     if (window.__TAURI__?.shell?.open) {
       console.log('🚀 Ambiente detectado: TAURI (.exe)');
       console.log('✅ Usando Tauri shell.open()...');
@@ -150,7 +132,7 @@ export const CRMPage: React.FC<CRMPageProps> = ({
       }
     }
     
-    // MÉTODO 3: Navegador web
+    // MÉTODO 2: Navegador web
     console.log('🌐 Ambiente detectado: NAVEGADOR WEB');
     console.log('✅ Usando window.open() padrão...');
     const newWindow = window.open(whatsappUrl, '_blank', 'noopener,noreferrer');

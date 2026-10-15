@@ -31,7 +31,11 @@ const InstallmentModal = lazy(() => import('./modals/InstallmentModal').then(m =
 const ChoiceModal = lazy(() => import('./modals/ChoiceModal').then(m => ({ default: m.ChoiceModal })));
 
 import { SoundFX } from './utils/audio';
-import { Money, createEntry, updateWorkOrderData, learnClientData, learnCatalogItems, learnTechnician, generateId } from './utils/helpers';
+import {
+  applyInstallmentToOS, buildInstallmentEntries, finalizeOSSingle, markOSFinalized,
+  reopenOS, restoreFinancial, statusChangeEffects, togglePayment,
+} from './services/osFinanceService';
+import { Money, updateWorkOrderData, learnClientData, learnCatalogItems, learnTechnician, generateId } from './utils/helpers';
 import { LedgerEntry, WorkOrder, Client, CatalogItem, OSStatus, Technician } from './types';
 
 interface PendingAction {
@@ -150,32 +154,18 @@ function AppContent() {
     const os = workOrders.find(o => o.id === osId);
     if (!os || os.status === newStatus) return;
 
-    const isBecomingFinalized = newStatus === 'FINALIZADO' && os.status !== 'FINALIZADO';
-    const isLeavingFinalized = os.status === 'FINALIZADO' && newStatus !== 'FINALIZADO';
-
-    if (isBecomingFinalized && !os.financialId) {
+    const effect = statusChangeEffects(os, newStatus, new Date().toISOString());
+    if (effect.kind === 'ask-finish') {
       setPendingAction({ type: 'FINISH_OS_FINANCIAL', data: os });
       return;
-    } else if (isLeavingFinalized && os.financialId) {
+    } else if (effect.kind === 'ask-restore') {
       setPendingAction({ type: 'RESTORE_FINANCIAL', data: os });
       return;
     }
 
-    setWorkOrders(prev => prev.map(o => {
-      if (o.id !== osId) return o;
-
-      const updates: Partial<WorkOrder> = { status: newStatus };
-
-      if (isBecomingFinalized) {
-        updates.paymentDate = new Date().toISOString();
-      }
-
-      if (isLeavingFinalized) {
-        updates.paymentDate = undefined;
-      }
-
-      return { ...o, ...updates };
-    }));
+    if (effect.kind === 'update') {
+      setWorkOrders(prev => prev.map(o => o.id === osId ? { ...o, ...effect.updates } : o));
+    }
 
     SoundFX.pop();
   };
@@ -269,28 +259,13 @@ Abrir OS?`)) {
   };
 
   const handleTogglePayment = (entryId: string) => {
-    const entry = ledger.find(e => e.id === entryId);
-    if (!entry || entry.type !== 'CREDIT') return;
+    const result = togglePayment(ledger, workOrders, entryId, new Date().toISOString());
+    if (!result) return;
 
-    const now = new Date().toISOString();
-    const newPaymentDate = entry.paymentDate ? undefined : now;
+    setLedger(result.ledger);
+    setWorkOrders(result.workOrders);
 
-    setLedger(prev => prev.map(e =>
-      e.id === entryId
-        ? { ...e, paymentDate: newPaymentDate }
-        : e
-    ));
-
-    const linkedOS = workOrders.find(os => os.financialId === entryId);
-    if (linkedOS) {
-      setWorkOrders(prev => prev.map(os =>
-        os.id === linkedOS.id
-          ? { ...os, paymentDate: newPaymentDate }
-          : os
-      ));
-    }
-
-    addToast(newPaymentDate ? '💵 Marcado como pago!' : '⏳ Marcado como pendente', 'info');
+    addToast(result.paid ? '💵 Marcado como pago!' : '⏳ Marcado como pendente', 'info');
     SoundFX.pop();
   };
 
@@ -349,46 +324,14 @@ Abrir OS?`)) {
   };
 
   const handleInstallmentConfirm = (config: any) => {
-    const newEntries: LedgerEntry[] = [];
-    const baseDate = new Date(config.firstPaymentDate);
-    const groupId = config.groupId;
-
-    for (let i = 0; i < config.installments; i++) {
-      const dueDate = new Date(baseDate);
-      dueDate.setMonth(dueDate.getMonth() + i);
-
-      const isLastInstallment = i === config.installments - 1;
-      const amount = isLastInstallment ? config.lastInstallmentAmount : config.installmentAmount;
-
-      newEntries.push({
-        id: crypto.randomUUID(),
-        description: `${config.description} - Parcela ${i + 1}/${config.installments}`,
-        amount: amount,
-        type: 'CREDIT',
-        effectiveDate: dueDate.toISOString(),
-        createdAt: new Date().toISOString(),
-        groupId: groupId,
-        installmentNumber: i + 1,
-        totalInstallments: config.installments,
-        installmentGroupId: groupId,
-        isPaid: false,
-        dueDate: dueDate.toISOString(),
-      });
-    }
+    const newEntries = buildInstallmentEntries(config);
 
     setLedger(prev => [...newEntries, ...prev]);
 
     if (installmentOS) {
       setWorkOrders(prev => prev.map(o =>
         o.id === installmentOS.id
-          ? {
-              ...o,
-              status: 'AGUARDANDO_PAGAMENTO' as OSStatus,
-              financialId: newEntries[0].id,
-              paymentMethod: 'INSTALLMENT',
-              installmentConfig: config,
-              paymentDate: undefined,
-            }
+          ? applyInstallmentToOS(o, config, newEntries[0].id)
           : o
       ));
 
@@ -486,39 +429,17 @@ Abrir OS?`)) {
     if (pendingAction.type === 'RESTORE_FINANCIAL') {
       const os = pendingAction.data;
 
-      const financialEntry = ledger.find(e => e.id === os.financialId);
+      const restored = restoreFinancial(ledger, os);
 
-      if (financialEntry) {
-        const groupToDelete = financialEntry.groupId || financialEntry.installmentGroupId;
-
-        if (groupToDelete) {
-          const parcelsToRemove = ledger.filter(e =>
-            e.groupId === groupToDelete || e.installmentGroupId === groupToDelete
-          );
-
-          setLedger(prev => prev.filter(e =>
-            e.groupId !== groupToDelete && e.installmentGroupId !== groupToDelete
-          ));
-
-          addToast(`${parcelsToRemove.length} parcelas removidas.`, 'info');
-        } else {
-          setLedger(prev => prev.filter(e => e.id !== os.financialId));
-          addToast('Lançamento removido.', 'info');
-        }
+      if (restored.removedGroup) {
+        setLedger(restored.ledger);
+        addToast(`${restored.removedCount} parcelas removidas.`, 'info');
+      } else if (restored.removedCount > 0) {
+        setLedger(restored.ledger);
+        addToast('Lançamento removido.', 'info');
       }
 
-      setWorkOrders(prev => prev.map(o =>
-        o.id === os.id
-          ? {
-              ...o,
-              status: 'EM_SERVICO' as OSStatus,
-              financialId: undefined,
-              paymentMethod: undefined,
-              installmentConfig: undefined,
-              paymentDate: undefined,
-            }
-          : o
-      ));
+      setWorkOrders(prev => prev.map(o => o.id === os.id ? reopenOS(o) : o));
 
       addToast('OS reaberta.', 'success');
     }
@@ -537,24 +458,11 @@ Abrir OS?`)) {
       setInstallmentOS(pendingInstallmentOS);
       setIsInstallmentModalOpen(true);
     } else {
-      const paymentDate = new Date().toISOString();
-      const entry = createEntry(
-        `Receita OS #${pendingInstallmentOS.osNumber} - ${pendingInstallmentOS.clientName}`,
-        pendingInstallmentOS.total,
-        'CREDIT',
-        pendingInstallmentOS.createdAt,
-        undefined,
-        paymentDate
-      );
+      const { entry, os: finalizedOS } = finalizeOSSingle(pendingInstallmentOS);
       setLedger(prev => [entry, ...prev]);
       setWorkOrders(prev => prev.map(o =>
         o.id === pendingInstallmentOS.id
-          ? {
-              ...o,
-              status: 'FINALIZADO' as OSStatus,
-              financialId: entry.id,
-              paymentDate: paymentDate,
-            }
+          ? markOSFinalized(o, entry.id, finalizedOS.paymentDate!)
           : o
       ));
       addToast('OS Finalizada!', 'success');

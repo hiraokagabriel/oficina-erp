@@ -142,7 +142,7 @@ export const updateWorkOrderData = (
   vehicle: string,
   clientName: string,
   clientPhone: string,
-  mileage: string,
+  mileage: string | number, // o App passa number (OSModal); os testes passam string
   parts: CatalogItem[],
   services: CatalogItem[],
   dateString?: string,

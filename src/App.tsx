@@ -36,13 +36,11 @@ import {
   reopenOS, restoreFinancial, statusChangeEffects, togglePayment,
 } from './services/osFinanceService';
 import { Money, updateWorkOrderData, learnClientData, learnCatalogItems, learnTechnician, generateId } from './utils/helpers';
-import { LedgerEntry, WorkOrder, Client, CatalogItem, OSStatus, Technician } from './types';
+import { LedgerEntry, WorkOrder, Client, CatalogItem, OSStatus, Technician, InstallmentConfig, OSModalPayload } from './types';
 
-interface PendingAction {
-  type: 'DELETE_OS' | 'ARCHIVE_OS' | 'FINISH_OS_FINANCIAL' | 'RESTORE_FINANCIAL' | 'IMPORT_DATA';
-  data?: any;
-  content?: string;
-}
+type PendingAction =
+  | { type: 'DELETE_OS' | 'ARCHIVE_OS' | 'FINISH_OS_FINANCIAL' | 'RESTORE_FINANCIAL'; data: WorkOrder }
+  | { type: 'IMPORT_DATA'; content: string };
 
 function AppContent() {
   const {
@@ -140,9 +138,9 @@ function AppContent() {
       await uploadToDrive(filename, content, settings.googleDriveToken, settings.googleApiKey);
       setDriveStatus('success');
       addToast('Backup salvo!', 'success');
-    } catch (e: any) {
+    } catch (e) {
       setDriveStatus('error');
-      addToast(e.message || 'Erro no backup.', 'error');
+      addToast((e instanceof Error ? e.message : undefined) || 'Erro no backup.', 'error');
     } finally {
       setIsBackuping(false);
     }
@@ -170,7 +168,7 @@ function AppContent() {
     SoundFX.pop();
   };
 
-  const handleSaveOSModal = (data: any) => {
+  const handleSaveOSModal = (data: OSModalPayload) => {
     const duplicate = workOrders.find(o => o.osNumber === data.osNumber && o.id !== editingOS?.id);
     if (duplicate && !confirm(`OS #${data.osNumber} duplicada. Continuar?`)) return;
 
@@ -216,7 +214,7 @@ function AppContent() {
         status: 'ORCAMENTO' as OSStatus,
         parts: data.parts,
         services: data.services,
-        total: data.parts.reduce((a: number, b: any) => a + b.price, 0) + data.services.reduce((a: number, b: any) => a + b.price, 0),
+        total: data.parts.reduce((a, b) => a + b.price, 0) + data.services.reduce((a, b) => a + b.price, 0),
         createdAt: data.createdAt || new Date().toISOString(),
         publicNotes: data.publicNotes || '',
         technician: technicianName || undefined,
@@ -323,7 +321,7 @@ Abrir OS?`)) {
     addToast('Técnico salvo!', 'success');
   };
 
-  const handleInstallmentConfirm = (config: any) => {
+  const handleInstallmentConfirm = (config: InstallmentConfig) => {
     const newEntries = buildInstallmentEntries(config);
 
     setLedger(prev => [...newEntries, ...prev]);
@@ -445,7 +443,7 @@ Abrir OS?`)) {
     }
 
     if (pendingAction.type === 'IMPORT_DATA') {
-      void importBackup(pendingAction.content!);
+      void importBackup(pendingAction.content);
     }
 
     setPendingAction(null);

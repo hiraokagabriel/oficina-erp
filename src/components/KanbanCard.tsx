@@ -3,7 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { WorkOrder, OSStatus } from '../types';
 import { ContextMenu } from './ContextMenu';
-import { ActionMenu } from './ActionMenu';
+import { ActionMenu, MenuItem } from './ActionMenu';
 
 declare global {
   interface Window {
@@ -111,7 +111,7 @@ export const KanbanCard = React.memo(({
   };
 
   const menuItems = useMemo(() => {
-    const items: any[] = [
+    const items: MenuItem[] = [
       {
         icon: '✏️',
         label: 'Editar OS',

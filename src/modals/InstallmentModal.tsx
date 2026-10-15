@@ -1,15 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Money } from '../utils/helpers';
-
-export interface InstallmentConfig {
-  totalAmount: number;
-  installments: number;
-  installmentAmount: number;
-  lastInstallmentAmount: number;
-  firstPaymentDate: string;
-  groupId: string;
-  description: string;
-}
+import { InstallmentConfig } from '../types';
 
 interface InstallmentModalProps {
   isOpen: boolean;

@@ -1,4 +1,7 @@
-import { DatabaseSchema, LedgerEntry, WorkOrder } from '../types';
+import { DatabaseSchema, LedgerEntry, WorkOrder, WorkshopSettings } from '../types';
+
+/** Settings de bancos v0 podiam ter `technician` (hoje é o catálogo de técnicos). */
+type LegacySettings = WorkshopSettings & { technician?: unknown };
 import { learnTechnician } from './helpers';
 
 // Versão do formato do banco. Subir aqui e acrescentar um passo em STEPS.
@@ -37,10 +40,11 @@ function v0ToV1(db: DatabaseSchema): DatabaseSchema {
   // (c) Técnico legado em settings.technician vira item do catálogo de técnicos.
   let catalogTechnicians = db.catalogTechnicians;
   let settings = db.settings;
-  const legacyTech = (settings as any)?.technician;
+  const legacySettings: LegacySettings = settings;
+  const legacyTech = legacySettings?.technician;
   if (legacyTech && typeof legacyTech === 'string' && legacyTech.trim() !== '') {
     catalogTechnicians = learnTechnician(catalogTechnicians, legacyTech.trim());
-    const copy: any = { ...settings };
+    const copy: LegacySettings = { ...settings };
     delete copy.technician;
     settings = copy;
   }

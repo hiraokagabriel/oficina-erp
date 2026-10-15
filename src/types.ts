@@ -141,6 +141,38 @@ export interface WorkshopSettings {
   googleApiKey?: string;
 }
 
+/** Payload que o OSModal entrega a handleSaveOSModal (App.tsx) ao salvar uma OS. */
+export interface OSModalPayload {
+  osNumber: number;
+  createdAt: string;
+  paymentDate?: string;
+  clientName: string;
+  clientPhone: string;
+  clientNotes: string;
+  /** Modelo + placa, como gravado na OS. */
+  vehicle: string;
+  vehicleModelOnly: string;
+  plate: string;
+  mileage: number;
+  parts: OrderItem[];
+  services: OrderItem[];
+  publicNotes: string;
+  technician?: string;
+  advanceAmount?: number;
+}
+
+/** Ponto do gráfico de fluxo de caixa (useFinance.chartFluxo). */
+export type ChartFluxoPoint = {
+  name: string;
+  valor: number;
+};
+
+/** Fatia do gráfico de pizza peças x serviços (useFinance.chartPie). */
+export type ChartPiePoint = {
+  name: string;
+  value: number;
+};
+
 export interface DatabaseSchema {
   ledger: LedgerEntry[];
   workOrders: WorkOrder[];
@@ -363,7 +395,10 @@ export function createEmptyChecklist(mileageIn = 0): ChecklistSchema {
   };
 }
 
-export function migrateChecklist(raw: any): ChecklistSchema {
+/** Checklist como pode vir de bancos antigos: parcial, nulo ou sem `categories`. */
+export type LegacyChecklist = Partial<ChecklistSchema> | null | undefined;
+
+export function migrateChecklist(raw: LegacyChecklist): ChecklistSchema {
   if (raw && Array.isArray(raw.categories)) return raw as ChecklistSchema;
   const base = createEmptyChecklist(raw?.mileageIn ?? 0);
   return { ...base, notes: raw?.notes ?? '' };

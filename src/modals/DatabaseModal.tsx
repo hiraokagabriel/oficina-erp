@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Client, CatalogItem, Technician, PartCategory, PART_CATEGORY_META } from '../types';
+import { Client, CatalogItem, Technician, PART_CATEGORY_META } from '../types';
 import { PartCategorySelect } from '../components/PartCategorySelect';
 
 interface DatabaseModalProps {
@@ -20,6 +20,12 @@ interface DatabaseModalProps {
 
 type Tab = 'CLIENTS' | 'PARTS' | 'SERVICES' | 'TECHNICIANS';
 
+// Linha da listagem: carrega o tipo do item para o JSX poder estreitar sem cast.
+type DbRow =
+  | { kind: 'CLIENT'; item: Client }
+  | { kind: 'PART' | 'SERVICE'; item: CatalogItem }
+  | { kind: 'TECHNICIAN'; item: Technician };
+
 export const DatabaseModal: React.FC<DatabaseModalProps> = ({
   isOpen, onClose, clients, catalogParts, catalogServices, catalogTechnicians,
   onSaveClient, onDeleteClient, onSaveCatalogItem, onDeleteCatalogItem, 
@@ -36,22 +42,22 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
   // --- FILTROS & PERFORMANCE ---
   const filteredList = useMemo(() => {
     const term = searchTerm.toLowerCase();
-    let list: any[] = [];
-    
-    if (activeTab === 'CLIENTS') list = clients;
-    else if (activeTab === 'PARTS') list = catalogParts;
-    else if (activeTab === 'SERVICES') list = catalogServices;
-    else list = catalogTechnicians;
+    let rows: DbRow[];
+
+    if (activeTab === 'CLIENTS') rows = clients.map((item): DbRow => ({ kind: 'CLIENT', item }));
+    else if (activeTab === 'PARTS') rows = catalogParts.map((item): DbRow => ({ kind: 'PART', item }));
+    else if (activeTab === 'SERVICES') rows = catalogServices.map((item): DbRow => ({ kind: 'SERVICE', item }));
+    else rows = catalogTechnicians.map((item): DbRow => ({ kind: 'TECHNICIAN', item }));
 
     // Filtra e limita a 50 itens para performance máxima
-    return list.filter((item: any) => {
-        if (activeTab === 'CLIENTS') {
-            return item.name.toLowerCase().includes(term) || item.phone.includes(term);
+    return rows.filter((row) => {
+        if (row.kind === 'CLIENT') {
+            return row.item.name.toLowerCase().includes(term) || row.item.phone.includes(term);
         }
-        if (activeTab === 'TECHNICIANS') {
-            return item.name.toLowerCase().includes(term);
+        if (row.kind === 'TECHNICIAN') {
+            return row.item.name.toLowerCase().includes(term);
         }
-        return item.description.toLowerCase().includes(term);
+        return row.item.description.toLowerCase().includes(term);
     }).slice(0, 50);
   }, [activeTab, searchTerm, clients, catalogParts, catalogServices, catalogTechnicians]);
 
@@ -280,54 +286,54 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                     </tr>
                 </thead>
                 <tbody>
-                    {filteredList.map((item: any) => (
-                        <tr key={item.id}>
+                    {filteredList.map((row) => (
+                        <tr key={row.item.id}>
                             <td>
-                                {activeTab === 'CLIENTS' ? (
+                                {row.kind === 'CLIENT' ? (
                                     <div>
-                                        <strong>{item.name}</strong>
+                                        <strong>{row.item.name}</strong>
                                         <div style={{fontSize:'0.8rem', color:'var(--text-muted)'}}>
-                                            {item.vehicles.length > 0 
-                                                ? item.vehicles.map((v:any) => v.model).join(', ') 
+                                            {row.item.vehicles.length > 0 
+                                                ? row.item.vehicles.map((v) => v.model).join(', ') 
                                                 : 'Sem veículos'}
                                         </div>
                                     </div>
-                                ) : activeTab === 'TECHNICIANS' ? (
+                                ) : row.kind === 'TECHNICIAN' ? (
                                     <div>
-                                        <strong>👨‍🔧 {item.name}</strong>
+                                        <strong>👨‍🔧 {row.item.name}</strong>
                                     </div>
                                 ) : (
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <span>{item.description}</span>
+                                        <span>{row.item.description}</span>
                                         {/* 🆕 Issue #42: badge de categoria na listagem de peças */}
-                                        {activeTab === 'PARTS' && item.category && (
+                                        {row.kind === 'PART' && row.item.category && (
                                           <span style={{
                                             fontSize: '0.68rem',
                                             fontWeight: 800,
                                             textTransform: 'uppercase',
-                                            color: PART_CATEGORY_META[item.category as PartCategory].color,
+                                            color: PART_CATEGORY_META[row.item.category].color,
                                             letterSpacing: '0.04em',
                                             opacity: 0.85
                                           }}>
-                                            ● {PART_CATEGORY_META[item.category as PartCategory].label}
+                                            ● {PART_CATEGORY_META[row.item.category].label}
                                           </span>
                                         )}
                                     </div>
                                 )}
                             </td>
                             <td style={{textAlign:'right'}}>
-                                {activeTab === 'CLIENTS' ? item.phone : 
-                                 activeTab === 'TECHNICIANS' ? '' : 
-                                 formatMoney(item.price)}
+                                {row.kind === 'CLIENT' ? row.item.phone : 
+                                 row.kind === 'TECHNICIAN' ? '' : 
+                                 formatMoney(row.item.price)}
                             </td>
                             <td style={{textAlign:'center'}}>
                                 <button 
                                     className="btn-icon" 
                                     title="Editar" 
                                     onClick={() => {
-                                        if (activeTab === 'CLIENTS') setEditingClient({...item});
-                                        else if (activeTab === 'TECHNICIANS') setEditingTechnician({...item});
-                                        else setEditingItem({...item});
+                                        if (row.kind === 'CLIENT') setEditingClient({...row.item});
+                                        else if (row.kind === 'TECHNICIAN') setEditingTechnician({...row.item});
+                                        else setEditingItem({...row.item});
                                     }}
                                 >✏️</button>
                                 <button 
@@ -335,9 +341,9 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                                     title="Excluir" 
                                     onClick={() => {
                                         if(confirm("Tem certeza? Esta ação é irreversível.")) {
-                                            if (activeTab === 'CLIENTS') onDeleteClient(item.id);
-                                            else if (activeTab === 'TECHNICIANS') onDeleteTechnician(item.id);
-                                            else onDeleteCatalogItem(item.id, activeTab === 'PARTS' ? 'part' : 'service');
+                                            if (row.kind === 'CLIENT') onDeleteClient(row.item.id);
+                                            else if (row.kind === 'TECHNICIAN') onDeleteTechnician(row.item.id);
+                                            else onDeleteCatalogItem(row.item.id, row.kind === 'PART' ? 'part' : 'service');
                                         }
                                     }}
                                 >🗑️</button>

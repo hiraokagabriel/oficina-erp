@@ -60,8 +60,8 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
     }
 
     result.sort((a, b) => {
-      let valA: any = a[sortBy];
-      let valB: any = b[sortBy];
+      let valA: string | number | undefined = a[sortBy];
+      let valB: string | number | undefined = b[sortBy];
 
       if (sortBy === 'paymentDate') {
         if (!valA && !valB) return 0;
@@ -70,13 +70,14 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
         valA = new Date(valA).getTime();
         valB = new Date(valB).getTime();
       } else if (sortBy === 'createdAt') {
-        valA = new Date(valA).getTime();
-        valB = new Date(valB).getTime();
-      } else if (typeof valA === 'string') {
+        valA = new Date(a.createdAt).getTime();
+        valB = new Date(b.createdAt).getTime();
+      } else if (typeof valA === 'string' && typeof valB === 'string') {
         valA = valA.toLowerCase();
         valB = valB.toLowerCase();
       }
 
+      if (valA === undefined || valB === undefined) return 0; // só paymentDate pode faltar, e já foi tratado acima
       const comparison = valA < valB ? -1 : valA > valB ? 1 : 0;
       return sortDirection === 'asc' ? comparison : -comparison;
     });
@@ -330,7 +331,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
               <select 
                 className="form-input"
                 value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value as any)}
+                onChange={(e) => setDateFilter(e.target.value as 'all' | 'today' | 'week' | 'month')}
               >
                 <option value="all">Todo o período</option>
                 <option value="today">Hoje</option>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   WorkOrder,
+  WorkshopSettings,
   ChecklistSchema,
   InspectionStatus,
   INSPECTION_STATUS_META,
@@ -15,7 +16,7 @@ interface ChecklistModalProps {
   onClose: () => void;
   onSave: (data: ChecklistSchema) => void;
   os: WorkOrder | null;
-  settings?: any;
+  settings?: WorkshopSettings;
 }
 
 export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose, onSave, os, settings }) => {

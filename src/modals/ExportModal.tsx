@@ -115,9 +115,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({
       } else {
         throw new Error(res?.message);
       }
-    } catch (e: any) { 
+    } catch (e) { 
         SoundFX.error();
-        alert("Erro ao exportar: " + e.toString()); 
+        alert("Erro ao exportar: " + String(e)); 
     } finally {
         setIsExporting(false);
     }

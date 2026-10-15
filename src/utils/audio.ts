@@ -1,7 +1,7 @@
 export const SoundFX = {
   playTone: (freq: number, type: 'sine' | 'square' | 'triangle', duration: number) => {
     try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      const AudioContext: typeof window.AudioContext | undefined = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!AudioContext) return;
       
       const ctx = new AudioContext();

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { WorkOrder, Client, OrderItem, CatalogItem, Technician, PartCategory, PART_CATEGORY_META } from '../types';
+import { WorkOrder, Client, OrderItem, CatalogItem, Technician, PartCategory, PART_CATEGORY_META, OSModalPayload } from '../types';
 import { getLocalDateString } from '../utils/helpers';
 import { MarginIndicator } from '../components/MarginIndicator';
 import { PartCategorySelect } from '../components/PartCategorySelect';
@@ -7,7 +7,7 @@ import { PartCategorySelect } from '../components/PartCategorySelect';
 interface OSModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (osData: any) => void;
+  onSave: (osData: OSModalPayload) => void;
   editingOS: WorkOrder | null;
   clients: Client[];
   catalogParts: CatalogItem[];
@@ -200,10 +200,10 @@ export const OSModal: React.FC<OSModalProps> = ({
 
   const updateItem = (
     list: OrderItem[],
-    setList: any,
+    setList: React.Dispatch<React.SetStateAction<OrderItem[]>>,
     index: number,
     field: keyof OrderItem,
-    value: any,
+    value: OrderItem[keyof OrderItem],
     catalog: CatalogItem[]
   ) => {
     const newList = [...list];

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { LedgerEntry } from '../types';
+import { LedgerEntry, ChartFluxoPoint, ChartPiePoint } from '../types';
 
 const COLORS = {
   primary: '#8257e6', secondary: '#00bcd4', success: '#04d361', warning: '#ff9800', 
@@ -12,8 +12,8 @@ const ITEMS_PER_PAGE = 20;
 interface FinancialPageProps {
   isLoading: boolean;
   kpiData: { saldo: number; receitas: number; despesas: number; ticketMedio: number; };
-  chartDataFluxo: any[];
-  chartDataPie: any[];
+  chartDataFluxo: ChartFluxoPoint[];
+  chartDataPie: ChartPiePoint[];
   ledger: LedgerEntry[];
   Money: { format: (val: number) => string; toFloat: (val: number) => number; };
   onOpenExport: () => void;

@@ -1,13 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 
-interface MenuItem {
-  icon: string;
-  label: string;
-  onClick: () => void;
-  variant?: 'default' | 'danger' | 'success' | 'primary';
-  divider?: boolean;
-}
+import { MenuItem } from './ActionMenu';
 
 interface ContextMenuProps {
   x: number;
@@ -140,7 +134,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
-              item.onClick();
+              item.onClick?.();
               onClose();
             }}
             style={{

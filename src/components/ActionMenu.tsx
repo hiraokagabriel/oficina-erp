@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 
-interface MenuItem {
-  icon: string;
-  label: string;
-  onClick: () => void;
+/** Item sem `label` é renderizado como divisória (ver `divider`); por isso icon/label/onClick são opcionais. */
+export interface MenuItem {
+  icon?: string;
+  label?: string;
+  onClick?: () => void;
   variant?: 'default' | 'danger' | 'success' | 'primary';
   divider?: boolean;
 }
@@ -131,7 +132,7 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ items, buttonSize = 32 }
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
-              item.onClick();
+              item.onClick?.();
               setIsOpen(false);
             }}
             style={{

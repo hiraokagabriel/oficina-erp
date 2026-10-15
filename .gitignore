@@ -47,3 +47,5 @@ database.json
 C:\OficinaData
 
 *.csv
+# Claude Code (config local)
+.claude/settings.local.json

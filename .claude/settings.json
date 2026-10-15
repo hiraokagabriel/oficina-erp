@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run build)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)"
+    ],
+    "deny": [
+      "Read(./database.json)",
+      "Read(**/*.csv)",
+      "Read(./node_modules/**)",
+      "Read(./dist/**)",
+      "Read(./src-tauri/target/**)",
+      "Read(./src-tauri/Cargo.lock)"
+    ]
+  }
+}

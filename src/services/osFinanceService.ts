@@ -1,6 +1,6 @@
 import { InstallmentConfig, LedgerEntry, OSStatus, WorkOrder } from '../types';
 import { generateId } from '../utils/helpers';
-import { addMonths, parseDateFlexible } from '../utils/dates';
+import { addMonths, formatDateOnly, parseDateFlexible, parseDateOnly } from '../utils/dates';
 
 // Regras financeiras da OS extraídas do App.tsx como funções puras (extração literal).
 // O App mantém setState, toasts, sons e modais; aqui só o cálculo.
@@ -50,7 +50,6 @@ export const buildInstallmentEntries = (
       installmentNumber: i + 1,
       totalInstallments: config.installments,
       installmentGroupId: groupId,
-      isPaid: false,
       dueDate: dueDate.toISOString(),
     });
   }
@@ -99,13 +98,23 @@ export const restoreFinancial = (
   return { ledger: newLedger, os: reopenOS(os), removedCount, removedGroup };
 };
 
-// Alterna pago/pendente de um CREDIT e sincroniza o paymentDate da OS ligada por financialId.
+export interface TogglePaymentResult {
+  ledger: LedgerEntry[];
+  workOrders: WorkOrder[];
+  paid: boolean;
+  /** Preenchido quando o pagamento de parcelas finalizou ou reabriu a OS (para o toast). */
+  osEffect?: { osNumber: number; kind: 'finalized' | 'reopened' };
+}
+
+// Alterna pago/pendente de um CREDIT e mantém a OS ligada coerente.
+// À vista (ligada por financialId): o paymentDate da OS acompanha o lançamento.
+// Parcelada (installmentConfig.groupId == installmentGroupId): o estado da OS é derivado de TODAS as parcelas.
 export const togglePayment = (
   ledger: LedgerEntry[],
   workOrders: WorkOrder[],
   entryId: string,
   now: string = new Date().toISOString()
-): { ledger: LedgerEntry[]; workOrders: WorkOrder[]; paid: boolean } | null => {
+): TogglePaymentResult | null => {
   const entry = ledger.find(e => e.id === entryId);
   if (!entry || entry.type !== 'CREDIT') return null;
 
@@ -118,16 +127,50 @@ export const togglePayment = (
   );
 
   let newWorkOrders = workOrders;
-  const linkedOS = workOrders.find(os => os.financialId === entryId);
-  if (linkedOS) {
-    newWorkOrders = workOrders.map(os =>
-      os.id === linkedOS.id
-        ? { ...os, paymentDate: newPaymentDate }
-        : os
-    );
+  let osEffect: TogglePaymentResult['osEffect'];
+
+  const installmentOS = entry.installmentGroupId
+    ? workOrders.find(o =>
+        o.paymentMethod === 'INSTALLMENT' && o.installmentConfig?.groupId === entry.installmentGroupId)
+    : undefined;
+
+  if (installmentOS) {
+    const group = newLedger.filter(e =>
+      e.type === 'CREDIT' && e.installmentGroupId === entry.installmentGroupId);
+    const allPaid = group.length > 0 && group.every(e => !!e.paymentDate);
+    let changed: Partial<WorkOrder> | null = null;
+
+    if (allPaid) {
+      const latest = group
+        .map(e => e.paymentDate as string)
+        .reduce((a, b) => (Date.parse(b) > Date.parse(a) ? b : a));
+      // OS arquivada só recebe o paymentDate: o status não sai do arquivo.
+      changed = installmentOS.status === 'ARQUIVADO'
+        ? { paymentDate: latest }
+        : { status: 'FINALIZADO' as OSStatus, paymentDate: latest };
+      if (installmentOS.status !== 'FINALIZADO' && installmentOS.status !== 'ARQUIVADO') {
+        osEffect = { osNumber: installmentOS.osNumber, kind: 'finalized' };
+      }
+    } else if (installmentOS.status === 'FINALIZADO') {
+      changed = { status: 'AGUARDANDO_PAGAMENTO' as OSStatus, paymentDate: undefined };
+      osEffect = { osNumber: installmentOS.osNumber, kind: 'reopened' };
+    }
+
+    if (changed) {
+      newWorkOrders = workOrders.map(o => o.id === installmentOS.id ? { ...o, ...changed } : o);
+    }
+  } else {
+    const linkedOS = workOrders.find(os => os.financialId === entryId);
+    if (linkedOS) {
+      newWorkOrders = workOrders.map(os =>
+        os.id === linkedOS.id
+          ? { ...os, paymentDate: newPaymentDate }
+          : os
+      );
+    }
   }
 
-  return { ledger: newLedger, workOrders: newWorkOrders, paid: !!newPaymentDate };
+  return { ledger: newLedger, workOrders: newWorkOrders, paid: !!newPaymentDate, osEffect };
 };
 
 export type StatusChangeEffect =
@@ -147,6 +190,11 @@ export const statusChangeEffects = (
   const isBecomingFinalized = newStatus === 'FINALIZADO' && os.status !== 'FINALIZADO';
   const isLeavingFinalized = os.status === 'FINALIZADO' && newStatus !== 'FINALIZADO';
 
+  // D7: arquivar uma OS finalizada só muda o status (receitas, financialId e paymentDate ficam).
+  if (isLeavingFinalized && newStatus === 'ARQUIVADO' && os.financialId) {
+    return { kind: 'update', updates: { status: newStatus } };
+  }
+
   if (isBecomingFinalized && !os.financialId) {
     return { kind: 'ask-finish' };
   } else if (isLeavingFinalized && os.financialId) {
@@ -156,7 +204,8 @@ export const statusChangeEffects = (
   const updates: Partial<WorkOrder> = { status: newStatus };
 
   if (isBecomingFinalized) {
-    updates.paymentDate = now;
+    // Desarquivar uma OS que já tem financialId e paymentDate não sobrescreve o paymentDate.
+    updates.paymentDate = os.financialId && os.paymentDate ? os.paymentDate : now;
   }
 
   if (isLeavingFinalized) {
@@ -184,7 +233,7 @@ export const finalizeOSSingle = (
   const entry: LedgerEntry = {
     id: newId(),
     description: `Receita OS #${os.osNumber} - ${os.clientName}`,
-    amount: os.total,
+    amount: getRemainingAmount(os),
     type: 'CREDIT',
     effectiveDate: new Date(os.createdAt).toISOString(),
     createdAt: now,
@@ -192,4 +241,51 @@ export const finalizeOSSingle = (
     paymentDate: new Date(paymentDate).toISOString(),
   };
   return { entry, os: markOSFinalized(os, entry.id, paymentDate) };
+};
+
+// Valor ainda a receber da OS: total - adiantamento, só quando o adiantamento está no caixa
+// (advanceEntryId). OS legada (advanceAmount sem advanceEntryId) usa o total cheio (D3).
+export const getRemainingAmount = (os: WorkOrder): number =>
+  os.advanceEntryId ? Math.max(os.total - (os.advanceAmount || 0), 0) : os.total;
+
+// D3: OS FINALIZADO, ARQUIVADO com financeiro ou com financialId não sincroniza o adiantamento.
+export const isAdvanceSyncLocked = (os: WorkOrder): boolean =>
+  os.status === 'FINALIZADO' || (os.status === 'ARQUIVADO' && !!os.financialId) || !!os.financialId;
+
+// Mantém o lançamento de adiantamento (CREDIT já recebido) da OS no caixa.
+// D3: OS FINALIZADO, ARQUIVADO com financeiro ou com financialId não sincroniza (ledger intacto).
+export const syncAdvanceEntry = ({ os, advanceAmount, ledger, now = new Date().toISOString(), newId = generateId }: {
+  os: WorkOrder;
+  advanceAmount?: number;
+  ledger: LedgerEntry[];
+  now?: string;
+  newId?: () => string;
+}): { ledger: LedgerEntry[]; advanceEntryId?: string } => {
+  if (isAdvanceSyncLocked(os)) return { ledger, advanceEntryId: os.advanceEntryId };
+
+  const description = `Adiantamento OS #${os.osNumber} - ${os.clientName}`;
+  const existing = os.advanceEntryId ? ledger.find(e => e.id === os.advanceEntryId) : undefined;
+
+  if (!advanceAmount || advanceAmount <= 0) {
+    if (!os.advanceEntryId) return { ledger, advanceEntryId: undefined };
+    return { ledger: ledger.filter(e => e.id !== os.advanceEntryId), advanceEntryId: undefined };
+  }
+
+  if (existing) {
+    return {
+      ledger: ledger.map(e => e.id === existing.id ? { ...e, amount: advanceAmount, description } : e),
+      advanceEntryId: existing.id,
+    };
+  }
+
+  const entry: LedgerEntry = {
+    id: newId(),
+    description,
+    amount: advanceAmount,
+    type: 'CREDIT',
+    effectiveDate: parseDateOnly(formatDateOnly(new Date(now))).toISOString(),
+    createdAt: now,
+    paymentDate: now,
+  };
+  return { ledger: [entry, ...ledger], advanceEntryId: entry.id };
 };

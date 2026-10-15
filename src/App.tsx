@@ -33,7 +33,8 @@ const ChoiceModal = lazy(() => import('./modals/ChoiceModal').then(m => ({ defau
 import { SoundFX } from './utils/audio';
 import {
   applyInstallmentToOS, buildInstallmentEntries, finalizeOSSingle, markOSFinalized,
-  reopenOS, restoreFinancial, statusChangeEffects, togglePayment,
+  getRemainingAmount, isAdvanceSyncLocked, reopenOS, restoreFinancial, statusChangeEffects, syncAdvanceEntry,
+  togglePayment,
 } from './services/osFinanceService';
 import { Money, updateWorkOrderData, learnClientData, learnCatalogItems, learnTechnician, generateId } from './utils/helpers';
 import { toISOFromDateInput } from './utils/dates';
@@ -197,7 +198,17 @@ function AppContent() {
         data.advanceAmount,
       );
 
-      const updated: WorkOrder = { ...updatedBase, technician: technicianName || undefined };
+      let updated: WorkOrder = { ...updatedBase, technician: technicianName || undefined };
+      // Adiantamento no caixa (D3: OS finalizada/com financeiro não sincroniza). O campo vazio do modal zera o adiantamento.
+      if (!isAdvanceSyncLocked(editingOS)) {
+        const advance = syncAdvanceEntry({
+          os: { ...editingOS, osNumber: data.osNumber, clientName: data.clientName },
+          advanceAmount: data.advanceAmount,
+          ledger,
+        });
+        setLedger(advance.ledger);
+        updated = { ...updated, advanceAmount: data.advanceAmount, advanceEntryId: advance.advanceEntryId };
+      }
       setWorkOrders(prev => prev.map(o => o.id === editingOS.id ? updated : o));
 
       if (updated.financialId) {
@@ -205,7 +216,7 @@ function AppContent() {
       }
       addToast('OS atualizada!', 'success');
     } else {
-      const newOS: WorkOrder = {
+      let newOS: WorkOrder = {
         id: generateId(),
         osNumber: data.osNumber,
         vehicle: data.vehicle,
@@ -221,6 +232,11 @@ function AppContent() {
         technician: technicianName || undefined,
         advanceAmount: typeof data.advanceAmount === 'number' ? data.advanceAmount : undefined,
       };
+      const advance = syncAdvanceEntry({ os: newOS, advanceAmount: newOS.advanceAmount, ledger });
+      if (advance.advanceEntryId) {
+        setLedger(advance.ledger);
+        newOS = { ...newOS, advanceEntryId: advance.advanceEntryId };
+      }
       setWorkOrders(prev => [...prev, newOS]);
       addToast('Nova OS criada!', 'success');
     }
@@ -264,7 +280,16 @@ Abrir OS?`)) {
     setLedger(result.ledger);
     setWorkOrders(result.workOrders);
 
-    addToast(result.paid ? '💵 Marcado como pago!' : '⏳ Marcado como pendente', 'info');
+    if (result.osEffect) {
+      addToast(
+        result.osEffect.kind === 'finalized'
+          ? `OS #${result.osEffect.osNumber} finalizada: todas as parcelas pagas`
+          : `OS #${result.osEffect.osNumber} voltou a Aguardando Pagamento: há parcela pendente`,
+        'info'
+      );
+    } else {
+      addToast(result.paid ? '💵 Marcado como pago!' : '⏳ Marcado como pendente', 'info');
+    }
     SoundFX.pop();
   };
 
@@ -408,6 +433,7 @@ Abrir OS?`)) {
       const os = pendingAction.data;
       setWorkOrders(p => p.filter(i => i.id !== os.id));
       if (os.financialId) setLedger(p => p.filter(e => e.id !== os.financialId));
+      if (os.advanceEntryId) setLedger(p => p.filter(e => e.id !== os.advanceEntryId));
       addToast('OS excluída.', 'info');
     }
 
@@ -676,7 +702,7 @@ Abrir OS?`)) {
               setIsInstallmentModalOpen(false);
               setInstallmentOS(null);
             }}
-            totalAmount={installmentOS.total}
+            totalAmount={getRemainingAmount(installmentOS)}
             description={`OS #${installmentOS.osNumber} - ${installmentOS.clientName}`}
             onConfirm={handleInstallmentConfirm}
           />
@@ -758,7 +784,7 @@ Abrir OS?`)) {
             onYes={() => handleInstallmentChoice(true)}
             onNo={() => handleInstallmentChoice(false)}
             title="Deseja Parcelar?"
-            message={`Valor total: ${Money.format(pendingInstallmentOS.total)}\n\nEscolha como deseja receber o pagamento`}
+            message={`Valor total: ${Money.format(getRemainingAmount(pendingInstallmentOS))}\n\nEscolha como deseja receber o pagamento`}
             yesText="Parcelar"
             noText="Pagamento Único"
             yesIcon="💳"

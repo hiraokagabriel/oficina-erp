@@ -32,8 +32,9 @@ describe('buildInstallmentEntries', () => {
       expect(e).toMatchObject({
         description: `Receita OS #1 - Fulano - Parcela ${i + 1}/3`,
         type: 'CREDIT', createdAt: NOW, groupId: 'g1', installmentGroupId: 'g1',
-        installmentNumber: i + 1, totalInstallments: 3, isPaid: false,
+        installmentNumber: i + 1, totalInstallments: 3,
       });
+      expect(e.isPaid).toBeUndefined(); // 5.1: isPaid deixou de ser gravado (paymentDate é a verdade)
       expect(e.effectiveDate).toBe(e.dueDate);
       expect(e.paymentDate).toBeUndefined();
     });
@@ -218,20 +219,21 @@ describe('togglePayment', () => {
     expect(r.workOrders).toBe(wos);
   });
 
-  // COMPORTAMENTO ATUAL (suspeito): a OS só é sincronizada pela parcela ligada por financialId (a 1ª).
-  // Pagar a parcela 2 não toca na OS; e desmarcar a 1ª limpa o paymentDate da OS mesmo com as outras pagas.
-  it('parcela que não é a ligada não sincroniza a OS', () => {
-    const r = togglePayment([p1, p2], [linked], 'p2', NOW)!;
+  // CORRIGIDO (5.4): em OS parcelada (paymentMethod INSTALLMENT) o estado da OS é derivado de TODAS as
+  // parcelas do grupo, não só da 1ª ligada por financialId. Parcela parcial não altera a OS.
+  const instOS = os({ status: 'AGUARDANDO_PAGAMENTO', financialId: 'p1', paymentMethod: 'INSTALLMENT', installmentConfig: config({ groupId: 'g1' }) });
+  it('parcela que não é a ligada, com outra pendente, não altera a OS', () => {
+    const r = togglePayment([p1, p2], [instOS], 'p2', NOW)!;
     expect(r.ledger[1].paymentDate).toBe(NOW);
-    expect(r.workOrders[0].paymentDate).toBeUndefined();
+    expect(r.workOrders[0]).toBe(instOS);
   });
 
-  // COMPORTAMENTO ATUAL (suspeito): a OS continua AGUARDANDO_PAGAMENTO mesmo com todas as parcelas pagas
-  // (togglePayment não muda o status da OS).
-  it('pagar todas as parcelas não finaliza a OS', () => {
-    const a = togglePayment([p1, p2], [linked], 'p1', NOW)!;
-    const b = togglePayment(a.ledger, a.workOrders, 'p2', NOW)!;
-    expect(b.workOrders[0].status).toBe('AGUARDANDO_PAGAMENTO');
+  // CORRIGIDO (5.4): pagar todas as parcelas finaliza a OS (paymentDate = o mais recente).
+  it('pagar todas as parcelas finaliza a OS', () => {
+    const a = togglePayment([p1, p2], [instOS], 'p1', NOW)!;
+    const b = togglePayment(a.ledger, a.workOrders, 'p2', '2026-03-20T15:00:00.000Z')!;
+    expect(b.workOrders[0]).toMatchObject({ status: 'FINALIZADO', paymentDate: '2026-03-20T15:00:00.000Z' });
+    expect(b.osEffect).toEqual({ osNumber: 1, kind: 'finalized' });
   });
 
   it('não muta as listas de entrada', () => {
@@ -266,10 +268,11 @@ describe('statusChangeEffects', () => {
     expect(r).toEqual({ kind: 'update', updates: { status: 'APROVADO' } });
     expect(r.kind === 'update' && 'paymentDate' in r.updates).toBe(false);
   });
-  // COMPORTAMENTO ATUAL (suspeito): ARQUIVADO a partir de FINALIZADO com financialId também pede para
-  // restaurar o financeiro (apagando as receitas) - o fluxo de arquivar passa por aqui.
-  it('FINALIZADO com financialId para ARQUIVADO pede restauração', () => {
-    expect(statusChangeEffects(os({ status: 'FINALIZADO', financialId: 'f1' }), 'ARQUIVADO', NOW)).toEqual({ kind: 'ask-restore' });
+  // CORRIGIDO (5.4, D7): arquivar uma OS finalizada não pede restauração nem apaga nada:
+  // só muda o status e mantém financialId e paymentDate.
+  it('FINALIZADO com financialId para ARQUIVADO só muda o status', () => {
+    expect(statusChangeEffects(os({ status: 'FINALIZADO', financialId: 'f1', paymentDate: NOW }), 'ARQUIVADO', NOW))
+      .toEqual({ kind: 'update', updates: { status: 'ARQUIVADO' } });
   });
 });
 

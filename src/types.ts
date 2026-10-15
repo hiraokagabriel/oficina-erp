@@ -9,6 +9,7 @@ export interface LedgerEntry {
   installmentNumber?: number;
   totalInstallments?: number;
   installmentGroupId?: string;
+  /** @deprecated Não é mais gravado nem lido: `paymentDate` é a única verdade de "pago". Mantido só por bancos antigos. */
   isPaid?: boolean;
   dueDate?: string;
   paymentDate?: string;
@@ -37,6 +38,8 @@ export interface WorkOrder {
   installmentConfig?: InstallmentConfig;
   technician?: string;
   advanceAmount?: number;
+  /** Lançamento CREDIT do adiantamento no caixa (ver syncAdvanceEntry). Ausente em OS legadas. */
+  advanceEntryId?: string;
 }
 
 export type OSStatus =

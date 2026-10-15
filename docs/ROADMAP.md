@@ -87,7 +87,10 @@ Os hashes são commits representativos de cada marco (`git show <hash>`).
 
 Achados do mapeamento do código. Caminhos relativos à raiz.
 
-### Risco de perda de dados (prioridade máxima)
+### Risco de perda de dados (prioridade máxima; mitigado na Fase 0, ver seção 3)
+
+Os itens abaixo descrevem o estado **antes** da Fase 0 (referências `arquivo:linha` do commit `0a4be3e`).
+
 - `load_database` devolve `"{}"` (banco vazio) em qualquer erro de leitura (`src-tauri/src/lib.rs:44`). O app abre "limpo" sem avisar.
 - O front só captura exceção e ignora `success: false` do salvamento (`src/context/DatabaseContext.tsx:109`).
 - Existe um único `.bak`, sobrescrito a cada gravação (`src-tauri/src/lib.rs:13-78`).
@@ -114,20 +117,22 @@ Achados do mapeamento do código. Caminhos relativos à raiz.
 Objetivo: parar de perder dados no uso multi-PC e deixar o código seguro para evoluir.
 
 **Proteção de dados**
-- [ ] `load_database` falhar com erro explícito e aviso na tela, em vez de devolver `{}`.
-- [ ] Tratar `success: false` no salvamento e avisar o usuário.
-- [ ] Backups rotativos (vários, com data), no lugar de um único `.bak`.
-- [ ] `schemaVersion` no banco e migrações em um só lugar, fora do `App.tsx`.
-- [ ] Detecção de conflito: antes de salvar, conferir se o arquivo mudou no disco desde o carregamento; se mudou, avisar e oferecer recarregar.
-- [ ] Tirar token e API key do Google do `database.json` e do backup.
+Implementado e publicado (commits `4c9651a`, `5e9419c`, `9c345b1`, `c724c29`, `01c816d`). Compilação e testes unitários passam; **falta validar na interface** com banco sintético e com dois PCs.
+
+- [x] `load_database` falhar com erro explícito e aviso na tela, em vez de devolver `{}`.
+- [x] Tratar `success: false` no salvamento e avisar o usuário (retentativas, banner "Não salvo", gravar ao fechar).
+- [x] Backups rotativos (vários, com data) em `%LOCALAPPDATA%`, no lugar de um único `.bak`.
+- [x] `schemaVersion` no banco e migrações em um só lugar, fora do `App.tsx` (`src/utils/migrations.ts`).
+- [x] Detecção de conflito (`revision` + `history` no `meta`), diálogo com cópia de recuperação e verificação a cada 30 s e ao focar a janela.
+- [x] Tirar token e API key do Google do `database.json` e do backup (ficam no `localStorage` de cada PC).
 
 **Dívida técnica**
-- [ ] Remover o código morto listado na seção 2.
-- [ ] Extrair do `App.tsx` a regra de finalização, parcelamento e migrações para módulos testáveis.
+- [x] Remover o código morto listado na seção 2 (feito: `src/domain/*`, `src/types/index.ts`, Rust solto em `src/`, `PrintableInvoice`, `InputModal`, `EditEntryModal`, `sound.ts`, fallback `window.electron`). Segue o código comentado do `App.tsx` e as props `onPrintClient`/`onPrintShop`, fora deste item.
+- [x] Migrações fora do `App.tsx` (`src/utils/migrations.ts`) e regra de finalização, parcelamento, pagamento e reabertura de OS extraída, sem mudar comportamento, para `src/services/osFinanceService.ts`. Segue no `App.tsx`: roteamento, ~20 estados de modal e os demais handlers.
 - [ ] Eliminar os `any` e unificar os tipos em `src/types.ts`.
 - [ ] Trocar vínculo por nome por ids (cliente, item de catálogo) com migração.
 - [ ] Dinheiro sempre em centavos inteiros e datas sem deslocamento de fuso.
-- [ ] Testes para parcelamento, cascade e migrações (ainda sem framework de testes: escolher um leve, como Vitest).
+- [x] Testes de parcelamento, finalização/reabertura, pagamento, cascade e helpers (`npm test`, 108 testes, fixtures sintéticas). Eles **fixam o comportamento atual, inclusive os defeitos** listados na seção 3.1. Falta validar o fluxo na interface.
 - [ ] Atualizar o README.
 
 Critério de pronto: abrir o app nos dois PCs, forçar um salvamento concorrente e ver o aviso de conflito sem perder dado; `npm run build` limpo.
@@ -154,12 +159,34 @@ Critério de pronto: saber o que está atrasado e o que entra amanhã, sem plani
 
 ---
 
+## 3.1 Comportamentos suspeitos registrados nos testes (ainda não corrigidos)
+
+Os testes marcam cada um com `// COMPORTAMENTO ATUAL (suspeito)`. Quem corrigir deve atualizar o teste junto.
+
+**Dinheiro e parcelas (candidatos à Fase 1 e ao item de centavos/fuso):**
+- O vencimento usa `setMonth`: a parcela do dia 31 pula de mês (31/jan + 1 mês = 3/mar).
+- Marcar **uma** parcela como paga só atualiza o `paymentDate` da OS quando é a 1ª (a única ligada por `financialId`). Pagar todas as parcelas **não finaliza a OS**: ela fica em `AGUARDANDO_PAGAMENTO`.
+- O pagamento à vista usa o `createdAt` da OS como data de competência da receita, e não deixa `paymentMethod` como `SINGLE`.
+- `Money.fromFloat(1.005)` dá 100 (erro de ponto flutuante). `'YYYY-MM-DD'` em `createEntry` vira meia-noite UTC e, no Brasil, o dia local é o anterior.
+- Editar uma OS já finalizada recalcula o total sem atualizar o lançamento no Ledger.
+- `config` do parcelamento não é validado: 0 parcelas gera lista vazia e quebra o `App` (lê `newEntries[0]`); data inválida lança erro; valores negativos são aceitos.
+
+**Reabrir OS (risco de perda de dado financeiro):**
+- Mover uma OS finalizada que tem `financialId` para `ARQUIVADO` também pede a restauração financeira, o que **apagaria as receitas**.
+- `restoreFinancial` apaga qualquer lançamento com o mesmo `groupId`, inclusive de outra origem, e reabre a OS em silêncio se o `financialId` estiver órfão.
+
+**Vínculo por nome (item "trocar nome por ids"):**
+- O cascade casa cliente e item por texto, sensível a caixa, e troca só a 1ª ocorrência na descrição do Ledger (`includes`/`replace`: "Mari" casa com "Mariana").
+- Veículos são casados por índice: remover o 1º reescreve a OS do Gol como Uno.
+- O cascade altera também OS já finalizadas. Mudança só de preço no catálogo não propaga.
+- `learnClientData` funde clientes homônimos; `learnCatalogItems` nunca atualiza o preço de um item existente.
+
 ## 4. Fora de escopo (por enquanto)
 
 Nuvem, servidor e banco online; distribuir ou vender para outras oficinas; estoque e fornecedores; WhatsApp automático (o botão manual continua); login e permissões; assinatura digital (a assinatura segue física nos impressos).
 
 ## 5. Decisões em aberto
 
-- Mecanismo de conflito: arquivo de trava na pasta sincronizada ou comparação de versão (data e hash) ao salvar. Decidir no início da Fase 0.
-- Framework de testes: Vitest é a escolha provável (já usa Vite).
+- ~~Mecanismo de conflito~~: decidido, `revision` (uuid) com `history` dentro do `meta` do JSON, conferida no Rust ao salvar. Arquivo de trava, mtime e hash foram descartados.
+- ~~Framework de testes~~: decidido, Vitest.
 - Se o adiantamento deve contar como receita no dia do recebimento ou no fechamento da OS.

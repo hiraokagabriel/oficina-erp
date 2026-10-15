@@ -8,27 +8,33 @@ Tauri 2 (Rust) + React 19 + TypeScript + Vite + Recharts + @dnd-kit. Interface e
 - `npm run dev`: só o front (Vite, porta 1420)
 - `npm run tauri dev`: app completo (Tauri + front)
 - `npm run build`: `tsc && vite build`. É a verificação mínima antes de dar uma tarefa por concluída.
-- Não há testes nem lint configurados. Não invente comandos de teste.
+- `npm test`: Vitest, 108 testes de lógica pura (banco: `migrations`, `conflictDiff`, `externalChange`, `secrets`; negócio: `osFinanceService`, `cascadeService`, `helpers`). Não há testes de telas nem lint. Os testes de negócio fixam o comportamento atual, inclusive defeitos marcados com `COMPORTAMENTO ATUAL (suspeito)` (lista em `docs/ROADMAP.md` seção 3.1): corrigir um defeito exige atualizar o teste.
+- `cargo test` e `cargo check` em `src-tauri`. Se `tauri dev` falhar com "failed to read plugin permissions", a pasta `src-tauri/target` guarda caminhos antigos: rode `cargo clean` ali.
 
 ## Arquitetura
 
 - **Tipos reais: `src/types.ts`** (WorkOrder, OSStatus, LedgerEntry, Client, CatalogItem, WorkshopSettings, DatabaseSchema). Os imports `'../types'` resolvem para esse arquivo.
-- **Código morto, não usar nem tomar como referência:** `src/domain/*`, `src/types/index.ts`, `src/domain/workshop/WorkOrder.ts.rs`, `src/hooks/useWorkshopData.ts` e `src/utils/formatters.ts` (vazios), `src/io.rs|lib.rs|main.rs` e `src-tauri/src/main.tsx|styles.css`, `PrintableInvoice.tsx`, `InputModal`, `EditEntryModal`. Estão na Fase 0 do `docs/ROADMAP.md` para remoção.
-- `src/App.tsx` (~950 linhas) concentra roteamento por `activeTab`, estados de modal, fluxo de finalização/parcelamento e migrações de dados. A regra de negócio vive aqui hoje.
-- `src/context/DatabaseContext.tsx`: carrega e salva o banco (JSON local), salvamento com debounce de 3 s, expõe `dbPath`/`setDbPath`.
+- Não existe camada `src/domain`, `src/hooks/useWorkshopData` nem `src/utils/formatters`: foram removidos como código morto. Dinheiro e helpers de negócio ficam em `src/utils/helpers.ts` (`Money`, `createEntry`, `updateWorkOrderData`...).
+- `src/App.tsx` (~870 linhas) concentra roteamento por `activeTab`, estados de modal e os handlers. As regras de finalização, parcelamento, pagamento e reabertura de OS ficam em `src/services/osFinanceService.ts` (funções puras com relógio e gerador de id injetáveis); os handlers só chamam essas funções e cuidam de estado, toasts e modais. As migrações ficam em `src/utils/migrations.ts`.
+- `src/context/DatabaseContext.tsx`: carrega e salva o banco (JSON local). Estado de carga (`loadStatus`), salvamento com debounce de 3 s e retentativas, `readOnly` para banco de versão futura, diálogo de conflito/divergência e verificação do arquivo a cada 30 s e ao focar a janela. Expõe `dbPath`/`setDbPath`.
+- `src/utils/migrations.ts` (`CURRENT_SCHEMA_VERSION`, `migrate`), `conflictDiff.ts`, `externalChange.ts` e `secrets.ts`: lógica pura do banco, com testes.
 - `src/hooks/useFinance.ts`: KPIs e lançamentos do financeiro.
 - `src/services/`: `cascadeService` (propaga renomeações) e `googleDrive` (backup).
 - `src/pages/` telas, `src/modals/` janelas de ação, `src/components/` reutilizáveis, `src/utils/` helpers e impressão (`printOS.ts`, `printChecklist.ts`).
-- `src-tauri/src/lib.rs`: comandos Tauri `save_database_atomic`, `load_database`, `export_report`. O Rust só faz I/O; a lógica fica no front.
-- Banco: arquivo JSON local (padrão `C:\OficinaData\database.json`), salvo de forma atômica (`.tmp` + `rename`, um único `.bak`). Sem versão de schema; migrações ad hoc em `App.tsx`. Valores em centavos.
-- Uso real: 2+ PCs compartilhando o banco por pasta sincronizada (`dbPath`). Já houve perda de dados por salvamento concorrente; veja `docs/ROADMAP.md`.
+- `src-tauri/src/lib.rs`: comandos Tauri `save_database_atomic` (confere a `revision` do disco e recusa gravar em conflito), `load_database`, `read_db_meta`, `save_recovery_copy`, `backup_pre_migration` e `export_report`. O Rust só faz I/O e a checagem de conflito; a lógica de negócio fica no front.
+- Banco: arquivo JSON local (padrão `C:\OficinaData\database.json`), gravado de forma atômica (`.tmp` + `rename`). Tem `meta` (`schemaVersion`, `revision`, `history`, `savedAt`, `savedBy`). Valores em centavos.
+- Backups rotativos e cópias de recuperação ficam em `%LOCALAPPDATA%\com.oficinapro.app\` (`backups\`, `recuperacao\`), fora da pasta sincronizada. Não há mais `.bak` ao lado do banco.
+- Token e API key do Google ficam no `localStorage` de cada PC (`src/utils/secrets.ts`), nunca no `database.json` nem no backup do Drive.
+- Uso real: 2+ PCs compartilhando o banco por pasta sincronizada (`dbPath`). Já houve perda de dados por salvamento concorrente; a Fase 0 do `docs/ROADMAP.md` implementou a proteção (falta validar na interface).
+- Versão antiga do app descarta o `meta` ao salvar: atualizar todos os PCs no mesmo dia.
 - O README está parcialmente desatualizado (cita `@hello-pangea/dnd`; o projeto usa `@dnd-kit`). Em caso de divergência, vale o `package.json` e o código.
 
 ## Regras do projeto
 
 - Dados de cliente e financeiros são reais. Nunca ler, copiar ou commitar `database.json` nem `*.csv` (o `.gitignore` já os exclui; o `.claude/settings.json` bloqueia a leitura).
 - Não ler nem editar o que o `.gitignore` exclui: `node_modules`, `dist`, `src-tauri/target`, `src-tauri/Cargo.lock`, logs.
-- Antes de mexer em `WorkOrder`, `Ledger` ou no formato do banco, verificar a compatibilidade com dados já salvos (migração).
+- Antes de mexer em `WorkOrder`, `Ledger` ou no formato do banco, verificar a compatibilidade com dados já salvos. Mudança de formato exige: subir `CURRENT_SCHEMA_VERSION`, acrescentar o passo em `src/utils/migrations.ts` (puro e idempotente) e um teste com fixture sintética.
+- Testar sempre com banco sintético em pasta temporária (campo `dbPath` em Config), nunca com o banco real.
 - Reaproveitar o que existe (helpers, `Money`, formatters) antes de criar código novo.
 
 ## Processo de trabalho
@@ -36,7 +42,7 @@ Tauri 2 (Rust) + React 19 + TypeScript + Vite + Recharts + @dnd-kit. Interface e
 1. **Plano:** para pedidos com mais de uma etapa, apresentar o plano em etapas, com o modelo indicado em cada uma.
 2. **Aprovação:** esperar o "ok" do usuário antes de editar, apagar ou instalar.
 3. **Execução:** delegar conforme a hierarquia abaixo.
-4. **Verificação:** rodar `npm run build` e só então declarar concluído (skill `superpowers:verification-before-completion`).
+4. **Verificação:** rodar `npm run build` e `npm test` (e `cargo test` se tocou o Rust) e só então declarar concluído (skill `superpowers:verification-before-completion`). Diga explicitamente o que não foi verificado (tudo que depende da interface).
 5. **Fim de cada mensagem:** indicar o modelo recomendado para o próximo passo.
 6. Commits e PRs só quando o usuário pedir.
 

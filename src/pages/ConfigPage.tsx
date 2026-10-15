@@ -38,8 +38,17 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
     e.target.value = '';
   };
 
+  // O caminho só é aplicado ao sair do campo ou com Enter: cada troca recarrega o banco.
+  const [dbPathDraft, setDbPathDraft] = React.useState(dbPath);
+  React.useEffect(() => { setDbPathDraft(dbPath); }, [dbPath]);
+
+  const commitDbPath = () => {
+    const next = dbPathDraft.trim();
+    if (next && next !== dbPath) setDbPath(next);
+  };
+
   const handleDbPathChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setDbPath(e.target.value);
+    setDbPathDraft(e.target.value);
   };
 
   return (
@@ -57,8 +66,10 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
                   <label className="form-label">📁 Local do arquivo de dados (database.json)</label>
                   <input
                     className="form-input"
-                    value={dbPath}
+                    value={dbPathDraft}
                     onChange={handleDbPathChange}
+                    onBlur={commitDbPath}
+                    onKeyDown={(e) => { if (e.key === 'Enter') commitDbPath(); }}
                     placeholder="Ex: C:\\OficinaData\\database.json"
                   />
                   <small style={{ color: 'var(--text-muted)', marginTop: 5, display: 'block' }}>

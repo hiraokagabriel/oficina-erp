@@ -545,7 +545,15 @@ Abrir OS?`)) {
     }
 
     if (pendingAction.type === 'IMPORT_DATA') {
-      const parsed = JSON.parse(pendingAction.content!);
+      let parsed: any;
+      try {
+        parsed = JSON.parse(pendingAction.content!);
+        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('formato inesperado');
+      } catch {
+        addToast('Arquivo de backup inválido. Nada foi alterado.', 'error');
+        setPendingAction(null);
+        return;
+      }
       setLedger(parsed.ledger || []);
       setWorkOrders(parsed.workOrders || []);
       setClients(parsed.clients || []);

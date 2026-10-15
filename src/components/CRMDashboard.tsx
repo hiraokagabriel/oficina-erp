@@ -1,16 +1,20 @@
 import React, { useMemo } from 'react';
 import { Client, WorkOrder, CRMStats } from '../types';
 import { Money } from '../utils/helpers';
+import { ClientReceivable } from '../services/receivables';
 
 interface CRMDashboardProps {
   clients: Client[];
   workOrders: WorkOrder[];
+  /** Maiores devedores (já ordenados e limitados); vazio/ausente esconde o card. */
+  topDebtors?: ClientReceivable[];
   onClientSelect?: (client: Client) => void;
 }
 
 export const CRMDashboard: React.FC<CRMDashboardProps> = ({
   clients,
   workOrders,
+  topDebtors = [],
   onClientSelect
 }) => {
   const stats = useMemo((): CRMStats => {
@@ -244,6 +248,43 @@ export const CRMDashboard: React.FC<CRMDashboardProps> = ({
           </div>
         )}
       </div>
+
+      {topDebtors.length > 0 && (
+        <div style={{
+          background: 'var(--bg-panel)',
+          border: '1px solid var(--border)',
+          borderRadius: '16px',
+          padding: '24px',
+          marginBottom: '32px'
+        }}>
+          <h2 style={{ fontSize: '1.5rem', marginBottom: '20px', color: 'var(--text)' }}>
+            Maiores devedores
+          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {topDebtors.map(d => {
+              const client = clients.find(c => c.name === d.clientName);
+              const content = (
+                <>
+                  <span style={{ fontWeight: 'bold' }}>{d.clientName}</span>
+                  <span style={{ textAlign: 'right' }}>
+                    <span style={{ fontWeight: 'bold' }}>Em aberto {Money.format(d.emAberto)}</span>
+                    {d.atrasado > 0 && (
+                      <span style={{ display: 'block', color: 'var(--danger)', fontWeight: 700, fontSize: '0.9rem' }}>
+                        Atrasado {Money.format(d.atrasado)}
+                      </span>
+                    )}
+                  </span>
+                </>
+              );
+              return client && onClientSelect ? (
+                <button key={d.clientName} type="button" className="debtor-row" onClick={() => onClientSelect(client)}>{content}</button>
+              ) : (
+                <div key={d.clientName} className="debtor-row">{content}</div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {stats.pendingServices > 0 && (
         <div style={{

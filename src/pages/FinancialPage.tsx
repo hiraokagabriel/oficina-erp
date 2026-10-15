@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { LedgerEntry, ChartFluxoPoint, ChartPiePoint } from '../types';
+import { summarizeReceivables, formatDueDate, getReceivableLabel, getReceivableStatus } from '../services/receivables';
 
 const COLORS = {
   primary: '#8257e6', secondary: '#00bcd4', success: '#04d361', warning: '#ff9800', 
@@ -15,6 +16,8 @@ interface FinancialPageProps {
   chartDataFluxo: ChartFluxoPoint[];
   chartDataPie: ChartPiePoint[];
   ledger: LedgerEntry[];
+  /** Ledger COMPLETO (sem filtro de mês/tipo): base do "A receber". */
+  allLedger: LedgerEntry[];
   Money: { format: (val: number) => string; toFloat: (val: number) => number; };
   onOpenExport: () => void;
   onOpenEntry: () => void;
@@ -30,7 +33,7 @@ interface FinancialPageProps {
 }
 
 export const FinancialPage: React.FC<FinancialPageProps> = ({ 
-  isLoading, kpiData, chartDataFluxo, chartDataPie, ledger, Money, 
+  isLoading, kpiData, chartDataFluxo, chartDataPie, ledger, allLedger, Money, 
   onOpenExport, onOpenEntry, onEditEntry, onDeleteEntry, onTogglePayment,
   selectedMonth, onMonthChange, viewMode, setViewMode,
   filterType, setFilterType
@@ -41,6 +44,10 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
   useEffect(() => {
     setCurrentPage(1);
   }, [ledger.length, filterType, viewMode, selectedMonth]);
+
+  // "A receber" é geral: não depende do mês/ano nem do filtro de tipo.
+  const today = new Date();
+  const receivables = useMemo(() => summarizeReceivables(allLedger, new Date()), [allLedger]);
 
   const totalPages = Math.ceil(ledger.length / ITEMS_PER_PAGE);
   const paginatedLedger = ledger.slice(
@@ -92,7 +99,7 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
       
       {isLoading ? (
           <div className="stats-row">
-             {[1,2,3,4].map(i => <div key={i} className="skeleton" style={{height: 120, borderRadius: 16}}/>)}
+             {[1,2,3,4,5,6].map(i => <div key={i} className="skeleton" style={{height: 120, borderRadius: 16}}/>)}
           </div>
       ) : (
           <div className="stats-row">
@@ -104,6 +111,16 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
             <div className="stat-card"><div className="stat-label">Receitas</div><div className="stat-value" style={{color: 'var(--success)'}}>{Money.format(kpiData.receitas)}</div></div>
             <div className="stat-card"><div className="stat-label">Despesas</div><div className="stat-value" style={{color: 'var(--danger)'}}>{Money.format(kpiData.despesas)}</div></div>
             <div className="stat-card" style={{borderColor: 'var(--border)'}}><div className="stat-label">Ticket Médio</div><div className="stat-value">{Money.format(kpiData.ticketMedio)}</div></div>
+            <div className="stat-card">
+               <div className="stat-label">A receber</div>
+               <div className="stat-value">{Money.format(receivables.totalAReceber)}</div>
+               <div className="stat-trend">{receivables.countAReceber} {receivables.countAReceber === 1 ? 'lançamento' : 'lançamentos'} (total geral)</div>
+            </div>
+            <div className="stat-card">
+               <div className="stat-label">Atrasado</div>
+               <div className="stat-value" style={{color: receivables.countAtrasado > 0 ? 'var(--danger)' : undefined}}>{Money.format(receivables.totalAtrasado)}</div>
+               <div className="stat-trend">{receivables.countAtrasado} {receivables.countAtrasado === 1 ? 'lançamento vencido' : 'lançamentos vencidos'} (total geral)</div>
+            </div>
           </div>
       )}
 
@@ -154,6 +171,39 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
         </div>
       </div>
       
+      <div className="card" style={{marginBottom: 24}}>
+          <h3 style={{margin: '0 0 15px'}}>A receber</h3>
+          <div className="receivables-scroll">
+            <table className="data-table">
+              <thead><tr><th>Vencimento</th><th>Descrição</th><th>Valor</th><th>Situação</th><th>Ação</th></tr></thead>
+              <tbody>
+                {receivables.items.length === 0 ? (
+                  <tr><td colSpan={5} style={{textAlign:'center', padding:20, color:'var(--text-muted)'}}>Nada a receber</td></tr>
+                ) : receivables.items.map(e => {
+                  const late = getReceivableStatus(e, today) === 'ATRASADO';
+                  return (
+                    <tr key={e.id}>
+                      <td>{formatDueDate(e)}</td>
+                      <td>{e.description}</td>
+                      <td style={{fontWeight:'bold'}}>{Money.format(e.amount)}</td>
+                      <td><span className={`receivable-status ${late ? 'late' : 'open'}`}>{getReceivableLabel(e, today)}</span></td>
+                      <td>
+                        <button
+                          className="btn-sm receivable-pay"
+                          onClick={() => onTogglePayment(e.id)}
+                          aria-label={`Marcar como pago: ${e.description}`}
+                        >
+                          Marcar como pago
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+      </div>
+
       <div className="card">
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 15}}>
               <h3 style={{margin:0}}>Lançamentos</h3>

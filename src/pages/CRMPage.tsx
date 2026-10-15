@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Client, WorkOrder, STATUS_LABELS } from '../types';
+import { Client, WorkOrder, LedgerEntry, STATUS_LABELS } from '../types';
+import { getClientReceivables } from '../services/receivables';
 import { CRMDashboard } from '../components/CRMDashboard';
 import { ClientEditModal } from '../modals/ClientEditModal';
 
@@ -17,6 +18,7 @@ declare global {
 interface CRMPageProps {
   clients: Client[];
   workOrders: WorkOrder[];
+  ledger: LedgerEntry[];
   isLoading: boolean;
   formatMoney: (val: number) => string;
   onSaveClient?: (client: Client) => void;
@@ -26,6 +28,7 @@ interface CRMPageProps {
 export const CRMPage: React.FC<CRMPageProps> = ({ 
   clients, 
   workOrders, 
+  ledger,
   isLoading, 
   formatMoney,
   onSaveClient,
@@ -35,6 +38,10 @@ export const CRMPage: React.FC<CRMPageProps> = ({
   const [showDashboard, setShowDashboard] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  // Dívida por cliente (vínculo por NOME da OS: homônimos se somam; ver item 4.6).
+  const receivables = useMemo(() => getClientReceivables(workOrders, ledger, new Date()), [workOrders, ledger]);
+  const selectedDebt = selectedClient ? receivables.byClient.get(selectedClient.name) : undefined;
 
   const filteredClients = useMemo(() => {
     if (!searchTerm) return clients;
@@ -195,6 +202,7 @@ export const CRMPage: React.FC<CRMPageProps> = ({
           <CRMDashboard
             clients={clients}
             workOrders={workOrders}
+            topDebtors={receivables.ranking.slice(0, 5)}
             onClientSelect={(client) => {
               setSelectedClient(client);
               setShowDashboard(false);
@@ -240,6 +248,14 @@ export const CRMPage: React.FC<CRMPageProps> = ({
                     >
                         <div className="client-name">{c.name}</div>
                         <div className="client-contact">{c.phone || '...'} • {c.vehicles.length} veículo(s)</div>
+                        {receivables.byClient.get(c.name) && (
+                          <div className="client-debt">
+                            Em aberto {formatMoney(receivables.byClient.get(c.name)!.emAberto)}
+                            {receivables.byClient.get(c.name)!.atrasado > 0 && (
+                              <span className="late">Atrasado {formatMoney(receivables.byClient.get(c.name)!.atrasado)}</span>
+                            )}
+                          </div>
+                        )}
                     </div>
                   ))
               )}
@@ -405,6 +421,24 @@ export const CRMPage: React.FC<CRMPageProps> = ({
                             {formatMoney(clientHistory.reduce((a, o) => a + (o.status==='FINALIZADO'?o.total:0), 0))}
                           </div>
                         </div>
+
+                        {/* Em aberto (contas a receber) */}
+                        {selectedDebt && (
+                          <div className="stat-card" style={{ padding: '24px', borderRadius: 'var(--radius-card)', border: '1px solid var(--border)' }}>
+                            <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 700 }}>
+                              Em aberto
+                            </div>
+                            <div style={{ fontSize: '2rem', fontWeight: 800 }}>{formatMoney(selectedDebt.emAberto)}</div>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                              {selectedDebt.countAberto} {selectedDebt.countAberto === 1 ? 'lançamento' : 'lançamentos'}
+                            </div>
+                            {selectedDebt.atrasado > 0 && (
+                              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--danger)', marginTop: '6px' }}>
+                                Atrasado {formatMoney(selectedDebt.atrasado)} ({selectedDebt.countAtrasado})
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         {/* Serviços Realizados */}
                         <div className="stat-card" style={{

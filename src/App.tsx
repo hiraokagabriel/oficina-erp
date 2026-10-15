@@ -542,6 +542,7 @@ Abrir OS?`)) {
                 chartDataFluxo={finance.chartFluxo}
                 chartDataPie={finance.chartPie}
                 ledger={finance.filteredLedger}
+                allLedger={ledger}
                 Money={Money}
                 onOpenExport={() => setIsExportModalOpen(true)}
                 onOpenEntry={() => {
@@ -629,6 +630,7 @@ Abrir OS?`)) {
               <CRMPage
                 clients={clients}
                 workOrders={workOrders}
+                ledger={ledger}
                 isLoading={isLoading}
                 formatMoney={Money.format}
                 onSaveClient={handleSaveClient}

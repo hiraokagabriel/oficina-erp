@@ -18,6 +18,9 @@ import "./styles-part-categories.css";
 // 🆕 CHECKLIST STYLES — Issue #43
 import "./styles-checklist.css";
 
+// CONTAS A RECEBER
+import "./styles-receivables.css";
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <App />

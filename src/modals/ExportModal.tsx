@@ -47,8 +47,8 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     setIsExporting(true);
 
     const [yearStr, monthStr] = targetMonth.split('-');
-    const targetYear = parseInt(yearStr);
-    const mIndex = parseInt(monthStr);
+    const targetYear = parseInt(yearStr, 10);
+    const mIndex = parseInt(monthStr, 10);
 
     // Filtra dados do mês selecionado
     const filteredLedger = ledger.filter(e => {
@@ -136,7 +136,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                     {availableMonths.map(dateStr => { 
                         const [y, m] = dateStr.split('-'); 
                         // Uso do MONTH_NAMES importado dos types
-                        const monthName = MONTH_NAMES[parseInt(m)-1] || "Mês Inválido";
+                        const monthName = MONTH_NAMES[parseInt(m, 10)-1] || "Mês Inválido";
                         return (<option key={dateStr} value={dateStr}>{monthName} / {y}</option>); 
                     })}
                 </select>

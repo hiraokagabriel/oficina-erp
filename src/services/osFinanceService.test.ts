@@ -58,17 +58,29 @@ describe('buildInstallmentEntries', () => {
     expect(months).toEqual([[4, 10], [5, 10], [6, 10]]);
   });
 
-  // COMPORTAMENTO ATUAL (suspeito): setMonth estoura o mês: 31/jan + 1 mês = 03/mar (fev/2026 tem 28 dias),
-  // a parcela 2 pula fevereiro. Teste independente de fuso (datas locais ao meio-dia).
-  it('parcela do dia 31 pula de mês', () => {
+  // CORRIGIDO (4.5): setMonth estourava o mês (31/jan + 1 mês = 03/mar, pulava fevereiro); agora
+  // o vencimento cai no último dia do mês (28/fev). Teste independente de fuso (datas locais ao meio-dia).
+  it('parcela do dia 31 cai no último dia do mês', () => {
     const r = buildInstallmentEntries(
       config({ installments: 3, firstPaymentDate: new Date(2026, 0, 31, 12).toISOString() }),
       { now: NOW, newId: seqId() }
     );
     const d = r.map(e => new Date(e.dueDate!));
     expect([d[0].getMonth(), d[0].getDate()]).toEqual([0, 31]);
-    expect([d[1].getMonth(), d[1].getDate()]).toEqual([2, 3]); // março, não fevereiro
-    expect([d[2].getMonth(), d[2].getDate()]).toEqual([2, 31]); // i=2 parte de 31/jan: 31/mar
+    expect([d[1].getMonth(), d[1].getDate()]).toEqual([1, 28]); // fevereiro/2026 tem 28 dias
+    expect([d[2].getMonth(), d[2].getDate()]).toEqual([2, 31]); // 31/jan + 2 meses = 31/mar
+  });
+  it('firstPaymentDate só-dia vira meio-dia local e as parcelas somam exatamente o total', () => {
+    const r = buildInstallmentEntries(
+      config({ installments: 3, totalAmount: 10000, installmentAmount: 3333, lastInstallmentAmount: 3334, firstPaymentDate: '2026-01-31' }),
+      { now: NOW, newId: seqId() }
+    );
+    const d = r.map(e => new Date(e.dueDate!));
+    expect(d.map(x => [x.getFullYear(), x.getMonth(), x.getDate(), x.getHours()])).toEqual([
+      [2026, 0, 31, 12], [2026, 1, 28, 12], [2026, 2, 31, 12],
+    ]);
+    expect(r.map(e => e.amount)).toEqual([3333, 3333, 3334]);
+    expect(r.reduce((a, e) => a + e.amount, 0)).toBe(10000);
   });
 
   // COMPORTAMENTO ATUAL (suspeito): config sem validação. 0 parcelas = lista vazia (e o App

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  Money, calculateFinancials, createEntry, createWorkOrder, generateId,
+  Money, calculateFinancials, createEntry, createWorkOrder, generateId, splitCents,
   learnCatalogItems, learnClientData, learnTechnician, updateWorkOrderData,
 } from './helpers';
 import type { CatalogItem, Client, OrderItem, Technician, WorkOrder } from '../types';
@@ -18,13 +18,43 @@ describe('Money', () => {
     expect(Money.fromFloat(0)).toBe(0);
     expect(Money.fromFloat(19.99)).toBe(1999);
   });
-  // COMPORTAMENTO ATUAL (suspeito): 1.005 * 100 = 100.49999... em ponto flutuante, então arredonda para 100 (não 101).
-  it('fromFloat sofre de erro de ponto flutuante', () => {
-    expect(Money.fromFloat(1.005)).toBe(100);
+  // CORRIGIDO (4.5): 1.005 * 100 = 100.49999... em ponto flutuante arredondava para 100; agora dá 101.
+  it('fromFloat é robusto a erro de ponto flutuante', () => {
+    expect(Money.fromFloat(1.005)).toBe(101);
+    expect(Money.fromFloat(0.1 + 0.2)).toBe(30);
+    expect(Money.fromFloat(1.15)).toBe(115);
+    expect(Money.fromFloat(19.99)).toBe(1999);
+    expect(Money.fromFloat(4.35)).toBe(435);
+  });
+  it('fromFloat com zero, negativos e valores já em centavos inteiros', () => {
+    expect(Money.fromFloat(0)).toBe(0);
+    expect(Money.fromFloat(-0.001)).toBe(0);
+    expect(Money.fromFloat(-19.99)).toBe(-1999);
+    expect(Money.fromFloat(-1.005)).toBe(-101);
+    expect(Money.fromFloat(-0.1 - 0.2)).toBe(-30);
+    expect(Money.fromFloat(12345)).toBe(1234500); // 12345 reais
+    expect(Money.fromFloat(Money.toFloat(1999))).toBe(1999); // ida e volta
   });
   it('toFloat e format', () => {
     expect(Money.toFloat(1050)).toBe(10.5);
     expect(Money.format(123456).replace(/\s/g, ' ')).toBe('R$ 1.234,56');
+  });
+});
+
+describe('splitCents', () => {
+  it('divide em centavos inteiros com o resto na última parcela', () => {
+    expect(splitCents(10000, 3)).toEqual([3333, 3333, 3334]);
+    expect(splitCents(10000, 4)).toEqual([2500, 2500, 2500, 2500]);
+    expect(splitCents(1, 3)).toEqual([0, 0, 1]);
+  });
+  it('a soma é sempre exata', () => {
+    for (const [total, n] of [[9999, 7], [100, 6], [123457, 12], [5, 2]]) {
+      expect(splitCents(total, n).reduce((a, b) => a + b, 0)).toBe(total);
+    }
+  });
+  it('contagem inválida vira 1 parcela', () => {
+    expect(splitCents(500, NaN)).toEqual([500]);
+    expect(splitCents(500, 0)).toEqual([500]);
   });
 });
 
@@ -46,13 +76,17 @@ describe('createEntry', () => {
   });
   it('com dateString/paymentDate normaliza para ISO', () => {
     const e = createEntry('Teste', 500, 'CREDIT', '2026-01-10', 'g1', '2026-02-01');
-    expect(e.effectiveDate).toBe('2026-01-10T00:00:00.000Z');
-    expect(e.paymentDate).toBe('2026-02-01T00:00:00.000Z');
+    expect(new Date(e.effectiveDate).getTime()).toBe(new Date(2026, 0, 10, 12).getTime());
+    expect(new Date(e.paymentDate!).getTime()).toBe(new Date(2026, 1, 1, 12).getTime());
     expect(e.groupId).toBe('g1');
   });
-  // COMPORTAMENTO ATUAL (suspeito): 'YYYY-MM-DD' vira meia-noite UTC; em fusos negativos (Brasil) o dia local é o anterior.
-  it('dateString sem hora é meia-noite UTC', () => {
-    expect(createEntry('x', 1, 'CREDIT', '2026-01-10').effectiveDate.endsWith('T00:00:00.000Z')).toBe(true);
+  // CORRIGIDO (4.5): 'YYYY-MM-DD' virava meia-noite UTC (dia anterior no Brasil); agora é meio-dia LOCAL.
+  it('dateString só-dia é meio-dia local (mesmo dia em qualquer fuso)', () => {
+    const d = new Date(createEntry('x', 1, 'CREDIT', '2026-01-10').effectiveDate);
+    expect([d.getFullYear(), d.getMonth(), d.getDate(), d.getHours()]).toEqual([2026, 0, 10, 12]);
+  });
+  it('dateString ISO completo é mantido como está', () => {
+    expect(createEntry('x', 1, 'CREDIT', '2026-01-10T15:30:00.000Z').effectiveDate).toBe('2026-01-10T15:30:00.000Z');
   });
 });
 

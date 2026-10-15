@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { WorkOrder, Client, OrderItem, CatalogItem, Technician, PartCategory, PART_CATEGORY_META, OSModalPayload } from '../types';
-import { getLocalDateString } from '../utils/helpers';
+import { getLocalDateString, Money } from '../utils/helpers';
+import { toISOFromDateInput } from '../utils/dates';
 import { MarginIndicator } from '../components/MarginIndicator';
 import { PartCategorySelect } from '../components/PartCategorySelect';
 
@@ -55,8 +56,8 @@ export const OSModal: React.FC<OSModalProps> = ({
   const [tempPart, setTempPart] = useState({ description: '', price: '', cost: '', category: '' as PartCategory | '' });
   const [tempService, setTempService] = useState({ description: '', price: '', cost: '' });
 
-  const toFloat = (val: number) => val / 100;
-  const fromFloat = (val: number) => Math.round(val * 100);
+  const toFloat = Money.toFloat;
+  const fromFloat = Money.fromFloat;
 
   // --- CÁLCULOS FINANCEIROS MEMOIZADOS ---
   const partsTotal = useMemo(() => parts.reduce((acc, i) => acc + i.price, 0), [parts]);
@@ -284,7 +285,7 @@ export const OSModal: React.FC<OSModalProps> = ({
 
   const handleConfirm = () => {
     if (!clientName || !vehicle) { alert("Preencha cliente e veículo."); return; }
-    const numOS = parseInt(osNumber);
+    const numOS = parseInt(osNumber, 10);
     if (isNaN(numOS)) { alert("Número OS inválido."); return; }
     const fullVehicle = plate ? `${vehicle} - ${plate.toUpperCase()}` : vehicle;
 
@@ -299,14 +300,14 @@ export const OSModal: React.FC<OSModalProps> = ({
     onSave({
       osNumber: numOS,
       createdAt: date,
-      paymentDate: paymentDate ? new Date(paymentDate).toISOString() : undefined,
+      paymentDate: paymentDate ? toISOFromDateInput(paymentDate) : undefined,
       clientName,
       clientPhone: contact,
       clientNotes: notes,
       vehicle: fullVehicle,
       vehicleModelOnly: vehicle,
       plate: plate.toUpperCase(),
-      mileage: parseInt(mileage) || 0,
+      mileage: parseInt(mileage, 10) || 0,
       parts: parts.filter(p => p.description.trim() !== ""),
       services: services.filter(s => s.description.trim() !== ""),
       publicNotes,
@@ -423,7 +424,7 @@ export const OSModal: React.FC<OSModalProps> = ({
             <input
               type="number"
               value={minMargin}
-              onChange={e => setMinMargin(parseInt(e.target.value) || 70)}
+              onChange={e => setMinMargin(parseInt(e.target.value, 10) || 70)}
               min="0"
               max="100"
               style={{ width: '70px', padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--border)', fontSize: '0.9rem' }}

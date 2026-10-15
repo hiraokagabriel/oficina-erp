@@ -36,6 +36,7 @@ import {
   reopenOS, restoreFinancial, statusChangeEffects, togglePayment,
 } from './services/osFinanceService';
 import { Money, updateWorkOrderData, learnClientData, learnCatalogItems, learnTechnician, generateId } from './utils/helpers';
+import { toISOFromDateInput } from './utils/dates';
 import { LedgerEntry, WorkOrder, Client, CatalogItem, OSStatus, Technician, InstallmentConfig, OSModalPayload } from './types';
 
 type PendingAction =
@@ -215,7 +216,7 @@ function AppContent() {
         parts: data.parts,
         services: data.services,
         total: data.parts.reduce((a, b) => a + b.price, 0) + data.services.reduce((a, b) => a + b.price, 0),
-        createdAt: data.createdAt || new Date().toISOString(),
+        createdAt: data.createdAt ? toISOFromDateInput(data.createdAt) : new Date().toISOString(),
         publicNotes: data.publicNotes || '',
         technician: technicianName || undefined,
         advanceAmount: typeof data.advanceAmount === 'number' ? data.advanceAmount : undefined,
@@ -229,7 +230,7 @@ function AppContent() {
   const handleSaveEntryModal = (desc: string, val: number, type: 'CREDIT' | 'DEBIT', dateStr: string, recurrence: 'SINGLE' | 'INSTALLMENT' | 'RECURRING', count: number) => {
     const absVal = Math.abs(val);
     if (editingEntry) {
-      finance.updateEntry({ ...editingEntry, description: desc, amount: Money.fromFloat(absVal), type, effectiveDate: dateStr });
+      finance.updateEntry({ ...editingEntry, description: desc, amount: Money.fromFloat(absVal), type, effectiveDate: toISOFromDateInput(dateStr) });
       addToast('Lançamento atualizado.', 'success');
       setEditingEntry(null);
     } else {

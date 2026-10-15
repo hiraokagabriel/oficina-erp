@@ -118,7 +118,7 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
                     min="2" 
                     max="60"
                     value={count} 
-                    onChange={e => setCount(parseInt(e.target.value))} 
+                    onChange={e => setCount(parseInt(e.target.value, 10))} 
                 />
             </div>
         )}
@@ -132,7 +132,7 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
                     min="2" 
                     max="120"
                     value={count} 
-                    onChange={e => setCount(parseInt(e.target.value))} 
+                    onChange={e => setCount(parseInt(e.target.value, 10))} 
                     placeholder="Ex: 12 meses"
                 />
                 <small style={{color:'var(--text-muted)'}}>Isso lançará o valor mensalmente a partir da data selecionada.</small>

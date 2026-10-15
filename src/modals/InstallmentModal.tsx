@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Money } from '../utils/helpers';
+import { Money, getLocalDateString } from '../utils/helpers';
+import { addMonths, parseDateFlexible } from '../utils/dates';
 import { InstallmentConfig } from '../types';
 
 interface InstallmentModalProps {
@@ -19,7 +20,7 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
 }) => {
   const [installments, setInstallments] = useState<number>(2);
   const [firstPaymentDate, setFirstPaymentDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
+    getLocalDateString()
   );
 
   const calculateInstallments = (totalInCents: number, count: number) => {
@@ -42,7 +43,7 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setInstallments(2);
-      setFirstPaymentDate(new Date().toISOString().split('T')[0]);
+      setFirstPaymentDate(getLocalDateString());
     }
   }, [isOpen]);
 
@@ -64,12 +65,10 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
 
   const generateInstallmentDates = () => {
     const dates = [];
-    const baseDate = new Date(firstPaymentDate);
+    const baseDate = parseDateFlexible(firstPaymentDate);
 
     for (let i = 0; i < installments; i++) {
-      const date = new Date(baseDate);
-      date.setMonth(date.getMonth() + i);
-      dates.push(date);
+      dates.push(addMonths(baseDate, i));
     }
     return dates;
   };

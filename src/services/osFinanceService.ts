@@ -1,5 +1,6 @@
 import { InstallmentConfig, LedgerEntry, OSStatus, WorkOrder } from '../types';
 import { generateId } from '../utils/helpers';
+import { addMonths, parseDateFlexible } from '../utils/dates';
 
 // Regras financeiras da OS extraídas do App.tsx como funções puras (extração literal).
 // O App mantém setState, toasts, sons e modais; aqui só o cálculo.
@@ -29,12 +30,11 @@ export const buildInstallmentEntries = (
   { now = new Date().toISOString(), newId = () => crypto.randomUUID() }: Injectables = {}
 ): LedgerEntry[] => {
   const newEntries: LedgerEntry[] = [];
-  const baseDate = new Date(config.firstPaymentDate);
+  const baseDate = parseDateFlexible(config.firstPaymentDate);
   const groupId = config.groupId;
 
   for (let i = 0; i < config.installments; i++) {
-    const dueDate = new Date(baseDate);
-    dueDate.setMonth(dueDate.getMonth() + i);
+    const dueDate = addMonths(baseDate, i);
 
     const isLastInstallment = i === config.installments - 1;
     const amount = isLastInstallment ? config.lastInstallmentAmount : config.installmentAmount;

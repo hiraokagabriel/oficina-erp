@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Client, CatalogItem, Technician, PART_CATEGORY_META } from '../types';
+import { Money } from '../utils/helpers';
 import { PartCategorySelect } from '../components/PartCategorySelect';
 
 interface DatabaseModalProps {
@@ -151,7 +152,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                     className="form-input" 
                     type="number" 
                     value={editingItem.price / 100} 
-                    onChange={e => setEditingItem({...editingItem, price: Math.round(parseFloat(e.target.value) * 100)})} 
+                    onChange={e => setEditingItem({...editingItem, price: Money.fromFloat(parseFloat(e.target.value))})} 
                 />
              </div>
 

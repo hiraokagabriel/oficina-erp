@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useDatabase } from '../context/DatabaseContext';
-import { createEntry, Money } from '../utils/helpers';
+import { createEntry, Money, splitCents } from '../utils/helpers';
+import { addMonths, formatDateOnly, parseDateOnly } from '../utils/dates';
 import { LedgerEntry } from '../types';
 
 // Helpers internos de data (locais para o hook)
@@ -10,14 +11,9 @@ const getLocalMonth = () => {
     return d.toISOString().slice(0, 7);
 };
 
-const addMonthsToDate = (dateStr: string, monthsToAdd: number): string => {
-    const [year, month, day] = dateStr.split('-').map(Number);
-    const date = new Date(year, month - 1 + monthsToAdd, day);
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-};
+// Soma meses com clamp no último dia do mês (31/jan + 1 mês = 28/fev).
+const addMonthsToDate = (dateStr: string, monthsToAdd: number): string =>
+    formatDateOnly(addMonths(parseDateOnly(dateStr), monthsToAdd));
 
 export const useFinance = () => {
     const { ledger, setLedger, workOrders } = useDatabase();
@@ -40,24 +36,27 @@ export const useFinance = () => {
     ) => {
         const absVal = Math.abs(val);
         const newEntries: LedgerEntry[] = [];
+        const totalCents = Money.fromFloat(absVal);
+        // Parcelado: divide em centavos inteiros, com o resto na última parcela (soma exata).
+        const installmentCents = recurrence === 'INSTALLMENT' ? splitCents(totalCents, count) : [];
         
         // Gera um ID de grupo se for mais de 1 lançamento
         const groupId = count > 1 ? crypto.randomUUID() : undefined;
           
         if (recurrence === 'SINGLE') {
-            newEntries.push(createEntry(desc, Money.fromFloat(absVal), type, dateStr));
+            newEntries.push(createEntry(desc, totalCents, type, dateStr));
         } else {
             for (let i = 0; i < count; i++) {
                 const currentDate = addMonthsToDate(dateStr, i);
                 let finalDesc = desc;
-                let finalValue = absVal;
+                let finalValue = totalCents;
 
                 if (recurrence === 'INSTALLMENT') {
                     finalDesc = `${desc} (${i + 1}/${count})`;
-                    finalValue = parseFloat((absVal / count).toFixed(2));
+                    finalValue = installmentCents[i];
                 }
                 // Passa o groupId para vincular as parcelas
-                newEntries.push(createEntry(finalDesc, Money.fromFloat(finalValue), type, currentDate, groupId));
+                newEntries.push(createEntry(finalDesc, finalValue, type, currentDate, groupId));
             }
         }
         setLedger(prev => [...newEntries.reverse(), ...prev]);
@@ -112,7 +111,7 @@ export const useFinance = () => {
             saldo: kpiLedger.reduce((a,e) => a + (e.type === 'CREDIT' ? e.amount : -e.amount), 0),
             receitas: kpiLedger.filter(e => e.type === 'CREDIT').reduce((a,e)=>a+e.amount, 0),
             despesas: kpiLedger.filter(e => e.type === 'DEBIT').reduce((a,e)=>a+e.amount, 0),
-            ticketMedio: filteredWorkOrders.filter(o => o.status === 'FINALIZADO').reduce((a,o)=>a+o.total, 0) / (filteredWorkOrders.filter(o => o.status === 'FINALIZADO').length || 1)
+            ticketMedio: Math.round(filteredWorkOrders.filter(o => o.status === 'FINALIZADO').reduce((a,o)=>a+o.total, 0) / (filteredWorkOrders.filter(o => o.status === 'FINALIZADO').length || 1))
         };
     }, [ledger, filteredWorkOrders, selectedMonth, viewMode]);
 
@@ -122,10 +121,10 @@ export const useFinance = () => {
    
         filteredLedger.forEach(e => { 
           if (filterType === 'DEBIT' && e.type === 'DEBIT') {
-              let key = viewMode === 'YEAR' ? monthLabels[parseInt(e.effectiveDate.slice(5, 7)) - 1] : e.effectiveDate.slice(8, 10);
+              let key = viewMode === 'YEAR' ? monthLabels[parseInt(e.effectiveDate.slice(5, 7), 10) - 1] : e.effectiveDate.slice(8, 10);
               map[key] = (map[key] || 0) + e.amount;
           } else if ((filterType === 'ALL' || filterType === 'CREDIT') && e.type === 'CREDIT') {
-             let key = viewMode === 'YEAR' ? monthLabels[parseInt(e.effectiveDate.slice(5, 7)) - 1] : e.effectiveDate.slice(8, 10);
+             let key = viewMode === 'YEAR' ? monthLabels[parseInt(e.effectiveDate.slice(5, 7), 10) - 1] : e.effectiveDate.slice(8, 10);
              map[key] = (map[key] || 0) + e.amount;
           }
         });

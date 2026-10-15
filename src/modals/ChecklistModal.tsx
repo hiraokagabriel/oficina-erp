@@ -137,7 +137,7 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
               type="number"
               className="form-input checklist-km-input"
               value={checklist.mileageIn ?? os.mileage}
-              onChange={e => setChecklist(prev => ({ ...prev, mileageIn: parseInt(e.target.value) || 0 }))}
+              onChange={e => setChecklist(prev => ({ ...prev, mileageIn: parseInt(e.target.value, 10) || 0 }))}
             />
           </div>
 

@@ -1,4 +1,5 @@
 import { CatalogItem, Client, LedgerEntry, WorkOrder, OrderItem, Technician } from '../types';
+import { toISOFromDateInput } from './dates';
 
 export const generateId = (): string => {
   return typeof crypto !== 'undefined' && crypto.randomUUID 
@@ -15,7 +16,12 @@ export const getLocalDateString = (): string => {
 };
 
 export const Money = {
-  fromFloat: (amount: number): number => Math.round(amount * 100),
+  // toPrecision(15) remove o ruído binário (1.005 * 100 = 100.49999999999999) antes de arredondar.
+  // Simétrico para negativos (meio centavo se afasta de zero) e nunca devolve -0.
+  fromFloat: (amount: number): number => {
+    const cents = Math.round(Number((Math.abs(amount) * 100).toPrecision(15)));
+    return amount < 0 && cents !== 0 ? -cents : cents;
+  },
   toFloat: (cents: number): number => cents / 100,
   format: (cents: number): string => {
     return new Intl.NumberFormat('pt-BR', {
@@ -23,6 +29,15 @@ export const Money = {
       currency: 'BRL'
     }).format(cents / 100);
   }
+};
+
+// Divide um total em centavos em `count` partes inteiras; o resto vai na última parcela (a soma é exata).
+export const splitCents = (totalCents: number, count: number): number[] => {
+  const n = Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 1;
+  const base = Math.floor(totalCents / n);
+  const parts = Array<number>(n).fill(base);
+  parts[n - 1] = totalCents - base * (n - 1);
+  return parts;
 };
 
 export const createEntry = (
@@ -38,10 +53,10 @@ export const createEntry = (
     description,
     amount,
     type,
-    effectiveDate: dateString ? new Date(dateString).toISOString() : new Date().toISOString(),
+    effectiveDate: dateString ? toISOFromDateInput(dateString) : new Date().toISOString(),
     createdAt: new Date().toISOString(),
     groupId,
-    paymentDate: paymentDate ? new Date(paymentDate).toISOString() : undefined
+    paymentDate: paymentDate ? toISOFromDateInput(paymentDate) : undefined
   };
 };
 

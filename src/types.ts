@@ -136,7 +136,8 @@ export interface WorkshopSettings {
   cnpj: string;
   address: string;
   exportPath: string;
-  googleDriveToken: string;
+  /** Segredos: ficam só no localStorage deste PC (ver utils/secrets.ts); nunca vão para o database.json. */
+  googleDriveToken?: string;
   googleApiKey?: string;
 }
 
@@ -148,6 +149,18 @@ export interface DatabaseSchema {
   catalogServices: CatalogItem[];
   catalogTechnicians: Technician[];
   settings: WorkshopSettings;
+  /** Ausente = banco v0 (anterior ao controle de versão). */
+  meta?: DatabaseMeta;
+}
+
+export interface DatabaseMeta {
+  schemaVersion: number;
+  /** Identifica o último salvamento; usada para detectar conflito entre computadores. */
+  revision: string;
+  /** Revisions anteriores, da mais recente para a mais antiga (máx. 50). */
+  history: string[];
+  savedAt: string;
+  savedBy: string;
 }
 
 export type InspectionStatus = 'pending' | 'ok' | 'attention' | 'urgent';

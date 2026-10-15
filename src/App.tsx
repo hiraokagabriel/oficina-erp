@@ -1,6 +1,9 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 
-import { DatabaseProvider, useDatabase } from './context/DatabaseContext';
+import { invoke } from '@tauri-apps/api/core';
+import { DatabaseProvider, useDatabase, parseDatabase } from './context/DatabaseContext';
+import { adoptSecrets, stripDbSecrets } from './utils/secrets';
+import { CURRENT_SCHEMA_VERSION, migrate } from './utils/migrations';
 import { useFinance } from './hooks/useFinance';
 import { useKeyboard } from './hooks/useKeyboard';
 import { updateClientCascading, updateCatalogItemCascading } from './services/cascadeService';
@@ -55,6 +58,7 @@ function AppContent() {
     setSettings,
     isLoading,
     isSaving,
+    readOnly,
     dbPath,
     setDbPath,
   } = useDatabase();
@@ -96,68 +100,6 @@ function AppContent() {
     } catch {}
   }, [isSidebarCollapsed]);
 
-  useEffect(() => {
-    const migrateOldWorkOrders = () => {
-      let updated = false;
-      const newWorkOrders = workOrders.map(os => {
-        if (os.status === 'FINALIZADO' && !os.paymentDate) {
-          updated = true;
-          return { ...os, paymentDate: os.createdAt };
-        }
-        return os;
-      });
-
-      if (updated) {
-        setWorkOrders(newWorkOrders);
-        addToast('OSs antigas atualizadas!', 'success');
-      }
-    };
-
-    if (!isLoading && workOrders.length > 0) {
-      migrateOldWorkOrders();
-    }
-  }, [isLoading]);
-
-  useEffect(() => {
-    const migrateLedgerEntries = () => {
-      let updated = false;
-      const newLedger = ledger.map(entry => {
-        if (entry.type === 'CREDIT' && !entry.paymentDate) {
-          const linkedOS = workOrders.find(os => os.financialId === entry.id);
-          if (linkedOS && linkedOS.paymentDate) {
-            updated = true;
-            return { ...entry, paymentDate: linkedOS.paymentDate };
-          }
-        }
-        return entry;
-      });
-
-      if (updated) {
-        setLedger(newLedger);
-      }
-    };
-
-    if (!isLoading && ledger.length > 0 && workOrders.length > 0) {
-      migrateLedgerEntries();
-    }
-  }, [isLoading, ledger.length, workOrders.length]);
-
-  useEffect(() => {
-    if (isLoading) return;
-
-    const legacyTech = (settings as any)?.technician;
-    if (!legacyTech || typeof legacyTech !== 'string' || legacyTech.trim() === '') return;
-
-    const name = legacyTech.trim();
-    setCatalogTechnicians(prev => learnTechnician(prev, name));
-
-    setSettings(prev => {
-      const copy: any = { ...prev };
-      delete copy.technician;
-      return copy;
-    });
-  }, [isLoading]);
-
   const addToast = (message: string, type: ToastType = 'info') => {
     const id = crypto.randomUUID();
     setToasts(prev => [...prev, { id, message, type }]);
@@ -186,7 +128,7 @@ function AppContent() {
 
     try {
       const fullDb = { ledger, workOrders, clients, catalogParts, catalogServices, catalogTechnicians, settings };
-      const content = JSON.stringify(fullDb, null, 2);
+      const content = JSON.stringify(stripDbSecrets(fullDb), null, 2); // sem token/API key
       const now = new Date();
       const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
       const filename = `backup_oficina_${timestamp}.json`;
@@ -480,6 +422,43 @@ Abrir OS?`)) {
     printOS(os, settings, 'SHOP');
   };*/
 
+  // Importa um backup: valida, migra (com backup do arquivo original) e só então troca os dados.
+  const importBackup = async (content: string) => {
+    if (readOnly) {
+      addToast('O banco está aberto somente para leitura. Atualize o OficinaPro para importar.', 'error');
+      return;
+    }
+    let result: ReturnType<typeof migrate>;
+    try {
+      result = migrate(parseDatabase(content, settings));
+    } catch (e) {
+      addToast(`Arquivo de backup inválido. Nada foi alterado. ${e instanceof Error ? e.message : ''}`.trim(), 'error');
+      return;
+    }
+    const { db, from, changed } = result;
+    if (from > CURRENT_SCHEMA_VERSION) {
+      addToast('Este backup foi salvo por uma versão mais nova do OficinaPro. Atualize o app para importá-lo. Nada foi alterado.', 'error');
+      return;
+    }
+    if (changed) {
+      try {
+        const bk = await invoke<{ success: boolean; message: string }>('backup_pre_migration', { content, fromVersion: from });
+        if (!bk?.success) throw new Error(bk?.message || 'sem resposta');
+      } catch (e) {
+        addToast(`Não foi possível guardar o backup antes de atualizar o formato (${e instanceof Error ? e.message : String(e)}). Nada foi alterado.`, 'error');
+        return;
+      }
+    }
+    setLedger(db.ledger);
+    setWorkOrders(db.workOrders);
+    setClients(db.clients);
+    setCatalogParts(db.catalogParts);
+    setCatalogServices(db.catalogServices);
+    setCatalogTechnicians(db.catalogTechnicians);
+    setSettings(adoptSecrets(db.settings)); // segredos do backup só entram se o local estiver vazio
+    addToast(changed ? `Dados importados e atualizados para o formato v${CURRENT_SCHEMA_VERSION}!` : 'Dados importados!', 'success');
+  };
+
   const executePendingAction = () => {
     if (!pendingAction) return;
 
@@ -545,23 +524,7 @@ Abrir OS?`)) {
     }
 
     if (pendingAction.type === 'IMPORT_DATA') {
-      let parsed: any;
-      try {
-        parsed = JSON.parse(pendingAction.content!);
-        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('formato inesperado');
-      } catch {
-        addToast('Arquivo de backup inválido. Nada foi alterado.', 'error');
-        setPendingAction(null);
-        return;
-      }
-      setLedger(parsed.ledger || []);
-      setWorkOrders(parsed.workOrders || []);
-      setClients(parsed.clients || []);
-      setCatalogParts(parsed.catalogParts || []);
-      setCatalogServices(parsed.catalogServices || []);
-      setCatalogTechnicians(parsed.catalogTechnicians || []);
-      if (parsed.settings) setSettings(parsed.settings);
-      addToast('Dados importados!', 'success');
+      void importBackup(pendingAction.content!);
     }
 
     setPendingAction(null);

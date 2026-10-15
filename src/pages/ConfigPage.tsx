@@ -188,7 +188,7 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
                     className="form-input" 
                     type="password" 
                     placeholder="Token de acesso..." 
-                    value={settings.googleDriveToken} 
+                    value={settings.googleDriveToken || ''} 
                     onChange={(e) => handleChange('googleDriveToken', e.target.value)} 
                 />
             </div>

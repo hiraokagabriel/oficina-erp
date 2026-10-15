@@ -16,6 +16,65 @@ pub struct LoadResult {
     /// "ok" | "not_found"
     status: String,
     content: String,
+    /// Nome desta máquina (vai para meta.savedBy nos salvamentos).
+    machine: String,
+}
+
+#[derive(serde::Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ConflictInfo {
+    saved_by: Option<String>,
+    saved_at: Option<String>,
+}
+
+#[derive(serde::Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveResult {
+    /// "ok" | "conflict" | "io_error"
+    status: String,
+    message: String,
+    /// revision gravada (só em "ok")
+    revision: Option<String>,
+    /// dados do salvamento que está no disco (só em "conflict"; pode vir vazio)
+    conflict: Option<ConflictInfo>,
+    machine: String,
+}
+
+impl SaveResult {
+    fn ok(revision: Option<String>) -> Self {
+        SaveResult {
+            status: "ok".into(),
+            message: "Salvo com sucesso.".into(),
+            revision,
+            conflict: None,
+            machine: machine_name(),
+        }
+    }
+    fn io_error(message: String) -> Self {
+        SaveResult { status: "io_error".into(), message, revision: None, conflict: None, machine: machine_name() }
+    }
+    fn conflict(info: ConflictInfo) -> Self {
+        SaveResult {
+            status: "conflict".into(),
+            message: "O arquivo do banco foi alterado por outro computador. Nada foi gravado.".into(),
+            revision: None,
+            conflict: Some(info),
+            machine: machine_name(),
+        }
+    }
+}
+
+/// Nome da máquina, sem crates: variável de ambiente do Windows (ou HOSTNAME).
+fn machine_name() -> String {
+    for key in ["COMPUTERNAME", "HOSTNAME"] {
+        if let Ok(v) = std::env::var(key) {
+            let v = v.trim();
+            if !v.is_empty() {
+                return v.to_string();
+            }
+        }
+    }
+    "desconhecido".into()
 }
 
 // ---------------------------------------------------------------------------
@@ -62,22 +121,17 @@ fn civil_from_days(z: i64) -> (i64, i64, i64) {
     (if m <= 2 { y + 1 } else { y }, m, d)
 }
 
-/// Nome do backup para um instante (UTC): database-AAAAMMDD-HHmmss.json
-fn backup_file_name(secs: u64) -> String {
+/// AAAAMMDD-HHmmss (UTC)
+fn stamp(secs: u64) -> String {
     let days = (secs / 86400) as i64;
     let rem = secs % 86400;
     let (y, m, d) = civil_from_days(days);
-    format!(
-        "{}{:04}{:02}{:02}-{:02}{:02}{:02}{}",
-        BACKUP_PREFIX,
-        y,
-        m,
-        d,
-        rem / 3600,
-        (rem % 3600) / 60,
-        rem % 60,
-        BACKUP_SUFFIX
-    )
+    format!("{:04}{:02}{:02}-{:02}{:02}{:02}", y, m, d, rem / 3600, (rem % 3600) / 60, rem % 60)
+}
+
+/// Nome do backup para um instante (UTC): database-AAAAMMDD-HHmmss.json
+fn backup_file_name(secs: u64) -> String {
+    format!("{}{}{}", BACKUP_PREFIX, stamp(secs), BACKUP_SUFFIX)
 }
 
 /// Lê o instante (segundos UTC) a partir do nome. None se não for um backup nosso.
@@ -201,27 +255,86 @@ fn write_tmp(tmp_path: &Path, content: &str) -> Result<(), String> {
     Ok(())
 }
 
+#[derive(serde::Deserialize, Default)]
+#[serde(default, rename_all = "camelCase")]
+struct DiskMeta {
+    revision: Option<String>,
+    saved_by: Option<String>,
+    saved_at: Option<String>,
+    /// Aceita qualquer JSON; só as strings são aproveitadas (ver `read_disk_meta`).
+    history: Option<Vec<serde_json::Value>>,
+}
+
+/// Só o `meta` do arquivo; o resto do JSON é ignorado.
+#[derive(serde::Deserialize, Default)]
+#[serde(default)]
+struct DiskDoc {
+    meta: Option<DiskMeta>,
+}
+
+/// Compara a revision esperada com a do disco. Err = conflito (nada deve ser gravado).
+fn check_conflict(path: &Path, expected: Option<&str>) -> Result<(), ConflictInfo> {
+    let unknown = || ConflictInfo { saved_by: None, saved_at: None };
+    let bytes = match fs::read(path) {
+        Ok(b) => b,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // sem arquivo: ok só se também não esperávamos nenhum (primeira gravação)
+            return if expected.is_none() { Ok(()) } else { Err(unknown()) };
+        }
+        Err(_) => return Err(unknown()), // existe mas não dá para ler
+    };
+    let doc: DiskDoc = match serde_json::from_slice(&bytes) {
+        Ok(d) => d,
+        Err(_) => return Err(unknown()), // ilegível: não sobrescrever
+    };
+    match doc.meta {
+        // banco v0 (sem meta): só a primeira gravação da versão nova pode substituí-lo
+        None | Some(DiskMeta { revision: None, .. }) => {
+            if expected.is_none() { Ok(()) } else { Err(unknown()) }
+        }
+        Some(m) => {
+            if expected.is_some() && m.revision.as_deref() == expected {
+                Ok(())
+            } else {
+                Err(ConflictInfo { saved_by: m.saved_by, saved_at: m.saved_at })
+            }
+        }
+    }
+}
+
+/// revision do meta de um conteúdo que estamos gravando (só para devolver ao front).
+fn revision_of(content: &str) -> Option<String> {
+    serde_json::from_str::<DiskDoc>(content).ok()?.meta?.revision
+}
+
 fn save_database_impl(
     path: &Path,
     content: &str,
+    expected_revision: Option<&str>,
     backup_dir: Option<&Path>,
     now: u64,
     first_in_session: bool,
-) -> IoResult {
+) -> SaveResult {
     let tmp_path = path.with_extension("tmp");
 
     // Primeira gravação ("Criar banco novo aqui"): cria a pasta se ainda não existir.
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() && !parent.exists() {
             if let Err(e) = fs::create_dir_all(parent) {
-                return IoResult { success: false, message: format!("Erro criar pasta: {}", e) };
+                return SaveResult::io_error(format!("Erro criar pasta: {}", e));
             }
         }
     }
 
     if let Err(message) = write_tmp(&tmp_path, content) {
         let _ = fs::remove_file(&tmp_path);
-        return IoResult { success: false, message };
+        return SaveResult::io_error(message);
+    }
+
+    // Conflito: lido logo antes do rename (janela mínima; não é um lock entre máquinas).
+    if let Err(info) = check_conflict(path, expected_revision) {
+        let _ = fs::remove_file(&tmp_path);
+        return SaveResult::conflict(info);
     }
 
     // Backup do arquivo atual do disco, antes de ser substituído. Falha não impede o save.
@@ -235,36 +348,152 @@ fn save_database_impl(
 
     if let Err(e) = fs::rename(&tmp_path, path) {
         let _ = fs::remove_file(&tmp_path);
-        return IoResult { success: false, message: format!("Erro rename: {}", e) };
+        return SaveResult::io_error(format!("Erro rename: {}", e));
     }
 
-    IoResult { success: true, message: "Salvo com sucesso.".into() }
+    SaveResult::ok(revision_of(content))
+}
+
+/// Resultado de `read_db_meta`: só o meta do arquivo no disco, sem o resto do JSON.
+#[derive(serde::Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct MetaResult {
+    /// "ok" (meta com revision) | "no_meta" (banco v0, sem meta/revision) | "not_found" | "unreadable"
+    status: String,
+    revision: Option<String>,
+    history: Vec<String>,
+    saved_by: Option<String>,
+    saved_at: Option<String>,
+}
+
+impl MetaResult {
+    fn bare(status: &str) -> Self {
+        MetaResult { status: status.into(), revision: None, history: Vec::new(), saved_by: None, saved_at: None }
+    }
+}
+
+/// Lê só o `meta` do arquivo. Ausente/ilegível não é erro: vira um status próprio.
+fn read_disk_meta(path: &Path) -> MetaResult {
+    let bytes = match fs::read(path) {
+        Ok(b) => b,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return MetaResult::bare("not_found"),
+        Err(_) => return MetaResult::bare("unreadable"),
+    };
+    let doc: DiskDoc = match serde_json::from_slice(&bytes) {
+        Ok(d) => d,
+        Err(_) => return MetaResult::bare("unreadable"),
+    };
+    match doc.meta {
+        Some(DiskMeta { revision: Some(revision), saved_by, saved_at, history }) => MetaResult {
+            status: "ok".into(),
+            revision: Some(revision),
+            history: history
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect(),
+            saved_by,
+            saved_at,
+        },
+        _ => MetaResult::bare("no_meta"),
+    }
 }
 
 #[command]
-fn save_database_atomic(app: AppHandle, filepath: String, content: String) -> IoResult {
-    let backup_dir: Option<PathBuf> = match app.path().app_local_data_dir() {
-        Ok(d) => Some(d.join("backups")),
+fn read_db_meta(filepath: String) -> MetaResult {
+    read_disk_meta(Path::new(&filepath))
+}
+
+fn local_dir(app: &AppHandle, sub: &str) -> Option<PathBuf> {
+    match app.path().app_local_data_dir() {
+        Ok(d) => Some(d.join(sub)),
         Err(e) => {
             eprintln!("Aviso: pasta de dados local indisponível: {}", e);
             None
         }
-    };
+    }
+}
+
+#[command]
+fn save_database_atomic(
+    app: AppHandle,
+    filepath: String,
+    content: String,
+    expected_revision: Option<String>,
+) -> SaveResult {
+    let backup_dir = local_dir(&app, "backups");
     let path = Path::new(&filepath);
     let first = !BACKUP_DONE_THIS_SESSION.load(Ordering::SeqCst);
     let existed = path.exists();
-    let result = save_database_impl(path, &content, backup_dir.as_deref(), now_secs(), first);
-    if result.success && existed {
+    let result = save_database_impl(
+        path,
+        &content,
+        expected_revision.as_deref(),
+        backup_dir.as_deref(),
+        now_secs(),
+        first,
+    );
+    if result.status == "ok" && existed {
         BACKUP_DONE_THIS_SESSION.store(true, Ordering::SeqCst);
     }
     result
 }
 
+/// Grava `content` em dir/<prefix><AAAAMMDD-HHmmss>[-n].json sem sobrescrever nada.
+/// Devolve o caminho gravado.
+fn write_stamped_file(dir: &Path, prefix: &str, now: u64, content: &str) -> Result<PathBuf, String> {
+    fs::create_dir_all(dir).map_err(|e| format!("criar pasta: {}", e))?;
+    for n in 0..100 {
+        let name = if n == 0 {
+            format!("{}{}.json", prefix, stamp(now))
+        } else {
+            format!("{}{}-{}.json", prefix, stamp(now), n)
+        };
+        let target = dir.join(name);
+        match fs::OpenOptions::new().write(true).create_new(true).open(&target) {
+            Ok(mut f) => {
+                f.write_all(content.as_bytes()).map_err(|e| format!("escrever: {}", e))?;
+                f.sync_all().map_err(|e| format!("sync: {}", e))?;
+                return Ok(target);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(format!("criar arquivo: {}", e)),
+        }
+    }
+    Err("nomes de arquivo esgotados".into())
+}
+
+/// Backup do banco lido (antes de migrar): database-pre-v<from>-AAAAMMDD-HHmmss.json.
+/// O nome não segue o padrão da rotação, então a retenção nunca o apaga.
+#[command]
+fn backup_pre_migration(app: AppHandle, content: String, from_version: u32) -> IoResult {
+    let Some(dir) = local_dir(&app, "backups") else {
+        return IoResult { success: false, message: "Pasta de dados local indisponível.".into() };
+    };
+    let prefix = format!("{}pre-v{}-", BACKUP_PREFIX, from_version);
+    match write_stamped_file(&dir, &prefix, now_secs(), &content) {
+        Ok(p) => IoResult { success: true, message: p.display().to_string() },
+        Err(e) => IoResult { success: false, message: format!("Erro no backup pré-migração: {}", e) },
+    }
+}
+
+/// Estado local não gravado por causa de conflito: recuperacao/database-conflito-AAAAMMDD-HHmmss.json
+#[command]
+fn save_recovery_copy(app: AppHandle, content: String) -> IoResult {
+    let Some(dir) = local_dir(&app, "recuperacao") else {
+        return IoResult { success: false, message: "Pasta de dados local indisponível.".into() };
+    };
+    match write_stamped_file(&dir, "database-conflito-", now_secs(), &content) {
+        Ok(p) => IoResult { success: true, message: p.display().to_string() },
+        Err(e) => IoResult { success: false, message: format!("Erro ao guardar a cópia de recuperação: {}", e) },
+    }
+}
+
 fn load_database_impl(path: &Path) -> Result<LoadResult, String> {
     match fs::read_to_string(path) {
-        Ok(content) => Ok(LoadResult { status: "ok".into(), content }),
+        Ok(content) => Ok(LoadResult { status: "ok".into(), content, machine: machine_name() }),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            Ok(LoadResult { status: "not_found".into(), content: String::new() })
+            Ok(LoadResult { status: "not_found".into(), content: String::new(), machine: machine_name() })
         }
         Err(e) => Err(format!("Erro ao ler o banco: {}", e)),
     }
@@ -314,6 +543,9 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             save_database_atomic,
+            backup_pre_migration,
+            save_recovery_copy,
+            read_db_meta,
             load_database,
             export_report
         ])
@@ -438,8 +670,8 @@ mod tests {
         let d = temp_dir("save");
         let db = d.join("db.json");
         let bk = d.join("backups");
-        let r = save_database_impl(&db, "{\"v\":1}", Some(&bk), ts(2026, 10, 15, 10, 0, 0), true);
-        assert!(r.success);
+        let r = save_database_impl(&db, "{\"v\":1}", None, Some(&bk), ts(2026, 10, 15, 10, 0, 0), true);
+        assert_eq!(r.status, "ok");
         assert_eq!(fs::read_to_string(&db).unwrap(), "{\"v\":1}");
         assert!(!d.join("db.tmp").exists());
         assert!(!d.join("db.bak").exists());
@@ -451,7 +683,7 @@ mod tests {
     fn save_cria_pasta_ausente() {
         let d = temp_dir("save-mkdir");
         let db = d.join("sub").join("db.json");
-        assert!(save_database_impl(&db, "{}", None, ts(2026, 10, 15, 10, 0, 0), true).success);
+        assert!(save_database_impl(&db, "{}", None, None, ts(2026, 10, 15, 10, 0, 0), true).status == "ok");
         assert_eq!(fs::read_to_string(&db).unwrap(), "{}");
         let _ = fs::remove_dir_all(&d);
     }
@@ -462,23 +694,23 @@ mod tests {
         let db = d.join("db.json");
         let bk = d.join("backups");
         let t0 = ts(2026, 10, 15, 10, 0, 0);
-        fs::write(&db, "antigo").unwrap();
+        fs::write(&db, "{\"antigo\":1}").unwrap();
 
         // primeira gravação da sessão: sempre faz backup
-        assert!(save_database_impl(&db, "v1", Some(&bk), t0, true).success);
+        assert!(save_database_impl(&db, "{\"v1\":1}", None, Some(&bk), t0, true).status == "ok");
         let b0 = bk.join(backup_file_name(t0));
-        assert_eq!(fs::read_to_string(&b0).unwrap(), "antigo");
+        assert_eq!(fs::read_to_string(&b0).unwrap(), "{\"antigo\":1}");
 
         // 10 min depois: sem novo backup
-        assert!(save_database_impl(&db, "v2", Some(&bk), t0 + 600, false).success);
+        assert!(save_database_impl(&db, "{\"v2\":1}", None, Some(&bk), t0 + 600, false).status == "ok");
         assert_eq!(fs::read_dir(&bk).unwrap().count(), 1);
 
         // 31 min depois: novo backup com o conteúdo então no disco (v2)
-        assert!(save_database_impl(&db, "v3", Some(&bk), t0 + 31 * 60, false).success);
+        assert!(save_database_impl(&db, "{\"v3\":1}", None, Some(&bk), t0 + 31 * 60, false).status == "ok");
         assert_eq!(fs::read_dir(&bk).unwrap().count(), 2);
         let b1 = bk.join(backup_file_name(t0 + 31 * 60));
-        assert_eq!(fs::read_to_string(&b1).unwrap(), "v2");
-        assert_eq!(fs::read_to_string(&db).unwrap(), "v3");
+        assert_eq!(fs::read_to_string(&b1).unwrap(), "{\"v2\":1}");
+        assert_eq!(fs::read_to_string(&db).unwrap(), "{\"v3\":1}");
         let _ = fs::remove_dir_all(&d);
     }
 
@@ -486,12 +718,12 @@ mod tests {
     fn falha_de_backup_nao_impede_save() {
         let d = temp_dir("backup-fail");
         let db = d.join("db.json");
-        fs::write(&db, "antigo").unwrap();
+        fs::write(&db, "{\"antigo\":1}").unwrap();
         // a "pasta" de backup é um arquivo: create_dir_all falha
         let bk = d.join("bloqueio");
         fs::write(&bk, "x").unwrap();
-        let r = save_database_impl(&db, "novo", Some(&bk), ts(2026, 10, 15, 10, 0, 0), true);
-        assert!(r.success);
+        let r = save_database_impl(&db, "novo", None, Some(&bk), ts(2026, 10, 15, 10, 0, 0), true);
+        assert_eq!(r.status, "ok");
         assert_eq!(fs::read_to_string(&db).unwrap(), "novo");
         let _ = fs::remove_dir_all(&d);
     }
@@ -499,13 +731,231 @@ mod tests {
     #[test]
     fn erro_de_save_apaga_tmp_e_preserva_destino() {
         let d = temp_dir("save-err");
-        // destino é uma pasta: o rename do .tmp falha
+        // destino é uma pasta: existe mas é ilegível, então vira conflito (o rename nem é tentado)
         let db = d.join("db.json");
         fs::create_dir_all(&db).unwrap();
-        let r = save_database_impl(&db, "x", None, ts(2026, 10, 15, 10, 0, 0), true);
-        assert!(!r.success);
+        let r = save_database_impl(&db, "x", None, None, ts(2026, 10, 15, 10, 0, 0), true);
+        assert_eq!(r.status, "conflict");
         assert!(!d.join("db.tmp").exists());
         assert!(db.is_dir());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    // ----- conflito de revision -----
+
+    fn doc(rev: &str, by: &str, at: &str) -> String {
+        format!(
+            "{{\"ledger\":[],\"meta\":{{\"schemaVersion\":1,\"revision\":\"{}\",\"history\":[],\"savedAt\":\"{}\",\"savedBy\":\"{}\"}}}}",
+            rev, at, by
+        )
+    }
+
+    fn save_exp(db: &Path, content: &str, expected: Option<&str>) -> SaveResult {
+        save_database_impl(db, content, expected, None, ts(2026, 10, 15, 10, 0, 0), true)
+    }
+
+    #[test]
+    fn conflito_disco_inexistente_sem_expected_grava() {
+        let d = temp_dir("cf-new");
+        let db = d.join("db.json");
+        let r = save_exp(&db, &doc("r1", "PC-A", "t"), None);
+        assert_eq!(r.status, "ok");
+        assert_eq!(r.revision.as_deref(), Some("r1"));
+        assert_eq!(fs::read_to_string(&db).unwrap(), doc("r1", "PC-A", "t"));
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn conflito_disco_inexistente_com_expected_nao_grava() {
+        let d = temp_dir("cf-gone");
+        let db = d.join("db.json");
+        let r = save_exp(&db, &doc("r2", "PC-A", "t"), Some("r1"));
+        assert_eq!(r.status, "conflict");
+        assert!(!db.exists());
+        assert!(!d.join("db.tmp").exists());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn conflito_revision_igual_grava() {
+        let d = temp_dir("cf-eq");
+        let db = d.join("db.json");
+        fs::write(&db, doc("r1", "PC-A", "t1")).unwrap();
+        let novo = doc("r2", "PC-A", "t2");
+        let r = save_exp(&db, &novo, Some("r1"));
+        assert_eq!(r.status, "ok");
+        assert_eq!(r.revision.as_deref(), Some("r2"));
+        assert_eq!(fs::read_to_string(&db).unwrap(), novo);
+        assert!(!d.join("db.tmp").exists());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn conflito_revision_diferente_nao_grava_e_informa_quem_salvou() {
+        let d = temp_dir("cf-diff");
+        let db = d.join("db.json");
+        let no_disco = doc("rX", "PC-B", "2026-10-15T14:30:00.000Z");
+        fs::write(&db, &no_disco).unwrap();
+        let r = save_exp(&db, &doc("r2", "PC-A", "t2"), Some("r1"));
+        assert_eq!(r.status, "conflict");
+        assert_eq!(
+            r.conflict,
+            Some(ConflictInfo {
+                saved_by: Some("PC-B".into()),
+                saved_at: Some("2026-10-15T14:30:00.000Z".into())
+            })
+        );
+        assert_eq!(fs::read_to_string(&db).unwrap(), no_disco, "disco intacto");
+        assert!(!d.join("db.tmp").exists());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn conflito_disco_com_revision_e_expected_none_nao_grava() {
+        let d = temp_dir("cf-none");
+        let db = d.join("db.json");
+        fs::write(&db, doc("rX", "PC-B", "t")).unwrap();
+        assert_eq!(save_exp(&db, &doc("r2", "PC-A", "t2"), None).status, "conflict");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn conflito_meta_sumiu_com_expected_some_nao_grava() {
+        let d = temp_dir("cf-nometa");
+        let db = d.join("db.json");
+        fs::write(&db, "{\"ledger\":[]}").unwrap();
+        let r = save_exp(&db, &doc("r2", "PC-A", "t2"), Some("r1"));
+        assert_eq!(r.status, "conflict");
+        assert_eq!(r.conflict, Some(ConflictInfo { saved_by: None, saved_at: None }));
+        assert_eq!(fs::read_to_string(&db).unwrap(), "{\"ledger\":[]}");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn conflito_disco_v0_com_expected_none_grava() {
+        let d = temp_dir("cf-v0");
+        let db = d.join("db.json");
+        fs::write(&db, "{\"ledger\":[],\"workOrders\":[]}").unwrap();
+        let novo = doc("r1", "PC-A", "t");
+        assert_eq!(save_exp(&db, &novo, None).status, "ok");
+        assert_eq!(fs::read_to_string(&db).unwrap(), novo);
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn conflito_arquivo_ilegivel_nao_grava() {
+        let d = temp_dir("cf-bad");
+        let db = d.join("db.json");
+        for conteudo in ["{ isto nao e json", "", "[1,2]"] {
+            fs::write(&db, conteudo).unwrap();
+            for exp in [None, Some("r1")] {
+                let r = save_exp(&db, &doc("r2", "PC-A", "t2"), exp);
+                assert_eq!(r.status, "conflict", "conteudo {:?} exp {:?}", conteudo, exp);
+                assert_eq!(fs::read_to_string(&db).unwrap(), conteudo);
+            }
+        }
+        // existe mas não é lido como arquivo (pasta): também conflito
+        let sub = d.join("pasta.json");
+        fs::create_dir_all(&sub).unwrap();
+        assert_eq!(save_exp(&sub, &doc("r2", "PC-A", "t2"), Some("r1")).status, "conflict");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn conflito_ignora_o_resto_do_json_e_meta_parcial() {
+        let d = temp_dir("cf-partial");
+        let db = d.join("db.json");
+        // meta sem savedBy/savedAt: revision igual ainda libera
+        fs::write(&db, "{\"x\":[1,{\"a\":2}],\"meta\":{\"revision\":\"r1\"}}").unwrap();
+        assert_eq!(save_exp(&db, &doc("r2", "PC-A", "t"), Some("r1")).status, "ok");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    // ----- read_db_meta -----
+
+    #[test]
+    fn meta_presente_devolve_revision_history_e_quem_salvou() {
+        let d = temp_dir("meta-ok");
+        let db = d.join("db.json");
+        fs::write(
+            &db,
+            "{\"ledger\":[{\"x\":1}],\"meta\":{\"schemaVersion\":1,\"revision\":\"r3\",\"history\":[\"r2\",5,\"r1\"],\"savedAt\":\"2026-10-15T14:30:00.000Z\",\"savedBy\":\"PC-B\"}}",
+        )
+        .unwrap();
+        let m = read_disk_meta(&db);
+        assert_eq!(m.status, "ok");
+        assert_eq!(m.revision.as_deref(), Some("r3"));
+        assert_eq!(m.history, vec!["r2".to_string(), "r1".to_string()]);
+        assert_eq!(m.saved_by.as_deref(), Some("PC-B"));
+        assert_eq!(m.saved_at.as_deref(), Some("2026-10-15T14:30:00.000Z"));
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn meta_sem_meta_ou_sem_revision_e_no_meta() {
+        let d = temp_dir("meta-none");
+        let db = d.join("db.json");
+        fs::write(&db, "{\"ledger\":[]}").unwrap();
+        assert_eq!(read_disk_meta(&db), MetaResult::bare("no_meta"));
+        fs::write(&db, "{\"meta\":{\"schemaVersion\":1}}").unwrap();
+        assert_eq!(read_disk_meta(&db).status, "no_meta");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn meta_arquivo_ausente_e_not_found() {
+        let d = temp_dir("meta-nf");
+        assert_eq!(read_disk_meta(&d.join("nao-existe.json")), MetaResult::bare("not_found"));
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn meta_arquivo_ilegivel_e_unreadable() {
+        let d = temp_dir("meta-bad");
+        let db = d.join("db.json");
+        for conteudo in ["{ isto nao e json", "", "[1,2]"] {
+            fs::write(&db, conteudo).unwrap();
+            assert_eq!(read_disk_meta(&db).status, "unreadable", "conteudo {:?}", conteudo);
+        }
+        // pasta no lugar do arquivo
+        let sub = d.join("pasta.json");
+        fs::create_dir_all(&sub).unwrap();
+        assert_eq!(read_disk_meta(&sub).status, "unreadable");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn nome_da_maquina_nunca_vazio() {
+        assert!(!machine_name().trim().is_empty());
+    }
+
+    // ----- backup pré-migração e cópia de recuperação -----
+
+    #[test]
+    fn backup_pre_migracao_nao_entra_na_retencao() {
+        let now = ts(2026, 10, 15, 12, 0, 0);
+        let pre = format!("database-pre-v0-{}.json", stamp(now));
+        assert_eq!(pre, "database-pre-v0-20261015-120000.json");
+        assert_eq!(parse_backup_name(&pre), None);
+        // mesmo com excesso de backups normais, o pré-migração nunca é apagado
+        let mut names: Vec<String> = (0..40).map(|i| backup_file_name(now - i * 120)).collect();
+        names.push(pre.clone());
+        let del = backups_to_delete(&names, now);
+        assert!(!del.contains(&pre));
+        assert!(!del.is_empty());
+    }
+
+    #[test]
+    fn write_stamped_file_nao_sobrescreve() {
+        let d = temp_dir("stamped");
+        let dir = d.join("recuperacao");
+        let t = ts(2026, 10, 15, 12, 0, 0);
+        let a = write_stamped_file(&dir, "database-conflito-", t, "um").unwrap();
+        let b = write_stamped_file(&dir, "database-conflito-", t, "dois").unwrap();
+        assert_ne!(a, b);
+        assert_eq!(a.file_name().unwrap().to_str().unwrap(), "database-conflito-20261015-120000.json");
+        assert_eq!(fs::read_to_string(&a).unwrap(), "um");
+        assert_eq!(fs::read_to_string(&b).unwrap(), "dois");
         let _ = fs::remove_dir_all(&d);
     }
 }

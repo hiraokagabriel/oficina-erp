@@ -129,19 +129,22 @@ Implementado e publicado (commits `4c9651a`, `5e9419c`, `9c345b1`, `c724c29`, `0
 **Dívida técnica**
 - [x] Remover o código morto listado na seção 2 (feito: `src/domain/*`, `src/types/index.ts`, Rust solto em `src/`, `PrintableInvoice`, `InputModal`, `EditEntryModal`, `sound.ts`, fallback `window.electron`). Segue o código comentado do `App.tsx` e as props `onPrintClient`/`onPrintShop`, fora deste item.
 - [x] Migrações fora do `App.tsx` (`src/utils/migrations.ts`) e regra de finalização, parcelamento, pagamento e reabertura de OS extraída, sem mudar comportamento, para `src/services/osFinanceService.ts`. Segue no `App.tsx`: roteamento, ~20 estados de modal e os demais handlers.
-- [ ] Eliminar os `any` e unificar os tipos em `src/types.ts`.
+- [x] Eliminar os `any` do código de produção e unificar os tipos em `src/types.ts` (restam 8 `any` em `migrations.test.ts`).
 - [ ] Trocar vínculo por nome por ids (cliente, item de catálogo) com migração.
-- [ ] Dinheiro sempre em centavos inteiros e datas sem deslocamento de fuso.
-- [x] Testes de parcelamento, finalização/reabertura, pagamento, cascade e helpers (`npm test`, 108 testes, fixtures sintéticas). Eles **fixam o comportamento atual, inclusive os defeitos** listados na seção 3.1. Falta validar o fluxo na interface.
+- [x] Dinheiro em centavos exatos (`Money.fromFloat`, `splitCents`) e datas sem deslocamento de fuso (`src/utils/dates.ts`). Ficou de fora: os filtros por mês do Financeiro ainda leem o trecho UTC da data ISO (seguro de UTC-12 a UTC+11) e lançamentos antigos gravados à meia-noite UTC continuam aparecendo um dia antes.
+- [x] Testes de parcelamento, finalização/reabertura, pagamento, cascade, helpers, datas e contas a receber (`npm test`, 166 testes, fixtures sintéticas, também em vários fusos). Os que sobraram da seção 3.1 **fixam o comportamento atual, inclusive os defeitos**. Falta validar o fluxo na interface.
 - [ ] Atualizar o README.
 
 Critério de pronto: abrir o app nos dois PCs, forçar um salvamento concorrente e ver o aviso de conflito sem perder dado; `npm run build` limpo.
 
 ### Fase 1: Contas a receber
-- [ ] Adiantamento gera lançamento no caixa.
-- [ ] Unificar `isPaid`, `dueDate` e `paymentDate` em um só conceito.
-- [ ] Visão de parcelas pendentes e atrasadas (Financeiro).
-- [ ] Indicador de quem deve e quanto (Financeiro e CRM).
+Implementada e testada (166 testes); **falta validar na interface** com banco sintético.
+
+- [x] Adiantamento gera lançamento no caixa ("Adiantamento OS #N - cliente", já recebido, ligado por `WorkOrder.advanceEntryId`). Editar o valor atualiza o lançamento, zerar o remove, excluir a OS o remove, reabrir a OS o mantém. A receita à vista e as parcelas passam a ser calculadas sobre `total - adiantamento`. Só vale para OS ainda não finalizadas: **não há correção retroativa** de OS finalizadas com adiantamento (evita contar duas vezes).
+- [x] Conceito único de "pago": `paymentDate` (`src/services/receivables.ts`: recebido, a receber ou atrasado, por dia local; vencimento = `dueDate`, ou `effectiveDate` se não houver). `isPaid` deixou de ser gravado e está marcado como `@deprecated`.
+- [x] Financeiro: cards "A receber" (ainda não vencido) e "Atrasado" (totais gerais, fora do filtro de mês) e seção "A receber" com vencimento, situação em texto e botão "Marcar como pago". Os KPIs de saldo, receitas, despesas e ticket médio **não mudaram**.
+- [x] CRM: "Em aberto" e "Atrasado" por cliente (lista e detalhe) e card "Maiores devedores" no dashboard. A dívida é ligada pelo **nome** do cliente na OS (homônimos se somam); lançamentos manuais sem OS ficam de fora.
+- [x] Consistência da OS: ao pagar a última parcela a OS vai a `FINALIZADO` sozinha; se uma parcela voltar a pendente, volta a `AGUARDANDO_PAGAMENTO`. Arquivar uma OS finalizada não apaga mais as receitas.
 
 Critério de pronto: em qualquer dia, ver o total a receber e a lista de atrasados.
 
@@ -159,21 +162,25 @@ Critério de pronto: saber o que está atrasado e o que entra amanhã, sem plani
 
 ---
 
-## 3.1 Comportamentos suspeitos registrados nos testes (ainda não corrigidos)
+## 3.1 Comportamentos suspeitos registrados nos testes
 
-Os testes marcam cada um com `// COMPORTAMENTO ATUAL (suspeito)`. Quem corrigir deve atualizar o teste junto.
+Os testes marcam os que seguem abertos com `// COMPORTAMENTO ATUAL (suspeito)` e os já corrigidos com `// CORRIGIDO (4.5)` ou `// CORRIGIDO (5.4)`. Quem corrigir um defeito deve atualizar o teste junto.
 
-**Dinheiro e parcelas (candidatos à Fase 1 e ao item de centavos/fuso):**
-- O vencimento usa `setMonth`: a parcela do dia 31 pula de mês (31/jan + 1 mês = 3/mar).
-- Marcar **uma** parcela como paga só atualiza o `paymentDate` da OS quando é a 1ª (a única ligada por `financialId`). Pagar todas as parcelas **não finaliza a OS**: ela fica em `AGUARDANDO_PAGAMENTO`.
+**Já corrigidos**
+- (4.5) O vencimento no dia 31 pulava de mês; agora cai no último dia do mês (31/jan, 28/fev, 31/mar).
+- (4.5) `Money.fromFloat(1.005)` dava 100; agora 101. `'YYYY-MM-DD'` em `createEntry` virava meia-noite UTC; agora é meio-dia local. A divisão de lançamentos parcelados perdia o resto; agora soma exato.
+- (5.4) Marcar uma parcela como paga só sincronizava a OS pela 1ª parcela e pagar todas as parcelas não finalizava a OS; agora a OS é finalizada ao pagar a última e volta a `AGUARDANDO_PAGAMENTO` se uma parcela for desmarcada.
+- (5.4) Arquivar uma OS finalizada pedia a restauração financeira e apagaria as receitas; agora só muda o status.
+
+**Dinheiro e parcelas (abertos)**
 - O pagamento à vista usa o `createdAt` da OS como data de competência da receita, e não deixa `paymentMethod` como `SINGLE`.
-- `Money.fromFloat(1.005)` dá 100 (erro de ponto flutuante). `'YYYY-MM-DD'` em `createEntry` vira meia-noite UTC e, no Brasil, o dia local é o anterior.
 - Editar uma OS já finalizada recalcula o total sem atualizar o lançamento no Ledger.
 - `config` do parcelamento não é validado: 0 parcelas gera lista vazia e quebra o `App` (lê `newEntries[0]`); data inválida lança erro; valores negativos são aceitos.
+- Adiantamento igual ao total da OS: o restante é 0 e o app cria um lançamento (ou parcelas) de R$ 0,00.
 
-**Reabrir OS (risco de perda de dado financeiro):**
-- Mover uma OS finalizada que tem `financialId` para `ARQUIVADO` também pede a restauração financeira, o que **apagaria as receitas**.
+**Reabrir e desarquivar OS**
 - `restoreFinancial` apaga qualquer lançamento com o mesmo `groupId`, inclusive de outra origem, e reabre a OS em silêncio se o `financialId` estiver órfão.
+- Desarquivar leva a OS para `ORCAMENTO`, mesmo que ela já tenha financeiro lançado (as receitas continuam intactas, mas a OS não aparece como `AGUARDANDO_PAGAMENTO`). Decisão do usuário: **manter assim por enquanto**. Melhoria possível: guardar o status anterior à arquivação (campo opcional novo na OS) e voltar a ele.
 
 **Vínculo por nome (item "trocar nome por ids"):**
 - O cascade casa cliente e item por texto, sensível a caixa, e troca só a 1ª ocorrência na descrição do Ledger (`includes`/`replace`: "Mari" casa com "Mariana").
@@ -189,4 +196,5 @@ Nuvem, servidor e banco online; distribuir ou vender para outras oficinas; estoq
 
 - ~~Mecanismo de conflito~~: decidido, `revision` (uuid) com `history` dentro do `meta` do JSON, conferida no Rust ao salvar. Arquivo de trava, mtime e hash foram descartados.
 - ~~Framework de testes~~: decidido, Vitest.
-- Se o adiantamento deve contar como receita no dia do recebimento ou no fechamento da OS.
+- ~~Adiantamento~~: decidido, conta como receita recebida na data do adiantamento; a receita final da OS é `total - adiantamento`.
+- **Regime dos KPIs do Financeiro:** hoje `saldo` e `receitas` somam todo crédito do mês pelo vencimento, **inclusive parcelas ainda não pagas**. Foi mantido de propósito e os cards "A receber" e "Atrasado" foram acrescentados. Decidir depois se `saldo` e `receitas` devem passar a contar só o que foi recebido (caixa).

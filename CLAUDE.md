@@ -8,7 +8,8 @@ Tauri 2 (Rust) + React 19 + TypeScript + Vite + Recharts + @dnd-kit. Interface e
 - `npm run dev`: só o front (Vite, porta 1420)
 - `npm run tauri dev`: app completo (Tauri + front)
 - `npm run build`: `tsc && vite build`. É a verificação mínima antes de dar uma tarefa por concluída.
-- `npm test`: Vitest, 108 testes de lógica pura (banco: `migrations`, `conflictDiff`, `externalChange`, `secrets`; negócio: `osFinanceService`, `cascadeService`, `helpers`). Não há testes de telas nem lint. Os testes de negócio fixam o comportamento atual, inclusive defeitos marcados com `COMPORTAMENTO ATUAL (suspeito)` (lista em `docs/ROADMAP.md` seção 3.1): corrigir um defeito exige atualizar o teste.
+- `npm test`: Vitest, 166 testes de lógica pura (banco: `migrations`, `conflictDiff`, `externalChange`, `secrets`; negócio: `osFinanceService`, `receivables`, `cascadeService`, `helpers`, `dates`). Não há testes de telas nem lint. Testes de datas rodam sob qualquer fuso: confira também com `$env:TZ='UTC'; npm test` (PowerShell). Os testes de negócio fixam o comportamento atual, inclusive defeitos marcados com `COMPORTAMENTO ATUAL (suspeito)` (lista em `docs/ROADMAP.md` seção 3.1): corrigir um defeito exige atualizar o teste.
+- Zero `any` no código de produção: não reintroduza.
 - `cargo test` e `cargo check` em `src-tauri`. Se `tauri dev` falhar com "failed to read plugin permissions", a pasta `src-tauri/target` guarda caminhos antigos: rode `cargo clean` ali.
 
 ## Arquitetura
@@ -16,6 +17,8 @@ Tauri 2 (Rust) + React 19 + TypeScript + Vite + Recharts + @dnd-kit. Interface e
 - **Tipos reais: `src/types.ts`** (WorkOrder, OSStatus, LedgerEntry, Client, CatalogItem, WorkshopSettings, DatabaseSchema). Os imports `'../types'` resolvem para esse arquivo.
 - Não existe camada `src/domain`, `src/hooks/useWorkshopData` nem `src/utils/formatters`: foram removidos como código morto. Dinheiro e helpers de negócio ficam em `src/utils/helpers.ts` (`Money`, `createEntry`, `updateWorkOrderData`...).
 - `src/App.tsx` (~870 linhas) concentra roteamento por `activeTab`, estados de modal e os handlers. As regras de finalização, parcelamento, pagamento e reabertura de OS ficam em `src/services/osFinanceService.ts` (funções puras com relógio e gerador de id injetáveis); os handlers só chamam essas funções e cuidam de estado, toasts e modais. As migrações ficam em `src/utils/migrations.ts`.
+- `src/services/receivables.ts`: contas a receber (recebido, a receber ou atrasado por dia local; resumo geral; dívida por cliente ligada pelo nome da OS). `paymentDate` é a única verdade de "pago"; `LedgerEntry.isPaid` está obsoleto e não é gravado. O adiantamento da OS vira um lançamento já recebido ligado por `WorkOrder.advanceEntryId` (só para OS não finalizadas); a receita à vista e as parcelas usam `getRemainingAmount` (`total - adiantamento`).
+- Dinheiro sempre em centavos inteiros (`Money.fromFloat`, `splitCents`) e datas só-dia como meio-dia local (`src/utils/dates.ts`: `parseDateOnly`, `addMonths` com limite no fim do mês). Não use `toFixed`/`parseFloat` em cálculo, nem `new Date('AAAA-MM-DD')`.
 - `src/context/DatabaseContext.tsx`: carrega e salva o banco (JSON local). Estado de carga (`loadStatus`), salvamento com debounce de 3 s e retentativas, `readOnly` para banco de versão futura, diálogo de conflito/divergência e verificação do arquivo a cada 30 s e ao focar a janela. Expõe `dbPath`/`setDbPath`.
 - `src/utils/migrations.ts` (`CURRENT_SCHEMA_VERSION`, `migrate`), `conflictDiff.ts`, `externalChange.ts` e `secrets.ts`: lógica pura do banco, com testes.
 - `src/hooks/useFinance.ts`: KPIs e lançamentos do financeiro.

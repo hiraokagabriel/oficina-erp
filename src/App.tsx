@@ -28,7 +28,7 @@ const InstallmentModal = lazy(() => import('./modals/InstallmentModal').then(m =
 const ChoiceModal = lazy(() => import('./modals/ChoiceModal').then(m => ({ default: m.ChoiceModal })));
 
 import { SoundFX } from './utils/audio';
-import { Money, createEntry, updateWorkOrderData, learnClientData, learnCatalogItems, learnTechnician } from './utils/helpers';
+import { Money, createEntry, updateWorkOrderData, learnClientData, learnCatalogItems, learnTechnician, generateId } from './utils/helpers';
 import { LedgerEntry, WorkOrder, Client, CatalogItem, OSStatus, Technician } from './types';
 
 interface PendingAction {
@@ -470,15 +470,15 @@ Abrir OS?`)) {
     printOS(os, settings);
   };
 
-  const handlePrintOSClient = (os: WorkOrder) => {
+  /*const handlePrintOSClient = (os: WorkOrder) => {
     addToast(`Imprimindo via do cliente - OS #${os.osNumber}...`, 'info');
     printOS(os, settings, 'CLIENT');
-  };
+  };*/
 
-  const handlePrintOSShop = (os: WorkOrder) => {
+  /*const handlePrintOSShop = (os: WorkOrder) => {
     addToast(`Imprimindo via da oficina - OS #${os.osNumber}...`, 'info');
     printOS(os, settings, 'SHOP');
-  };
+  };*/
 
   const executePendingAction = () => {
     if (!pendingAction) return;

@@ -199,7 +199,7 @@ export const PartsPage: React.FC<PartsPageProps> = ({ workOrders, isLoading }) =
     }
   };
 
-  const partsToDisplay = consolidatedParts.filter(p => selectedParts.size === 0 || p.selected);
+  /*const partsToDisplay = consolidatedParts.filter(p => selectedParts.size === 0 || p.selected); */
 
   if (isLoading) {
     return (

@@ -65,18 +65,24 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     // Gera o conteúdo do CSV
     const headers = ["ID", "Data", "Data Registro", "Data Pagamento", "Nº OS", "Cliente", "Descricao", "Valor", "Tipo", "Auditado"];
     const rows = filteredLedger.map(entry => {
-      // CORREÇÃO AQUI: Garante que 'history' seja um array, mesmo que undefined
-      const safeHistory = entry.history || [];
-      
-      const valor = Money.toFloat(entry.amount).toFixed(2).replace('.', ',');
-      const audit = safeHistory.length > 0 ? "SIM" : "NAO";
-      const desc = entry.description.replace(/;/g, " - ");
-      
-      const dataCompetencia = new Date(entry.effectiveDate).toLocaleDateString();
-      // Pega a data do primeiro registro do histórico ou usa a competência se não houver
-      const dataRegistro = safeHistory.length > 0 
-          ? new Date(safeHistory[0].timestamp).toLocaleDateString() 
-          : dataCompetencia;
+      const valor = Money.toFloat(entry.amount)
+        .toFixed(2)
+        .replace('.', ',');
+
+    const desc = entry.description.replace(/;/g, ' - ');
+
+    const dataCompetencia = new Date(
+      entry.effectiveDate
+      ).toLocaleDateString();
+
+    const dataRegistro = new Date(
+      entry.createdAt
+      ).toLocaleDateString();
+
+    // Indica lançamentos agrupados ou parcelados
+    const audit = entry.groupId || entry.installmentGroupId
+      ? 'SIM'
+      : 'NAO';
       
       // Cruza com dados da OS (se houver vínculo)
       const relatedOS = workOrders.find(w => w.financialId === entry.id);

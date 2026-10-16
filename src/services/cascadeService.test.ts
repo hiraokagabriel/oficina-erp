@@ -45,6 +45,43 @@ describe('updateClientCascading', () => {
     expect(r.newLedger[1].description).toBe('Aluguel');
   });
 
+  describe('installmentConfig.description', () => {
+    const inst = (description: string) => ({
+      totalAmount: 3000, installments: 3, installmentAmount: 1000, lastInstallmentAmount: 1000,
+      firstPaymentDate: '2026-02-10T12:00:00.000Z', groupId: 'g1', description,
+    });
+
+    it('OS parcelada com descrição velha é atualizada e conta como mudança', () => {
+      const old = client();
+      const r = updateClientCascading(old, { ...old, name: 'Beltrano Teste' }, [os({ installmentConfig: inst('OS #1 - Fulano Teste') })], []);
+      expect(r.hasChanges).toBe(true);
+      expect(r.newWorkOrders[0].installmentConfig?.description).toBe('OS #1 - Beltrano Teste');
+      expect(r.newWorkOrders[0].installmentConfig?.groupId).toBe('g1');
+    });
+
+    it('OS sem installmentConfig não quebra', () => {
+      const old = client();
+      const r = updateClientCascading(old, { ...old, name: 'Beltrano Teste' }, [os()], []);
+      expect(r.newWorkOrders[0].installmentConfig).toBeUndefined();
+      expect(r.newWorkOrders[0].clientName).toBe('Beltrano Teste');
+    });
+
+    it('OS de outro cliente (homônimo por id) fica intacta', () => {
+      const old = client();
+      const other = os({ id: 'os2', osNumber: 2, clientId: 'c2', installmentConfig: inst('OS #2 - Fulano Teste') });
+      const r = updateClientCascading(old, { ...old, name: 'Beltrano Teste' }, [other], []);
+      expect(r.newWorkOrders[0]).toBe(other);
+      expect(r.newWorkOrders[0].installmentConfig?.description).toBe('OS #2 - Fulano Teste');
+    });
+
+    it('nome não mudou: descrição intacta', () => {
+      const old = client();
+      const o = os({ installmentConfig: inst('OS #1 - Fulano Teste') });
+      const r = updateClientCascading(old, { ...old, phone: '11 98888-8888' }, [o], []);
+      expect(r.newWorkOrders[0].installmentConfig?.description).toBe('OS #1 - Fulano Teste');
+    });
+  });
+
   it('propaga telefone só nas OSs do cliente', () => {
     const old = client();
     const r = updateClientCascading(old, { ...old, phone: '11 98888-8888' }, [os(), os({ id: 'os2', clientId: 'c2', clientName: 'Outro' })], []);

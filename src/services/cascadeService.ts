@@ -52,6 +52,13 @@ export const updateClientCascading = (
         if (legacy) next.clientId = oldClient.id;
         if (nameChanged) next.clientName = updatedClient.name;
         if (phoneChanged) next.clientPhone = updatedClient.phone;
+        if (nameChanged && os.installmentConfig?.description) {
+            // O parcelamento guarda "OS #N - <cliente>" no próprio config; acompanha a renomeação.
+            const instDesc = replaceOsClientName(os.installmentConfig.description, os.osNumber, oldClient.name, updatedClient.name);
+            if (instDesc !== os.installmentConfig.description) {
+                next.installmentConfig = { ...os.installmentConfig, description: instDesc };
+            }
+        }
 
         if (vehiclesChanged) {
             const oldVehId = resolveVehicleId(os, oldClient);

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { updateClientCascading, updateCatalogItemCascading, updateTechnicianCascading } from './cascadeService';
-import type { CatalogItem, Client, LedgerEntry, OrderItem, Technician, WorkOrder } from '../types';
+import type { Appointment, CatalogItem, Client, LedgerEntry, OrderItem, Technician, WorkOrder } from '../types';
 
 // Fixtures sintéticas.
 const client = (over: Partial<Client> = {}): Client => ({
@@ -207,7 +207,7 @@ describe('updateClientCascading', () => {
   it('cliente sem OS: listas devolvidas intactas e hasChanges false', () => {
     const old = client();
     const r = updateClientCascading(old, { ...old, name: 'Novo' }, [], []);
-    expect(r).toEqual({ newWorkOrders: [], newLedger: [], hasChanges: false });
+    expect(r).toEqual({ newWorkOrders: [], newLedger: [], newAppointments: [], hasChanges: false });
   });
 
   // CORRIGIDO (4.6): veículos casados por índice (remover o 1º reescrevia a OS do Gol como Uno) -> por id.
@@ -403,5 +403,54 @@ describe('updateTechnicianCascading', () => {
     const r = updateTechnicianCascading(tech('t1', 'Zé'), tech('t1', 'José'), wos, [tech('t1', 'Zé')]);
     expect(r.hasChanges).toBe(false);
     expect(wos[0].technician).toBe('Outro');
+  });
+});
+
+describe('updateClientCascading: agendamentos (schema v3)', () => {
+  const ap = (over: Partial<Appointment> = {}): Appointment => ({
+    id: 'a1', date: '2026-03-10T15:00:00.000Z', clientName: 'Fulano Teste', clientId: 'c1', clientPhone: '11 90000-0000',
+    vehicle: 'Gol - AAA-0001', status: 'AGENDADO', createdAt: '2026-03-01T15:00:00.000Z', ...over,
+  });
+
+  it('por clientId: nome e telefone acompanham; hasChanges true mesmo sem OS', () => {
+    const old = client();
+    const r = updateClientCascading(old, { ...old, name: 'Beltrano Teste', phone: '11 98888-8888' }, [], [], [old], [ap(), ap({ id: 'a2', clientId: 'c2', clientName: 'Outro' })]);
+    expect(r.hasChanges).toBe(true);
+    expect(r.newAppointments[0]).toMatchObject({ clientName: 'Beltrano Teste', clientPhone: '11 98888-8888', clientId: 'c1' });
+    expect(r.newAppointments[1].clientName).toBe('Outro');
+  });
+
+  it('sem clientId: casa pelo nome normalizado se único e ganha o id', () => {
+    const old = client();
+    const r = updateClientCascading(old, { ...old, name: 'Novo' }, [], [], [old], [ap({ clientId: undefined, clientName: ' fulano TESTE ' })]);
+    expect(r.newAppointments[0]).toMatchObject({ clientName: 'Novo', clientId: 'c1' });
+    expect(r.hasChanges).toBe(true);
+  });
+
+  it('sem clientId e nome homônimo no cadastro: não é tocado', () => {
+    const a = client();
+    const b = client({ id: 'c2', name: 'fulano teste' });
+    const orig = ap({ clientId: undefined });
+    const r = updateClientCascading(a, { ...a, name: 'Novo' }, [], [], [a, b], [orig]);
+    expect(r.newAppointments[0]).toBe(orig);
+    expect(r.hasChanges).toBe(false);
+  });
+
+  it('nada a mudar no agendamento: hasChanges false e mesmo objeto', () => {
+    const old = client();
+    const orig = ap();
+    const r = updateClientCascading(old, { ...old, phone: '11 90000-0000', vehicles: [...old.vehicles, { id: 'v2', model: 'Uno', plate: 'B' }] }, [], [], [old], [orig]);
+    expect(r.newAppointments[0]).toBe(orig);
+    expect(r.hasChanges).toBe(false);
+  });
+
+  it('não muta a entrada e sem cliente antigo devolve cópia', () => {
+    const old = client();
+    const aps = [ap()];
+    updateClientCascading(old, { ...old, name: 'Novo' }, [], [], [old], aps);
+    expect(aps[0].clientName).toBe('Fulano Teste');
+    const r = updateClientCascading(undefined, old, [], [], [], aps);
+    expect(r.newAppointments).toEqual(aps);
+    expect(r.hasChanges).toBe(false);
   });
 });

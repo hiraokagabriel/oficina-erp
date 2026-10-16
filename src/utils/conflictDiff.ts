@@ -1,8 +1,8 @@
-import { Client, DatabaseSchema, LedgerEntry, WorkOrder } from '../types';
+import { Appointment, Client, DatabaseSchema, LedgerEntry, WorkOrder } from '../types';
 
 export interface LocalChange {
   kind: 'novo' | 'alterado' | 'removido';
-  group: 'OS' | 'Lançamento' | 'Cliente';
+  group: 'OS' | 'Lançamento' | 'Cliente' | 'Agendamento';
   id: string;
   label: string;
 }
@@ -50,5 +50,6 @@ export function diffLocalChanges(baseSnapshot: string | null, current: DatabaseS
     ...diffList<WorkOrder>(base.workOrders, current.workOrders, 'OS', os => `OS #${os.osNumber}`),
     ...diffList<LedgerEntry>(base.ledger, current.ledger, 'Lançamento', e => e.description || e.id),
     ...diffList<Client>(base.clients, current.clients, 'Cliente', c => c.name || c.id),
+    ...diffList<Appointment>(base.appointments, current.appointments ?? [], 'Agendamento', a => `${a.clientName || a.id} (${a.vehicle})`),
   ];
 }

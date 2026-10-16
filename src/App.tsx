@@ -59,6 +59,8 @@ function AppContent() {
     setCatalogServices,
     catalogTechnicians,
     setCatalogTechnicians,
+    appointments,
+    setAppointments,
     settings,
     setSettings,
     isLoading,
@@ -132,7 +134,7 @@ function AppContent() {
     addToast('Criando backup...', 'info');
 
     try {
-      const fullDb = { ledger, workOrders, clients, catalogParts, catalogServices, catalogTechnicians, settings };
+      const fullDb = { ledger, workOrders, clients, catalogParts, catalogServices, catalogTechnicians, appointments, settings };
       const content = JSON.stringify(stripDbSecrets(fullDb), null, 2); // sem token/API key
       const now = new Date();
       const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
@@ -335,10 +337,11 @@ Abrir OS?`)) {
   const handleSaveClient = (updatedClient: Client) => {
     const oldClient = clients.find(c => c.id === updatedClient.id);
     setClients(prev => prev.find(c => c.id === updatedClient.id) ? prev.map(c => c.id === updatedClient.id ? updatedClient : c) : [...prev, updatedClient]);
-    const { newWorkOrders, newLedger, hasChanges } = updateClientCascading(oldClient, updatedClient, workOrders, ledger, clients);
+    const { newWorkOrders, newLedger, newAppointments, hasChanges } = updateClientCascading(oldClient, updatedClient, workOrders, ledger, clients, appointments);
     if (hasChanges) {
       setWorkOrders(newWorkOrders);
       setLedger(newLedger);
+      setAppointments(newAppointments);
       addToast('Atualizado em cascata!', 'success');
     } else {
       addToast('Salvo!', 'success');
@@ -454,6 +457,7 @@ Abrir OS?`)) {
     setCatalogParts(db.catalogParts);
     setCatalogServices(db.catalogServices);
     setCatalogTechnicians(db.catalogTechnicians);
+    setAppointments(db.appointments);
     setSettings(adoptSecrets(db.settings)); // segredos do backup só entram se o local estiver vazio
     const semCliente = changed ? countUnresolvedLinks(db).osSemCliente : 0;
     const aviso = semCliente > 0

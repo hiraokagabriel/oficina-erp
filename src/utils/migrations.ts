@@ -6,7 +6,7 @@ import { learnTechnician } from './helpers';
 import { matchClientId, normalizeName, resolveCatalogItemId, resolveTechnicianId, resolveVehicleId } from './links';
 
 // Versão do formato do banco. Subir aqui e acrescentar um passo em STEPS.
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 export interface MigrationResult {
   db: DatabaseSchema;
@@ -108,6 +108,14 @@ export const v1ToV2 = (db: DatabaseSchema): DatabaseSchema => {
   return { ...db, clients, workOrders };
 };
 
+/**
+ * v2 -> v3 (PURA, registrada em STEPS).
+ * Só acrescenta `appointments: []` quando a coleção não existe (ou não é lista). Não altera mais nada
+ * (`WorkOrder.expectedDate` é opcional e não precisa de passo). Idempotente: lista existente é mantida.
+ */
+export const v2ToV3 = (db: DatabaseSchema): DatabaseSchema =>
+  Array.isArray(db.appointments) ? db : { ...db, appointments: [] };
+
 export interface UnresolvedLinks {
   osSemCliente: number;
   osSemVeiculo: number;
@@ -136,7 +144,7 @@ export const countUnresolvedLinks = (db: DatabaseSchema): UnresolvedLinks => {
 };
 
 // STEPS[n] leva da versão n para n+1.
-const STEPS: Array<(db: DatabaseSchema) => DatabaseSchema> = [v0ToV1, v1ToV2];
+const STEPS: Array<(db: DatabaseSchema) => DatabaseSchema> = [v0ToV1, v1ToV2, v2ToV3];
 
 /**
  * Migra o banco até CURRENT_SCHEMA_VERSION. Pura (não altera a entrada) e idempotente.

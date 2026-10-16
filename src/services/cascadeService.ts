@@ -1,4 +1,4 @@
-import { Client, WorkOrder, LedgerEntry, CatalogItem, OrderItem, Technician, Vehicle } from '../types';
+import { Appointment, Client, WorkOrder, LedgerEntry, CatalogItem, OrderItem, Technician, Vehicle } from '../types';
 import { normalizeName, resolveVehicleId } from '../utils/links';
 
 // Cascata de renomeações por ID (plano 4.6, passo 4). Funções puras: não mutam as entradas.
@@ -19,14 +19,16 @@ const replaceOsClientName = (description: string, osNumber: number, oldName: str
 
 // Atualiza OSs e Financeiro quando Cliente muda.
 // `clients` = lista de clientes ANTES da edição (decide se o nome antigo é único para as OS legadas sem clientId).
+// `appointments` (schema v3): clientName/clientPhone acompanham por clientId, ou por nome normalizado único quando sem id.
 export const updateClientCascading = (
     oldClient: Client | undefined,
     updatedClient: Client,
     workOrders: WorkOrder[],
     ledger: LedgerEntry[],
-    clients: Client[] = []
+    clients: Client[] = [],
+    appointments: Appointment[] = []
 ) => {
-    if (!oldClient) return { newWorkOrders: [...workOrders], newLedger: [...ledger], hasChanges: false };
+    if (!oldClient) return { newWorkOrders: [...workOrders], newLedger: [...ledger], newAppointments: [...appointments], hasChanges: false };
 
     const nameChanged = oldClient.name !== updatedClient.name;
     const phoneChanged = oldClient.phone !== updatedClient.phone;
@@ -34,7 +36,7 @@ export const updateClientCascading = (
     const newVehicles = updatedClient.vehicles ?? [];
     const vehiclesChanged = JSON.stringify(oldVehicles) !== JSON.stringify(newVehicles);
     if (!nameChanged && !phoneChanged && !vehiclesChanged) {
-        return { newWorkOrders: [...workOrders], newLedger: [...ledger], hasChanges: false };
+        return { newWorkOrders: [...workOrders], newLedger: [...ledger], newAppointments: [...appointments], hasChanges: false };
     }
 
     const oldNorm = normalizeName(oldClient.name);
@@ -97,7 +99,21 @@ export const updateClientCascading = (
         });
     }
 
-    return { newWorkOrders, newLedger, hasChanges };
+    const newAppointments = appointments.map(ap => {
+        const linked = ap.clientId === oldClient.id;
+        const legacy = !ap.clientId && !!oldNorm && nameIsUnique && normalizeName(ap.clientName) === oldNorm;
+        if (!linked && !legacy) return ap;
+        const next: Appointment = { ...ap };
+        if (legacy) next.clientId = oldClient.id;
+        if (nameChanged) next.clientName = updatedClient.name;
+        if (phoneChanged) next.clientPhone = updatedClient.phone;
+        const changed = (Object.keys(next) as (keyof Appointment)[]).some(k => next[k] !== ap[k]);
+        if (!changed) return ap;
+        hasChanges = true;
+        return next;
+    });
+
+    return { newWorkOrders, newLedger, newAppointments, hasChanges };
 };
 
 // Atualiza OSs quando Item do Catálogo muda. Só a descrição; o preço da OS nunca muda.

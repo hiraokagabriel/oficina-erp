@@ -44,6 +44,30 @@ export interface WorkOrder {
   advanceAmount?: number;
   /** Lançamento CREDIT do adiantamento no caixa (ver syncAdvanceEntry). Ausente em OS legadas. */
   advanceEntryId?: string;
+  /** Previsão de entrega prometida (schema v3; ISO do meio-dia local; só a data conta). Opcional. */
+  expectedDate?: string;
+}
+
+export type AppointmentStatus = 'AGENDADO' | 'COMPARECEU' | 'CANCELADO' | 'FALTOU';
+
+/** Agendamento de entrada de veículo (schema v3). */
+export interface Appointment {
+  id: string;
+  /** ISO do meio-dia local do dia agendado. */
+  date: string;
+  /** 'HH:MM' (opcional). */
+  time?: string;
+  clientName: string;
+  clientId?: string;
+  clientPhone?: string;
+  /** Texto 'modelo - PLACA', como na OS. */
+  vehicle: string;
+  vehicleId?: string;
+  reason?: string;
+  status: AppointmentStatus;
+  /** OS criada a partir do agendamento. */
+  workOrderId?: string;
+  createdAt: string;
 }
 
 export type OSStatus =
@@ -162,6 +186,8 @@ export interface OSModalPayload {
   osNumber: number;
   createdAt: string;
   paymentDate?: string;
+  /** Previsão de entrega (ISO do meio-dia local); ainda não preenchida pelo OSModal. */
+  expectedDate?: string;
   /** Ainda não usados (passo posterior do plano 4.6). */
   clientId?: string;
   technicianId?: string;
@@ -199,6 +225,8 @@ export interface DatabaseSchema {
   catalogParts: CatalogItem[];
   catalogServices: CatalogItem[];
   catalogTechnicians: Technician[];
+  /** Agendamentos (schema v3). Ausente em bancos antigos = []. */
+  appointments: Appointment[];
   settings: WorkshopSettings;
   /** Ausente = banco v0 (anterior ao controle de versão). */
   meta?: DatabaseMeta;

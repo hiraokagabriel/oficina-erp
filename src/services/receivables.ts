@@ -19,7 +19,7 @@ export interface ReceivablesSummary {
 export const getDueDate = (entry: LedgerEntry): string => entry.dueDate ?? entry.effectiveDate;
 
 // 'YYYY-MM-DD' local de um Date, de um 'YYYY-MM-DD' ou de um ISO completo.
-const toLocalDay = (value: string | Date): string =>
+export const toLocalDay = (value: string | Date): string =>
   value instanceof Date ? formatDateOnly(value) : formatDateOnly(parseDateFlexible(value));
 
 export const getReceivableStatus = (
@@ -60,7 +60,7 @@ export const summarizeReceivables = (
 const dayParts = (day: string) => day.split('-').map(Number);
 
 /** Dias de calendário entre dois 'YYYY-MM-DD' (b - a). Usa UTC só para a conta: sem efeito de horário de verão. */
-const diffDays = (a: string, b: string): number => {
+export const diffDays = (a: string, b: string): number => {
   const [ay, am, ad] = dayParts(a);
   const [by, bm, bd] = dayParts(b);
   return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86400000);

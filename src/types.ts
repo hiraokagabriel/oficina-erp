@@ -21,6 +21,10 @@ export interface WorkOrder {
   vehicle: string;
   clientName: string;
   clientPhone: string;
+  /** Vínculos por id (schema v2; opcionais para bancos antigos). O texto acima continua sendo o gravado/exibido. */
+  clientId?: string;
+  vehicleId?: string;
+  technicianId?: string;
   mileage: number;
   status: OSStatus;
   parts: OrderItem[];
@@ -64,12 +68,19 @@ export const MONTH_NAMES = [
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
 ];
 
+/** Veículo do cliente. `id` é opcional para bancos antigos (a migração v1ToV2 o preenche). */
+export interface Vehicle {
+  id?: string;
+  model: string;
+  plate: string;
+}
+
 export interface Client {
   id: string;
   name: string;
   phone: string;
   notes?: string;
-  vehicles: { model: string; plate: string }[];
+  vehicles: Vehicle[];
   totalSpent?: number;
   serviceCount?: number;
   lastServiceDate?: string;
@@ -118,6 +129,8 @@ export const PART_CATEGORY_META: Record<PartCategory, PartCategoryMeta> = {
 
 export interface OrderItem {
   id: string;
+  /** Item do catálogo de origem (schema v2; opcional). */
+  catalogItemId?: string;
   description: string;
   price: number;
   cost?: number;
@@ -149,6 +162,9 @@ export interface OSModalPayload {
   osNumber: number;
   createdAt: string;
   paymentDate?: string;
+  /** Ainda não usados (passo posterior do plano 4.6). */
+  clientId?: string;
+  technicianId?: string;
   clientName: string;
   clientPhone: string;
   clientNotes: string;

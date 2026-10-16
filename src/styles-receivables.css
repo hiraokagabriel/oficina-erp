@@ -20,3 +20,42 @@ button.debtor-row:focus-visible { outline: 2px solid var(--primary); outline-off
 /* CRM com o dashboard visível: o .crm-layout (height:100%, overflow:hidden) encolhia a 0 numa coluna flex e a lista de clientes sumia.
    Com o dashboard aberto, dê altura própria à lista e deixe a página rolar. */
 .crm-layout.crm-layout--below-dashboard { flex-shrink: 0; height: 70vh; min-height: 420px; }
+
+/* Financeiro a 800 px: barra de ações quebra linha em vez de cortar. */
+.financial-actions { flex-wrap: wrap; }
+
+/* Tabela "A receber": datas, valor e situação em uma linha; a descrição trunca com reticências (title tem o texto completo),
+   assim "Situação" e o botão ficam visíveis sem rolagem horizontal. */
+.receivables-table td, .receivables-table th { white-space: nowrap; }
+.receivables-table td.receivable-desc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 0; width: 100%; }
+.receivables-table .receivable-pay { white-space: nowrap; }
+
+/* Telas estreitas (<= 960 px): cada conta vira um bloco (descrição; vencimento, valor e situação; ação), sem rolagem horizontal.
+   A descrição trunca com reticências (o title tem o texto completo). */
+@media (max-width: 960px) {
+  .receivables-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .receivables-table, .receivables-table tbody { display: block; }
+  .receivables-table tr { display: grid; grid-template-columns: auto auto minmax(0, 1fr); column-gap: 12px; row-gap: 6px;
+    align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .receivables-table td { display: block; padding: 0; border-bottom: none; min-width: 0; }
+  .receivables-table td.receivable-desc { grid-column: 1 / -1; grid-row: 1; max-width: none; width: auto; }
+  .receivables-table td:nth-child(1) { grid-column: 1; grid-row: 2; }
+  .receivables-table td:nth-child(3) { grid-column: 2; grid-row: 2; }
+  .receivables-table td:nth-child(4) { grid-column: 3; grid-row: 2; }
+  .receivables-table td:nth-child(5) { grid-column: 1 / -1; grid-row: 3; justify-self: end; }
+  .receivables-table td:only-child { grid-column: 1 / -1; grid-row: 1; }
+}
+
+/* Painel de detalhe do CRM a 800 px: lista e detalhe empilhados (lado a lado o painel ficava com ~125 px e cortava o conteúdo). */
+.crm-layout > .crm-details { min-width: 0; }
+.crm-layout > .client-list { flex-shrink: 0; }
+@media (max-width: 960px) {
+  .crm-layout { flex-direction: column; overflow-y: auto; }
+  .crm-layout > .client-list { width: 100%; max-height: 220px; }
+  .crm-layout > .crm-details { flex: 0 0 auto; max-height: none; overflow-y: visible; padding: 20px; }
+  /* cabeçalho do cliente (nome + WhatsApp/Editar, estilos inline): os botões quebram linha em vez de cortar */
+  .crm-details [style*="space-between"] { flex-wrap: wrap; gap: 12px; }
+}
+
+/* Tema pastel: o --success (#81b29a) dá ~2,4:1 como texto; use um verde mais escuro só nos KPIs de valor positivo (>= 4,5:1). */
+[data-theme="pastel"] .stat-card .stat-value.stat-value--success { color: #2f6b4d !important; }

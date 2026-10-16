@@ -59,8 +59,8 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
     <>
       <div className="header-area">
         <h1 className="page-title">Painel Financeiro</h1>
-        <div style={{display:'flex', gap:10, alignItems: 'center'}}>
-          
+        <div className="financial-actions" style={{display:'flex', gap:10, alignItems: 'center', flexWrap: 'wrap'}}>
+
           <div className="toggle-group" style={{display: 'flex', background: 'var(--bg-panel)', borderRadius: 8, padding: 2}}>
              <button 
                 className="btn-sm" 
@@ -105,10 +105,10 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
           <div className="stats-row">
             <div className="stat-card">
                <div className="stat-label">Resultado ({viewMode === 'YEAR' ? 'Ano' : 'Mês'})</div>
-               <div className="stat-value" style={{color: kpiData.saldo >= 0 ? 'var(--success)' : 'var(--danger)'}}>{Money.format(kpiData.saldo)}</div>
+               <div className={kpiData.saldo >= 0 ? 'stat-value stat-value--success' : 'stat-value'} style={{color: kpiData.saldo >= 0 ? 'var(--success)' : 'var(--danger)'}}>{Money.format(kpiData.saldo)}</div>
                <div className="stat-trend">{kpiData.saldo >= 0 ? 'Lucro do período' : 'Prejuízo do período'}</div>
             </div>
-            <div className="stat-card"><div className="stat-label">Receitas</div><div className="stat-value" style={{color: 'var(--success)'}}>{Money.format(kpiData.receitas)}</div></div>
+            <div className="stat-card"><div className="stat-label">Receitas</div><div className="stat-value stat-value--success" style={{color: 'var(--success)'}}>{Money.format(kpiData.receitas)}</div></div>
             <div className="stat-card"><div className="stat-label">Despesas</div><div className="stat-value" style={{color: 'var(--danger)'}}>{Money.format(kpiData.despesas)}</div></div>
             <div className="stat-card" style={{borderColor: 'var(--border)'}}><div className="stat-label">Ticket Médio</div><div className="stat-value">{Money.format(kpiData.ticketMedio)}</div></div>
             <div className="stat-card">
@@ -174,7 +174,7 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
       <div className="card" style={{marginBottom: 24}}>
           <h3 style={{margin: '0 0 15px'}}>A receber</h3>
           <div className="receivables-scroll">
-            <table className="data-table">
+            <table className="data-table receivables-table">
               <thead><tr><th>Vencimento</th><th>Descrição</th><th>Valor</th><th>Situação</th><th>Ação</th></tr></thead>
               <tbody>
                 {receivables.items.length === 0 ? (
@@ -184,7 +184,7 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                   return (
                     <tr key={e.id}>
                       <td>{formatDueDate(e)}</td>
-                      <td>{e.description}</td>
+                      <td className="receivable-desc" title={e.description}>{e.description}</td>
                       <td style={{fontWeight:'bold'}}>{Money.format(e.amount)}</td>
                       <td><span className={`receivable-status ${late ? 'late' : 'open'}`}>{getReceivableLabel(e, today)}</span></td>
                       <td>

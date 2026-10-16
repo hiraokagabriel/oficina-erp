@@ -212,7 +212,7 @@ export const CRMPage: React.FC<CRMPageProps> = ({
         </div>
       )}
       
-      <div className="crm-layout">
+      <div className={showDashboard ? 'crm-layout crm-layout--below-dashboard' : 'crm-layout'}>
           {/* LISTA DE CLIENTES */}
           <div className="client-list">
               <div style={{ padding: '12px', borderBottom: '1px solid var(--border)' }}>

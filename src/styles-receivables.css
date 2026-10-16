@@ -12,3 +12,11 @@
 button.debtor-row { cursor: pointer; }
 button.debtor-row:hover { background: var(--bg-hover); }
 button.debtor-row:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* Tema pastel: o --danger do tema (#d08c7f) tem contraste ~2,7:1 sobre branco; para TEXTO de atraso use um tom mais escuro (>= 4,5:1). */
+[data-theme="pastel"] .receivable-status.late,
+[data-theme="pastel"] .client-debt .late { color: #a8453a; }
+
+/* CRM com o dashboard visível: o .crm-layout (height:100%, overflow:hidden) encolhia a 0 numa coluna flex e a lista de clientes sumia.
+   Com o dashboard aberto, dê altura própria à lista e deixe a página rolar. */
+.crm-layout.crm-layout--below-dashboard { flex-shrink: 0; height: 70vh; min-height: 420px; }

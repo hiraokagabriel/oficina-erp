@@ -202,6 +202,17 @@ Limitações enquanto o passo 6 não for ativado:
 - Veículos antigos do cliente não têm id; o cascade não os atualiza até a migração ou até o cadastro ser salvo de novo.
 - `resolveClientId` percorre o cadastro por OS (O(OS × clientes)); aceitável hoje, indexar se o banco crescer.
 
+## 3.2 Teste de interface (2026-10-16)
+
+Feito no navegador (Playwright com Edge) contra o front real, com o Rust do Tauri **simulado em JS** e um banco **sintético**. Cobriu a Fase 0 (migração, tela de erro, somente leitura, conflito, recarga silenciosa, divergência, segredos), a Fase 1 (cards e lista "A receber", pagar parcelas finalizando a OS, adiantamento) e a 4.6 (seletor de homônimos, ids gravados, cascade, CRM). **Passou em tudo, com 3 correções feitas a partir dele:**
+- Bug grave: a verificação periódica de mudança externa nunca agia, porque `saveTimeoutRef` não voltava a `null` ao disparar o debounce e `hasPendingEdits()` ficava sempre verdadeiro. Corrigido em `DatabaseContext.tsx` e reprovado no mesmo cenário (toast "Dados atualizados" e diálogo de divergência).
+- No tema pastel o texto "Atrasado" tinha contraste de 2,7:1; agora 5,9:1 (Financeiro) e 5,0:1 (lista do CRM).
+- No CRM com o dashboard visível a lista de clientes encolhia a altura 0; agora tem altura própria e a página rola.
+
+Segue aberto: `installmentConfig.description` da OS parcelada guarda o nome antigo do cliente depois de uma renomeação (as parcelas do caixa e `clientName` são atualizados); em janela estreita (800 px) a tabela "A receber" e a barra do Financeiro cortam à direita; o verde dos KPIs no tema pastel tem contraste 2,4:1 (cor do tema, anterior à Fase 1).
+
+**Não coberto:** o Rust/Tauri real (backups, cópias de recuperação, fechar a janela com `onCloseRequested`), a migração v1 → v2 (não ativada), impressão, Drive, checklist, Processos, Peças e exportação. Esses precisam de teste manual no `npm run tauri dev` com um banco sintético.
+
 ## 4. Fora de escopo (por enquanto)
 
 Nuvem, servidor e banco online; distribuir ou vender para outras oficinas; estoque e fornecedores; WhatsApp automático (o botão manual continua); login e permissões; assinatura digital (a assinatura segue física nos impressos).

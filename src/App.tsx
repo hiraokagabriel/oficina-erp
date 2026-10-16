@@ -16,6 +16,7 @@ import { printOS } from './utils/printOS';
 
 const FinancialPage = lazy(() => import('./pages/FinancialPage').then(m => ({ default: m.FinancialPage })));
 const WorkshopPage = lazy(() => import('./pages/WorkshopPage').then(m => ({ default: m.WorkshopPage })));
+const AgendaPage = lazy(() => import('./pages/AgendaPage').then(m => ({ default: m.AgendaPage })));
 const CRMPage = lazy(() => import('./pages/CRMPage').then(m => ({ default: m.CRMPage })));
 const ProcessPage = lazy(() => import('./pages/ProcessPage').then(m => ({ default: m.ProcessPage })));
 const PartsPage = lazy(() => import('./pages/PartsPage').then(m => ({ default: m.PartsPage })));
@@ -39,6 +40,10 @@ import {
 import { Money, updateWorkOrderData, generateId } from './utils/helpers';
 import { linkClient, linkCatalogItems, linkTechnician, preferredClientId } from './utils/links';
 import { toISOFromDateInput } from './utils/dates';
+import { AppointmentAction, AppointmentInput, applyAppointmentAction, linkAppointmentToOS, makeAppointment, updateAppointment } from './services/agenda';
+import { appointmentToOSDraft, OSDraftFromAppointment } from './services/schedule';
+import type { AppointmentModalMode } from './modals/AppointmentModal';
+import type { Appointment } from './types';
 import { LedgerEntry, WorkOrder, Client, CatalogItem, OSStatus, Technician, InstallmentConfig, OSModalPayload } from './types';
 
 type PendingAction =
@@ -73,7 +78,9 @@ function AppContent() {
   const finance = useFinance();
 
   const [currentTheme, setCurrentTheme] = useState<'dark' | 'pastel'>('dark');
-  const [activeTab, setActiveTab] = useState<'FINANCEIRO' | 'OFICINA' | 'PROCESSOS' | 'CLIENTES' | 'PECAS' | 'CONFIG'>('OFICINA');
+  const [activeTab, setActiveTab] = useState<'FINANCEIRO' | 'OFICINA' | 'AGENDA' | 'PROCESSOS' | 'CLIENTES' | 'PECAS' | 'CONFIG'>('OFICINA');
+  // Fluxo Agenda -> Criar OS: agendamento de origem e rascunho (objeto estável: o OSModal reinicia o formulário se ele mudar).
+  const [osFromAppointment, setOsFromAppointment] = useState<{ appointment: Appointment; draft: OSDraftFromAppointment } | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
@@ -266,9 +273,58 @@ function AppContent() {
         newOS = { ...newOS, advanceEntryId: advance.advanceEntryId };
       }
       setWorkOrders(prev => [...prev, newOS]);
+      if (osFromAppointment) {
+        const originId = osFromAppointment.appointment.id;
+        setAppointments(prev => prev.map(a => a.id === originId ? linkAppointmentToOS(a, newOS) : a));
+        setOsFromAppointment(null);
+      }
       addToast('Nova OS criada!', 'success');
     }
     setIsModalOpen(false);
+  };
+
+  // ---------- Agenda ----------
+  const handleSaveAppointment = (input: AppointmentInput, editing: Appointment | null, mode: AppointmentModalMode) => {
+    try {
+      if (!editing) {
+        const created = makeAppointment({ ...input, newId: generateId(), now: new Date() });
+        setAppointments(prev => [...prev, created]);
+        addToast('Agendamento criado.', 'success');
+      } else {
+        let updated = updateAppointment(editing, input);
+        if (mode === 'REAGENDAR') updated = applyAppointmentAction(updated, 'REAGENDAR', { date: input.date, time: input.time });
+        setAppointments(prev => prev.map(a => a.id === editing.id ? updated : a));
+        addToast(mode === 'REAGENDAR' ? 'Agendamento reagendado.' : 'Agendamento atualizado.', 'success');
+      }
+    } catch (e) {
+      addToast(e instanceof Error ? e.message : 'Não foi possível salvar o agendamento.', 'error');
+    }
+  };
+
+  const handleAppointmentAction = (id: string, action: Exclude<AppointmentAction, 'REAGENDAR'>) => {
+    const current = appointments.find(a => a.id === id);
+    if (!current) return;
+    try {
+      const updated = applyAppointmentAction(current, action);
+      setAppointments(prev => prev.map(a => a.id === id ? updated : a));
+      addToast(
+        action === 'COMPARECEU' ? 'Marcado como compareceu.' : action === 'FALTOU' ? 'Marcado como faltou.' : 'Agendamento cancelado.',
+        'info'
+      );
+    } catch (e) {
+      addToast(e instanceof Error ? e.message : 'Ação inválida.', 'error');
+    }
+  };
+
+  const handleDeleteAppointment = (id: string) => {
+    setAppointments(prev => prev.filter(a => a.id !== id));
+    addToast('Agendamento excluído.', 'info');
+  };
+
+  const handleCreateOSFromAppointment = (appointment: Appointment) => {
+    setEditingOS(null);
+    setOsFromAppointment({ appointment, draft: appointmentToOSDraft(appointment) });
+    setIsModalOpen(true);
   };
 
   const handleSaveEntryModal = (desc: string, val: number, type: 'CREDIT' | 'DEBIT', dateStr: string, recurrence: 'SINGLE' | 'INSTALLMENT' | 'RECURRING', count: number) => {
@@ -539,6 +595,8 @@ Abrir OS?`)) {
   };
 
   useEffect(() => { document.documentElement.setAttribute('data-theme', currentTheme); }, [currentTheme]);
+  // Fechar o modal da OS (salvar, cancelar ou Esc) encerra o fluxo Agenda -> Criar OS; cancelar não altera o agendamento.
+  useEffect(() => { if (!isModalOpen) setOsFromAppointment(null); }, [isModalOpen]);
   useEffect(() => { if (showConfetti) setTimeout(() => setShowConfetti(false), 3000); }, [showConfetti]);
 
   useKeyboard('F2', () => {
@@ -656,6 +714,18 @@ Abrir OS?`)) {
               />
             )}
 
+            {activeTab === 'AGENDA' && (
+              <AgendaPage
+                appointments={appointments}
+                workOrders={workOrders}
+                clients={clients}
+                onSave={handleSaveAppointment}
+                onAction={handleAppointmentAction}
+                onDelete={handleDeleteAppointment}
+                onCreateOS={handleCreateOSFromAppointment}
+              />
+            )}
+
             {activeTab === 'PROCESSOS' && (
               <ProcessPage
                 workOrders={workOrders}
@@ -712,6 +782,7 @@ Abrir OS?`)) {
             onClose={() => setIsModalOpen(false)}
             onSave={handleSaveOSModal}
             editingOS={editingOS}
+            draft={editingOS ? undefined : osFromAppointment?.draft}
             clients={clients}
             catalogParts={catalogParts}
             catalogServices={catalogServices}

@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { WorkOrder, Client, OrderItem, CatalogItem, Technician, PartCategory, PART_CATEGORY_META, OSModalPayload } from '../types';
 import { getLocalDateString, Money } from '../utils/helpers';
-import { normalizeName, resolveCatalogItemId, resolveClientId, resolveTechnicianId } from '../utils/links';
+import { normalizeName, resolveCatalogItemId, resolveClientId, resolveTechnicianId, splitVehicle } from '../utils/links';
+import type { OSDraftFromAppointment } from '../services/schedule';
+import { appendNote } from '../services/agenda';
 import { toISOFromDateInput, parseDateFlexible, formatDateOnly } from '../utils/dates';
 import { MarginIndicator } from '../components/MarginIndicator';
 import { PartCategorySelect } from '../components/PartCategorySelect';
@@ -18,6 +20,8 @@ interface OSModalProps {
   nextOSNumber: number;
   isSaving: boolean;
   formatMoney: (val: number) => string;
+  /** Valores iniciais ao CRIAR (vindos de um agendamento). Ignorado ao editar. */
+  draft?: OSDraftFromAppointment;
 }
 
 // 🆕 Issue #41: Ordem de exibição das categorias
@@ -27,12 +31,15 @@ const CATEGORY_ORDER: PartCategory[] = [
 ];
 
 export const OSModal: React.FC<OSModalProps> = ({
-  isOpen, onClose, onSave, editingOS, clients, catalogParts, catalogServices, catalogTechnicians, nextOSNumber, isSaving, formatMoney
+  isOpen, onClose, onSave, editingOS, clients, catalogParts, catalogServices, catalogTechnicians, nextOSNumber, isSaving, formatMoney, draft
 }) => {
   // --- REFS PARA ATALHOS ---
   const partInputRef = useRef<HTMLInputElement>(null);
   const serviceInputRef = useRef<HTMLInputElement>(null);
   const clientInputRef = useRef<HTMLInputElement>(null);
+  // Motivo do agendamento a levar para a Obs. Interna (vazio = sem rascunho) e o último texto que o app mesmo preencheu.
+  const pendingDraftNote = useRef("");
+  const autoDraftNotes = useRef("");
 
   // --- ESTADOS DE DADOS ---
   const [osNumber, setOsNumber] = useState("");
@@ -183,6 +190,7 @@ export const OSModal: React.FC<OSModalProps> = ({
       setOsNumber(nextOSNumber.toString());
       setDate(getLocalDateString());
       setPaymentDate("");
+      setExpectedDate("");
       setClientName("");
       setChosenClientId("");
       setContact("");
@@ -196,8 +204,43 @@ export const OSModal: React.FC<OSModalProps> = ({
       setServices([]);
       setAdvanceAmountDisplay("");
     }
+    // Rascunho (Agenda -> Criar OS): só valores iniciais ao CRIAR. clientId só vale se o cliente ainda existe.
+    if (!editingOS && draft) {
+      const draftClient = draft.clientId ? clients.find(c => c.id === draft.clientId) : undefined;
+      setClientName(draft.clientName);
+      setChosenClientId(draftClient ? draftClient.id : "");
+      setContact(draft.clientPhone || draftClient?.phone || "");
+      const dv = splitVehicle(draft.vehicle);
+      setVehicle(dv.model);
+      setPlate(dv.plate);
+      // O motivo do agendamento vai para a Obs. Interna (nunca para as Observações da OS, que saem impressas),
+      // acrescentado na linha de baixo das notas que o cliente já tem: aplicado no efeito de auto-preenchimento.
+      pendingDraftNote.current = draft.notes.trim();
+      autoDraftNotes.current = "";
+    } else {
+      // sem rascunho (ou edição): nunca herda motivo de uma abertura anterior
+      pendingDraftNote.current = "";
+      autoDraftNotes.current = "";
+    }
     setTimeout(() => clientInputRef.current?.focus(), 100);
-  }, [isOpen, editingOS, nextOSNumber]);
+  }, [isOpen, editingOS, nextOSNumber, draft]);
+
+  // Motivo vindo da Agenda: com o cliente conhecido, notas atuais dele + linha de baixo + motivo; cliente não cadastrado:
+  // só o motivo; homônimo sem escolha: espera a escolha. Trocar a escolha refaz o texto para o NOVO cliente, mas só
+  // enquanto a Obs. Interna estiver vazia ou ainda for a que este efeito preencheu (o que o usuário digitou é respeitado).
+  // Isso também evita gravar as notas de um homônimo no cadastro do outro.
+  useEffect(() => {
+    const motivo = pendingDraftNote.current;
+    if (!motivo || !clientName) return;
+    let alvo: string | null = null;
+    if (selectedClient) alvo = appendNote(selectedClient.notes, motivo);
+    else if (!needsClientChoice) alvo = motivo;
+    if (alvo === null) return;
+    const novo = alvo;
+    const anterior = autoDraftNotes.current;
+    autoDraftNotes.current = novo;
+    setNotes(prev => (prev === "" || prev === anterior ? novo : prev));
+  }, [clientName, clients, selectedClient, needsClientChoice]);
 
   // Auto-preencher contato
   useEffect(() => {

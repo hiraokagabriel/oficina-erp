@@ -2,16 +2,17 @@ import React from 'react';
 
 interface SidebarProps {
   activeTab: string;
-  setActiveTab: (tab: 'FINANCEIRO' | 'OFICINA' | 'PROCESSOS' | 'CLIENTES' | 'PECAS' | 'CONFIG') => void;
+  setActiveTab: (tab: 'FINANCEIRO' | 'OFICINA' | 'AGENDA' | 'PROCESSOS' | 'CLIENTES' | 'PECAS' | 'CONFIG') => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
 }
 
-const NAV_ITEMS: { id: 'FINANCEIRO' | 'OFICINA' | 'PROCESSOS' | 'CLIENTES' | 'PECAS' | 'CONFIG'; label: string; icon: string }[] = [
+const NAV_ITEMS: { id: 'FINANCEIRO' | 'OFICINA' | 'AGENDA' | 'PROCESSOS' | 'CLIENTES' | 'PECAS' | 'CONFIG'; label: string; icon: string }[] = [
   { id: 'FINANCEIRO', label: 'Financeiro',      icon: '📊' },
   { id: 'PROCESSOS',  label: 'Processos',       icon: '📋' },
   { id: 'CLIENTES',   label: 'Clientes (CRM)',  icon: '👥' },
   { id: 'OFICINA',    label: 'Oficina',         icon: '🔧' },
+  { id: 'AGENDA',     label: 'Agenda',          icon: '🗓️' },
   { id: 'PECAS',      label: 'Peças',           icon: '📦' },
   { id: 'CONFIG',     label: 'Config',          icon: '⚙️' },
 ];

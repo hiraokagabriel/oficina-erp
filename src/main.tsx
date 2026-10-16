@@ -23,6 +23,10 @@ import "./styles-receivables.css";
 
 // PREVISÃO DE ENTREGA
 import "./styles-schedule.css";
+
+// AGENDA DE ENTRADA DE VEÍCULOS
+import "./styles-agenda.css";
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <App />

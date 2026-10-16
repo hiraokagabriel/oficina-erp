@@ -484,10 +484,15 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (loadStatus !== 'ok' || readOnly || conflict) return;
 
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = setTimeout(() => { void saveNowRef.current(); }, SAVE_DEBOUNCE_MS);
+    // A ref só indica "gravação armada" enquanto o timer está pendente: zere-a ao disparar e ao cancelar,
+    // senão hasPendingEdits() fica sempre verdadeiro e a verificação periódica descarta toda decisão.
+    saveTimeoutRef.current = setTimeout(() => {
+      saveTimeoutRef.current = null;
+      void saveNowRef.current();
+    }, SAVE_DEBOUNCE_MS);
 
     return () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      if (saveTimeoutRef.current) { clearTimeout(saveTimeoutRef.current); saveTimeoutRef.current = null; }
     };
   }, [ledger, workOrders, clients, catalogParts, catalogServices, catalogTechnicians, settings, dbPath, loadStatus, readOnly, conflict]);
 

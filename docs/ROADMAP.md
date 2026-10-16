@@ -130,7 +130,7 @@ Implementado e publicado (commits `4c9651a`, `5e9419c`, `9c345b1`, `c724c29`, `0
 - [x] Remover o código morto listado na seção 2 (feito: `src/domain/*`, `src/types/index.ts`, Rust solto em `src/`, `PrintableInvoice`, `InputModal`, `EditEntryModal`, `sound.ts`, fallback `window.electron`). Segue o código comentado do `App.tsx` e as props `onPrintClient`/`onPrintShop`, fora deste item.
 - [x] Migrações fora do `App.tsx` (`src/utils/migrations.ts`) e regra de finalização, parcelamento, pagamento e reabertura de OS extraída, sem mudar comportamento, para `src/services/osFinanceService.ts`. Segue no `App.tsx`: roteamento, ~20 estados de modal e os demais handlers.
 - [x] Eliminar os `any` do código de produção e unificar os tipos em `src/types.ts` (restam 8 `any` em `migrations.test.ts`).
-- [x] Trocar vínculo por nome por ids (cliente, veículo, item de catálogo, técnico). Plano 4.6 completo, **schema v2 ATIVO** (`CURRENT_SCHEMA_VERSION = 2`, `STEPS = [v0ToV1, v1ToV2]`):
+- [x] Trocar vínculo por nome por ids (cliente, veículo, item de catálogo, técnico). Plano 4.6 completo, **ativo desde o schema v2** (hoje `CURRENT_SCHEMA_VERSION = 3`, `STEPS = [v0ToV1, v1ToV2, v2ToV3]`):
   - OS novas e editadas gravam `clientId`, `vehicleId`, `technicianId` e `catalogItemId`; veículos novos ganham id; nome repetido de cliente abre o seletor "Qual cliente?" no cadastro da OS.
   - O cascade (renomear cliente, item ou técnico) casa por id e mantém os textos atualizados, com reserva pelo nome só quando ele é único.
   - Dívida e CRM agrupam por cliente resolvido por id (reserva `nome:<normalizado>`).
@@ -155,11 +155,15 @@ Implementada e testada (166 testes); **falta validar na interface** com banco si
 Critério de pronto: em qualquer dia, ver o total a receber e a lista de atrasados.
 
 ### Fase 2: Prazo e agenda
-- [ ] Previsão de entrega na OS, visível no Kanban, em Processos e na impressão.
-- [ ] Destaque de OS atrasadas.
-- [ ] Agenda de entrada de veículos (tela nova), ligada à criação da OS.
+Implementada e testada (357 testes e verificação no navegador com banco sintético). **Muda o formato do banco: schema v3** (coleção nova `appointments`), então todos os PCs devem atualizar **uma vez só, direto para a v3**, no mesmo dia.
+
+- [x] Previsão de entrega na OS (`WorkOrder.expectedDate`, só a data), visível no Kanban (selo em texto), em Processos (coluna ordenável e filtro "Só atrasadas"), no cabeçalho da Oficina ("N atrasadas · M com entrega hoje") e na impressão da OS (linha "PREVISÃO DE ENTREGA" só quando houver).
+- [x] Destaque de OS atrasadas: atrasada = previsão já passou (por dia local) e status Aprovado ou Em Serviço (`src/services/schedule.ts`). Orçamento, Aguardando Pagamento, Finalizada e Arquivada nunca atrasam.
+- [x] Agenda de entrada de veículos: aba **Agenda** (lista por dia, semana de segunda a domingo com navegação, "Hoje" e "Amanhã" em destaque). Agendamento com cliente, telefone, veículo, data, hora opcional e motivo; ações Criar OS, Compareceu, Faltou, Cancelar, Reagendar, Editar e Excluir. "Criar OS" abre a OS pré-preenchida e, ao salvar, marca o agendamento como Compareceu e liga a OS (`workOrderId`). O motivo vai para a **Obs. Interna** da OS, na linha de baixo das notas que o cliente já tem (nunca para as Observações da OS, que saem impressas). Cliente homônimo exige escolha; cliente não cadastrado fica só como texto, sem criar cadastro. Renomear o cliente atualiza os agendamentos dele por id.
 
 Critério de pronto: saber o que está atrasado e o que entra amanhã, sem planilha externa.
+
+Segue aberto da Fase 2: `.btn` primário no tema pastel tem contraste 3,46:1 na ponta rosa do gradiente (estilo global antigo, decisão de design); F2 só abre "Nova OS" na aba Oficina; o modal de agendamento não prende o foco do Tab; impressão real em A4 e janela Tauri real não foram testadas.
 
 ### Fase 3: Margem e preço
 - [ ] Relatório de margem por serviço, peça e categoria.

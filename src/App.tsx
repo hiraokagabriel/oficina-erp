@@ -6,7 +6,7 @@ import { adoptSecrets, stripDbSecrets } from './utils/secrets';
 import { CURRENT_SCHEMA_VERSION, migrate } from './utils/migrations';
 import { useFinance } from './hooks/useFinance';
 import { useKeyboard } from './hooks/useKeyboard';
-import { updateClientCascading, updateCatalogItemCascading } from './services/cascadeService';
+import { updateClientCascading, updateCatalogItemCascading, updateTechnicianCascading } from './services/cascadeService';
 import { uploadToDrive } from './services/googleDrive';
 import { Sidebar } from './components/Sidebar';
 import { Confetti } from './components/ui/Confetti';
@@ -335,7 +335,7 @@ Abrir OS?`)) {
   const handleSaveClient = (updatedClient: Client) => {
     const oldClient = clients.find(c => c.id === updatedClient.id);
     setClients(prev => prev.find(c => c.id === updatedClient.id) ? prev.map(c => c.id === updatedClient.id ? updatedClient : c) : [...prev, updatedClient]);
-    const { newWorkOrders, newLedger, hasChanges } = updateClientCascading(oldClient, updatedClient, workOrders, ledger);
+    const { newWorkOrders, newLedger, hasChanges } = updateClientCascading(oldClient, updatedClient, workOrders, ledger, clients);
     if (hasChanges) {
       setWorkOrders(newWorkOrders);
       setLedger(newLedger);
@@ -354,7 +354,7 @@ Abrir OS?`)) {
       oldItem = catalogServices.find(s => s.id === updatedItem.id);
       setCatalogServices(prev => prev.find(s => s.id === updatedItem.id) ? prev.map(s => s.id === updatedItem.id ? updatedItem : s) : [...prev, updatedItem]);
     }
-    const { newWorkOrders, hasChanges } = updateCatalogItemCascading(oldItem, updatedItem, workOrders);
+    const { newWorkOrders, hasChanges } = updateCatalogItemCascading(oldItem, updatedItem, workOrders, type === 'part' ? catalogParts : catalogServices, type);
     if (hasChanges) {
       setWorkOrders(newWorkOrders);
       addToast('Atualizado em cascata!', 'success');
@@ -369,7 +369,14 @@ Abrir OS?`)) {
         ? prev.map(t => t.id === tech.id ? tech : t)
         : [...prev, tech]
     );
-    addToast('Técnico salvo!', 'success');
+    const oldTech = catalogTechnicians.find(t => t.id === tech.id);
+    const { newWorkOrders, hasChanges } = updateTechnicianCascading(oldTech, tech, workOrders, catalogTechnicians);
+    if (hasChanges) {
+      setWorkOrders(newWorkOrders);
+      addToast('Atualizado em cascata!', 'success');
+    } else {
+      addToast('Técnico salvo!', 'success');
+    }
   };
 
   const handleInstallmentConfirm = (config: InstallmentConfig) => {

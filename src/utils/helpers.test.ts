@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   Money, calculateFinancials, createEntry, createWorkOrder, generateId, splitCents,
-  learnCatalogItems, learnClientData, learnTechnician, updateWorkOrderData,
+  learnTechnician, updateWorkOrderData,
 } from './helpers';
-import type { CatalogItem, Client, OrderItem, Technician, WorkOrder } from '../types';
+import type { CatalogItem, OrderItem, Technician, WorkOrder } from '../types';
 
 const NOW = '2026-03-15T15:00:00.000Z';
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date(NOW)); });
@@ -147,57 +147,6 @@ describe('updateWorkOrderData', () => {
     const o = updateWorkOrderData(original, 1, 'Gol', 'Fulano', '1', '10', [cat('a', 'X', 9999)], []);
     expect(o.total).toBe(9999);
     expect(o.financialId).toBe('fin1');
-  });
-});
-
-describe('learnClientData', () => {
-  const base: Client[] = [{ id: 'c1', name: 'Fulano Teste', phone: '1', notes: 'n', vehicles: [{ model: 'Gol', plate: 'A' }] }];
-  it('nome vazio não altera', () => {
-    expect(learnClientData(base, '   ', 'Gol', 'A', '1')).toBe(base);
-  });
-  it('cliente novo é adicionado com trim', () => {
-    const r = learnClientData(base, '  Novo  ', 'Uno', 'B', '2');
-    expect(r).toHaveLength(2);
-    expect(r[1]).toMatchObject({ name: 'Novo', phone: '2', notes: '', vehicles: [{ model: 'Uno', plate: 'B' }] });
-  });
-  it('existente (sem caixa) adiciona veículo novo e atualiza telefone/notas', () => {
-    const r = learnClientData(base, 'fulano teste', 'Uno', 'B', '9', 'nota nova');
-    expect(r).toHaveLength(1);
-    expect(r[0].phone).toBe('9');
-    expect(r[0].notes).toBe('nota nova');
-    expect(r[0].vehicles).toHaveLength(2);
-  });
-  it('veículo repetido não duplica; telefone vazio mantém o antigo', () => {
-    const r = learnClientData(base, 'Fulano Teste', 'Gol', 'A', '');
-    expect(r[0].vehicles).toHaveLength(1);
-    expect(r[0].phone).toBe('1');
-    expect(r[0].notes).toBe('n');
-  });
-  // COMPORTAMENTO ATUAL (suspeito): o cliente é identificado pelo NOME; dois clientes homônimos viram um só.
-  it('homônimos são fundidos', () => {
-    const r = learnClientData(base, 'FULANO TESTE', 'Palio', 'C', '5');
-    expect(r).toHaveLength(1);
-    expect(r[0].vehicles.map(v => v.plate)).toEqual(['A', 'C']);
-  });
-});
-
-describe('learnCatalogItems', () => {
-  it('adiciona itens novos e ignora existentes (sem caixa)', () => {
-    const r = learnCatalogItems([cat('1', 'Filtro')], [cat('2', 'FILTRO'), cat('3', 'Vela')]);
-    expect(r.map(c => c.description)).toEqual(['Filtro', 'Vela']);
-  });
-  it('preenche categoria só se a existente não tiver', () => {
-    const r = learnCatalogItems(
-      [cat('1', 'Filtro'), cat('2', 'Vela', 1, { category: 'MOTOR' })],
-      [cat('9', 'filtro', 1, { category: 'FREIO' }), cat('8', 'vela', 1, { category: 'FREIO' })]
-    );
-    expect(r[0].category).toBe('FREIO');
-    expect(r[1].category).toBe('MOTOR');
-  });
-  // COMPORTAMENTO ATUAL (suspeito): item existente nunca tem preço/custo atualizado pelo aprendizado.
-  it('preço novo de item existente é ignorado', () => {
-    const r = learnCatalogItems([cat('1', 'Filtro', 1000)], [cat('2', 'Filtro', 5000)]);
-    expect(r[0].price).toBe(1000);
   });
 });
 

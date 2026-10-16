@@ -1,4 +1,4 @@
-import { CatalogItem, Client, LedgerEntry, WorkOrder, OrderItem, Technician } from '../types';
+import { CatalogItem, LedgerEntry, WorkOrder, OrderItem, Technician } from '../types';
 import { toISOFromDateInput } from './dates';
 
 export const generateId = (): string => {
@@ -196,73 +196,6 @@ export const updateWorkOrderData = (
     publicNotes: publicNotes !== undefined ? publicNotes : original.publicNotes,
     advanceAmount: advanceAmount !== undefined ? advanceAmount : original.advanceAmount,
   };
-};
-
-export const learnClientData = (
-  currentClients: Client[],
-  name: string,
-  vehicleModel: string,
-  plate: string,
-  phone: string,
-  notes?: string
-): Client[] => {
-  const normalizedName = name.trim();
-  if (!normalizedName) return currentClients;
-
-  const existingIndex = currentClients.findIndex(c => c.name.toLowerCase() === normalizedName.toLowerCase());
-  
-  const newVehicle = { model: vehicleModel, plate };
-  
-  if (existingIndex >= 0) {
-    const client = currentClients[existingIndex];
-    const vehicleExists = client.vehicles.some(v => v.plate === plate && v.model === vehicleModel);
-    
-    const updatedClient = {
-      ...client,
-      phone: phone || client.phone,
-      notes: notes || client.notes,
-      vehicles: vehicleExists ? client.vehicles : [...client.vehicles, newVehicle]
-    };
-
-    const newList = [...currentClients];
-    newList[existingIndex] = updatedClient;
-    return newList;
-  } else {
-    return [
-      ...currentClients,
-      {
-        id: generateId(),
-        name: normalizedName,
-        phone,
-        notes: notes || '',
-        vehicles: [newVehicle]
-      }
-    ];
-  }
-};
-
-export const learnCatalogItems = (
-  currentCatalog: CatalogItem[],
-  newItems: CatalogItem[]
-): CatalogItem[] => {
-  const updatedCatalog = [...currentCatalog];
-
-  newItems.forEach(item => {
-    const existingIdx = updatedCatalog.findIndex(
-      c => c.description.toLowerCase() === item.description.toLowerCase()
-    );
-
-    if (existingIdx === -1) {
-      updatedCatalog.push({ ...item });
-    } else {
-      const existing = updatedCatalog[existingIdx];
-      if (!existing.category && item.category) {
-        updatedCatalog[existingIdx] = { ...existing, category: item.category };
-      }
-    }
-  });
-
-  return updatedCatalog;
 };
 
 export const learnTechnician = (

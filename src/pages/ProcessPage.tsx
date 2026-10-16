@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { WorkOrder, OSStatus, STATUS_LABELS } from '../types';
+import { compareByExpectedDate, getDeliveryBadge } from '../services/deliveryBadge';
+import { getDeliveryStatus } from '../services/schedule';
 
 interface ProcessPageProps {
   workOrders: WorkOrder[];
@@ -7,7 +9,7 @@ interface ProcessPageProps {
   onUpdateStatus: (id: string, newStatus: OSStatus) => void;
 }
 
-type SortKey = 'osNumber' | 'clientName' | 'createdAt' | 'total' | 'paymentDate';
+type SortKey = 'osNumber' | 'clientName' | 'createdAt' | 'total' | 'paymentDate' | 'expectedDate';
 
 export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew, onUpdateStatus }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -17,6 +19,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [expandedGroups, setExpandedGroups] = useState<Set<OSStatus>>(new Set(['ORCAMENTO', 'APROVADO', 'EM_SERVICO']));
   const [selectedOS, setSelectedOS] = useState<string | null>(null);
+  const [onlyLate, setOnlyLate] = useState(false);
 
   // 📊 ESTATÍSTICAS GLOBAIS
   const stats = useMemo(() => {
@@ -59,7 +62,13 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
       });
     }
 
+    if (onlyLate) {
+      const today = new Date();
+      result = result.filter(os => getDeliveryStatus(os, today) === 'ATRASADA');
+    }
+
     result.sort((a, b) => {
+      if (sortBy === 'expectedDate') return compareByExpectedDate(a, b, sortDirection);
       let valA: string | number | undefined = a[sortBy];
       let valB: string | number | undefined = b[sortBy];
 
@@ -83,7 +92,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
     });
 
     return result;
-  }, [workOrders, searchTerm, selectedStatus, dateFilter, sortBy, sortDirection]);
+  }, [workOrders, searchTerm, selectedStatus, dateFilter, onlyLate, sortBy, sortDirection]);
 
   // 📋 ESTATÍSTICAS POR STATUS
   const groupStats = useMemo(() => {
@@ -340,9 +349,16 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
               </select>
             </div>
           </div>
+
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="delivery-only-late">
+              <input type="checkbox" checked={onlyLate} onChange={(e) => setOnlyLate(e.target.checked)} />
+              Só atrasadas
+            </label>
+          </div>
         </div>
 
-        {(searchTerm || selectedStatus !== 'ALL' || dateFilter !== 'all') && (
+        {(searchTerm || selectedStatus !== 'ALL' || dateFilter !== 'all' || onlyLate) && (
           <div style={{ marginTop: '16px', textAlign: 'right' }}>
             <button 
               className="btn-sm"
@@ -350,6 +366,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                 setSearchTerm('');
                 setSelectedStatus('ALL');
                 setDateFilter('all');
+                setOnlyLate(false);
               }}
             >
               ✕ Limpar Filtros
@@ -370,7 +387,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
             Nenhum processo encontrado
           </h3>
           <p style={{ fontSize: '1rem', opacity: 0.7 }}>
-            {searchTerm || selectedStatus !== 'ALL' || dateFilter !== 'all'
+            {searchTerm || selectedStatus !== 'ALL' || dateFilter !== 'all' || onlyLate
               ? 'Tente ajustar os filtros acima'
               : 'Crie seu primeiro processo clicando no botão acima'}
           </p>
@@ -451,6 +468,13 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                             💵 Pagamento <SortIcon column="paymentDate" />
                           </th>
                           <th 
+                            style={{ width: '14%', cursor: 'pointer' }}
+                            onClick={() => handleSort('expectedDate')}
+                            className="sortable-th"
+                          >
+                            🚚 Previsão de entrega <SortIcon column="expectedDate" />
+                          </th>
+                          <th 
                             style={{ width: '12%', cursor: 'pointer' }}
                             onClick={() => handleSort('total')}
                             className="sortable-th"
@@ -510,6 +534,21 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                                 }}>
                                   Pendente
                                 </span>
+                              )}
+                            </td>
+                            <td>
+                              {os.expectedDate ? (() => {
+                                const badge = getDeliveryBadge(os, new Date());
+                                return (
+                                  <div className="process-expected">
+                                    <span className="cell-secondary">{formatDate(os.expectedDate)}</span>
+                                    {badge && badge.kind === 'atrasada' && (
+                                      <span className={`delivery-badge delivery-badge--${badge.kind}`}>{badge.label}</span>
+                                    )}
+                                  </div>
+                                );
+                              })() : (
+                                <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Sem previsão</span>
                               )}
                             </td>
                             <td>

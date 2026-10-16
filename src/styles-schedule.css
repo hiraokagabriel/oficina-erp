@@ -1,0 +1,23 @@
+/* PREVISÃO DE ENTREGA (Kanban, Processos, resumo da Oficina). Usa só variáveis de tema (escuro e pastel). */
+.delivery-badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 0.72rem; line-height: 1.4;
+  border: 1px solid var(--border); color: var(--text-muted); background: transparent; white-space: nowrap; }
+.delivery-badge--atrasada { color: var(--danger); border-color: var(--danger); font-weight: 700; }
+.delivery-badge--hoje { color: var(--warning); border-color: var(--warning); font-weight: 700; }
+
+.delivery-summary { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 8px;
+  border: 1px solid var(--border); font-size: 0.85rem; color: var(--text-main); }
+.delivery-summary .delivery-late { color: var(--danger); font-weight: 700; }
+.delivery-summary .delivery-today { color: var(--warning); font-weight: 700; }
+
+.process-expected { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.delivery-only-late { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9rem; color: var(--text-main); min-height: 38px; }
+.delivery-only-late input { width: 16px; height: 16px; accent-color: var(--primary); }
+.delivery-only-late input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* Tema pastel: --danger (#d08c7f) e --warning (#e9c46a) são pálidos demais como TEXTO sobre branco (< 4,5:1); use tons escuros. */
+[data-theme="pastel"] .delivery-badge--atrasada,
+[data-theme="pastel"] .delivery-summary .delivery-late { color: #a8453a; }
+[data-theme="pastel"] .delivery-badge--atrasada { border-color: #a8453a; }
+[data-theme="pastel"] .delivery-badge--hoje,
+[data-theme="pastel"] .delivery-summary .delivery-today { color: #7a5200; }
+[data-theme="pastel"] .delivery-badge--hoje { border-color: #7a5200; }

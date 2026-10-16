@@ -1,4 +1,5 @@
 import { WorkOrder, WorkshopSettings, STATUS_LABELS, PartCategory, PART_CATEGORY_META } from '../types';
+import { formatExpectedDate } from '../services/schedule';
 
 // Variante de impressão: CLIENT = via do cliente (assina o mecânico), SHOP = via da oficina (assina o cliente)
 export type PrintVariant = 'CLIENT' | 'SHOP';
@@ -646,6 +647,10 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
               <span class="label-sm">DATA EMISSÃO</span>
               <span class="meta-value">${formatDate(data.createdAt)}</span>
             </div>
+            ${formatExpectedDate(data) ? `<div class="meta-item">
+              <span class="label-sm">PREVISÃO DE ENTREGA</span>
+              <span class="meta-value">${formatExpectedDate(data)}</span>
+            </div>` : ''}
             <div class="meta-item">
               <span class="label-sm">STATUS</span>
               <span class="meta-value status-print">${STATUS_LABELS[data.status]}</span>

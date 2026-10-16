@@ -221,8 +221,8 @@ function AppContent() {
         data.advanceAmount,
       );
 
-      // clientId/vehicleId/technicianId sempre regravados: updateWorkOrderData preserva os campos de `original`.
-      let updated: WorkOrder = { ...updatedBase, technician: technicianName || undefined, clientId, vehicleId, technicianId };
+      // clientId/vehicleId/technicianId/expectedDate sempre regravados (expectedDate vazio limpa a previsão): updateWorkOrderData preserva os campos de `original`.
+      let updated: WorkOrder = { ...updatedBase, technician: technicianName || undefined, clientId, vehicleId, technicianId, expectedDate: data.expectedDate };
       // Adiantamento no caixa (D3: OS finalizada/com financeiro não sincroniza). O campo vazio do modal zera o adiantamento.
       if (!isAdvanceSyncLocked(editingOS)) {
         const advance = syncAdvanceEntry({
@@ -247,6 +247,7 @@ function AppContent() {
         clientId,
         vehicleId,
         technicianId,
+        expectedDate: data.expectedDate,
         clientName: data.clientName,
         clientPhone: data.clientPhone,
         mileage: data.mileage,

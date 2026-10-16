@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { WorkOrder, OSStatus } from '../types';
 import { KanbanBoard } from '../components/KanbanBoard';
+import { summarizeDeliveries } from '../services/schedule';
 
 interface WorkshopPageProps {
   workOrders: WorkOrder[];
@@ -37,12 +38,22 @@ export const WorkshopPage: React.FC<WorkshopPageProps> = ({
     [workOrders]
   );
 
+  const deliveries = useMemo(() => summarizeDeliveries(workOrders, new Date()), [workOrders]);
+  const lateCount = deliveries.atrasadas.length;
+
   return (
     <div className="workshop-page" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div className="page-header" style={{ marginBottom: 15, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1 className="page-title" style={{ margin: 0 }}>Gestão de Oficina</h1>
         
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {(lateCount > 0 || deliveries.hoje > 0) && (
+            <span className="delivery-summary" role="status">
+              <span className="delivery-late">{lateCount} {lateCount === 1 ? 'atrasada' : 'atrasadas'}</span>
+              <span aria-hidden="true">·</span>
+              <span className="delivery-today">{deliveries.hoje} com entrega hoje</span>
+            </span>
+          )}
           {/* 🆕 BOTÃO DE TOGGLE ARQUIVADAS */}
           <button 
             className={showArchived ? "btn" : "btn-secondary"} 

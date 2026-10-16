@@ -4,6 +4,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { WorkOrder, OSStatus } from '../types';
 import { ContextMenu } from './ContextMenu';
 import { ActionMenu, MenuItem } from './ActionMenu';
+import { getDeliveryBadge } from '../services/deliveryBadge';
 
 declare global {
   interface Window {
@@ -202,6 +203,8 @@ export const KanbanCard = React.memo(({
     setContextMenu({ x: e.clientX, y: e.clientY });
   };
 
+  const deliveryBadge = getDeliveryBadge(os, new Date());
+
   const shouldShowHoverEffects = isHovered && !isDragging && !forcedDragging;
 
   return (
@@ -272,6 +275,14 @@ export const KanbanCard = React.memo(({
 
           <div className="os-client" style={{ marginBottom: 4, marginTop: 8 }}>{os.clientName}</div>
           <div className="os-vehicle" style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{os.vehicle}</div>
+
+          {deliveryBadge && (
+            <div style={{ marginTop: 6 }}>
+              <span className={`delivery-badge delivery-badge--${deliveryBadge.kind}`} title={deliveryBadge.title}>
+                {deliveryBadge.label}
+              </span>
+            </div>
+          )}
 
           {!!(os.technician || '').trim() && (
             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4 }}>

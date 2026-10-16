@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { WorkOrder, Client, OrderItem, CatalogItem, Technician, PartCategory, PART_CATEGORY_META, OSModalPayload } from '../types';
 import { getLocalDateString, Money } from '../utils/helpers';
 import { normalizeName, resolveCatalogItemId, resolveClientId, resolveTechnicianId } from '../utils/links';
-import { toISOFromDateInput } from '../utils/dates';
+import { toISOFromDateInput, parseDateFlexible, formatDateOnly } from '../utils/dates';
 import { MarginIndicator } from '../components/MarginIndicator';
 import { PartCategorySelect } from '../components/PartCategorySelect';
 
@@ -38,6 +38,7 @@ export const OSModal: React.FC<OSModalProps> = ({
   const [osNumber, setOsNumber] = useState("");
   const [date, setDate] = useState("");
   const [paymentDate, setPaymentDate] = useState("");
+  const [expectedDate, setExpectedDate] = useState(""); // previsão de entrega (AAAA-MM-DD do input; vazio = sem previsão)
   const [clientName, setClientName] = useState("");
   // Cliente escolhido quando há homônimos no cadastro (plano 4.6); vazio = sem escolha.
   const [chosenClientId, setChosenClientId] = useState("");
@@ -148,6 +149,7 @@ export const OSModal: React.FC<OSModalProps> = ({
       setOsNumber(editingOS.osNumber.toString());
       setDate(editingOS.createdAt ? editingOS.createdAt.split('T')[0] : getLocalDateString());
       setPaymentDate(editingOS.paymentDate ? editingOS.paymentDate.split('T')[0] : "");
+      setExpectedDate(editingOS.expectedDate ? formatDateOnly(parseDateFlexible(editingOS.expectedDate)) : "");
       setClientName(editingOS.clientName);
 
       // Por clientId; sem ele, pelo nome (só se único: homônimos não são adivinhados).
@@ -325,6 +327,7 @@ export const OSModal: React.FC<OSModalProps> = ({
       osNumber: numOS,
       createdAt: date,
       paymentDate: paymentDate ? toISOFromDateInput(paymentDate) : undefined,
+      expectedDate: expectedDate ? toISOFromDateInput(expectedDate) : undefined,
       clientId: selectedClient?.id,
       technicianId: resolveTechnicianId(technician, catalogTechnicians),
       clientName,
@@ -381,6 +384,17 @@ export const OSModal: React.FC<OSModalProps> = ({
               value={paymentDate}
               onChange={e => setPaymentDate(e.target.value)}
               style={{ color: paymentDate ? 'var(--success)' : 'var(--text-muted)', fontWeight: paymentDate ? 'bold' : 'normal' }}
+            />
+          </div>
+          <div className="form-group" style={{ flex: 1 }}>
+            <label className="form-label" htmlFor="os-expected-date">🚚 Previsão de entrega <span style={{ opacity: 0.6, fontSize: '0.8rem' }}>(Opcional)</span></label>
+            <input
+              id="os-expected-date"
+              className="form-input"
+              type="date"
+              value={expectedDate}
+              onChange={e => setExpectedDate(e.target.value)}
+              style={{ color: 'var(--text-main)' }}
             />
           </div>
           <div className="form-group" style={{ flex: 2 }}>

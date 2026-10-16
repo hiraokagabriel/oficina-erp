@@ -6,7 +6,7 @@ import { learnTechnician } from './helpers';
 import { matchClientId, normalizeName, resolveCatalogItemId, resolveTechnicianId, resolveVehicleId } from './links';
 
 // Versão do formato do banco. Subir aqui e acrescentar um passo em STEPS.
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 
 export interface MigrationResult {
   db: DatabaseSchema;
@@ -69,7 +69,7 @@ const linkItems = (items: OrderItem[] | undefined, catalog: CatalogItem[]): Orde
   items?.map(it => withLink(it, 'catalogItemId', resolveCatalogItemId(it, catalog)));
 
 /**
- * v1 -> v2 (PURA, ainda NÃO registrada em STEPS: a ativação é um passo à parte).
+ * v1 -> v2 (PURA, registrada em STEPS).
  * Só ACRESCENTA ids (vehicles[].id, WorkOrder.clientId/vehicleId/technicianId, OrderItem.catalogItemId):
  * nunca altera nem normaliza o texto gravado, nunca apaga registro e não toca no ledger.
  * Decisão: as descrições do ledger NÃO são migradas (ficam como texto histórico).
@@ -136,7 +136,7 @@ export const countUnresolvedLinks = (db: DatabaseSchema): UnresolvedLinks => {
 };
 
 // STEPS[n] leva da versão n para n+1.
-const STEPS: Array<(db: DatabaseSchema) => DatabaseSchema> = [v0ToV1];
+const STEPS: Array<(db: DatabaseSchema) => DatabaseSchema> = [v0ToV1, v1ToV2];
 
 /**
  * Migra o banco até CURRENT_SCHEMA_VERSION. Pura (não altera a entrada) e idempotente.

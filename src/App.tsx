@@ -3,7 +3,7 @@ import { useState, useEffect, lazy, Suspense } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { DatabaseProvider, useDatabase, parseDatabase } from './context/DatabaseContext';
 import { adoptSecrets, stripDbSecrets } from './utils/secrets';
-import { CURRENT_SCHEMA_VERSION, migrate } from './utils/migrations';
+import { CURRENT_SCHEMA_VERSION, countUnresolvedLinks, migrate } from './utils/migrations';
 import { useFinance } from './hooks/useFinance';
 import { useKeyboard } from './hooks/useKeyboard';
 import { updateClientCascading, updateCatalogItemCascading, updateTechnicianCascading } from './services/cascadeService';
@@ -455,7 +455,11 @@ Abrir OS?`)) {
     setCatalogServices(db.catalogServices);
     setCatalogTechnicians(db.catalogTechnicians);
     setSettings(adoptSecrets(db.settings)); // segredos do backup só entram se o local estiver vazio
-    addToast(changed ? `Dados importados e atualizados para o formato v${CURRENT_SCHEMA_VERSION}!` : 'Dados importados!', 'success');
+    const semCliente = changed ? countUnresolvedLinks(db).osSemCliente : 0;
+    const aviso = semCliente > 0
+      ? ` ${semCliente} ${semCliente === 1 ? 'OS ficou sem cliente vinculado e segue' : 'OS ficaram sem cliente vinculado e seguem'} funcionando pelo nome.`
+      : '';
+    addToast(changed ? `Dados importados e atualizados para o formato v${CURRENT_SCHEMA_VERSION}!${aviso}` : 'Dados importados!', 'success');
   };
 
   const executePendingAction = () => {

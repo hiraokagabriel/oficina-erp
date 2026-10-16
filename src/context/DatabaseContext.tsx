@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { LedgerEntry, WorkOrder, Client, CatalogItem, Technician, WorkshopSettings, DatabaseSchema, DatabaseMeta } from '../types';
-import { CURRENT_SCHEMA_VERSION, migrate } from '../utils/migrations';
+import { CURRENT_SCHEMA_VERSION, countUnresolvedLinks, migrate } from '../utils/migrations';
 import { diffLocalChanges, LocalChange } from '../utils/conflictDiff';
 import { generateId } from '../utils/helpers';
 import { adoptSecrets, hasSecrets, persistSecrets, stripDbSecrets } from '../utils/secrets';
@@ -286,7 +286,11 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Segredos do arquivo entram no localStorage só se estiver vazio; em memória vale o valor local.
     setSettingsRaw(adoptSecrets(p.db.settings));
     if (p.migratedFrom !== null) {
-      addToast(`Banco atualizado para o formato v${CURRENT_SCHEMA_VERSION}. Uma cópia do original foi guardada em backups.`, 'info');
+      const semCliente = countUnresolvedLinks(p.db).osSemCliente;
+      const aviso = semCliente > 0
+        ? ` ${semCliente} ${semCliente === 1 ? 'OS ficou sem cliente vinculado e segue' : 'OS ficaram sem cliente vinculado e seguem'} funcionando pelo nome.`
+        : '';
+      addToast(`Banco atualizado para o formato v${CURRENT_SCHEMA_VERSION}. Uma cópia do original foi guardada em backups.${aviso}`, 'info');
     }
   };
 

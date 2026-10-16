@@ -130,7 +130,11 @@ Implementado e publicado (commits `4c9651a`, `5e9419c`, `9c345b1`, `c724c29`, `0
 - [x] Remover o código morto listado na seção 2 (feito: `src/domain/*`, `src/types/index.ts`, Rust solto em `src/`, `PrintableInvoice`, `InputModal`, `EditEntryModal`, `sound.ts`, fallback `window.electron`). Segue o código comentado do `App.tsx` e as props `onPrintClient`/`onPrintShop`, fora deste item.
 - [x] Migrações fora do `App.tsx` (`src/utils/migrations.ts`) e regra de finalização, parcelamento, pagamento e reabertura de OS extraída, sem mudar comportamento, para `src/services/osFinanceService.ts`. Segue no `App.tsx`: roteamento, ~20 estados de modal e os demais handlers.
 - [x] Eliminar os `any` do código de produção e unificar os tipos em `src/types.ts` (restam 8 `any` em `migrations.test.ts`).
-- [ ] Trocar vínculo por nome por ids (cliente, item de catálogo) com migração.
+- [ ] Trocar vínculo por nome por ids (cliente, veículo, item de catálogo, técnico). **Implementado no código (plano 4.6, passos 1 a 5), mas a migração v1 → v2 ainda NÃO está ativada** (`CURRENT_SCHEMA_VERSION` continua 1 e `v1ToV2` está fora de `STEPS`). O que já funciona:
+  - OS novas e editadas gravam `clientId`, `vehicleId`, `technicianId` e `catalogItemId`; veículos novos ganham id; nome repetido de cliente abre o seletor "Qual cliente?" no cadastro da OS.
+  - O cascade (renomear cliente, item ou técnico) casa por id e mantém os textos atualizados, com reserva pelo nome só quando ele é único.
+  - Dívida e CRM agrupam por cliente resolvido por id (reserva `nome:<normalizado>`).
+  - Falta o **passo 6**: ativar o schema v2, que muda o formato do banco e exige **atualizar todos os PCs no mesmo dia**. Aguarda a autorização do dono, depois de testar na interface com banco sintético.
 - [x] Dinheiro em centavos exatos (`Money.fromFloat`, `splitCents`) e datas sem deslocamento de fuso (`src/utils/dates.ts`). Ficou de fora: os filtros por mês do Financeiro ainda leem o trecho UTC da data ISO (seguro de UTC-12 a UTC+11) e lançamentos antigos gravados à meia-noite UTC continuam aparecendo um dia antes.
 - [x] Testes de parcelamento, finalização/reabertura, pagamento, cascade, helpers, datas e contas a receber (`npm test`, 166 testes, fixtures sintéticas, também em vários fusos). Os que sobraram da seção 3.1 **fixam o comportamento atual, inclusive os defeitos**. Falta validar o fluxo na interface.
 - [ ] Atualizar o README.
@@ -182,11 +186,21 @@ Os testes marcam os que seguem abertos com `// COMPORTAMENTO ATUAL (suspeito)` e
 - `restoreFinancial` apaga qualquer lançamento com o mesmo `groupId`, inclusive de outra origem, e reabre a OS em silêncio se o `financialId` estiver órfão.
 - Desarquivar leva a OS para `ORCAMENTO`, mesmo que ela já tenha financeiro lançado (as receitas continuam intactas, mas a OS não aparece como `AGUARDANDO_PAGAMENTO`). Decisão do usuário: **manter assim por enquanto**. Melhoria possível: guardar o status anterior à arquivação (campo opcional novo na OS) e voltar a ele.
 
-**Vínculo por nome (item "trocar nome por ids"):**
-- O cascade casa cliente e item por texto, sensível a caixa, e troca só a 1ª ocorrência na descrição do Ledger (`includes`/`replace`: "Mari" casa com "Mariana").
-- Veículos são casados por índice: remover o 1º reescreve a OS do Gol como Uno.
-- O cascade altera também OS já finalizadas. Mudança só de preço no catálogo não propaga.
-- `learnClientData` funde clientes homônimos; `learnCatalogItems` nunca atualiza o preço de um item existente.
+**Vínculo por nome (item "trocar nome por ids")**
+
+Corrigidos no código (4.6, testes `CORRIGIDO (4.6)`; valem plenamente para OS com ids, isto é, as salvas depois da 4.6 ou migradas pelo passo 6):
+- O cascade casava cliente e item por texto, sensível a caixa, e trocava só a 1ª ocorrência na descrição do Ledger ("Mari" corrompia "Mariana"); agora casa por id e troca o trecho exato `OS #N - <nome>` de todas as parcelas, só nos lançamentos das OS do cliente.
+- Veículos eram casados por índice (remover o 1º reescrevia a OS do Gol como Uno); agora por `vehicleId`, e veículo removido deixa o texto da OS intacto. Placa vazia deixou de gerar "modelo - ".
+- `learnClientData` fundia clientes homônimos e `learnCatalogItems` reusava o id do item da OS; foram substituídos por `linkClient` e `linkCatalogItems`. Renomear técnico agora propaga para as OS.
+
+Segue como está (decisões do dono):
+- O cascade atualiza também OS já finalizadas e arquivadas (a impressão mostra o nome atual). Mudança só de preço no catálogo não propaga; o preço da OS nunca muda. O aprendizado de cadastro não atualiza preço do catálogo.
+- Descrições antigas do Ledger não são migradas.
+
+Limitações enquanto o passo 6 não for ativado:
+- OS antigas não têm ids: o cascade as liga na hora só quando o nome é único; homônimos sem id não são tocados e ficam fora dos totais por cliente do CRM (o histórico do cliente ainda os mostra pela reserva do texto, então a mesma OS pode aparecer no histórico dos dois homônimos).
+- Veículos antigos do cliente não têm id; o cascade não os atualiza até a migração ou até o cadastro ser salvo de novo.
+- `resolveClientId` percorre o cadastro por OS (O(OS × clientes)); aceitável hoje, indexar se o banco crescer.
 
 ## 4. Fora de escopo (por enquanto)
 

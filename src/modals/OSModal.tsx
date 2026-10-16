@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { WorkOrder, Client, OrderItem, CatalogItem, Technician, PartCategory, PART_CATEGORY_META, OSModalPayload } from '../types';
 import { getLocalDateString, Money } from '../utils/helpers';
+import { normalizeName, resolveCatalogItemId, resolveClientId, resolveTechnicianId } from '../utils/links';
 import { toISOFromDateInput } from '../utils/dates';
 import { MarginIndicator } from '../components/MarginIndicator';
 import { PartCategorySelect } from '../components/PartCategorySelect';
@@ -38,6 +39,8 @@ export const OSModal: React.FC<OSModalProps> = ({
   const [date, setDate] = useState("");
   const [paymentDate, setPaymentDate] = useState("");
   const [clientName, setClientName] = useState("");
+  // Cliente escolhido quando há homônimos no cadastro (plano 4.6); vazio = sem escolha.
+  const [chosenClientId, setChosenClientId] = useState("");
   const [contact, setContact] = useState("");
   const [technician, setTechnician] = useState("");
   const [notes, setNotes] = useState("");
@@ -117,11 +120,19 @@ export const OSModal: React.FC<OSModalProps> = ({
     return clients.filter(c => c.name.toLowerCase().includes(term)).slice(0, 50);
   }, [clients, clientName]);
 
-  const suggestedVehicles = useMemo(() => {
-    if (!clientName) return [];
-    const client = clients.find(c => c.name.toLowerCase() === clientName.trim().toLowerCase());
-    return client ? client.vehicles : [];
-  }, [clientName, clients]);
+  // Clientes de mesmo nome (normalizado). Mais de um = homônimos: o usuário precisa escolher qual.
+  const sameNameClients = useMemo(() => {
+    const n = normalizeName(clientName);
+    return n ? clients.filter(c => normalizeName(c.name) === n) : [];
+  }, [clients, clientName]);
+  const hasHomonyms = sameNameClients.length > 1;
+  const selectedClient = useMemo(() => {
+    if (sameNameClients.length === 1) return sameNameClients[0];
+    return sameNameClients.find(c => c.id === chosenClientId);
+  }, [sameNameClients, chosenClientId]);
+  const needsClientChoice = hasHomonyms && !selectedClient;
+
+  const suggestedVehicles = useMemo(() => selectedClient ? selectedClient.vehicles : [], [selectedClient]);
 
   const suggestedTechnicians = useMemo(() => {
     const term = technician.trim().toLowerCase();
@@ -139,7 +150,10 @@ export const OSModal: React.FC<OSModalProps> = ({
       setPaymentDate(editingOS.paymentDate ? editingOS.paymentDate.split('T')[0] : "");
       setClientName(editingOS.clientName);
 
-      const client = clients.find(c => c.name.toLowerCase() === editingOS.clientName.trim().toLowerCase());
+      // Por clientId; sem ele, pelo nome (só se único: homônimos não são adivinhados).
+      const linkedId = resolveClientId(editingOS, clients);
+      const client = linkedId ? clients.find(c => c.id === linkedId) : undefined;
+      setChosenClientId(editingOS.clientId && clients.some(c => c.id === editingOS.clientId) ? editingOS.clientId : "");
       setContact(editingOS.clientPhone || client?.phone || "");
       setTechnician(editingOS.technician || "");
       setNotes(client?.notes || "");
@@ -168,6 +182,7 @@ export const OSModal: React.FC<OSModalProps> = ({
       setDate(getLocalDateString());
       setPaymentDate("");
       setClientName("");
+      setChosenClientId("");
       setContact("");
       setTechnician("");
       setNotes("");
@@ -185,12 +200,12 @@ export const OSModal: React.FC<OSModalProps> = ({
   // Auto-preencher contato
   useEffect(() => {
     if (!clientName || contact) return;
-    const client = clients.find(c => c.name.toLowerCase() === clientName.trim().toLowerCase());
+    const client = selectedClient;
     if (client) {
       setContact(client.phone || "");
       if (!notes) setNotes(client.notes || "");
     }
-  }, [clientName, clients]);
+  }, [clientName, clients, selectedClient]);
 
   // Auto-preencher placa
   useEffect(() => {
@@ -212,6 +227,10 @@ export const OSModal: React.FC<OSModalProps> = ({
 
     if (field === 'description') {
       const match = catalog.find(c => c.description.toLowerCase() === (value as string).toLowerCase());
+      // O vínculo com o catálogo só vale enquanto a descrição casar com UM item; editada para outra coisa, perde.
+      const linkId = resolveCatalogItemId({ description: value as string }, catalog);
+      if (linkId) newList[index].catalogItemId = linkId;
+      else delete newList[index].catalogItemId;
       if (match) {
         newList[index].price = match.price;
         newList[index].cost = match.cost || 0;
@@ -231,8 +250,10 @@ export const OSModal: React.FC<OSModalProps> = ({
       if (!tempPart.description) return;
       const priceVal = parseFloat(tempPart.price.replace(',', '.')) || 0;
       const costVal = parseFloat(tempPart.cost.replace(',', '.')) || 0;
+      const partLinkId = resolveCatalogItemId({ description: tempPart.description }, catalogParts);
       const newItem: OrderItem = {
         id: crypto.randomUUID(),
+        ...(partLinkId ? { catalogItemId: partLinkId } : {}),
         description: tempPart.description,
         price: fromFloat(priceVal),
         cost: fromFloat(costVal),
@@ -250,8 +271,10 @@ export const OSModal: React.FC<OSModalProps> = ({
       if (!tempService.description) return;
       const priceVal = parseFloat(tempService.price.replace(',', '.')) || 0;
       const costVal = parseFloat(tempService.cost.replace(',', '.')) || 0;
+      const serviceLinkId = resolveCatalogItemId({ description: tempService.description }, catalogServices);
       const newItem: OrderItem = {
         id: crypto.randomUUID(),
+        ...(serviceLinkId ? { catalogItemId: serviceLinkId } : {}),
         description: tempService.description,
         price: fromFloat(priceVal),
         cost: fromFloat(costVal)
@@ -285,6 +308,7 @@ export const OSModal: React.FC<OSModalProps> = ({
 
   const handleConfirm = () => {
     if (!clientName || !vehicle) { alert("Preencha cliente e veículo."); return; }
+    if (needsClientChoice) { alert("Há mais de um cliente com esse nome. Escolha o cliente em \"Qual cliente?\"."); return; }
     const numOS = parseInt(osNumber, 10);
     if (isNaN(numOS)) { alert("Número OS inválido."); return; }
     const fullVehicle = plate ? `${vehicle} - ${plate.toUpperCase()}` : vehicle;
@@ -301,6 +325,8 @@ export const OSModal: React.FC<OSModalProps> = ({
       osNumber: numOS,
       createdAt: date,
       paymentDate: paymentDate ? toISOFromDateInput(paymentDate) : undefined,
+      clientId: selectedClient?.id,
+      technicianId: resolveTechnicianId(technician, catalogTechnicians),
       clientName,
       clientPhone: contact,
       clientNotes: notes,
@@ -328,7 +354,7 @@ export const OSModal: React.FC<OSModalProps> = ({
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [isOpen, clientName, vehicle, parts, services, osNumber, publicNotes, technician, advanceAmountDisplay]);
+  }, [isOpen, clientName, vehicle, parts, services, osNumber, publicNotes, technician, advanceAmountDisplay, selectedClient, needsClientChoice]);
 
   if (!isOpen) return null;
 
@@ -360,9 +386,42 @@ export const OSModal: React.FC<OSModalProps> = ({
           <div className="form-group" style={{ flex: 2 }}>
             <label className="form-label">Cliente</label>
             <input ref={clientInputRef} className="form-input" list="clients_list" value={clientName} onChange={e => setClientName(e.target.value)} autoFocus={!editingOS} />
-            <datalist id="clients_list">{suggestedClients.map(c => <option key={c.id} value={c.name} />)}</datalist>
+            <datalist id="clients_list">{[...new Set(suggestedClients.map(c => c.name))].map(n => <option key={n} value={n} />)}</datalist>
           </div>
         </div>
+
+        {hasHomonyms && (
+          <fieldset
+            className="form-group"
+            style={{ border: '1px solid var(--warning, var(--border))', borderRadius: 6, padding: '8px 12px', margin: '0 0 12px' }}
+          >
+            <legend className="form-label" style={{ padding: '0 6px' }}>Qual cliente?</legend>
+            <div role="radiogroup" aria-label="Qual cliente?" aria-required="true" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {sameNameClients.map(c => (
+                <label key={c.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', fontSize: '0.9rem' }}>
+                  <input
+                    type="radio"
+                    name="os-client-choice"
+                    checked={chosenClientId === c.id}
+                    onChange={() => { setChosenClientId(c.id); setContact(c.phone || ""); }}
+                  />
+                  <span>
+                    <strong>{c.name}</strong> · {c.phone ? c.phone : 'sem telefone'}
+                    <br />
+                    <span style={{ color: 'var(--text-muted)' }}>
+                      {c.vehicles.length > 0 ? c.vehicles.map(v => (v.plate ? `${v.model} - ${v.plate}` : v.model)).join(', ') : 'sem veículos'}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            {needsClientChoice && (
+              <small role="alert" style={{ display: 'block', marginTop: 6, color: 'var(--danger, #e53935)' }}>
+                Existe mais de um cliente com este nome. Escolha qual é para poder salvar a OS.
+              </small>
+            )}
+          </fieldset>
+        )}
 
         <div style={{ display: 'flex', gap: 16 }}>
           <div className="form-group" style={{ flex: 1 }}>
@@ -804,7 +863,7 @@ export const OSModal: React.FC<OSModalProps> = ({
 
         <div className="modal-actions">
           <button className="btn-secondary" onClick={onClose}>Cancelar</button>
-          <button className="btn" onClick={handleConfirm} disabled={isSaving} title="Atalho: Ctrl + Shift + Enter">
+          <button className="btn" onClick={handleConfirm} disabled={isSaving || needsClientChoice} title="Atalho: Ctrl + Shift + Enter">
             {isSaving ? '...' : 'Salvar (Ctrl+Shift+Enter)'}
           </button>
         </div>

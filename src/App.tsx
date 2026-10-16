@@ -36,7 +36,8 @@ import {
   getRemainingAmount, isAdvanceSyncLocked, reopenOS, restoreFinancial, statusChangeEffects, syncAdvanceEntry,
   togglePayment,
 } from './services/osFinanceService';
-import { Money, updateWorkOrderData, learnClientData, learnCatalogItems, learnTechnician, generateId } from './utils/helpers';
+import { Money, updateWorkOrderData, generateId } from './utils/helpers';
+import { linkClient, linkCatalogItems, linkTechnician, preferredClientId } from './utils/links';
 import { toISOFromDateInput } from './utils/dates';
 import { LedgerEntry, WorkOrder, Client, CatalogItem, OSStatus, Technician, InstallmentConfig, OSModalPayload } from './types';
 
@@ -174,14 +175,34 @@ function AppContent() {
     const duplicate = workOrders.find(o => o.osNumber === data.osNumber && o.id !== editingOS?.id);
     if (duplicate && !confirm(`OS #${data.osNumber} duplicada. Continuar?`)) return;
 
-    setClients(prev => learnClientData(prev, data.clientName, data.vehicleModelOnly || data.vehicle, data.plate || '', data.clientPhone, data.clientNotes || ''));
-    setCatalogParts(prev => learnCatalogItems(prev, data.parts));
-    setCatalogServices(prev => learnCatalogItems(prev, data.services));
-
-    const technicianName = (data.technician || '').trim();
-    if (technicianName) {
-      setCatalogTechnicians(prev => learnTechnician(prev, technicianName));
+    // Vínculos por id (plano 4.6): usa o ESTADO do render, como handleSaveClient. Os textos continuam gravados.
+    const linkedClient = linkClient({
+      clients,
+      clientName: data.clientName,
+      clientPhone: data.clientPhone,
+      clientNotes: data.clientNotes || '',
+      vehicle: data.vehicle,
+      clientId: preferredClientId(editingOS, data.clientName, data.clientId),
+      newId: generateId,
+    });
+    if (linkedClient.ambiguous) {
+      addToast('Há mais de um cliente com esse nome. Escolha qual cliente na OS antes de salvar.', 'error');
+      return;
     }
+    const linkedParts = linkCatalogItems({ catalog: catalogParts, items: data.parts, newId: generateId });
+    const linkedServices = linkCatalogItems({ catalog: catalogServices, items: data.services, newId: generateId });
+    const technicianName = (data.technician || '').trim();
+    const linkedTech = linkTechnician(catalogTechnicians, technicianName, generateId);
+    const clientId = linkedClient.clientId;
+    const vehicleId = linkedClient.vehicleId;
+    const technicianId = linkedTech.technicianId;
+    const osParts = linkedParts.items;
+    const osServices = linkedServices.items;
+
+    setClients(linkedClient.clients);
+    setCatalogParts(linkedParts.catalog);
+    setCatalogServices(linkedServices.catalog);
+    if (technicianName) setCatalogTechnicians(linkedTech.technicians);
 
     if (editingOS) {
       const updatedBase = updateWorkOrderData(
@@ -191,14 +212,15 @@ function AppContent() {
         data.clientName,
         data.clientPhone,
         data.mileage,
-        data.parts,
-        data.services,
+        osParts,
+        osServices,
         data.createdAt,
         data.publicNotes,
         data.advanceAmount,
       );
 
-      let updated: WorkOrder = { ...updatedBase, technician: technicianName || undefined };
+      // clientId/vehicleId/technicianId sempre regravados: updateWorkOrderData preserva os campos de `original`.
+      let updated: WorkOrder = { ...updatedBase, technician: technicianName || undefined, clientId, vehicleId, technicianId };
       // Adiantamento no caixa (D3: OS finalizada/com financeiro não sincroniza). O campo vazio do modal zera o adiantamento.
       if (!isAdvanceSyncLocked(editingOS)) {
         const advance = syncAdvanceEntry({
@@ -220,13 +242,16 @@ function AppContent() {
         id: generateId(),
         osNumber: data.osNumber,
         vehicle: data.vehicle,
+        clientId,
+        vehicleId,
+        technicianId,
         clientName: data.clientName,
         clientPhone: data.clientPhone,
         mileage: data.mileage,
         status: 'ORCAMENTO' as OSStatus,
-        parts: data.parts,
-        services: data.services,
-        total: data.parts.reduce((a, b) => a + b.price, 0) + data.services.reduce((a, b) => a + b.price, 0),
+        parts: osParts,
+        services: osServices,
+        total: osParts.reduce((a, b) => a + b.price, 0) + osServices.reduce((a, b) => a + b.price, 0),
         createdAt: data.createdAt ? toISOFromDateInput(data.createdAt) : new Date().toISOString(),
         publicNotes: data.publicNotes || '',
         technician: technicianName || undefined,

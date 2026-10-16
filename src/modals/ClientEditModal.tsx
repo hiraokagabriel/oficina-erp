@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Client } from '../types';
+import { generateId } from '../utils/helpers';
 
 interface ClientEditModalProps {
   isOpen: boolean;
@@ -35,7 +36,7 @@ export const ClientEditModal: React.FC<ClientEditModalProps> = ({
   const handleAddVehicle = () => {
     setFormData(prev => ({
       ...prev,
-      vehicles: [...prev.vehicles, { model: '', plate: '' }]
+      vehicles: [...prev.vehicles, { id: generateId(), model: '', plate: '' }]
     }));
   };
 

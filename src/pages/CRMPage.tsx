@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Client, WorkOrder, LedgerEntry, STATUS_LABELS } from '../types';
+import { osBelongsToClient } from '../utils/links';
 import { getClientReceivables } from '../services/receivables';
 import { CRMDashboard } from '../components/CRMDashboard';
 import { ClientEditModal } from '../modals/ClientEditModal';
@@ -39,9 +40,9 @@ export const CRMPage: React.FC<CRMPageProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  // Dívida por cliente (vínculo por NOME da OS: homônimos se somam; ver item 4.6).
-  const receivables = useMemo(() => getClientReceivables(workOrders, ledger, new Date()), [workOrders, ledger]);
-  const selectedDebt = selectedClient ? receivables.byClient.get(selectedClient.name) : undefined;
+  // Dívida por cliente, ligada pelo id resolvido da OS (chave de byClient = id do cliente).
+  const receivables = useMemo(() => getClientReceivables(workOrders, ledger, new Date(), clients), [workOrders, ledger, clients]);
+  const selectedDebt = selectedClient ? receivables.byClient.get(selectedClient.id) : undefined;
 
   const filteredClients = useMemo(() => {
     if (!searchTerm) return clients;
@@ -60,9 +61,9 @@ export const CRMPage: React.FC<CRMPageProps> = ({
   const clientHistory = useMemo(() => {
     if (!selectedClient) return [];
     return workOrders
-      .filter(os => os.clientName === selectedClient.name)
+      .filter(os => osBelongsToClient(os, selectedClient, clients))
       .sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [selectedClient, workOrders]);
+  }, [selectedClient, workOrders, clients]);
 
   const reminders = useMemo(() => {
       if (!selectedClient) return [];
@@ -248,11 +249,11 @@ export const CRMPage: React.FC<CRMPageProps> = ({
                     >
                         <div className="client-name">{c.name}</div>
                         <div className="client-contact">{c.phone || '...'} • {c.vehicles.length} veículo(s)</div>
-                        {receivables.byClient.get(c.name) && (
+                        {receivables.byClient.get(c.id) && (
                           <div className="client-debt">
-                            Em aberto {formatMoney(receivables.byClient.get(c.name)!.emAberto)}
-                            {receivables.byClient.get(c.name)!.atrasado > 0 && (
-                              <span className="late">Atrasado {formatMoney(receivables.byClient.get(c.name)!.atrasado)}</span>
+                            Em aberto {formatMoney(receivables.byClient.get(c.id)!.emAberto)}
+                            {receivables.byClient.get(c.id)!.atrasado > 0 && (
+                              <span className="late">Atrasado {formatMoney(receivables.byClient.get(c.id)!.atrasado)}</span>
                             )}
                           </div>
                         )}

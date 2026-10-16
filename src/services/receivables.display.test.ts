@@ -74,8 +74,8 @@ describe('getClientReceivables', () => {
       e('p3', { amount: 1000, dueDate: day(2026, 6, 1), installmentGroupId: 'g2', paymentDate: day(2026, 6, 2) }), // paga
     ];
     const { byClient } = getClientReceivables(works, ledger, TODAY);
-    expect(byClient.get('Ana')).toEqual({ clientName: 'Ana', emAberto: 700, atrasado: 0, countAberto: 1, countAtrasado: 0 });
-    expect(byClient.get('Bia')).toEqual({ clientName: 'Bia', emAberto: 2000, atrasado: 1000, countAberto: 2, countAtrasado: 1 });
+    expect(byClient.get('nome:ana')).toEqual({ clientName: 'Ana', emAberto: 700, atrasado: 0, countAberto: 1, countAtrasado: 0 });
+    expect(byClient.get('nome:bia')).toEqual({ clientName: 'Bia', emAberto: 2000, atrasado: 1000, countAberto: 2, countAtrasado: 1 });
   });
   it('1ª parcela ligada por financialId e as demais pelo grupo somam no mesmo cliente', () => {
     const works = [os('o1', 'Ana', { financialId: 'p1', installmentConfig: cfg('g1') })];
@@ -83,7 +83,7 @@ describe('getClientReceivables', () => {
       e('p1', { amount: 1000, dueDate: day(2026, 6, 1), installmentGroupId: 'g1' }),
       e('p2', { amount: 1000, dueDate: day(2026, 7, 1), installmentGroupId: 'g1' }),
     ];
-    expect(getClientReceivables(works, ledger, TODAY).byClient.get('Ana')?.emAberto).toBe(2000);
+    expect(getClientReceivables(works, ledger, TODAY).byClient.get('nome:ana')?.emAberto).toBe(2000);
   });
   it('ignora lançamento manual sem OS e DEBIT', () => {
     const works = [os('o1', 'Ana', { financialId: 'f1' })];
@@ -95,10 +95,10 @@ describe('getClientReceivables', () => {
     expect(r.byClient.size).toBe(0);
     expect(r.ranking).toEqual([]);
   });
-  it('homônimos (mesmo nome) se somam', () => {
+  it('sem cadastro (clients omitido): mesmo nome se soma na chave nome:', () => {
     const works = [os('o1', 'João', { financialId: 'f1' }), os('o2', 'João', { financialId: 'f2' })];
     const ledger = [e('f1', { amount: 100 }), e('f2', { amount: 250, dueDate: day(2026, 1, 1) })];
-    expect(getClientReceivables(works, ledger, TODAY).byClient.get('João'))
+    expect(getClientReceivables(works, ledger, TODAY).byClient.get('nome:joão'))
       .toEqual({ clientName: 'João', emAberto: 350, atrasado: 250, countAberto: 2, countAtrasado: 1 });
   });
   it('ranking: maior dívida primeiro, empate por nome; quem não deve fica de fora', () => {

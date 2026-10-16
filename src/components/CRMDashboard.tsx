@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Client, WorkOrder, CRMStats } from '../types';
 import { Money } from '../utils/helpers';
-import { ClientReceivable } from '../services/receivables';
+import { ClientReceivable, getClientSpending } from '../services/receivables';
 
 interface CRMDashboardProps {
   clients: Client[];
@@ -18,21 +18,10 @@ export const CRMDashboard: React.FC<CRMDashboardProps> = ({
   onClientSelect
 }) => {
   const stats = useMemo((): CRMStats => {
-    const clientSpending = new Map<string, { total: number; count: number; lastDate: string }>();
-    
-    workOrders
-      .filter(wo => wo.status === 'FINALIZADO')
-      .forEach(wo => {
-        const current = clientSpending.get(wo.clientName) || { total: 0, count: 0, lastDate: wo.createdAt };
-        clientSpending.set(wo.clientName, {
-          total: current.total + wo.total,
-          count: current.count + 1,
-          lastDate: wo.createdAt > current.lastDate ? wo.createdAt : current.lastDate
-        });
-      });
+    const clientSpending = getClientSpending(workOrders, clients);
 
     const enrichedClients = clients.map(client => {
-      const spending = clientSpending.get(client.name) || { total: 0, count: 0, lastDate: '' };
+      const spending = clientSpending.get(client.id) || { total: 0, count: 0, lastDate: '' };
       return {
         ...client,
         totalSpent: spending.total,
@@ -262,7 +251,7 @@ export const CRMDashboard: React.FC<CRMDashboardProps> = ({
           </h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {topDebtors.map(d => {
-              const client = clients.find(c => c.name === d.clientName);
+              const client = d.clientId ? clients.find(c => c.id === d.clientId) : undefined;
               const content = (
                 <>
                   <span style={{ fontWeight: 'bold' }}>{d.clientName}</span>
@@ -277,9 +266,9 @@ export const CRMDashboard: React.FC<CRMDashboardProps> = ({
                 </>
               );
               return client && onClientSelect ? (
-                <button key={d.clientName} type="button" className="debtor-row" onClick={() => onClientSelect(client)}>{content}</button>
+                <button key={d.clientId ?? d.clientName} type="button" className="debtor-row" onClick={() => onClientSelect(client)}>{content}</button>
               ) : (
-                <div key={d.clientName} className="debtor-row">{content}</div>
+                <div key={d.clientId ?? d.clientName} className="debtor-row">{content}</div>
               );
             })}
           </div>

@@ -1,4 +1,5 @@
-import { LedgerEntry, WorkOrder } from '../types';
+import { Client, LedgerEntry, WorkOrder } from '../types';
+import { clientGroupKey, resolveClientId } from '../utils/links';
 import { formatDateOnly, parseDateFlexible } from '../utils/dates';
 
 // Conceito único de "a receber": `paymentDate` é a única verdade de "pago" (isPaid não é mais lido).
@@ -91,7 +92,10 @@ export const getReceivableLabel = (entry: LedgerEntry, today: string | Date): st
 // ---------- Contas a receber por cliente ----------
 
 export interface ClientReceivable {
+  /** Nome para exibir (do cadastro quando resolvido; senão o texto da primeira OS). */
   clientName: string;
+  /** Preenchido quando a OS resolve para um cliente do cadastro. */
+  clientId?: string;
   /** Total em aberto (A_RECEBER + ATRASADO). */
   emAberto: number;
   /** Parte do total em aberto que já venceu. */
@@ -109,13 +113,16 @@ export interface ClientReceivablesResult {
 /**
  * Agrupa o que cada cliente deve. Ligação lançamento -> OS: `os.financialId === entry.id`
  * (à vista e 1ª parcela) ou `entry.installmentGroupId === os.installmentConfig?.groupId` (parcelas).
- * Cliente = `os.clientName`: vínculo POR NOME (frágil: homônimos se somam; resolve no item 4.6).
+ * Cliente = resolveClientId (clientId válido, senão o ÚNICO cliente de mesmo nome normalizado); a chave de
+ * `byClient` é o id do cliente. OS sem cliente resolvível agrupam em `nome:<nome normalizado>` (sem clientId).
+ * Sem `clients`, tudo cai na chave `nome:`.
  * Lançamentos sem OS (manuais) ficam de fora.
  */
 export const getClientReceivables = (
   workOrders: WorkOrder[],
   ledger: LedgerEntry[],
-  today: string | Date
+  today: string | Date,
+  clients: Client[] = []
 ): ClientReceivablesResult => {
   const byEntryId = new Map<string, WorkOrder>();
   const byGroupId = new Map<string, WorkOrder>();
@@ -131,10 +138,14 @@ export const getClientReceivables = (
     if (status !== 'A_RECEBER' && status !== 'ATRASADO') continue;
     const os = byEntryId.get(e.id) ?? (e.installmentGroupId ? byGroupId.get(e.installmentGroupId) : undefined);
     if (!os) continue;
-    let c = byClient.get(os.clientName);
+    const key = clientGroupKey(os, clients);
+    let c = byClient.get(key);
     if (!c) {
-      c = { clientName: os.clientName, emAberto: 0, atrasado: 0, countAberto: 0, countAtrasado: 0 };
-      byClient.set(os.clientName, c);
+      const clientId = resolveClientId(os, clients);
+      const name = clientId ? clients.find(x => x.id === clientId)?.name ?? os.clientName : os.clientName;
+      c = { clientName: name, emAberto: 0, atrasado: 0, countAberto: 0, countAtrasado: 0 };
+      if (clientId) c.clientId = clientId;
+      byClient.set(key, c);
     }
     c.emAberto += e.amount;
     c.countAberto++;
@@ -144,4 +155,31 @@ export const getClientReceivables = (
   const ranking = [...byClient.values()].sort(
     (a, b) => b.emAberto - a.emAberto || a.clientName.localeCompare(b.clientName, 'pt-BR'));
   return { byClient, ranking };
+};
+
+// ---------- Gasto por cliente (CRM) ----------
+
+export interface ClientSpending {
+  total: number;
+  count: number;
+  lastDate: string;
+}
+
+/**
+ * Soma as OS FINALIZADAS por cliente (total, quantidade, última data), com a mesma chave de
+ * getClientReceivables (id do cliente; reserva `nome:<normalizado>`). Mesma conta que o CRMDashboard fazia por nome.
+ */
+export const getClientSpending = (workOrders: WorkOrder[], clients: Client[]): Map<string, ClientSpending> => {
+  const map = new Map<string, ClientSpending>();
+  for (const wo of workOrders) {
+    if (wo.status !== 'FINALIZADO') continue;
+    const key = clientGroupKey(wo, clients);
+    const current = map.get(key) || { total: 0, count: 0, lastDate: wo.createdAt };
+    map.set(key, {
+      total: current.total + wo.total,
+      count: current.count + 1,
+      lastDate: wo.createdAt > current.lastDate ? wo.createdAt : current.lastDate,
+    });
+  }
+  return map;
 };

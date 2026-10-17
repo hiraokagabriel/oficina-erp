@@ -1,0 +1,121 @@
+/* MARGEM: selo do Kanban, indicador por item e análise da OS. Só variáveis de tema.
+   Informação nunca só por cor: todo estado tem texto. Níveis: na-meta, atencao, abaixo, sem-custo. */
+:root {
+  --margin-ok: var(--success);
+  --margin-warn: var(--warning);
+  --margin-bad: var(--danger);
+  --margin-none: var(--text-muted);
+}
+
+/* Tema pastel: success/warning/danger são pálidos como TEXTO sobre branco (< 4,5:1); tons escuros. */
+[data-theme="pastel"] {
+  --margin-ok: #1f6b3a;
+  --margin-warn: #7a5200;
+  --margin-bad: #a8453a;
+  --margin-none: #5a4f68;
+}
+
+.margin-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+  background: transparent;
+}
+.margin-badge--na_meta, .margin-text--na_meta { color: var(--margin-ok); }
+.margin-badge--atencao, .margin-text--atencao { color: var(--margin-warn); }
+.margin-badge--abaixo, .margin-text--abaixo { color: var(--margin-bad); }
+.margin-badge--sem_custo, .margin-text--sem_custo { color: var(--margin-none); }
+
+/* Indicador por item (MarginIndicator) */
+.margin-ind {
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  font-size: 0.75rem;
+  margin-top: 4px;
+}
+.margin-ind--na_meta { border-left-color: var(--margin-ok); }
+.margin-ind--atencao { border-left-color: var(--margin-warn); }
+.margin-ind--abaixo { border-left-color: var(--margin-bad); }
+.margin-ind--sem_custo { border-left-color: var(--margin-none); }
+.margin-ind__row { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.margin-ind__label { font-weight: 700; }
+.margin-ind__muted { color: var(--text-muted); font-size: 0.7rem; }
+.margin-ind__track { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; position: relative; margin-top: 4px; }
+.margin-ind__fill { height: 100%; transition: width 0.3s ease; }
+.margin-ind--na_meta .margin-ind__fill { background: var(--margin-ok); }
+.margin-ind--atencao .margin-ind__fill { background: var(--margin-warn); }
+.margin-ind--abaixo .margin-ind__fill { background: var(--margin-bad); }
+.margin-ind__goal { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--text-main); opacity: 0.7; }
+
+.margin-btn {
+  background: var(--primary);
+  /* Tema escuro: --primary é dourado (#caa400); texto branco dava 2,4:1. Texto escuro dá >= 7:1. */
+  color: #111;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+[data-theme="pastel"] .margin-btn { background: #5b21b6; color: #fff; }
+.margin-btn:focus-visible, .margin-hist button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.margin-suggest {
+  margin-top: 6px;
+  padding: 4px 6px;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Sugestão do histórico, discreta, sob a linha do item */
+.margin-hist {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 2px 0 4px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.margin-hist button {
+  background: transparent;
+  color: var(--primary);
+  border: 1px solid var(--primary);
+  border-radius: 4px;
+  padding: 1px 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+[data-theme="pastel"] .margin-hist button { color: #5b21b6; border-color: #5b21b6; }
+
+/* Análise financeira da OS */
+.margin-goal-note { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px; }
+.margin-partial-note { font-size: 0.8rem; color: var(--text-muted); margin-top: 6px; }
+.margin-min-box {
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 6px;
+  border: 2px solid var(--margin-ok);
+}
+.margin-min-box--abaixo { border-color: var(--margin-bad); }
+.margin-min-box__alert { font-size: 0.8rem; font-weight: 700; margin-top: 8px; color: var(--margin-bad); }
+.margin-cost-field { background: rgba(255, 152, 0, 0.1); }
+
+/* Config */
+.margin-config-error { color: var(--danger, #e53935); font-size: 0.8rem; margin-top: 5px; display: block; }
+[data-theme="pastel"] .margin-config-error { color: #a8453a; }

@@ -40,6 +40,7 @@ import {
 import { Money, updateWorkOrderData, generateId } from './utils/helpers';
 import { linkClient, linkCatalogItems, linkTechnician, preferredClientId } from './utils/links';
 import { toISOFromDateInput } from './utils/dates';
+import { getTargetMargin } from './services/margin';
 import { AppointmentAction, AppointmentInput, applyAppointmentAction, linkAppointmentToOS, makeAppointment, updateAppointment } from './services/agenda';
 import { appointmentToOSDraft, OSDraftFromAppointment } from './services/schedule';
 import type { AppointmentModalMode } from './modals/AppointmentModal';
@@ -657,6 +658,10 @@ Abrir OS?`)) {
                 setViewMode={finance.setViewMode}
                 filterType={finance.filterType}
                 setFilterType={finance.setFilterType}
+                workOrders={workOrders}
+                settings={settings}
+                catalogParts={catalogParts}
+                catalogServices={catalogServices}
               />
             )}
 
@@ -665,6 +670,7 @@ Abrir OS?`)) {
                 workOrders={workOrders}
                 isLoading={isLoading}
                 formatMoney={Money.format}
+                targetMargin={getTargetMargin(settings)}
                 onNewOS={() => {
                   setEditingOS(null);
                   setIsModalOpen(true);
@@ -794,6 +800,8 @@ Abrir OS?`)) {
             }
             isSaving={isSaving}
             formatMoney={Money.format}
+            targetMargin={getTargetMargin(settings)}
+            workOrders={workOrders}
           />
         )}
 
@@ -827,6 +835,7 @@ Abrir OS?`)) {
             isOpen={isDatabaseModalOpen}
             onClose={() => setIsDatabaseModalOpen(false)}
             clients={clients}
+            workOrders={workOrders}
             catalogParts={catalogParts}
             catalogServices={catalogServices}
             catalogTechnicians={catalogTechnicians}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { LedgerEntry, ChartFluxoPoint, ChartPiePoint } from '../types';
+import { LedgerEntry, ChartFluxoPoint, ChartPiePoint, WorkOrder, WorkshopSettings, CatalogItem } from '../types';
+import { MarginReport } from '../components/MarginReport';
 import { summarizeReceivables, formatDueDate, getReceivableLabel, getReceivableStatus } from '../services/receivables';
 
 const COLORS = {
@@ -30,16 +31,33 @@ interface FinancialPageProps {
   setViewMode: (mode: 'MONTH' | 'YEAR') => void;
   filterType: 'ALL' | 'CREDIT' | 'DEBIT';
   setFilterType: (type: 'ALL' | 'CREDIT' | 'DEBIT') => void;
+  /** Aba "Margem": OS, configurações (meta) e catálogos. */
+  workOrders: WorkOrder[];
+  settings: WorkshopSettings;
+  catalogParts: CatalogItem[];
+  catalogServices: CatalogItem[];
 }
 
 export const FinancialPage: React.FC<FinancialPageProps> = ({ 
   isLoading, kpiData, chartDataFluxo, chartDataPie, ledger, allLedger, Money, 
   onOpenExport, onOpenEntry, onEditEntry, onDeleteEntry, onTogglePayment,
   selectedMonth, onMonthChange, viewMode, setViewMode,
-  filterType, setFilterType
+  filterType, setFilterType,
+  workOrders, settings, catalogParts, catalogServices
 }) => {
-  
+
   const [currentPage, setCurrentPage] = useState(1);
+  const [tab, setTab] = useState<'GERAL' | 'MARGEM'>('GERAL');
+
+  // Setas, Home e End alternam as abas (padrão WAI-ARIA); o foco acompanha a aba ativa.
+  const onTabKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
+    if (!keys.includes(e.key)) return;
+    e.preventDefault();
+    const next = e.key === 'Home' ? 'GERAL' : e.key === 'End' ? 'MARGEM' : tab === 'GERAL' ? 'MARGEM' : 'GERAL';
+    setTab(next);
+    document.getElementById(next === 'GERAL' ? 'fin-tab-geral' : 'fin-tab-margem')?.focus();
+  };
 
   useEffect(() => {
     setCurrentPage(1);
@@ -96,7 +114,28 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
           <button className="btn" onClick={onOpenEntry}>+ Lançamento</button>
         </div>
       </div>
-      
+
+      <div className="fin-tabs" role="tablist" aria-label="Seções do Financeiro">
+        <button type="button" role="tab" id="fin-tab-geral" className="fin-tab"
+          aria-selected={tab === 'GERAL'} aria-controls="fin-panel" tabIndex={tab === 'GERAL' ? 0 : -1}
+          onClick={() => setTab('GERAL')} onKeyDown={onTabKeyDown}>Visão geral</button>
+        <button type="button" role="tab" id="fin-tab-margem" className="fin-tab"
+          aria-selected={tab === 'MARGEM'} aria-controls="fin-panel" tabIndex={tab === 'MARGEM' ? 0 : -1}
+          onClick={() => setTab('MARGEM')} onKeyDown={onTabKeyDown}>Margem</button>
+      </div>
+
+      <div id="fin-panel" role="tabpanel" aria-labelledby={tab === 'GERAL' ? 'fin-tab-geral' : 'fin-tab-margem'}>
+      {tab === 'MARGEM' ? (
+        <MarginReport
+          workOrders={workOrders}
+          settings={settings}
+          catalogParts={catalogParts}
+          catalogServices={catalogServices}
+          selectedMonth={selectedMonth}
+          viewMode={viewMode}
+        />
+      ) : (
+      <>
       {isLoading ? (
           <div className="stats-row">
              {[1,2,3,4,5,6].map(i => <div key={i} className="skeleton" style={{height: 120, borderRadius: 16}}/>)}
@@ -339,6 +378,9 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                  </button>
              </div>
           )}
+      </div>
+      </>
+      )}
       </div>
     </>
   );

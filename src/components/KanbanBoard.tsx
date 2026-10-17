@@ -24,6 +24,8 @@ interface KanbanBoardProps {
   };
   formatMoney: (val: number) => string;
   showArchived?: boolean;
+  /** Meta de margem global (%), das Configurações. */
+  targetMargin?: number;
 }
 
 // ...restante dos imports DnD
@@ -85,11 +87,13 @@ const KanbanColumn = React.memo(
     workOrders,
     actions,
     formatMoney,
+    targetMargin,
   }: {
     status: OSStatus;
     workOrders: WorkOrder[];
     actions: KanbanBoardProps['actions'];
     formatMoney: (val: number) => string;
+    targetMargin?: number;
   }) => {
     const sortedList = useMemo(() => {
       return workOrders
@@ -150,6 +154,7 @@ const KanbanColumn = React.memo(
                     formatMoney={formatMoney}
                     status={status}
                     actions={actions}
+                    targetMargin={targetMargin}
                   />
                 ))}
               </InfiniteScroll>
@@ -162,7 +167,7 @@ const KanbanColumn = React.memo(
 );
 
 export const KanbanBoard = React.memo<KanbanBoardProps>(
-  ({ workOrders, isLoading, onStatusChange, actions, formatMoney, showArchived = false }) => {
+  ({ workOrders, isLoading, onStatusChange, actions, formatMoney, showArchived = false, targetMargin }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [technicianFilter, setTechnicianFilter] = useState<'ALL' | 'NONE' | string>('ALL');
     const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
@@ -387,6 +392,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
             {showArchived ? (
               <KanbanColumn
                 status="ARQUIVADO"
+                targetMargin={targetMargin}
                 workOrders={filteredWorkOrders}
                 actions={actions}
                 formatMoney={formatMoney}
@@ -396,6 +402,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
                 <div style={{ scrollSnapAlign: 'start' }}>
                   <KanbanColumn
                     status="ORCAMENTO"
+                    targetMargin={targetMargin}
                     workOrders={filteredWorkOrders}
                     actions={actions}
                     formatMoney={formatMoney}
@@ -404,6 +411,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
                 <div style={{ scrollSnapAlign: 'start' }}>
                   <KanbanColumn
                     status="APROVADO"
+                    targetMargin={targetMargin}
                     workOrders={filteredWorkOrders}
                     actions={actions}
                     formatMoney={formatMoney}
@@ -412,6 +420,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
                 <div style={{ scrollSnapAlign: 'start' }}>
                   <KanbanColumn
                     status="EM_SERVICO"
+                    targetMargin={targetMargin}
                     workOrders={filteredWorkOrders}
                     actions={actions}
                     formatMoney={formatMoney}
@@ -420,6 +429,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
                 <div style={{ scrollSnapAlign: 'start' }}>
                   <KanbanColumn
                     status="AGUARDANDO_PAGAMENTO"
+                    targetMargin={targetMargin}
                     workOrders={filteredWorkOrders}
                     actions={actions}
                     formatMoney={formatMoney}
@@ -428,6 +438,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
                 <div style={{ scrollSnapAlign: 'start' }}>
                   <KanbanColumn
                     status="FINALIZADO"
+                    targetMargin={targetMargin}
                     workOrders={filteredWorkOrders}
                     actions={actions}
                     formatMoney={formatMoney}
@@ -518,6 +529,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
                   status={activeWorkOrder.status}
                   actions={actions}
                   isDragging
+                  targetMargin={targetMargin}
                 />
               </div>
             )}

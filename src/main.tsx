@@ -26,6 +26,14 @@ import "./styles-schedule.css";
 
 // AGENDA DE ENTRADA DE VEÍCULOS
 import "./styles-agenda.css";
+// RELATÓRIO DE MARGEM (aba do Financeiro)
+import "./styles-margin-report.css";
+
+// MARGEM (selo, indicador, análise do modal da OS)
+import "./styles-margin.css";
+
+// CAMPO DE VEÍCULO COM SUGESTÕES
+import "./styles-vehicle.css";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

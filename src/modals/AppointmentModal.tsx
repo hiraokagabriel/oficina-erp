@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Appointment, Client } from '../types';
+import { Appointment, Client, WorkOrder } from '../types';
+import { VehicleCombobox, useShopVehicles } from '../components/VehicleCombobox';
 import { AppointmentInput, appointmentDayKey, resolveAppointmentClient, validateAppointmentInput } from '../services/agenda';
 import { normalizeName } from '../utils/links';
 
@@ -15,6 +16,8 @@ interface AppointmentModalProps {
   /** AAAA-MM-DD sugerido ao criar. */
   defaultDate: string;
   clients: Client[];
+  /** Histórico de OS para sugerir veículos já atendidos na oficina. */
+  workOrders?: WorkOrder[];
 }
 
 const TITLES: Record<AppointmentModalMode, string> = {
@@ -25,7 +28,7 @@ const TITLES: Record<AppointmentModalMode, string> = {
 
 const vehicleText = (v: { model: string; plate: string }): string => (v.plate ? `${v.model} - ${v.plate}` : v.model);
 
-export const AppointmentModal: React.FC<AppointmentModalProps> = ({ isOpen, mode, onClose, onSave, editing, defaultDate, clients }) => {
+export const AppointmentModal: React.FC<AppointmentModalProps> = ({ isOpen, mode, onClose, onSave, editing, defaultDate, clients, workOrders }) => {
   const clientRef = useRef<HTMLInputElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
   const autoPhoneRef = useRef(''); // último telefone preenchido automaticamente a partir do cadastro
@@ -74,7 +77,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({ isOpen, mode
   const selectedClient = resolution.kind === 'unique' ? resolution.client : undefined;
 
   const clientNames = useMemo(() => [...new Set(clients.map(c => c.name))].slice(0, 200), [clients]);
-  const vehicleOptions = selectedClient ? selectedClient.vehicles.map(vehicleText) : [];
+  const shopVehicles = useShopVehicles(clients, workOrders);
 
   // Ao casar um único cliente, preenche o telefone se estiver vazio ou ainda for o que o app preencheu para
   // o cliente anterior (trocar o nome não pode deixar o telefone de outra pessoa). Telefone digitado/editado é preservado.
@@ -153,11 +156,10 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({ isOpen, mode
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor="appt-vehicle">Veículo (modelo - PLACA)</label>
-            <input
-              id="appt-vehicle" className="form-input" list="appt-vehicles-list" autoComplete="off"
-              value={vehicle} onChange={e => setVehicle(e.target.value)}
+            <VehicleCombobox
+              id="appt-vehicle" plateAware value={vehicle} onChange={setVehicle}
+              clientVehicles={selectedClient?.vehicles} shopVehicles={shopVehicles}
             />
-            <datalist id="appt-vehicles-list">{vehicleOptions.map(v => <option key={v} value={v} />)}</datalist>
           </div>
         </div>
 

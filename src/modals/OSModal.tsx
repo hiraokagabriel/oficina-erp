@@ -7,6 +7,35 @@ import { appendNote } from '../services/agenda';
 import { toISOFromDateInput, parseDateFlexible, formatDateOnly } from '../utils/dates';
 import { MarginIndicator } from '../components/MarginIndicator';
 import { PartCategorySelect } from '../components/PartCategorySelect';
+import { VehicleCombobox, useShopVehicles } from '../components/VehicleCombobox';
+import { computeOSMargin, formatPct, marginLabel, marginLevel, suggestPriceForTarget } from '../services/margin';
+import { PriceSuggestion, suggestHistoricalPrice } from '../services/pricing';
+import { costToInput, normalizeItemCost, parseCostEdit, parseCostInput, partialMarginNote } from '../services/marginView';
+
+/** Sugestão discreta do histórico de vendas; só sugere, o botão grava apenas o preço da linha. */
+const HistoryHint: React.FC<{
+  suggestion: PriceSuggestion | null | undefined;
+  currentPrice: number;
+  formatMoney: (val: number) => string;
+  onUse: (price: number) => void;
+}> = ({ suggestion, currentPrice, formatMoney, onUse }) => {
+  if (!suggestion) return null;
+  const same = suggestion.price === currentPrice;
+  return (
+    <div className="margin-hist">
+      <span>Histórico: {formatMoney(suggestion.price)} (mediana de {suggestion.samples} vendas)</span>
+      <button
+        type="button"
+        disabled={same}
+        onClick={() => onUse(suggestion.price)}
+        aria-label={`Usar o preço do histórico, ${formatMoney(suggestion.price)}`}
+        title={same ? 'O preço da linha já é este' : 'Aplica só o preço desta linha'}
+      >
+        Usar
+      </button>
+    </div>
+  );
+};
 
 interface OSModalProps {
   isOpen: boolean;
@@ -22,6 +51,10 @@ interface OSModalProps {
   formatMoney: (val: number) => string;
   /** Valores iniciais ao CRIAR (vindos de um agendamento). Ignorado ao editar. */
   draft?: OSDraftFromAppointment;
+  /** Meta de margem global (%), das Configurações. */
+  targetMargin: number;
+  /** Todas as OS, para a sugestão de preço pelo histórico. */
+  workOrders: WorkOrder[];
 }
 
 // 🆕 Issue #41: Ordem de exibição das categorias
@@ -31,7 +64,7 @@ const CATEGORY_ORDER: PartCategory[] = [
 ];
 
 export const OSModal: React.FC<OSModalProps> = ({
-  isOpen, onClose, onSave, editingOS, clients, catalogParts, catalogServices, catalogTechnicians, nextOSNumber, isSaving, formatMoney, draft
+  isOpen, onClose, onSave, editingOS, clients, catalogParts, catalogServices, catalogTechnicians, nextOSNumber, isSaving, formatMoney, draft, targetMargin, workOrders
 }) => {
   // --- REFS PARA ATALHOS ---
   const partInputRef = useRef<HTMLInputElement>(null);
@@ -60,8 +93,7 @@ export const OSModal: React.FC<OSModalProps> = ({
 
   const [parts, setParts] = useState<OrderItem[]>([]);
   const [services, setServices] = useState<OrderItem[]>([]);
-  const [showCostColumn, setShowCostColumn] = useState(false);
-  const [minMargin, setMinMargin] = useState(70);
+  const [showCostColumn, setShowCostColumn] = useState(true);
 
   // --- ESTADOS TEMPORÁRIOS ---
   const [tempPart, setTempPart] = useState({ description: '', price: '', cost: '', category: '' as PartCategory | '' });
@@ -73,28 +105,39 @@ export const OSModal: React.FC<OSModalProps> = ({
   // --- CÁLCULOS FINANCEIROS MEMOIZADOS ---
   const partsTotal = useMemo(() => parts.reduce((acc, i) => acc + i.price, 0), [parts]);
   const servicesTotal = useMemo(() => services.reduce((acc, i) => acc + i.price, 0), [services]);
-  const partsCost = useMemo(() => parts.reduce((acc, i) => acc + (i.cost || 0), 0), [parts]);
-  const servicesCost = useMemo(() => services.reduce((acc, i) => acc + (i.cost || 0), 0), [services]);
   const totalRevenue = useMemo(() => partsTotal + servicesTotal, [partsTotal, servicesTotal]);
-  const totalCost = useMemo(() => partsCost + servicesCost, [partsCost, servicesCost]);
-  const profit = useMemo(() => totalRevenue - totalCost, [totalRevenue, totalCost]);
-  const profitMargin = useMemo(() => {
-    if (totalRevenue === 0) return 0;
-    return (profit / totalRevenue) * 100;
-  }, [profit, totalRevenue]);
-  const roi = useMemo(() => {
-    if (totalCost === 0) return 0;
-    return (profit / totalCost) * 100;
-  }, [profit, totalCost]);
 
-  const minSuggestedRevenue = useMemo(() => {
-    if (totalCost === 0) return 0;
-    return totalCost / (1 - minMargin / 100);
-  }, [totalCost, minMargin]);
+  // Margem só dos itens COM custo (item sem custo fica fora da conta e é sinalizado).
+  const margin = useMemo(() => computeOSMargin({ parts, services }), [parts, services]);
+  const marginLvl = marginLevel(margin.marginPct, targetMargin);
+  const partialNote = partialMarginNote(margin);
+  const roi = margin.cost > 0 ? (margin.profit / margin.cost) * 100 : null;
+  // Valor dos itens com custo que atingiria a meta, e quanto falta (ou sobra) em relação ao praticado.
+  const minSuggestedRevenue = useMemo(() => suggestPriceForTarget(margin.cost, targetMargin), [margin.cost, targetMargin]);
+  const revenueDifference = minSuggestedRevenue === null ? 0 : margin.costedRevenue - minSuggestedRevenue;
 
-  const revenueDifference = useMemo(() => {
-    return totalRevenue - minSuggestedRevenue;
-  }, [totalRevenue, minSuggestedRevenue]);
+  // Sugestão pelo histórico (mediana de vendas finalizadas, 12 meses): por id de linha. A própria OS fica de fora.
+  const today = useMemo(() => getLocalDateString(), [isOpen]);
+  const historyOrders = useMemo(
+    () => (editingOS ? workOrders.filter(o => o.id !== editingOS.id) : workOrders),
+    [workOrders, editingOS]
+  );
+  const partHistory = useMemo(() => {
+    const out: Record<string, PriceSuggestion | null> = {};
+    if (!isOpen) return out;
+    for (const p of parts) {
+      if (p.description.trim()) out[p.id] = suggestHistoricalPrice({ kind: 'PART', catalogItemId: p.catalogItemId, description: p.description }, historyOrders, today);
+    }
+    return out;
+  }, [isOpen, parts, historyOrders, today]);
+  const serviceHistory = useMemo(() => {
+    const out: Record<string, PriceSuggestion | null> = {};
+    if (!isOpen) return out;
+    for (const s of services) {
+      if (s.description.trim()) out[s.id] = suggestHistoricalPrice({ kind: 'SERVICE', catalogItemId: s.catalogItemId, description: s.description }, historyOrders, today);
+    }
+    return out;
+  }, [isOpen, services, historyOrders, today]);
 
   // 🆕 Issue #41: Agrupamento de peças por categoria
   const groupedParts = useMemo(() => {
@@ -141,6 +184,7 @@ export const OSModal: React.FC<OSModalProps> = ({
   const needsClientChoice = hasHomonyms && !selectedClient;
 
   const suggestedVehicles = useMemo(() => selectedClient ? selectedClient.vehicles : [], [selectedClient]);
+  const shopVehicles = useShopVehicles(clients, workOrders);
 
   const suggestedTechnicians = useMemo(() => {
     const term = technician.trim().toLowerCase();
@@ -278,7 +322,8 @@ export const OSModal: React.FC<OSModalProps> = ({
       else delete newList[index].catalogItemId;
       if (match) {
         newList[index].price = match.price;
-        newList[index].cost = match.cost || 0;
+        // Custo só se o catálogo tiver; sem custo no catálogo, a linha continua sem custo (nunca 0).
+        if (match.cost && match.cost > 0) newList[index].cost = match.cost;
         // 🆕 Issue #42: auto-fill category se o item ainda não tem uma
         if (match.category && !newList[index].category) {
           newList[index].category = match.category;
@@ -294,14 +339,13 @@ export const OSModal: React.FC<OSModalProps> = ({
       e.preventDefault();
       if (!tempPart.description) return;
       const priceVal = parseFloat(tempPart.price.replace(',', '.')) || 0;
-      const costVal = parseFloat(tempPart.cost.replace(',', '.')) || 0;
       const partLinkId = resolveCatalogItemId({ description: tempPart.description }, catalogParts);
       const newItem: OrderItem = {
         id: crypto.randomUUID(),
         ...(partLinkId ? { catalogItemId: partLinkId } : {}),
         description: tempPart.description,
         price: fromFloat(priceVal),
-        cost: fromFloat(costVal),
+        cost: parseCostInput(tempPart.cost),
         category: tempPart.category || undefined
       };
       setParts(prev => [...prev, newItem]);
@@ -315,14 +359,13 @@ export const OSModal: React.FC<OSModalProps> = ({
       e.preventDefault();
       if (!tempService.description) return;
       const priceVal = parseFloat(tempService.price.replace(',', '.')) || 0;
-      const costVal = parseFloat(tempService.cost.replace(',', '.')) || 0;
       const serviceLinkId = resolveCatalogItemId({ description: tempService.description }, catalogServices);
       const newItem: OrderItem = {
         id: crypto.randomUUID(),
         ...(serviceLinkId ? { catalogItemId: serviceLinkId } : {}),
         description: tempService.description,
         price: fromFloat(priceVal),
-        cost: fromFloat(costVal)
+        cost: parseCostInput(tempService.cost)
       };
       setServices(prev => [...prev, newItem]);
       setTempService({ description: '', price: '', cost: '' });
@@ -336,7 +379,7 @@ export const OSModal: React.FC<OSModalProps> = ({
       ...tempPart,
       description: val,
       price: match ? (match.price / 100).toString() : tempPart.price,
-      cost: match ? ((match.cost || 0) / 100).toString() : tempPart.cost,
+      cost: match ? costToInput(match.cost) : tempPart.cost,
       // 🆕 Issue #42: auto-fill categoria aprendida do catálogo
       category: match?.category ?? tempPart.category
     });
@@ -347,7 +390,7 @@ export const OSModal: React.FC<OSModalProps> = ({
     setTempService({
       description: val,
       price: match ? (match.price / 100).toString() : tempService.price,
-      cost: match ? ((match.cost || 0) / 100).toString() : tempService.cost
+      cost: match ? costToInput(match.cost) : tempService.cost
     });
   };
 
@@ -380,8 +423,8 @@ export const OSModal: React.FC<OSModalProps> = ({
       vehicleModelOnly: vehicle,
       plate: plate.toUpperCase(),
       mileage: parseInt(mileage, 10) || 0,
-      parts: parts.filter(p => p.description.trim() !== ""),
-      services: services.filter(s => s.description.trim() !== ""),
+      parts: parts.filter(p => p.description.trim() !== "").map(normalizeItemCost),
+      services: services.filter(s => s.description.trim() !== "").map(normalizeItemCost),
       publicNotes,
       technician: technician.trim() || undefined,
       advanceAmount,
@@ -518,8 +561,7 @@ export const OSModal: React.FC<OSModalProps> = ({
         <div style={{ display: 'flex', gap: 16 }}>
           <div className="form-group" style={{ flex: 2 }}>
             <label className="form-label">Veículo</label>
-            <input className="form-input" list="veh_list" value={vehicle} onChange={e => setVehicle(e.target.value)} />
-            <datalist id="veh_list">{suggestedVehicles.map((v, i) => <option key={i} value={v.model} />)}</datalist>
+            <VehicleCombobox id="os-vehicle" value={vehicle} onChange={setVehicle} clientVehicles={suggestedVehicles} shopVehicles={shopVehicles} />
           </div>
           <div className="form-group" style={{ flex: 1 }}>
             <label className="form-label">Placa</label>
@@ -533,21 +575,10 @@ export const OSModal: React.FC<OSModalProps> = ({
 
         <hr style={{ borderColor: 'var(--border)', margin: '20px 0', opacity: 0.3 }} />
 
-        {/* Configuração de margem mínima */}
-        {showCostColumn && (
-          <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', backgroundColor: 'rgba(130, 87, 230, 0.05)', borderRadius: '6px' }}>
-            <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--primary)' }}>Margem Mínima Desejada:</label>
-            <input
-              type="number"
-              value={minMargin}
-              onChange={e => setMinMargin(parseInt(e.target.value, 10) || 70)}
-              min="0"
-              max="100"
-              style={{ width: '70px', padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--border)', fontSize: '0.9rem' }}
-            />
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>%</span>
-          </div>
-        )}
+        {/* Meta de margem (global, das Configurações) */}
+        <div className="margin-goal-note">
+          Meta de margem: <strong>{targetMargin}%</strong> (altere em Config)
+        </div>
 
         {/* COLUNAS PEÇAS / SERVIÇOS */}
         <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
@@ -663,13 +694,16 @@ export const OSModal: React.FC<OSModalProps> = ({
 
                         {showCostColumn && (
                           <input
-                            className="form-input"
+                            className="form-input margin-cost-field"
                             type="number"
-                            value={toFloat(p.cost || 0)}
-                            onChange={e => updateItem(parts, setParts, i, 'cost', fromFloat(parseFloat(e.target.value) || 0), catalogParts)}
-                            style={{ flex: 0.8, fontSize: '0.85rem', backgroundColor: 'rgba(255,152,0,0.1)' }}
+                            min="0"
+                            step="0.01"
+                            value={p.cost === undefined ? '' : toFloat(p.cost)}
+                            onChange={e => updateItem(parts, setParts, i, 'cost', parseCostEdit(e.target.value), catalogParts)}
+                            style={{ flex: 0.8, fontSize: '0.85rem' }}
                             placeholder="Custo"
-                            title="Custo interno de aquisição"
+                            title="Custo interno de aquisição (vazio = sem custo, fora da margem)"
+                            aria-label={`Custo de ${p.description || 'peça'}`}
                           />
                         )}
 
@@ -690,12 +724,19 @@ export const OSModal: React.FC<OSModalProps> = ({
                         </button>
                       </div>
 
-                      {showCostColumn && p.cost && p.cost > 0 && (
+                      <HistoryHint
+                        suggestion={partHistory[p.id]}
+                        currentPrice={p.price}
+                        formatMoney={formatMoney}
+                        onUse={(price) => updateItem(parts, setParts, i, 'price', price, catalogParts)}
+                      />
+
+                      {showCostColumn && p.description.trim() !== '' && (
                         <MarginIndicator
                           cost={p.cost}
                           price={p.price}
                           formatMoney={formatMoney}
-                          minMarginPercent={minMargin}
+                          minMarginPercent={targetMargin}
                           onSuggestPrice={(suggestedPrice) => {
                             updateItem(parts, setParts, i, 'price', suggestedPrice, catalogParts);
                           }}
@@ -779,13 +820,16 @@ export const OSModal: React.FC<OSModalProps> = ({
 
                     {showCostColumn && (
                       <input
-                        className="form-input"
+                        className="form-input margin-cost-field"
                         type="number"
-                        value={toFloat(s.cost || 0)}
-                        onChange={e => updateItem(services, setServices, i, 'cost', fromFloat(parseFloat(e.target.value) || 0), catalogServices)}
-                        style={{ flex: 0.8, fontSize: '0.85rem', backgroundColor: 'rgba(255,152,0,0.1)' }}
+                        min="0"
+                        step="0.01"
+                        value={s.cost === undefined ? '' : toFloat(s.cost)}
+                        onChange={e => updateItem(services, setServices, i, 'cost', parseCostEdit(e.target.value), catalogServices)}
+                        style={{ flex: 0.8, fontSize: '0.85rem' }}
                         placeholder="Custo"
-                        title="Custo interno de aquisição"
+                        title="Custo interno (vazio = sem custo, fora da margem)"
+                        aria-label={`Custo de ${s.description || 'serviço'}`}
                       />
                     )}
 
@@ -806,12 +850,19 @@ export const OSModal: React.FC<OSModalProps> = ({
                     </button>
                   </div>
 
-                  {showCostColumn && s.cost && s.cost > 0 && (
+                  <HistoryHint
+                    suggestion={serviceHistory[s.id]}
+                    currentPrice={s.price}
+                    formatMoney={formatMoney}
+                    onUse={(price) => updateItem(services, setServices, i, 'price', price, catalogServices)}
+                  />
+
+                  {showCostColumn && s.description.trim() !== '' && (
                     <MarginIndicator
                       cost={s.cost}
                       price={s.price}
                       formatMoney={formatMoney}
-                      minMarginPercent={minMargin}
+                      minMarginPercent={targetMargin}
                       onSuggestPrice={(suggestedPrice) => {
                         updateItem(services, setServices, i, 'price', suggestedPrice, catalogServices);
                       }}
@@ -842,58 +893,54 @@ export const OSModal: React.FC<OSModalProps> = ({
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Custo Total</div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--warning)' }}>
-                  {formatMoney(totalCost)}
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Custo (itens com custo)</div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--text-main)' }}>
+                  {formatMoney(margin.cost)}
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Lucro Bruto</div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                  {formatMoney(profit)}
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Lucro Bruto (itens com custo)</div>
+                <div className={`margin-text--${marginLvl.toLowerCase()}`} style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
+                  {formatMoney(margin.profit)}
                 </div>
               </div>
               <div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ROI</div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: roi >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                  {roi.toFixed(1)}%
+                <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--text-main)' }}>
+                  {roi === null ? 'Sem custo' : `${formatPct(roi)}%`}
                 </div>
               </div>
             </div>
 
             <div style={{ marginTop: 12, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Margem de Lucro: <strong style={{ color: 'var(--primary)' }}>{profitMargin.toFixed(1)}%</strong>
+              Margem de Lucro: <strong className={`margin-text--${marginLvl.toLowerCase()}`}>{marginLabel(marginLvl, margin.marginPct)}</strong>
+              {' '}(meta {targetMargin}%)
             </div>
+            {partialNote && <div className="margin-partial-note" role="status">{partialNote}</div>}
 
-            {totalCost > 0 && (
-              <div style={{
-                marginTop: 16,
-                padding: 12,
-                backgroundColor: profitMargin < minMargin ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)',
-                borderRadius: 6,
-                border: `2px solid ${profitMargin < minMargin ? '#ef4444' : '#22c55e'}`
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            {minSuggestedRevenue !== null && margin.marginPct !== null && (
+              <div className={`margin-min-box${marginLvl === 'ABAIXO' || marginLvl === 'ATENCAO' ? ' margin-min-box--abaixo' : ''}`}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 12, flexWrap: 'wrap' }}>
                   <div>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 'bold' }}>
-                      🎯 Valor Mínimo Sugerido ({minMargin}% margem)
+                      🎯 Valor Mínimo Sugerido ({targetMargin}% margem{partialNote ? ', só itens com custo' : ''})
                     </div>
                     <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: 'var(--primary)' }}>
-                      {formatMoney(Math.round(minSuggestedRevenue))}
+                      {formatMoney(minSuggestedRevenue)}
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
                       {revenueDifference >= 0 ? 'Acima do mínimo' : 'Abaixo do mínimo'}
                     </div>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: revenueDifference >= 0 ? '#22c55e' : '#ef4444' }}>
-                      {revenueDifference >= 0 ? '+' : ''}{formatMoney(Math.round(revenueDifference))}
+                    <div className={revenueDifference >= 0 ? 'margin-text--na_meta' : 'margin-text--abaixo'} style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
+                      {revenueDifference >= 0 ? '+' : ''}{formatMoney(revenueDifference)}
                     </div>
                   </div>
                 </div>
-                {profitMargin < minMargin && (
-                  <div style={{ fontSize: '0.75rem', color: '#ef4444', fontWeight: 'bold', marginTop: 8 }}>
-                    ⚠️ Esta OS está abaixo da margem mínima desejada. Considere ajustar os preços.
+                {marginLvl !== 'NA_META' && (
+                  <div className="margin-min-box__alert" role="status">
+                    ⚠️ Esta OS está abaixo da meta de margem ({targetMargin}%). Considere ajustar os preços. Você ainda pode salvar.
                   </div>
                 )}
               </div>

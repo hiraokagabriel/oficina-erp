@@ -663,6 +663,7 @@ export const CRMPage: React.FC<CRMPageProps> = ({
           client={selectedClient}
           onClose={() => setIsEditModalOpen(false)}
           onSave={handleSaveClient}
+          workOrders={workOrders}
         />
       )}
 

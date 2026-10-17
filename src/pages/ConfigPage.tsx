@@ -1,5 +1,6 @@
 import React from 'react';
 import { WorkshopSettings } from '../types';
+import { VehicleCatalogNote } from '../components/VehicleCatalogNote';
 
 interface ConfigPageProps {
   settings: WorkshopSettings;
@@ -23,7 +24,35 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
     setSettings({ ...settings, [field]: value });
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Meta de margem: inteiro 1..99 gravado COMO NÚMERO (a edição genérica acima grava texto). Vazio = padrão.
+  const [targetDraft, setTargetDraft] = React.useState(settings.targetMargin === undefined ? '' : String(settings.targetMargin));
+  const [targetError, setTargetError] = React.useState('');
+  React.useEffect(() => {
+    setTargetDraft(prev => {
+      if (settings.targetMargin === undefined) return prev.trim() === '' || targetError ? prev : '';
+      return String(settings.targetMargin) === prev.trim() ? prev : String(settings.targetMargin);
+    });
+  }, [settings.targetMargin]);
+
+  const handleTargetMarginChange = (raw: string) => {
+    setTargetDraft(raw);
+    const text = raw.trim();
+    if (text === '') {
+      setTargetError('');
+      const { targetMargin: _removed, ...rest } = settings;
+      setSettings(rest);
+      return;
+    }
+    const n = Number(text);
+    if (!/^\d+$/.test(text) || n < 1 || n > 99) {
+      setTargetError('Informe um número inteiro de 1 a 99.');
+      return;
+    }
+    setTargetError('');
+    setSettings({ ...settings, targetMargin: n });
+  };
+
+  const handleFileSelect =(e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -104,6 +133,32 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
         <div className="form-group">
           <label className="form-label">Endereço</label>
           <input className="form-input" value={settings.address} onChange={(e) => handleChange('address', e.target.value)} />
+        </div>
+      </div>
+
+      {/* SEÇÃO 1B: META DE MARGEM */}
+      <div className="card">
+        <h3>🎯 Meta de Margem</h3>
+        <div className="form-group" style={{ maxWidth: 260 }}>
+          <label className="form-label" htmlFor="cfg-target-margin">Meta de margem (%)</label>
+          <input
+            id="cfg-target-margin"
+            className="form-input"
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={99}
+            step={1}
+            placeholder="70"
+            value={targetDraft}
+            onChange={(e) => handleTargetMarginChange(e.target.value)}
+            aria-invalid={targetError ? true : undefined}
+            aria-describedby="cfg-target-margin-help"
+          />
+          <small id="cfg-target-margin-help" style={{ color: 'var(--text-muted)', marginTop: 5, display: 'block' }}>
+            Inteiro de 1 a 99. Vazio usa o padrão de 70%. Vale para a OS, o Kanban e o relatório de margem.
+          </small>
+          {targetError && <span className="margin-config-error" role="alert">{targetError}</span>}
         </div>
       </div>
 
@@ -221,6 +276,8 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
             )}
         </div>
       </div>
+
+      <VehicleCatalogNote />
 
     </div>
   );

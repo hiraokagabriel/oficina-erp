@@ -1,11 +1,14 @@
 import React from 'react';
+import { formatPct, hasCost, marginLabel, marginLevel, suggestPriceForTarget } from '../services/margin';
 
 interface MarginIndicatorProps {
-  cost: number;
+  /** Custo em centavos; ausente ou 0 = "Sem custo". */
+  cost?: number;
   price: number;
   formatMoney: (val: number) => string;
   onSuggestPrice?: (suggestedPrice: number) => void;
-  minMarginPercent?: number; // Margem mínima desejada (padrão 70%)
+  /** Meta de margem global (%), vinda das Configurações. */
+  minMarginPercent?: number;
 }
 
 export const MarginIndicator: React.FC<MarginIndicatorProps> = ({
@@ -15,120 +18,57 @@ export const MarginIndicator: React.FC<MarginIndicatorProps> = ({
   onSuggestPrice,
   minMarginPercent = 70
 }) => {
+  if (!hasCost({ cost })) {
+    return (
+      <div className="margin-ind margin-ind--sem_custo">
+        <span className="margin-ind__label margin-text--sem_custo">Sem custo</span>
+        <span className="margin-ind__muted"> (fora da conta de margem)</span>
+      </div>
+    );
+  }
+  const costCents = cost as number;
   // Evitar divisão por zero
   if (price === 0) return null;
-  
-  const margin = ((price - cost) / price) * 100;
-  const suggestedPrice = cost / (1 - minMarginPercent / 100);
-  
-  // Determina cor baseada na margem
-  const getColor = () => {
-    if (margin >= 70) return '#22c55e'; // Verde
-    if (margin >= 31) return '#f59e0b'; // Amarelo/Laranja
-    return '#ef4444'; // Vermelho
-  };
-  
-  const getBackgroundGradient = () => {
-    const percentage = Math.min(Math.max(margin, 0), 100);
-    const color = getColor();
-    return `linear-gradient(to right, ${color}30 0%, ${color}30 ${percentage}%, transparent ${percentage}%)`;
-  };
+
+  const margin = ((price - costCents) / price) * 100;
+  const level = marginLevel(margin, minMarginPercent);
+  const suggestedPrice = suggestPriceForTarget(costCents, minMarginPercent);
+  const pct = Math.min(Math.max(margin, 0), 100);
 
   return (
-    <div style={{
-      padding: '8px',
-      borderRadius: '6px',
-      background: getBackgroundGradient(),
-      border: `1px solid ${getColor()}40`,
-      fontSize: '0.75rem',
-      marginTop: '4px'
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-        <span style={{ fontWeight: 'bold', color: getColor() }}>
-          Margem: {margin.toFixed(1)}%
+    <div className={`margin-ind margin-ind--${level.toLowerCase()}`}>
+      <div className="margin-ind__row">
+        <span className={`margin-ind__label margin-text--${level.toLowerCase()}`}>
+          {marginLabel(level, margin)}
         </span>
-        {cost > 0 && (
-          <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>
-            Custo: {formatMoney(cost)}
-          </span>
-        )}
+        <span className="margin-ind__muted">Custo: {formatMoney(costCents)}</span>
       </div>
-      
-      {/* Barra visual */}
-      <div style={{
-        height: '8px',
-        backgroundColor: 'var(--border)',
-        borderRadius: '4px',
-        overflow: 'hidden',
-        position: 'relative'
-      }}>
-        <div style={{
-          height: '100%',
-          width: `${Math.min(Math.max(margin, 0), 100)}%`,
-          backgroundColor: getColor(),
-          transition: 'all 0.3s ease'
-        }} />
-        
-        {/* Marcador de margem mínima */}
-        <div style={{
-          position: 'absolute',
-          left: `${minMarginPercent}%`,
-          top: 0,
-          bottom: 0,
-          width: '2px',
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          boxShadow: '0 0 4px rgba(0,0,0,0.3)'
-        }} />
+
+      <div className="margin-ind__track" role="img" aria-label={`Margem de ${formatPct(margin)}%, meta de ${minMarginPercent}%`}>
+        <div className="margin-ind__fill" style={{ width: `${pct}%` }} />
+        <div className="margin-ind__goal" style={{ left: `${minMarginPercent}%` }} />
       </div>
-      
-      {/* Sugestão de preço */}
-      {margin < minMarginPercent && cost > 0 && onSuggestPrice && (
-        <div style={{
-          marginTop: '6px',
-          padding: '4px 6px',
-          backgroundColor: 'rgba(130, 87, 230, 0.1)',
-          borderRadius: '4px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-            💡 Preço sugerido ({minMarginPercent}%):
-          </span>
+
+      {margin < minMarginPercent && suggestedPrice !== null && onSuggestPrice && (
+        <div className="margin-suggest">
+          <span className="margin-ind__muted">Preço para atingir a meta ({minMarginPercent}%):</span>
           <button
-            onClick={() => onSuggestPrice(Math.round(suggestedPrice))} // ✅ suggestedPrice já está em centavos
-            style={{
-              background: 'var(--primary)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              padding: '2px 8px',
-              fontSize: '0.7rem',
-              cursor: 'pointer',
-              fontWeight: 'bold'
-            }}
+            className="margin-btn"
+            onClick={() => onSuggestPrice(suggestedPrice)}
             type="button"
+            title="Aplica este preço na linha"
           >
-            {formatMoney(Math.round(suggestedPrice))}
+            {formatMoney(suggestedPrice)}
           </button>
         </div>
       )}
-      
-      {/* Indicador de lucro */}
-      {cost > 0 && (
-        <div style={{
-          marginTop: '4px',
-          fontSize: '0.7rem',
-          color: 'var(--text-muted)',
-          display: 'flex',
-          justifyContent: 'space-between'
-        }}>
-          <span>Lucro:</span>
-          <span style={{ fontWeight: 'bold', color: getColor() }}>
-            {formatMoney(price - cost)}
-          </span>
-        </div>
-      )}
+
+      <div className="margin-ind__row" style={{ marginTop: 4 }}>
+        <span className="margin-ind__muted">Lucro:</span>
+        <span className={`margin-ind__label margin-text--${level.toLowerCase()}`}>
+          {formatMoney(price - costCents)}
+        </span>
+      </div>
     </div>
   );
 };

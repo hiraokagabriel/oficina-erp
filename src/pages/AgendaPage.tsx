@@ -135,6 +135,7 @@ export const AgendaPage: React.FC<AgendaPageProps> = ({ appointments, workOrders
           editing={modal.editing}
           defaultDate={modal.date}
           clients={clients}
+          workOrders={workOrders}
           onClose={() => setModal(null)}
           onSave={input => { onSave(input, modal.editing, modal.mode); setModal(null); }}
         />

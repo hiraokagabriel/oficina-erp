@@ -1,0 +1,47 @@
+/* Campo de veículo com sugestões (VehicleCombobox) */
+.vcb { position: relative; width: 100%; }
+.vcb-list {
+  position: fixed; z-index: 2000;
+  max-height: 320px; overflow-y: auto; padding: 4px;
+  background: var(--bg-panel); color: var(--text-main);
+  border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+.vcb-group {
+  padding: 8px 10px 4px; font-size: 0.72rem; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted);
+}
+.vcb-opt {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 0.92rem;
+  border: 1px solid transparent;
+}
+.vcb-opt.is-active { background: #2e2f36; border-color: var(--primary); }
+.vcb-label { min-width: 0; overflow-wrap: anywhere; }
+.vcb-meta { flex: none; font-size: 0.75rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.vcb-mark { background: transparent; color: var(--primary-hover); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+.vcb-empty { padding: 10px; font-size: 0.85rem; color: var(--text-muted); }
+.vcb-back {
+  position: sticky; top: -4px; z-index: 1; display: block; width: 100%; text-align: left;
+  margin: -4px 0 4px; padding: 8px 10px; font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer;
+  color: var(--text-main); background: var(--bg-panel); border: 0; border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.vcb-back:hover { color: var(--primary-hover); }
+.vcb-years { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 4px; }
+.vcb-year { justify-content: center; font-variant-numeric: tabular-nums; }
+.vcb-noyear { grid-column: 1 / -1; color: var(--text-muted); }
+.vcb-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+[data-theme="pastel"] .vcb-list { background: #FFFFFF; border-color: #D1C4E9; box-shadow: 0 12px 32px rgba(60, 40, 90, 0.18); }
+[data-theme="pastel"] .vcb-opt.is-active { background: #EDE9FE; border-color: #7C3AED; }
+[data-theme="pastel"] .vcb-back { background: #FFFFFF; color: #2D2438; border-color: #D1C4E9; }
+[data-theme="pastel"] .vcb-back:hover { color: #5B21B6; }
+[data-theme="pastel"] .vcb-mark { color: #5B21B6; }
+
+@media (max-width: 800px) {
+  .vcb-opt { flex-wrap: wrap; gap: 2px 12px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .vcb-opt { transition: background-color 0.1s; }
+}

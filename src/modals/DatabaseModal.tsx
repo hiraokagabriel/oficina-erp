@@ -1,7 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { Client, CatalogItem, Technician, PART_CATEGORY_META } from '../types';
+import { Client, WorkOrder, CatalogItem, Technician, PART_CATEGORY_META } from '../types';
 import { Money, generateId } from '../utils/helpers';
 import { PartCategorySelect } from '../components/PartCategorySelect';
+import { VehicleCombobox, useShopVehicles } from '../components/VehicleCombobox';
+import { normalizeItemCost, parseCostEdit } from '../services/marginView';
 
 interface DatabaseModalProps {
   isOpen: boolean;
@@ -17,6 +19,8 @@ interface DatabaseModalProps {
   onSaveTechnician: (technician: Technician) => void;
   onDeleteTechnician: (id: string) => void;
   formatMoney: (val: number) => string;
+  /** Histórico de OS para sugerir veículos já atendidos na oficina. */
+  workOrders?: WorkOrder[];
 }
 
 type Tab = 'CLIENTS' | 'PARTS' | 'SERVICES' | 'TECHNICIANS';
@@ -30,8 +34,9 @@ type DbRow =
 export const DatabaseModal: React.FC<DatabaseModalProps> = ({
   isOpen, onClose, clients, catalogParts, catalogServices, catalogTechnicians,
   onSaveClient, onDeleteClient, onSaveCatalogItem, onDeleteCatalogItem, 
-  onSaveTechnician, onDeleteTechnician, formatMoney
+  onSaveTechnician, onDeleteTechnician, formatMoney, workOrders
 }) => {
+  const shopVehicles = useShopVehicles(clients, workOrders);
   const [activeTab, setActiveTab] = useState<Tab>('CLIENTS');
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -81,7 +86,8 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
   const handleVehicleChange = (index: number, field: 'model' | 'plate', value: string) => {
       if (!editingClient) return;
       const newVehicles = [...editingClient.vehicles];
-      newVehicles[index] = { ...newVehicles[index], [field]: value.toUpperCase() };
+      // Só a placa vai em maiúsculas; o modelo mantém a grafia sugerida (ex.: Honda Civic 2.0 16v 2015).
+      newVehicles[index] = { ...newVehicles[index], [field]: field === 'plate' ? value.toUpperCase() : value };
       setEditingClient({ ...editingClient, vehicles: newVehicles });
   };
 
@@ -118,7 +124,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
             <div style={{maxHeight: 200, overflowY:'auto', paddingRight:5}}>
                 {editingClient.vehicles.map((v, i) => (
                     <div key={i} style={{display:'flex', gap:10, marginBottom:8}}>
-                        <input className="form-input" placeholder="Modelo/Cor" value={v.model} onChange={e => handleVehicleChange(i, 'model', e.target.value)} style={{flex:2}} />
+                        <div style={{flex:2, minWidth:0}}><VehicleCombobox id={`db-vehicle-${i}`} placeholder="Modelo/Cor" value={v.model} onChange={val => handleVehicleChange(i, 'model', val)} shopVehicles={shopVehicles} /></div>
                         <input className="form-input" placeholder="Placa" value={v.plate} onChange={e => handleVehicleChange(i, 'plate', e.target.value)} style={{flex:1}} />
                         <button className="btn-icon danger" onClick={() => handleRemoveVehicle(i)}>🗑️</button>
                     </div>
@@ -152,8 +158,25 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                     className="form-input" 
                     type="number" 
                     value={editingItem.price / 100} 
-                    onChange={e => setEditingItem({...editingItem, price: Money.fromFloat(parseFloat(e.target.value))})} 
+                    onChange={e => setEditingItem({...editingItem, price: Money.fromFloat(parseFloat(e.target.value))})}
                 />
+             </div>
+
+             <div className="form-group">
+                <label className="form-label" htmlFor="catalog-item-cost">Custo <span style={{ opacity: 0.6, fontSize: '0.8rem' }}>(Opcional)</span></label>
+                <input
+                    id="catalog-item-cost"
+                    className="form-input"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Vazio = sem custo"
+                    value={editingItem.cost === undefined ? '' : editingItem.cost / 100}
+                    onChange={e => setEditingItem({ ...editingItem, cost: parseCostEdit(e.target.value) })}
+                />
+                <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: 4 }}>
+                    Itens sem custo ficam fora do cálculo de margem.
+                </small>
              </div>
 
              {/* 🆕 Issue #42: categoria editável diretamente no catálogo (apenas para peças) */}
@@ -181,7 +204,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
              <div className="modal-actions">
                 <button className="btn-secondary" onClick={() => setEditingItem(null)}>Cancelar</button>
                 <button className="btn" onClick={() => { 
-                    onSaveCatalogItem(editingItem, activeTab === 'PARTS' ? 'part' : 'service'); 
+                    onSaveCatalogItem(normalizeItemCost(editingItem), activeTab === 'PARTS' ? 'part' : 'service');
                     setEditingItem(null); 
                 }}>Salvar</button>
             </div>
@@ -325,7 +348,12 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                             <td style={{textAlign:'right'}}>
                                 {row.kind === 'CLIENT' ? row.item.phone : 
                                  row.kind === 'TECHNICIAN' ? '' : 
-                                 formatMoney(row.item.price)}
+                                 <>
+                                    {formatMoney(row.item.price)}
+                                    <div style={{fontSize:'0.75rem', color:'var(--text-muted)'}}>
+                                        {typeof row.item.cost === 'number' && row.item.cost > 0 ? `Custo ${formatMoney(row.item.cost)}` : 'sem custo'}
+                                    </div>
+                                 </>}
                             </td>
                             <td style={{textAlign:'center'}}>
                                 <button 

@@ -7,6 +7,8 @@ interface WorkshopPageProps {
   workOrders: WorkOrder[];
   isLoading: boolean;
   formatMoney: (val: number) => string;
+  /** Meta de margem global (%), das Configurações. */
+  targetMargin?: number;
   onNewOS: () => void;
   onStatusChange: (osId: string, newStatus: OSStatus) => void;
   kanbanActions: {
@@ -26,6 +28,7 @@ export const WorkshopPage: React.FC<WorkshopPageProps> = ({
   workOrders,
   isLoading,
   formatMoney,
+  targetMargin,
   onNewOS,
   onStatusChange,
   kanbanActions
@@ -101,6 +104,7 @@ export const WorkshopPage: React.FC<WorkshopPageProps> = ({
             actions={kanbanActions} 
             formatMoney={formatMoney}
             showArchived={showArchived}
+            targetMargin={targetMargin}
         />
       </div>
     </div>

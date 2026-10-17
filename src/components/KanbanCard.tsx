@@ -5,6 +5,8 @@ import { WorkOrder, OSStatus } from '../types';
 import { ContextMenu } from './ContextMenu';
 import { ActionMenu, MenuItem } from './ActionMenu';
 import { getDeliveryBadge } from '../services/deliveryBadge';
+import { DEFAULT_TARGET_MARGIN } from '../services/margin';
+import { getMarginBadge } from '../services/marginView';
 
 declare global {
   interface Window {
@@ -34,14 +36,17 @@ interface KanbanCardProps {
     onQuickFinish?: (id: string) => void;
   };
   isDragging?: boolean;
+  /** Meta de margem global (%), das Configurações. */
+  targetMargin?: number;
 }
 
-export const KanbanCard = React.memo(({ 
-  os, 
-  formatMoney, 
-  status, 
-  actions, 
-  isDragging: forcedDragging
+export const KanbanCard = React.memo(({
+  os,
+  formatMoney,
+  status,
+  actions,
+  isDragging: forcedDragging,
+  targetMargin = DEFAULT_TARGET_MARGIN
 }: KanbanCardProps) => {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [isHovered, setIsHovered] = useState(false);
@@ -72,11 +77,7 @@ export const KanbanCard = React.memo(({
     forcedDragging && 'is-overlay'
   ].filter(Boolean).join(' ');
 
-  const getProfitMarginColor = (margin: number) => {
-    if (margin >= 70) return { color: 'var(--success)', bg: 'rgba(4, 211, 97, 0.1)' };
-    if (margin >= 16) return { color: 'var(--warning)', bg: 'rgba(255, 152, 0, 0.1)' };
-    return { color: 'var(--danger)', bg: 'rgba(229, 76, 76, 0.1)' };
-  };
+  const marginBadge = getMarginBadge(os, targetMargin, formatMoney);
 
   const openWhatsApp = async () => {
     if (!os.clientPhone) return;
@@ -246,22 +247,15 @@ export const KanbanCard = React.memo(({
         >
           <div className="os-header" style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span className="os-number">#{os.osNumber}</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               <span className="os-price">{formatMoney(os.total)}</span>
 
-              {os.profitMargin !== undefined && os.profitMargin > 0 && (
+              {marginBadge && (
                 <span
-                  style={{
-                    fontSize: '0.7rem',
-                    color: getProfitMarginColor(os.profitMargin).color,
-                    fontWeight: 'bold',
-                    padding: '2px 4px',
-                    borderRadius: 4,
-                    backgroundColor: getProfitMarginColor(os.profitMargin).bg
-                  }}
-                  title={`Lucro: ${formatMoney(os.profit || 0)} | ROI: ${os.totalCost && os.totalCost > 0 ? ((os.profit || 0) / os.totalCost * 100).toFixed(0) : '0'}%`}
+                  className={`margin-badge margin-badge--${marginBadge.level.toLowerCase()}`}
+                  title={marginBadge.title}
                 >
-                  +{os.profitMargin.toFixed(0)}%
+                  {marginBadge.label}
                 </span>
               )}
 

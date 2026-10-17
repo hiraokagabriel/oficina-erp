@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Client } from '../types';
+import { Client, WorkOrder } from '../types';
+import { VehicleCombobox, useShopVehicles } from '../components/VehicleCombobox';
 import { generateId } from '../utils/helpers';
 
 interface ClientEditModalProps {
@@ -7,14 +8,18 @@ interface ClientEditModalProps {
   client: Client;
   onClose: () => void;
   onSave: (client: Client) => void;
+  /** Histórico de OS para sugerir veículos já atendidos na oficina. */
+  workOrders?: WorkOrder[];
 }
 
 export const ClientEditModal: React.FC<ClientEditModalProps> = ({
   isOpen,
   client,
   onClose,
-  onSave
+  onSave,
+  workOrders
 }) => {
+  const shopVehicles = useShopVehicles([], workOrders);
   const [formData, setFormData] = useState({
     name: client.name,
     phone: client.phone || '',
@@ -139,12 +144,12 @@ export const ClientEditModal: React.FC<ClientEditModalProps> = ({
                 borderRadius: '8px',
                 border: '1px solid var(--border)'
               }}>
-                <input
-                  type="text"
-                  className="form-input"
+                <VehicleCombobox
+                  id={`client-vehicle-${index}`}
                   value={vehicle.model}
-                  onChange={(e) => handleVehicleChange(index, 'model', e.target.value)}
-                  placeholder="Modelo (ex: Gol 1.0)"
+                  onChange={(v) => handleVehicleChange(index, 'model', v)}
+                  shopVehicles={shopVehicles}
+                  placeholder="Modelo (ex: Honda Civic 2.0 16v 2015)"
                   style={{ margin: 0 }}
                 />
                 <input

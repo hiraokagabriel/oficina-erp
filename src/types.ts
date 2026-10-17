@@ -176,6 +176,8 @@ export interface WorkshopSettings {
   cnpj: string;
   address: string;
   exportPath: string;
+  /** Meta de margem global em % inteiro (1..99). Ausente = padrão (70). Ver services/margin.ts. */
+  targetMargin?: number;
   /** Segredos: ficam só no localStorage deste PC (ver utils/secrets.ts); nunca vão para o database.json. */
   googleDriveToken?: string;
   googleApiKey?: string;

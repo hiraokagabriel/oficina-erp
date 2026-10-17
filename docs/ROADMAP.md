@@ -166,9 +166,21 @@ Critério de pronto: saber o que está atrasado e o que entra amanhã, sem plani
 Segue aberto da Fase 2: `.btn` primário no tema pastel tem contraste 3,46:1 na ponta rosa do gradiente (estilo global antigo, decisão de design); F2 só abre "Nova OS" na aba Oficina; o modal de agendamento não prende o foco do Tab; impressão real em A4 e janela Tauri real não foram testadas.
 
 ### Fase 3: Margem e preço
-- [ ] Relatório de margem por serviço, peça e categoria.
-- [ ] Sugestão de preço a partir do histórico.
-- [ ] Alerta de OS abaixo da margem alvo (reaproveita `MarginIndicator`).
+Implementada e testada (561 testes e verificação no navegador com banco sintético). **Sem mudança de formato do banco** (só `WorkshopSettings.targetMargin?`, opcional).
+
+- [x] Meta de margem global em Config (padrão 70%, inteiro de 1 a 99; vazio restaura o padrão). Substitui a "margem mínima" local do modal da OS.
+- [x] Custo opcional por item (OS e catálogo). **Custo vazio ou 0 = "não informado"**: o item fica fora da conta de margem e é sinalizado ("N itens sem custo: margem parcial"). Nunca grava `cost: 0`.
+- [x] Níveis de margem (`src/services/margin.ts`): Sem custo, Na meta (≥ meta), Atenção (≥ metade da meta), Abaixo da meta. Selo no cartão do Kanban e indicador no modal da OS.
+- [x] Sugestão de preço: "Preço para atingir a meta" (arredonda para cima, nunca fica abaixo da meta) e preço do histórico (`src/services/pricing.ts`: mediana das vendas dos últimos 12 meses, mínimo 3 vendas, só sugere; botão "Usar").
+- [x] Relatório de margem: aba **Margem** no Financeiro (`MarginReport`), por serviço, peça e categoria, com OS abaixo da meta e itens sem custo. Escopo: OS Finalizadas e Aguardando pagamento, por data de criação, no mesmo mês/ano do filtro do Financeiro.
+
+Segue aberto da Fase 3: `os.profitMargin` ainda é gravado por `helpers.ts` mas o Kanban já não o usa; digitar "7,5" na meta grava "7" no disco enquanto mostra erro; item de catálogo antigo com `cost: 0` mostra "0" no campo Custo; a 1366 px as tabelas da aba Margem rolam na horizontal dentro do cartão; botão Mensal/Anual do Financeiro com contraste baixo no tema escuro.
+
+### Autopreenchimento de veículos
+Implementado (sem mudança de formato do banco). Base brasileira gerada da API pública da FIPE (`npm run vehicles:build`, cache em `scripts/.cache/`, que retoma de onde parou) e embutida em `src/data/veiculos-br.json`, carregada sob demanda. Campo `VehicleCombobox` no modal da OS, cadastro de cliente, gerenciador de cadastros e agendamento: sugestões em grupos (veículos do cliente, já cadastrados na oficina, base brasileira), busca em qualquer ordem ("civic 2.0 2015"), tolerância a 1 erro de digitação, seletor de ano em segundo passo quando o ano não foi digitado, texto livre sempre permitido. Formato: "Marca Modelo Cilindrada Válvulas Ano".
+
+- [ ] Completar a base: a FIPE limita chamadas anônimas por dia (429) e a primeira geração parou em 74 marcas e 4.738 versões. Faltavam Volkswagen, Toyota, Renault, Nissan, Peugeot, Mitsubishi, Volvo, Porsche, Suzuki, MINI e Subaru. Rodar `npm run vehicles:build` de novo (ou usar token gratuito do fipe.api.br).
+- [ ] Conferir os termos de uso da FIPE e da API parallelum (a atribuição aparece na Config).
 
 ---
 

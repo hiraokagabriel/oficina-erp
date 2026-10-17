@@ -49,3 +49,6 @@ C:\OficinaData
 *.csv
 # Claude Code (config local)
 .claude/settings.local.json
+
+# Cache do gerador do catálogo de veículos
+scripts/.cache/

@@ -9,7 +9,8 @@
     "build:analyze": "vite build --mode analyze",
     "preview": "vite preview",
     "tauri": "tauri",
-    "test": "vitest run"
+    "test": "vitest run",
+    "vehicles:build": "node scripts/build-vehicle-catalog.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -57,12 +57,23 @@ Skills de apoio: `superpowers:brainstorming` (features novas), `superpowers:syst
 
 ## Hierarquia de agentes
 
-A sessão principal roda no **Sonnet** e orquestra. Os agentes em `.claude/agents/` têm o modelo fixado e são acionados automaticamente quando a tarefa se encaixa:
+A sessão principal roda no **Sonnet** e orquestra (planeja, delega, verifica, commita). Os agentes em `.claude/agents/` têm modelo e `effort: medium` fixados no cabeçalho:
 
-| Agente | Modelo | Quando |
-|---|---|---|
-| `arquiteto` | Opus | Arquitetura complexa, bugs que atravessam vários arquivos, análise de código legado. Só lê e devolve diagnóstico ou plano. |
-| `dev` | Sonnet | Refatoração, arquivos novos, testes e revisão de código do dia a dia. É quem edita. |
-| `scout` | Haiku | Buscas e varreduras de arquivos, perguntas conceituais rápidas, comandos de terminal e scripts curtos. Só lê. |
+| Agente | Modelo | Edita? | Quando |
+|---|---|---|---|
+| `scout` | Haiku | não | Buscas ("onde está X"), perguntas rápidas, `git status/log/diff`, rodar build e testes e relatar a saída. |
+| `dev` | Sonnet | sim | Implementar, refatorar, arquivos novos, testes, bug localizado em 1 ou 2 arquivos. |
+| `verificador` | Sonnet | só o harness em `%TEMP%` | Verificação no navegador (Playwright + Edge, banco sintético), contraste, 800 px, regressões, testes em vários fusos. Relata defeitos, não corrige. |
+| `arquiteto` | Opus | não | Bug obscuro ou em vários arquivos, mudança de schema ou formato do banco, plano de feature grande. |
+| `revisor` | Opus | não | Revisão do diff antes de commit ou push: correção, risco ao banco salvo, compatibilidade entre PCs, `any`, testes faltando. |
 
-Regras: usar o menor modelo que dá conta; o `scout` junta fatos, o `dev` implementa e o `arquiteto` entra só quando o problema for realmente amplo ou obscuro. Se o `scout` não resolver, escalar para o `dev`; se o `dev` empacar em algo que cruza vários arquivos, escalar para o `arquiteto`.
+Fluxo por tipo de tarefa:
+
+- Pergunta ou busca: `scout`.
+- Bug simples: `dev` (com `superpowers:systematic-debugging`); `verificador` se tocou tela.
+- Bug obscuro ou em vários arquivos: `arquiteto` diagnostica, `dev` corrige, `verificador` confere.
+- Feature nova: brainstorming na sessão principal, `arquiteto` planeja se tocar schema ou vários módulos, `dev` implementa (em paralelo só com arquivos disjuntos), `verificador` confere.
+- Mudança de formato do banco: `arquiteto` obrigatório e aprovação do dono antes do `dev`.
+- Commit e push (só quando pedido): `revisor` revisa o diff, a sessão principal commita por assunto.
+
+Regras: usar o menor modelo que dá conta. Se o `scout` não resolver, escalar para o `dev`; se o `dev` empacar em algo que cruza vários arquivos, escalar para o `arquiteto`. Defeito achado pelo `verificador` ou pelo `revisor` volta para o `dev`. A sessão principal sempre confere build e testes por conta própria antes de declarar concluído.

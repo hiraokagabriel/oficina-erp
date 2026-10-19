@@ -97,19 +97,22 @@ export const highlightParts = (label: string, query: string): TextPart[] => {
 
 export type EnterDecision =
   | { kind: 'pick'; suggestion: VehicleSuggestion }
-  | { kind: 'label'; label: string }
   | { kind: 'keep' };
 
 /**
  * Enter: sugestão destacada seleciona; sem destaque, usa o melhor casamento da base só quando é inequívoco
- * (`bestMatch`); senão mantém o texto digitado como veículo novo.
+ * (`bestMatch`); senão mantém o texto digitado como veículo novo. O casamento único volta como `pick` e passa por
+ * `resolvePick`: sem ano digitado e com vários anos possíveis, abre o seletor de anos em vez de preencher sem ano.
  */
 export const decideEnter = (options: ReadonlyArray<FlatOption>, activeIndex: number, query: string, index: VehicleCatalog | null): EnterDecision => {
   const active = options[activeIndex];
   if (active) return { kind: 'pick', suggestion: active.suggestion };
   if (index && query.trim()) {
     const best = bestMatch(index, query);
-    if (best) return { kind: 'label', label: best.label };
+    if (best) {
+      const suggestion: VehicleSuggestion = { label: best.label, source: 'base', vehicleText: best.label, years: best.years, year: best.year };
+      return { kind: 'pick', suggestion };
+    }
   }
   return { kind: 'keep' };
 };

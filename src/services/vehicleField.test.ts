@@ -87,7 +87,18 @@ describe('decideEnter', () => {
   });
   it('sem destaque usa o melhor casamento inequívoco', () => {
     const d = decideEnter([], -1, 'civic 2.0 2015', index);
-    expect(d).toEqual({ kind: 'label', label: 'Honda Civic 2.0 16v 2015' });
+    expect(d.kind).toBe('pick');
+    if (d.kind !== 'pick') return;
+    expect(d.suggestion.label).toBe('Honda Civic 2.0 16v 2015');
+    expect(resolvePick(d.suggestion).kind).toBe('direct'); // ano digitado: preenche direto
+  });
+  it('casamento único sem ano digitado e com vários anos abre o seletor de anos', () => {
+    const d = decideEnter([], -1, 'civic 2.0', index);
+    expect(d.kind).toBe('pick');
+    if (d.kind !== 'pick') return;
+    const r = resolvePick(d.suggestion);
+    expect(r.kind).toBe('years');
+    if (r.kind === 'years') expect(r.years).toEqual([2016, 2015, 2014]);
   });
   it('sem casamento mantém o texto digitado', () => {
     expect(decideEnter([], -1, 'xyzzy', index)).toEqual({ kind: 'keep' });

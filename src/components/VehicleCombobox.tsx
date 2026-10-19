@@ -5,7 +5,7 @@ import type { VehicleSuggestion } from '../services/vehicleSearch';
 import { buildVehicleSuggestions, collectShopVehicles, type ShopVehicle } from '../services/vehicleSearch';
 import { getVehicleIndex, loadVehicleIndex } from '../services/vehicleIndex';
 import {
-  decideEnter, flattenOptions, highlightParts, limitGroups, queryOf, replaceModelKeepingPlate, resolvePick, suggestionWithYear, valueAfterPick,
+  decideEnter, flattenOptions, highlightParts, limitGroups, queryOf, resolvePick, suggestionWithYear, valueAfterPick,
 } from '../services/vehicleField';
 
 /** Veículos já usados na oficina (cadastro e OS), calculado uma vez por tela. */
@@ -152,7 +152,6 @@ export const VehicleCombobox: React.FC<VehicleComboboxProps> = ({
         e.preventDefault();
         const d = decideEnter(options, active, query, index);
         if (d.kind === 'pick') { choose(d.suggestion); return; }
-        if (d.kind === 'label') onChange(plateAware ? replaceModelKeepingPlate(value, d.label) : d.label);
         setOpen(false);
         setActive(-1);
         break;

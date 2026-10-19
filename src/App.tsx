@@ -6,6 +6,7 @@ import { adoptSecrets, stripDbSecrets } from './utils/secrets';
 import { CURRENT_SCHEMA_VERSION, countUnresolvedLinks, migrate } from './utils/migrations';
 import { useFinance } from './hooks/useFinance';
 import { useKeyboard } from './hooks/useKeyboard';
+import { canTriggerNewOSShortcut } from './utils/shortcuts';
 import { updateClientCascading, updateCatalogItemCascading, updateTechnicianCascading } from './services/cascadeService';
 import { uploadToDrive } from './services/googleDrive';
 import { Sidebar } from './components/Sidebar';
@@ -600,11 +601,15 @@ Abrir OS?`)) {
   useEffect(() => { if (!isModalOpen) setOsFromAppointment(null); }, [isModalOpen]);
   useEffect(() => { if (showConfetti) setTimeout(() => setShowConfetti(false), 3000); }, [showConfetti]);
 
-  useKeyboard('F2', () => {
-    if (activeTab === 'OFICINA') {
-      setEditingOS(null);
-      setIsModalOpen(true);
-    }
+  // F2: de qualquer aba leva à Oficina e abre Nova OS; ignora campo de texto em foco e janela modal aberta.
+  useKeyboard('F2', (e) => {
+    const hasOpenModal = isModalOpen || isEntryModalOpen || isExportModalOpen || isChecklistOpen || isDatabaseModalOpen
+      || isInstallmentModalOpen || isInstallmentChoiceOpen || deleteModalInfo.isOpen || !!pendingAction
+      || document.querySelector('.modal-overlay, [role="alertdialog"], [aria-modal="true"]') !== null;
+    if (!canTriggerNewOSShortcut(e.target as HTMLElement | null, hasOpenModal)) return;
+    setActiveTab('OFICINA');
+    setEditingOS(null);
+    setIsModalOpen(true);
     addToast('Nova OS (F2)', 'info');
   });
 

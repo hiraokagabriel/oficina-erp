@@ -3,6 +3,7 @@ import { Appointment, Client, WorkOrder } from '../types';
 import { VehicleCombobox, useShopVehicles } from '../components/VehicleCombobox';
 import { AppointmentInput, appointmentDayKey, resolveAppointmentClient, validateAppointmentInput } from '../services/agenda';
 import { normalizeName } from '../utils/links';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 export type AppointmentModalMode = 'NOVO' | 'EDITAR' | 'REAGENDAR';
 
@@ -29,6 +30,7 @@ const TITLES: Record<AppointmentModalMode, string> = {
 const vehicleText = (v: { model: string; plate: string }): string => (v.plate ? `${v.model} - ${v.plate}` : v.model);
 
 export const AppointmentModal: React.FC<AppointmentModalProps> = ({ isOpen, mode, onClose, onSave, editing, defaultDate, clients, workOrders }) => {
+  const formRef = useRef<HTMLFormElement>(null);
   const clientRef = useRef<HTMLInputElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
   const autoPhoneRef = useRef(''); // último telefone preenchido automaticamente a partir do cadastro
@@ -56,6 +58,8 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({ isOpen, mode
     const t =setTimeout(() => (mode === 'REAGENDAR' ? dateRef : clientRef).current?.focus(), 50);
     return () => clearTimeout(t);
   }, [isOpen, editing, defaultDate, mode]);
+
+  useFocusTrap(isOpen, formRef);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -113,7 +117,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({ isOpen, mode
 
   return (
     <div className="modal-overlay">
-      <form className="modal-content appt-modal" role="dialog" aria-modal="true" aria-labelledby="appt-title" onSubmit={onSubmit} noValidate>
+      <form ref={formRef} className="modal-content appt-modal" role="dialog" aria-modal="true" aria-labelledby="appt-title" onSubmit={onSubmit} noValidate>
         <h2 className="modal-title" id="appt-title">{TITLES[mode]}</h2>
 
         <div className="form-group">

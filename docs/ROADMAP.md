@@ -163,7 +163,7 @@ Implementada e testada (357 testes e verificação no navegador com banco sinté
 
 Critério de pronto: saber o que está atrasado e o que entra amanhã, sem planilha externa.
 
-Segue aberto da Fase 2: `.btn` primário no tema pastel tem contraste 3,46:1 na ponta rosa do gradiente (estilo global antigo, decisão de design); F2 só abre "Nova OS" na aba Oficina; o modal de agendamento não prende o foco do Tab; impressão real em A4 e janela Tauri real não foram testadas.
+Segue aberto da Fase 2: `.btn` primário no tema pastel tem contraste 3,46:1 na ponta rosa do gradiente (estilo global antigo, decisão de design); impressão real em A4 e janela Tauri real não foram testadas.
 
 ### Fase 3: Margem e preço
 Implementada e testada (561 testes e verificação no navegador com banco sintético). **Sem mudança de formato do banco** (só `WorkshopSettings.targetMargin?`, opcional).
@@ -174,7 +174,7 @@ Implementada e testada (561 testes e verificação no navegador com banco sinté
 - [x] Sugestão de preço: "Preço para atingir a meta" (arredonda para cima, nunca fica abaixo da meta) e preço do histórico (`src/services/pricing.ts`: mediana das vendas dos últimos 12 meses, mínimo 3 vendas, só sugere; botão "Usar").
 - [x] Relatório de margem: aba **Margem** no Financeiro (`MarginReport`), por serviço, peça e categoria, com OS abaixo da meta e itens sem custo. Escopo: OS Finalizadas e Aguardando pagamento, por data de criação, no mesmo mês/ano do filtro do Financeiro.
 
-Segue aberto da Fase 3: `os.profitMargin` ainda é gravado por `helpers.ts` mas o Kanban já não o usa; digitar "7,5" na meta grava "7" no disco enquanto mostra erro; item de catálogo antigo com `cost: 0` mostra "0" no campo Custo; a 1366 px as tabelas da aba Margem rolam na horizontal dentro do cartão; botão Mensal/Anual do Financeiro com contraste baixo no tema escuro.
+Segue aberto da Fase 3: a 1366 px as tabelas da aba Margem rolam na horizontal dentro do cartão.
 
 ### Autopreenchimento de veículos
 Implementado (sem mudança de formato do banco). Base brasileira gerada da API pública da FIPE (`npm run vehicles:build`, cache em `scripts/.cache/`, que retoma de onde parou) e embutida em `src/data/veiculos-br.json`, carregada sob demanda. Campo `VehicleCombobox` no modal da OS, cadastro de cliente, gerenciador de cadastros e agendamento: sugestões em grupos (veículos do cliente, já cadastrados na oficina, base brasileira), busca em qualquer ordem ("civic 2.0 2015"), tolerância a 1 erro de digitação, seletor de ano em segundo passo quando o ano não foi digitado, texto livre sempre permitido. Formato: "Marca Modelo Cilindrada Válvulas Ano".

@@ -81,21 +81,15 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
 
           <div className="toggle-group" style={{display: 'flex', background: 'var(--bg-panel)', borderRadius: 8, padding: 2}}>
              <button 
-                className="btn-sm" 
-                style={{
-                    background: viewMode === 'MONTH' ? 'var(--primary)' : 'transparent', 
-                    color: viewMode === 'MONTH' ? '#fff' : 'var(--text-muted)'
-                }}
+                className={`btn-sm${viewMode === 'MONTH' ? ' is-active' : ''}`}
+                aria-pressed={viewMode === 'MONTH'}
                 onClick={() => setViewMode('MONTH')}
              >
                 Mensal
              </button>
              <button 
-                className="btn-sm" 
-                style={{
-                    background: viewMode === 'YEAR' ? 'var(--primary)' : 'transparent', 
-                    color: viewMode === 'YEAR' ? '#fff' : 'var(--text-muted)'
-                }}
+                className={`btn-sm${viewMode === 'YEAR' ? ' is-active' : ''}`}
+                aria-pressed={viewMode === 'YEAR'}
                 onClick={() => setViewMode('YEAR')}
              >
                 Anual

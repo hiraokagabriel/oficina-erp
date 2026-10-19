@@ -142,6 +142,10 @@ describe('updateWorkOrderData', () => {
     expect(o.publicNotes).toBe('outra');
     expect(o.advanceAmount).toBe(0);
   });
+  it('não herda profitMargin gravado (obsoleto)', () => {
+    const o = updateWorkOrderData({ ...original, profitMargin: 42 }, 1, 'Gol', 'Fulano', '1', '10', [], []);
+    expect('profitMargin' in o).toBe(false);
+  });
   // COMPORTAMENTO ATUAL (suspeito): editar uma OS já finalizada recalcula total/lucro, mas NÃO atualiza o lançamento do Ledger ligado por financialId.
   it('editar OS finalizada muda total sem tocar no financeiro (financialId mantido)', () => {
     const o = updateWorkOrderData(original, 1, 'Gol', 'Fulano', '1', '10', [cat('a', 'X', 9999)], []);

@@ -362,7 +362,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                                     onClick={() => {
                                         if (row.kind === 'CLIENT') setEditingClient({...row.item});
                                         else if (row.kind === 'TECHNICIAN') setEditingTechnician({...row.item});
-                                        else setEditingItem({...row.item});
+                                        else setEditingItem(normalizeItemCost({ ...row.item }));
                                     }}
                                 >✏️</button>
                                 <button 

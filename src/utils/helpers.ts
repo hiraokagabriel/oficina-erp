@@ -144,7 +144,6 @@ export const createWorkOrder = (
     total: subParts + subServices,
     totalCost: financials.totalCost,
     profit: financials.profit,
-    profitMargin: financials.profitMargin,
     createdAt: finalDate,
     checklist: undefined,
     financialId: undefined
@@ -179,8 +178,10 @@ export const updateWorkOrderData = (
 
   const financials = calculateFinancials(orderParts, orderServices);
 
+  // profitMargin gravado é obsoleto: não herdar da OS original (a margem é recalculada dos itens).
+  const { profitMargin: _legacyMargin, ...rest } = original;
   return {
-    ...original,
+    ...rest,
     osNumber,
     vehicle,
     clientName,
@@ -191,7 +192,6 @@ export const updateWorkOrderData = (
     total: subParts + subServices,
     totalCost: financials.totalCost,
     profit: financials.profit,
-    profitMargin: financials.profitMargin,
     createdAt: finalDate,
     publicNotes: publicNotes !== undefined ? publicNotes : original.publicNotes,
     advanceAmount: advanceAmount !== undefined ? advanceAmount : original.advanceAmount,

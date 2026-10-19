@@ -187,6 +187,9 @@ body {
   background: transparent; color: var(--text-muted); cursor: pointer; transition: 0.2s; 
 }
 [data-theme="pastel"] .btn-sm { border-color: #D1C4E9; color: #6D28D9; }
+/* Alternador Mensal/Anual do Financeiro: texto escuro sobre o dourado (escuro) e branco sobre roxo mais fechado (pastel), contraste >= 4,5:1 */
+.toggle-group .btn-sm.is-active { background: var(--primary); border-color: var(--primary); color: #0b0b0d; font-weight: 600; }
+[data-theme="pastel"] .toggle-group .btn-sm.is-active { background: #6D28D9; border-color: #6D28D9; color: #fff; }
 .btn-sm:hover { border-color: var(--text-main); color: var(--text-main); background: var(--bg-card-hover); }
 
 .form-group { margin-bottom: 16px; }

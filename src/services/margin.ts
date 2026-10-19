@@ -12,6 +12,20 @@ export function getTargetMargin(settings?: { targetMargin?: number } | WorkshopS
   return typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 99 ? v : DEFAULT_TARGET_MARGIN;
 }
 
+export type TargetMarginDraft =
+  | { kind: 'empty' }
+  | { kind: 'valid'; value: number }
+  | { kind: 'invalid' };
+
+/** Valida o texto INTEIRO da meta digitada: vazio restaura o padrão; só inteiro 1..99 é válido ("7,5" e "7." não). */
+export function parseTargetMarginDraft(raw: string): TargetMarginDraft {
+  const text = raw.trim();
+  if (text === '') return { kind: 'empty' };
+  if (!/^\d+$/.test(text)) return { kind: 'invalid' };
+  const n = Number(text);
+  return n >= 1 && n <= 99 ? { kind: 'valid', value: n } : { kind: 'invalid' };
+}
+
 export const hasCost = (item: Pick<OrderItem, 'cost'>): boolean =>
   typeof item.cost === 'number' && item.cost > 0;
 

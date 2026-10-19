@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_TARGET_MARGIN, buildMarginReport, computeMargin, computeOSMargin, formatPct, getTargetMargin,
-  hasCost, inPeriod, marginLabel, marginLevel, suggestPriceForTarget,
+  hasCost, inPeriod, marginLabel, marginLevel, parseTargetMarginDraft, suggestPriceForTarget,
 } from './margin';
 import { CatalogItem, OrderItem, OSStatus, WorkOrder } from '../types';
 
@@ -15,6 +15,21 @@ let seq = 0;
 const os = (day: string, parts: OrderItem[], services: OrderItem[] = [], status: OSStatus = 'FINALIZADO'): WorkOrder => ({
   id: `o${++seq}`, osNumber: seq, vehicle: 'Gol - AAA1A11', clientName: 'Maria', clientPhone: '',
   mileage: 0, status, parts, services, total: 0, createdAt: iso(day),
+});
+
+describe('parseTargetMarginDraft', () => {
+  it('vazio restaura o padrão', () => {
+    expect(parseTargetMarginDraft('')).toEqual({ kind: 'empty' });
+    expect(parseTargetMarginDraft('  ')).toEqual({ kind: 'empty' });
+  });
+  it('inteiro 1..99 é válido', () => {
+    expect(parseTargetMarginDraft('1')).toEqual({ kind: 'valid', value: 1 });
+    expect(parseTargetMarginDraft(' 70 ')).toEqual({ kind: 'valid', value: 70 });
+    expect(parseTargetMarginDraft('99')).toEqual({ kind: 'valid', value: 99 });
+  });
+  it('parcial ou fora da faixa é inválido (nunca vira "7")', () => {
+    for (const t of ['7,5', '7.5', '7,', '0', '100', '-5', 'abc', '1e1']) expect(parseTargetMarginDraft(t)).toEqual({ kind: 'invalid' });
+  });
 });
 
 describe('getTargetMargin', () => {

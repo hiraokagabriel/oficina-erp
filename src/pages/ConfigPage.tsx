@@ -1,6 +1,7 @@
 import React from 'react';
 import { WorkshopSettings } from '../types';
 import { VehicleCatalogNote } from '../components/VehicleCatalogNote';
+import { parseTargetMarginDraft } from '../services/margin';
 
 interface ConfigPageProps {
   settings: WorkshopSettings;
@@ -34,22 +35,34 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
     });
   }, [settings.targetMargin]);
 
+  // Grava já ao digitar quando o texto inteiro é válido (ou vazio): fechar o app com o campo em foco não perde a meta.
+  // "7,5" nunca grava "7": fica inválido e só mostra erro ao confirmar (blur/Enter).
   const handleTargetMarginChange = (raw: string) => {
     setTargetDraft(raw);
-    const text = raw.trim();
-    if (text === '') {
-      setTargetError('');
+    setTargetError('');
+    const parsed = parseTargetMarginDraft(raw);
+    if (parsed.kind === 'valid') {
+      if (settings.targetMargin !== parsed.value) setSettings({ ...settings, targetMargin: parsed.value });
+    } else if (parsed.kind === 'empty' && settings.targetMargin !== undefined) {
       const { targetMargin: _removed, ...rest } = settings;
       setSettings(rest);
-      return;
     }
-    const n = Number(text);
-    if (!/^\d+$/.test(text) || n < 1 || n > 99) {
+  };
+
+  const commitTargetMargin = () => {
+    const parsed = parseTargetMarginDraft(targetDraft);
+    if (parsed.kind === 'invalid') {
       setTargetError('Informe um número inteiro de 1 a 99.');
       return;
     }
     setTargetError('');
-    setSettings({ ...settings, targetMargin: n });
+    if (parsed.kind === 'empty') {
+      if (settings.targetMargin === undefined) return;
+      const { targetMargin: _removed, ...rest } = settings;
+      setSettings(rest);
+      return;
+    }
+    if (settings.targetMargin !== parsed.value) setSettings({ ...settings, targetMargin: parsed.value });
   };
 
   const handleFileSelect =(e: React.ChangeEvent<HTMLInputElement>) => {
@@ -144,14 +157,13 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
           <input
             id="cfg-target-margin"
             className="form-input"
-            type="number"
+            type="text"
             inputMode="numeric"
-            min={1}
-            max={99}
-            step={1}
             placeholder="70"
             value={targetDraft}
             onChange={(e) => handleTargetMarginChange(e.target.value)}
+            onBlur={commitTargetMargin}
+            onKeyDown={(e) => { if (e.key === 'Enter') commitTargetMargin(); }}
             aria-invalid={targetError ? true : undefined}
             aria-describedby="cfg-target-margin-help"
           />

@@ -32,6 +32,7 @@ export interface WorkOrder {
   total: number;
   totalCost?: number;
   profit?: number;
+  /** @deprecated Não é mais gravado nem lido: a margem é recalculada dos itens (src/services/marginView.ts). Mantido só para ler bancos antigos. */
   profitMargin?: number;
   createdAt: string;
   financialId?: string;

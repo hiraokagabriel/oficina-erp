@@ -35,6 +35,9 @@ import "./styles-margin.css";
 // CAMPO DE VEÍCULO COM SUGESTÕES
 import "./styles-vehicle.css";
 
+// CONTRASTE WCAG AA (carregar por último)
+import "./styles-contrast.css";
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <App />

@@ -41,7 +41,6 @@ const RowsTable: React.FC<RowsTableProps> = ({ caption, rows, target, withPrices
               <th scope="col">Lucro</th>
               <th scope="col">Margem</th>
               {withPrices && <th scope="col">Preço do catálogo</th>}
-              {withPrices && <th scope="col">Preço mediano praticado</th>}
             </tr>
           </thead>
           <tbody>
@@ -50,7 +49,15 @@ const RowsTable: React.FC<RowsTableProps> = ({ caption, rows, target, withPrices
               const hint = withPrices ? priceHintCents(r) : null;
               return (
                 <tr key={r.key}>
-                  <td className="mr-desc" data-label="Descrição" title={r.description}>{r.description}</td>
+                  <td className="mr-desc" data-label="Descrição" title={r.description}>
+                    {r.description}
+                    {withPrices && (
+                      <span className="mr-sub">
+                        Preço mediano praticado: {r.medianPrice === null ? '—' : Money.format(r.medianPrice)}
+                        {hint !== null && <span className="mr-hint">{priceHintText(hint, Money.format)}</span>}
+                      </span>
+                    )}
+                  </td>
                   <td data-label="Vezes">{r.count}</td>
                   <td data-label="Receita">{Money.format(r.revenue)}</td>
                   <td data-label="Custo">{r.cost > 0 ? Money.format(r.cost) : '—'}</td>
@@ -60,12 +67,6 @@ const RowsTable: React.FC<RowsTableProps> = ({ caption, rows, target, withPrices
                   </td>
                   {withPrices && (
                     <td data-label="Preço do catálogo">{r.catalogPrice === null ? '—' : Money.format(r.catalogPrice)}</td>
-                  )}
-                  {withPrices && (
-                    <td data-label="Preço mediano praticado">
-                      {r.medianPrice === null ? '—' : Money.format(r.medianPrice)}
-                      {hint !== null && <span className="mr-hint">{priceHintText(hint, Money.format)}</span>}
-                    </td>
                   )}
                 </tr>
               );

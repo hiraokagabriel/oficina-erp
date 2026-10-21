@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Appointment, LedgerEntry, WorkOrder, Client, CatalogItem, Technician, WorkshopSettings, DatabaseSchema, DatabaseMeta } from '../types';
@@ -188,13 +188,14 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [settings, setSettingsRaw] = useState<WorkshopSettings>(() => adoptSecrets(DEFAULT_SETTINGS));
   // Quem edita as configurações (ConfigPage) também grava os segredos no localStorage deste PC.
-  const setSettings: React.Dispatch<React.SetStateAction<WorkshopSettings>> = (action) => {
+  // useCallback: identidade estável para o `value` do contexto não mudar a cada render.
+  const setSettings: React.Dispatch<React.SetStateAction<WorkshopSettings>> = useCallback((action) => {
     setSettingsRaw(prev => {
       const next = typeof action === 'function' ? action(prev) : action;
       persistSecrets(next); // idempotente
       return next;
     });
-  };
+  }, []);
 
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading');
   const [loadError, setLoadError] = useState<string>('');
@@ -768,20 +769,26 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     </div>
   );
 
+  // Memorizado: toasts e demais estados do provider não re-renderizam todos os consumidores.
+  const contextValue = useMemo<DatabaseContextData>(() => ({
+    ledger, setLedger,
+    workOrders, setWorkOrders,
+    clients, setClients,
+    catalogParts, setCatalogParts,
+    catalogServices, setCatalogServices,
+    catalogTechnicians, setCatalogTechnicians,
+    appointments, setAppointments,
+    settings, setSettings,
+    isLoading, isSaving, readOnly,
+    loadStatus, saveError,
+    dbPath, setDbPath,
+  }), [
+    ledger, workOrders, clients, catalogParts, catalogServices, catalogTechnicians,
+    appointments, settings, setSettings, isLoading, isSaving, readOnly, loadStatus, saveError, dbPath,
+  ]);
+
   return (
-    <DatabaseContext.Provider value={{
-      ledger, setLedger,
-      workOrders, setWorkOrders,
-      clients, setClients,
-      catalogParts, setCatalogParts,
-      catalogServices, setCatalogServices,
-      catalogTechnicians, setCatalogTechnicians,
-      appointments, setAppointments,
-      settings, setSettings,
-      isLoading, isSaving, readOnly,
-      loadStatus, saveError,
-      dbPath, setDbPath,
-    }}>
+    <DatabaseContext.Provider value={contextValue}>
       <ToastContainer toasts={toasts} removeToast={removeToast} />
       {blocked ? blockingScreen : children}
       {readOnly && !blocked && (

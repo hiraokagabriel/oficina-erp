@@ -2,8 +2,10 @@
    DRAG AND DROP OVERHAUL - PERFORMANCE E ANIMAÇÕES
    ========================================================================== */
 
-/* Otimizações de Performance */
-.kanban-card {
+/* Otimizações de Performance: camada de GPU só durante o arraste
+   (uma camada por cartão deixava o quadro pesado) */
+.kanban-card.is-dragging,
+.kanban-card.is-overlay {
   will-change: transform, box-shadow, opacity;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
@@ -101,7 +103,6 @@
 }
 
 /* GPU Acceleration */
-.kanban-card,
 .kanban-list-scroll {
   transform: translateZ(0);
   will-change: transform;

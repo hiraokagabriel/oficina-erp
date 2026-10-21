@@ -82,6 +82,7 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ items, buttonSize = 32 }
   const dropdown = isOpen ? (
     <div
       ref={dropdownRef}
+      className="action-menu-dropdown"
       style={{
         position: 'fixed',
         top: dropdownPosition.top,
@@ -178,36 +179,6 @@ export const ActionMenu: React.FC<ActionMenuProps> = ({ items, buttonSize = 32 }
         );
       })}
 
-      <style>{`
-        @keyframes dropdownFadeIn {
-          from {
-            opacity: 0;
-            transform: scale(0.92) translateY(-8px);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1) translateY(0);
-          }
-        }
-
-        /* ✅ Scrollbar customizado para Webkit (Chrome, Safari, Edge) */
-        div::-webkit-scrollbar {
-          width: 6px;
-        }
-
-        div::-webkit-scrollbar-track {
-          background: transparent;
-        }
-
-        div::-webkit-scrollbar-thumb {
-          background: var(--border);
-          border-radius: 3px;
-        }
-
-        div::-webkit-scrollbar-thumb:hover {
-          background: var(--text-muted);
-        }
-      `}</style>
     </div>
   ) : null;
 

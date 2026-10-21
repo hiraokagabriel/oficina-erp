@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 
 import { invoke } from '@tauri-apps/api/core';
 import { DatabaseProvider, useDatabase, parseDatabase } from './context/DatabaseContext';
@@ -123,7 +123,7 @@ function AppContent() {
     if (type === 'error') SoundFX.error();
   };
 
-  const removeToast = (id: string) => setToasts(prev => prev.filter(t => t.id !== id));
+  const removeToast = useCallback((id: string) => setToasts(prev => prev.filter(t => t.id !== id)), []);
 
   const handleGoogleDriveBackup = async () => {
     if (isBackuping) return;
@@ -473,6 +473,61 @@ Abrir OS?`)) {
     printOS(os, settings);
   };
 
+  // Ações do Kanban estáveis: o quadro não re-renderiza a cada toast/filtro/salvamento.
+  // Os callbacks leem sempre a versão mais recente dos handlers/estado via ref.
+  const kanbanRef = useRef({ workOrders, handleUpdateStatus, handlePrintOS });
+  // Atualizado após o commit do render (um render descartado não deixa handlers de estado não confirmado).
+  useLayoutEffect(() => {
+    kanbanRef.current = { workOrders, handleUpdateStatus, handlePrintOS };
+  });
+
+  const kanbanStatusChange = useCallback(
+    (id: string, status: OSStatus) => kanbanRef.current.handleUpdateStatus(id, status),
+    []
+  );
+
+  const kanbanActions = useMemo(() => ({
+    onRegress: (id: string) => {
+      const os = kanbanRef.current.workOrders.find(o => o.id === id);
+      if (!os) return;
+      const nextStatus: OSStatus =
+        os.status === 'FINALIZADO'
+          ? 'AGUARDANDO_PAGAMENTO'
+          : os.status === 'AGUARDANDO_PAGAMENTO'
+          ? 'EM_SERVICO'
+          : os.status === 'EM_SERVICO'
+          ? 'APROVADO'
+          : 'ORCAMENTO';
+      kanbanRef.current.handleUpdateStatus(id, nextStatus);
+    },
+    onAdvance: (id: string) => {
+      const os = kanbanRef.current.workOrders.find(o => o.id === id);
+      if (!os) return;
+      const nextStatus: OSStatus =
+        os.status === 'ORCAMENTO'
+          ? 'APROVADO'
+          : os.status === 'APROVADO'
+          ? 'EM_SERVICO'
+          : os.status === 'EM_SERVICO'
+          ? 'AGUARDANDO_PAGAMENTO'
+          : 'FINALIZADO';
+      kanbanRef.current.handleUpdateStatus(id, nextStatus);
+    },
+    onEdit: (os: WorkOrder) => {
+      setEditingOS(os);
+      setIsModalOpen(true);
+    },
+    onChecklist: (os: WorkOrder) => {
+      setChecklistOS(os);
+      setIsChecklistOpen(true);
+    },
+    onPrint: (os: WorkOrder) => kanbanRef.current.handlePrintOS(os),
+    onDelete: (os: WorkOrder) => setPendingAction({ type: 'DELETE_OS', data: os }),
+    onArchive: (os: WorkOrder) => setPendingAction({ type: 'ARCHIVE_OS', data: os }),
+    onRestore: (os: WorkOrder) => kanbanRef.current.handleUpdateStatus(os.id, 'ORCAMENTO'),
+    onQuickFinish: (id: string) => kanbanRef.current.handleUpdateStatus(id, 'FINALIZADO'),
+  }), []);
+
   /*const handlePrintOSClient = (os: WorkOrder) => {
     addToast(`Imprimindo via do cliente - OS #${os.osNumber}...`, 'info');
     printOS(os, settings, 'CLIENT');
@@ -680,48 +735,8 @@ Abrir OS?`)) {
                   setEditingOS(null);
                   setIsModalOpen(true);
                 }}
-                onStatusChange={handleUpdateStatus}
-                kanbanActions={{
-                  onRegress: (id) => {
-                    const os = workOrders.find(o => o.id === id);
-                    if (!os) return;
-                    const nextStatus: OSStatus =
-                      os.status === 'FINALIZADO'
-                        ? 'AGUARDANDO_PAGAMENTO'
-                        : os.status === 'AGUARDANDO_PAGAMENTO'
-                        ? 'EM_SERVICO'
-                        : os.status === 'EM_SERVICO'
-                        ? 'APROVADO'
-                        : 'ORCAMENTO';
-                    handleUpdateStatus(id, nextStatus);
-                  },
-                  onAdvance: (id) => {
-                    const os = workOrders.find(o => o.id === id);
-                    if (!os) return;
-                    const nextStatus: OSStatus =
-                      os.status === 'ORCAMENTO'
-                        ? 'APROVADO'
-                        : os.status === 'APROVADO'
-                        ? 'EM_SERVICO'
-                        : os.status === 'EM_SERVICO'
-                        ? 'AGUARDANDO_PAGAMENTO'
-                        : 'FINALIZADO';
-                    handleUpdateStatus(id, nextStatus);
-                  },
-                  onEdit: (os) => {
-                    setEditingOS(os);
-                    setIsModalOpen(true);
-                  },
-                  onChecklist: (os) => {
-                    setChecklistOS(os);
-                    setIsChecklistOpen(true);
-                  },
-                  onPrint: handlePrintOS,
-                  onDelete: (os) => setPendingAction({ type: 'DELETE_OS', data: os }),
-                  onArchive: (os) => setPendingAction({ type: 'ARCHIVE_OS', data: os }),
-                  onRestore: (os) => handleUpdateStatus(os.id, 'ORCAMENTO'),
-                  onQuickFinish: (id) => handleUpdateStatus(id, 'FINALIZADO'),
-                }}
+                onStatusChange={kanbanStatusChange}
+                kanbanActions={kanbanActions}
               />
             )}
 

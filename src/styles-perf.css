@@ -1,0 +1,53 @@
+/* ==========================================================================
+   PERFORMANCE: keyframes e regras antes embutidos em <style> dentro dos
+   componentes (um bloco por cartão/menu). Mesmo visual, uma única folha.
+   ========================================================================== */
+
+/* KanbanCard */
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.8); }
+  to   { opacity: 1; transform: scale(1);   }
+}
+@keyframes slideUpFade {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+/* ActionMenu e ContextMenu */
+@keyframes dropdownFadeIn {
+  from { opacity: 0; transform: scale(0.92) translateY(-8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes contextMenuFadeIn {
+  from { opacity: 0; transform: scale(0.92) translateY(-8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.action-menu-dropdown::-webkit-scrollbar { width: 6px; }
+.action-menu-dropdown::-webkit-scrollbar-track { background: transparent; }
+.action-menu-dropdown::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.action-menu-dropdown::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ProcessPage (fadeIn já existe em styles.css) */
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.process-row:hover {
+  background-color: var(--bg-card-hover) !important;
+  transform: translateX(2px);
+}
+.status-badge.clickable:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+/* CRMPage */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-20px); }
+}

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 
 export type ToastType = 'success' | 'error' | 'info';
 
@@ -24,12 +24,16 @@ export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, removeTo
 };
 
 const ToastItem: React.FC<{ toast: ToastMessage; onRemove: (id: string) => void }> = ({ toast, onRemove }) => {
+  // Ref para o timer não reiniciar quando o pai recria o callback.
+  const onRemoveRef = useRef(onRemove);
+  onRemoveRef.current = onRemove;
+
   useEffect(() => {
     const timer = setTimeout(() => {
-      onRemove(toast.id);
+      onRemoveRef.current(toast.id);
     }, 3000); // 3 segundos para sumir
     return () => clearTimeout(timer);
-  }, [toast.id, onRemove]);
+  }, [toast.id]);
 
   const icons = {
     success: '✅',

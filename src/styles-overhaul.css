@@ -1623,8 +1623,7 @@ body.text-selectable {
   }
 }
 
-/* Performance: Ativa GPU acceleration */
-.kanban-card,
+/* Performance: Ativa GPU acceleration (cartões do Kanban só no arraste, ver styles-dragdrop-overhaul.css) */
 .modal-content,
 .toast {
   transform: translateZ(0);

@@ -253,9 +253,6 @@ body {
   background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px; 
   padding: 16px; position: relative; overflow: hidden; display: flex; flex-direction: column; 
   gap: 8px; box-shadow: 0 4px 6px var(--shadow-color); width: 100%; box-sizing: border-box; cursor: grab;
-  transform: translateZ(0); 
-  backface-visibility: hidden;
-  will-change: transform, box-shadow;
 }
 [data-theme="pastel"] .kanban-card { background: #fff; border: 1px solid #EAE4F5; box-shadow: 0 4px 12px rgba(60, 40, 90, 0.05); }
 .kanban-card:hover { transform: scale(1.02); box-shadow: 0 15px 35px var(--shadow-color); border-color: var(--primary); background: var(--bg-card-hover); }

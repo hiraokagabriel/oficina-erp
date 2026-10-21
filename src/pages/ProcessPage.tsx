@@ -490,8 +490,9 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                             key={os.id} 
                             className="process-row"
                             style={{
-                              animation: `slideIn 0.3s ease-out ${index * 0.03}s both`,
-                              transition: 'all 0.2s ease'
+                              // atraso escalonado limitado: só os primeiros itens animam em sequência
+                              animation: `slideIn 0.3s ease-out ${Math.min(index, 12) * 0.03}s both`,
+                              transition: 'transform 0.2s ease, background-color 0.2s ease'
                             }}
                           >
                             <td>
@@ -612,44 +613,6 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
         </div>
       )}
 
-      <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        
-        @keyframes slideIn {
-          from {
-            opacity: 0;
-            transform: translateX(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
-        }
-
-        @keyframes slideDown {
-          from {
-            opacity: 0;
-            transform: translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        .process-row:hover {
-          background-color: var(--bg-card-hover) !important;
-          transform: translateX(2px);
-        }
-
-        .status-badge.clickable:hover {
-          transform: scale(1.05);
-          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        }
-      `}</style>
     </div>
   );
 };

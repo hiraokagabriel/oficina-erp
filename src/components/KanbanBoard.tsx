@@ -46,6 +46,8 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 
+const POINTER_OPTIONS = { activationConstraint: { distance: 8 } };
+
 const EmptyState = React.memo(({ status }: { status: OSStatus }) => {
   const messages: Record<OSStatus, { icon: string; text: string }> = {
     ORCAMENTO: { icon: '📝', text: 'Sem orçamentos pendentes' },
@@ -115,7 +117,17 @@ const KanbanColumn = React.memo(
       ARQUIVADO: 'var(--text-muted)',
     };
 
-    const itemIds = paginatedItems.map((os) => os.id);
+    // Mesma identidade enquanto os ids não mudam: array novo a cada render faz o
+    // SortableContext re-renderizar todos os cartões (digitar no filtro, por exemplo).
+    const itemIdsRef = useRef<string[]>([]);
+    const nextIds = paginatedItems.map((os) => os.id);
+    if (
+      nextIds.length !== itemIdsRef.current.length ||
+      nextIds.some((id, i) => id !== itemIdsRef.current[i])
+    ) {
+      itemIdsRef.current = nextIds;
+    }
+    const itemIds = itemIdsRef.current;
 
     return (
       <div
@@ -172,12 +184,10 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
     const [technicianFilter, setTechnicianFilter] = useState<'ALL' | 'NONE' | string>('ALL');
     const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
 
+    // Opções fora do render (POINTER_OPTIONS): objeto novo a cada render recriava os sensores
+    // e re-renderizava todos os cartões via contexto do dnd-kit.
     const sensors = useSensors(
-      useSensor(PointerSensor, {
-        activationConstraint: {
-          distance: 8,
-        },
-      }),
+      useSensor(PointerSensor, POINTER_OPTIONS),
       useSensor(KeyboardSensor)
     );
 

@@ -329,7 +329,7 @@ export const KanbanCard = React.memo(({
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 6,
-                  transition: 'all 0.2s ease',
+                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
                   boxShadow: '0 2px 8px rgba(130, 87, 230, 0.3)'
                 }}
                 onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(130, 87, 230, 0.4)'; }}
@@ -356,7 +356,7 @@ export const KanbanCard = React.memo(({
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 6,
-                    transition: 'all 0.2s ease',
+                    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
                     boxShadow: '0 2px 8px rgba(37, 211, 102, 0.3)'
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(37, 211, 102, 0.4)'; }}
@@ -379,16 +379,6 @@ export const KanbanCard = React.memo(({
         />
       )}
 
-      <style>{`
-        @keyframes fadeInScale {
-          from { opacity: 0; transform: scale(0.8); }
-          to   { opacity: 1; transform: scale(1);   }
-        }
-        @keyframes slideUpFade {
-          from { opacity: 0; transform: translateY(10px); }
-          to   { opacity: 1; transform: translateY(0);    }
-        }
-      `}</style>
     </>
   );
 });

@@ -38,6 +38,9 @@ import "./styles-vehicle.css";
 // CONTRASTE WCAG AA (carregar por último)
 import "./styles-contrast.css";
 
+// PERFORMANCE: keyframes antes embutidos em <style> nos componentes
+import "./styles-perf.css";
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <App />

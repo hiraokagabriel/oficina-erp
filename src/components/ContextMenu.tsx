@@ -180,18 +180,6 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
         );
       })}
 
-      <style>{`
-        @keyframes contextMenuFadeIn {
-          from {
-            opacity: 0;
-            transform: scale(0.92) translateY(-8px);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1) translateY(0);
-          }
-        }
-      `}</style>
     </div>
   );
 

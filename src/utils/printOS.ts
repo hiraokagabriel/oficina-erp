@@ -1,5 +1,6 @@
 import { WorkOrder, WorkshopSettings, STATUS_LABELS, PartCategory, PART_CATEGORY_META } from '../types';
 import { formatExpectedDate } from '../services/schedule';
+import { WARRANTY_TERM_TEXT } from './warranty';
 
 // Variante de impressão: CLIENT = via do cliente (assina o mecânico), SHOP = via da oficina (assina o cliente)
 export type PrintVariant = 'CLIENT' | 'SHOP';
@@ -200,7 +201,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
 
         <div class="terms-clause">
           <h3>4. GARANTIA DOS SERVIÇOS</h3>
-          <p>Os serviços prestados possuem garantia de <strong>90 (noventa) dias</strong> a partir da data de entrega do veículo, conforme o Código de Defesa do Consumidor (Lei n.º 8.078/1990). A garantia cobre exclusivamente os serviços executados e peças fornecidas pela oficina, ficando excluídos danos causados por mau uso, acidentes, modificações externas ou falta de manutenção pelo cliente.</p>
+          <p>Os serviços prestados possuem garantia de <strong>${WARRANTY_TERM_TEXT}</strong> a partir da data de entrega do veículo, conforme o Código de Defesa do Consumidor (Lei n.º 8.078/1990). A garantia cobre exclusivamente os serviços executados e peças fornecidas pela oficina, ficando excluídos danos causados por mau uso, acidentes, modificações externas ou falta de manutenção pelo cliente.</p>
         </div>
 
         <div class="terms-clause">

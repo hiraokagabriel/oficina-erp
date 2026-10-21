@@ -2,37 +2,11 @@
    Carregado por último em main.tsx. Só cor/opacidade/borda; nenhum layout muda.
    Alguns seletores usam [style*=...] com !important porque a cor vem de style inline dos componentes. */
 
-:root {
-  --border-control: #6f707b;       /* borda de campo e botão secundário: 3,6:1 sobre #1e1f22 */
-  --placeholder-color: #9a9aa5;    /* 5,9:1 sobre #1e1f22 */
-  --text-success: var(--success);
-  --text-danger: var(--danger);
-  --text-warning: var(--warning);
-  --text-info: var(--info);
-}
-
-/* Tema pastel: success/danger/warning/info são pálidos como TEXTO sobre branco; tons escuros para texto (>= 4,5:1). */
-[data-theme="pastel"] {
-  --border-control: #8a7fa0;       /* 3,7:1 sobre branco */
-  --placeholder-color: #6B6078;    /* 5,9:1 sobre branco */
-  --text-success: #2f6b4d;
-  --text-danger: #a8453a;
-  --text-warning: #7a5200;
-  --text-info: #0b5a73;
-}
+/* Tokens de contraste (--border-control, --placeholder-color, --text-success/danger/warning/info) agora ficam em styles-tokens.css. */
 
 /* ---- Campos: placeholder e borda ---- */
 input::placeholder, textarea::placeholder { color: var(--placeholder-color); opacity: 1; }
 input.form-input:not(:focus), select.form-input:not(:focus), textarea.form-input:not(:focus) { border-color: var(--border-control); }
-.btn-secondary, .btn-sm { border-color: var(--border-control); }
-[data-theme="pastel"] .btn-secondary, [data-theme="pastel"] .btn-sm { border-color: var(--border-control); }
-/* Botão secundário no pastel: o gradiente do .btn cobria o fundo branco e o texto roxo sumia (1,6:1) */
-[data-theme="pastel"] .btn.btn-secondary { background: #fff; box-shadow: none; }
-
-/* ---- Botão primário do tema pastel: texto branco >= 4,5:1 nas duas pontas (antes #8B5CF6 4,23:1 e #D946EF 3,46:1) ---- */
-[data-theme="pastel"] .btn {
-  background: linear-gradient(135deg, #7C3AED 0%, #C026D3 100%);
-}
 /* Selo "Margem"/botões de ícone mantêm o próprio visual; ver varredura. */
 
 /* ---- Texto semântico no pastel ---- */
@@ -82,7 +56,6 @@ button[style*="background: var(--primary)"] { color: #0b0b0d !important; }
 /* ---- Botões e cartões com gradiente fixo no JSX: texto branco >= 4,5:1 (mesmo matiz, tons mais fechados) ---- */
 /* Atenção: o navegador normaliza hex inline para rgb(), então os seletores usam a forma rgb. */
 button[style*="rgb(37, 211, 102)"] { background: linear-gradient(135deg, #0f7a3a 0%, #0b6b5f 100%) !important; }
-.btn.btn-success { background: linear-gradient(135deg, #0f7a3a 0%, #0b6b5f 100%) !important; color: #fff !important; }
 div[style*="rgb(102, 126, 234) 0%"] { background: linear-gradient(135deg, #4f46e5 0%, #6d28d9 100%) !important; }
 div[style*="rgb(240, 147, 251) 0%"] { background: linear-gradient(135deg, #a21caf 0%, #be123c 100%) !important; }
 div[style*="rgb(79, 172, 254) 0%"] { background: linear-gradient(135deg, #0369a1 0%, #0e7490 100%) !important; }

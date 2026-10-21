@@ -26,10 +26,10 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
 
         {isGroup ? (
             <div style={{display: 'flex', flexDirection: 'column', gap: 10}}>
-                <button className="btn" onClick={onConfirmSingle} style={{background: 'var(--bg-panel)', border: '1px solid var(--border)', color: 'var(--text-main)'}}>
+                <button className="btn btn-secondary" onClick={onConfirmSingle}>
                     Excluir APENAS este (Resta o histórico)
                 </button>
-                <button className="btn" onClick={onConfirmGroup} style={{backgroundColor: 'var(--danger)', color: 'white'}}>
+                <button className="btn btn-danger" onClick={onConfirmGroup}>
                     Excluir TODAS as parcelas/série
                 </button>
                 <button className="btn-secondary" onClick={onClose} style={{marginTop: 10}}>
@@ -39,7 +39,7 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
         ) : (
             <div className="modal-actions" style={{justifyContent: 'center'}}>
                 <button className="btn-secondary" onClick={onClose}>Cancelar</button>
-                <button className="btn" onClick={onConfirmSingle} style={{backgroundColor: 'var(--danger)', color: 'white'}}>
+                <button className="btn btn-danger" onClick={onConfirmSingle}>
                     Excluir
                 </button>
             </div>

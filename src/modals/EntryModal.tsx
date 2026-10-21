@@ -153,33 +153,17 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
           <label>Tipo</label>
           <div style={{display: 'flex', gap: 10}}>
             <button 
-                className="btn" 
-                style={{
-                    flex: 1, 
-                    // Lógica visual melhorada: Cor de fundo + Opacidade
-                    backgroundColor: type === 'CREDIT' ? 'var(--success)' : 'var(--bg-panel)',
-                    color: type === 'CREDIT' ? '#fff' : 'var(--text-main)',
-                    border: type === 'CREDIT' ? '1px solid var(--success)' : '1px solid var(--border)',
-                    opacity: type === 'CREDIT' ? 1 : 0.5, // Visual "Desativado" se não for o escolhido
-                    transform: type === 'CREDIT' ? 'scale(1.02)' : 'scale(1)', // Leve destaque
-                    transition: 'all 0.2s ease'
-                }}
+                className={type === 'CREDIT' ? 'btn btn-success' : 'btn btn-secondary'}
+                aria-pressed={type === 'CREDIT'}
+                style={{ flex: 1 }}
                 onClick={() => setType('CREDIT')}
             >
                 Receita (+Entrada)
             </button>
             <button 
-                className="btn" 
-                style={{
-                    flex: 1, 
-                    // Lógica visual melhorada: Cor de fundo + Opacidade
-                    backgroundColor: type === 'DEBIT' ? 'var(--danger)' : 'var(--bg-panel)',
-                    color: type === 'DEBIT' ? '#fff' : 'var(--text-main)',
-                    border: type === 'DEBIT' ? '1px solid var(--danger)' : '1px solid var(--border)',
-                    opacity: type === 'DEBIT' ? 1 : 0.5, // Visual "Desativado" se não for o escolhido
-                    transform: type === 'DEBIT' ? 'scale(1.02)' : 'scale(1)', // Leve destaque
-                    transition: 'all 0.2s ease'
-                }}
+                className={type === 'DEBIT' ? 'btn btn-danger' : 'btn btn-secondary'}
+                aria-pressed={type === 'DEBIT'}
+                style={{ flex: 1 }}
                 onClick={() => setType('DEBIT')}
             >
                 Despesa (-Saída)

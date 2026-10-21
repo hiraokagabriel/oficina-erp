@@ -109,12 +109,12 @@ const KanbanColumn = React.memo(
     });
 
     const colColorMap: Record<OSStatus, string> = {
-      ORCAMENTO: '#00bcd4',            // azul claro (info)
-      APROVADO: '#ffd34d',            // amarelo claro (warning)
-      EM_SERVICO: '#caa400',          // mostarda forte (primary)
-      AGUARDANDO_PAGAMENTO: '#ff9800',// laranja cobrança
-      FINALIZADO: '#04d361',          // verde sucesso
-      ARQUIVADO: 'var(--text-muted)',
+      ORCAMENTO: 'var(--status-orcamento)',
+      APROVADO: 'var(--status-aprovado)',
+      EM_SERVICO: 'var(--status-em-servico)',
+      AGUARDANDO_PAGAMENTO: 'var(--status-aguardando-pagamento)',
+      FINALIZADO: 'var(--status-finalizado)',
+      ARQUIVADO: 'var(--status-arquivado)',
     };
 
     // Mesma identidade enquanto os ids não mudam: array novo a cada render faz o
@@ -472,16 +472,14 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
                     width: 36,
                     height: 64,
                     borderRadius: 999,
-                    border: '1px solid rgba(255,255,255,0.12)',
-                    background: 'rgba(15,15,20,0.35)',
-                    color: '#E0E0E0',
+                    border: '1px solid var(--border-strong)',
+                    background: 'var(--surface-1)',
+                    color: 'var(--text)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    backdropFilter: 'blur(6px)',
                     boxShadow: '0 6px 18px rgba(0,0,0,0.6)',
-                    opacity: 0.9,
                     transition: 'opacity 0.2s ease, transform 0.2s ease',
                     zIndex: 50,
                   }}
@@ -503,16 +501,14 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
                     width: 36,
                     height: 64,
                     borderRadius: 999,
-                    border: '1px solid rgba(255,255,255,0.12)',
-                    background: 'rgba(15,15,20,0.35)',
-                    color: '#E0E0E0',
+                    border: '1px solid var(--border-strong)',
+                    background: 'var(--surface-1)',
+                    color: 'var(--text)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    backdropFilter: 'blur(6px)',
                     boxShadow: '0 6px 18px rgba(0,0,0,0.6)',
-                    opacity: 0.9,
                     transition: 'opacity 0.2s ease, transform 0.2s ease',
                     zIndex: 50,
                   }}

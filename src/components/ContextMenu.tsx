@@ -68,19 +68,19 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
 
   const getVariantColor = (variant?: string) => {
     switch (variant) {
-      case 'danger': return '#e54c54';
-      case 'success': return '#04d361';
-      case 'primary': return '#8257e6';
+      case 'danger': return 'var(--text-danger)';
+      case 'success': return 'var(--text-success)';
+      case 'primary': return 'var(--accent-text)';
       default: return 'var(--text)';
     }
   };
 
   const getVariantBg = (variant?: string) => {
     switch (variant) {
-      case 'danger': return 'rgba(229, 76, 76, 0.1)';
-      case 'success': return 'rgba(4, 211, 97, 0.1)';
-      case 'primary': return 'rgba(130, 87, 230, 0.1)';
-      default: return 'rgba(130, 87, 230, 0.08)';
+      case 'danger': return 'color-mix(in srgb, var(--danger-fill) 12%, transparent)';
+      case 'success': return 'color-mix(in srgb, var(--success-fill) 12%, transparent)';
+      case 'primary': return 'var(--accent-soft)';
+      default: return 'var(--accent-soft)';
     }
   };
 

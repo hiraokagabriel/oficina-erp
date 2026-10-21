@@ -1,0 +1,188 @@
+/* ==========================================================================
+   TOKENS DO SISTEMA VISUAL "PAINEL DE INSTRUMENTOS"
+   Escuro = padrão (:root). Pastel = [data-theme="pastel"] (App.tsx grava o atributo em <html>).
+   Carregado depois de styles.css e antes de styles-contrast.css e styles-perf.css.
+   Variáveis antigas viram APELIDOS dos tokens novos: o nome antigo continua funcionando.
+   Sem backdrop-filter, sem gradiente em botão, sem scale no hover.
+   ========================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* --- Superfícies, bordas, texto (tokens novos) --- */
+  --bg-app: #0E0F12;
+  --surface-1: #17181C;          /* cartão */
+  --surface-2: #1F2126;          /* campo */
+  --surface-3: #272A30;          /* hover */
+  --border: #33353D;
+  --border-strong: #6F707B;      /* bordas de controle: >= 3:1 */
+  --text: #ECECEE;
+  --text-2: #B4B6BE;
+  --text-3: #8E909A;
+
+  /* --- Ação / item ativo / foco / "Hoje" (nunca status) --- */
+  --accent: #D4A514;
+  --accent-hover: #E3B92F;
+  --on-accent: #0B0B0D;
+  --accent-text: #E3B92F;
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  --focus-ring: #D4A514;
+  --danger-fill: #C0392B;        /* fundo de botão de perigo, texto branco */
+  --on-danger: #FFFFFF;
+
+  /* --- Luzes de status das OS (cor da luz) e variante de texto --- */
+  --status-orcamento: #60A5FA;             --status-orcamento-text: #60A5FA;
+  --status-aprovado: #2DD4BF;              --status-aprovado-text: #2DD4BF;
+  --status-em-servico: #FB923C;            --status-em-servico-text: #FB923C;
+  --status-aguardando-pagamento: #F472B6;  --status-aguardando-pagamento-text: #F472B6;
+  --status-finalizado: #34D399;            --status-finalizado-text: #34D399;
+  --status-arquivado: #9CA3AF;             --status-arquivado-text: #9CA3AF;
+  --status-atrasado: #F87171;              --status-atrasado-text: #F87171;
+
+  /* --- Semânticos (cor de preenchimento/borda e variante de texto) --- */
+  --success: #34D399;
+  --warning: #FBBF24;
+  --danger: #F87171;
+  --info: #38BDF8;
+  --text-success: #34D399;
+  --text-warning: #FBBF24;
+  --text-danger: #F87171;
+  --text-info: #38BDF8;
+  --border-control: var(--border-strong);
+  --placeholder-color: #9A9CA6;
+
+  /* --- Escala tipográfica --- */
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-tech: "Cascadia Mono", Consolas, monospace;
+  --fs-xs: 0.8125rem;   /* 13 */
+  --fs-sm: 0.9375rem;   /* 15 */
+  --fs-base: 1rem;      /* 16 */
+  --fs-md: 1.125rem;    /* 18 */
+  --fs-lg: 1.25rem;     /* 20 */
+  --fs-xl: 1.625rem;    /* 26 */
+  --fs-2xl: 2rem;       /* 32 */
+  --lh-base: 1.45;
+  --fw-regular: 400;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  /* --- Espaçamento (múltiplos de 4) --- */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-6: 24px; --sp-8: 32px; --sp-12: 48px;
+
+  /* --- Cantos, altura de controle, sombras, movimento --- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --control-h: 44px;
+  --control-h-min: 40px;
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --elev-2: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --elev-3: 0 12px 32px rgba(0, 0, 0, 0.6);
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+
+  /* --- APELIDOS: nomes antigos apontam para os tokens novos --- */
+  --bg-panel: var(--surface-1);
+  --bg-input: var(--surface-2);
+  --bg-card-hover: var(--surface-3);
+  --bg-card: var(--surface-1);
+  --bg-surface: var(--surface-1);
+  --bg-primary: var(--bg-app);
+  --bg-secondary: var(--surface-2);
+  --bg-hover: var(--surface-3);
+  --surface: var(--surface-1);
+  --primary: var(--accent);
+  --primary-hover: var(--accent-hover);
+  --text-main: var(--text);
+  --text-muted: var(--text-2);
+  --radius-card: var(--radius-lg);
+  --radius-btn: var(--radius-md);
+  --radius-input: var(--radius-md);
+  --shadow-color: rgba(0, 0, 0, 0.45);
+  --glass-border: rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="pastel"] {
+  color-scheme: light;
+
+  --bg-app: #F7F5FA;
+  --surface-1: #FFFFFF;
+  --surface-2: #F3EFF8;
+  --surface-3: #EDE7FB;
+  --border: #E4DCEF;
+  --border-strong: #8A7FA0;
+  --text: #241D2E;
+  --text-2: #5A5068;
+  --text-3: #6B6078;
+
+  --accent: #6D28D9;
+  --accent-hover: #5B21B6;
+  --on-accent: #FFFFFF;
+  --accent-text: #5B21B6;
+  --focus-ring: #7C3AED;
+  --danger-fill: #B91C1C;
+
+  --status-orcamento: #60A5FA;             --status-orcamento-text: #1D4ED8;
+  --status-aprovado: #2DD4BF;              --status-aprovado-text: #0F766E;
+  --status-em-servico: #FB923C;            --status-em-servico-text: #C2410C;
+  --status-aguardando-pagamento: #F472B6;  --status-aguardando-pagamento-text: #BE185D;
+  --status-finalizado: #34D399;            --status-finalizado-text: #047857;
+  --status-arquivado: #9CA3AF;             --status-arquivado-text: #4B5563;
+  --status-atrasado: #F87171;              --status-atrasado-text: #B91C1C;
+
+  --success: #10B981;
+  --warning: #D97706;
+  --danger: #B91C1C;
+  --info: #0EA5E9;
+  --text-success: #047857;
+  --text-warning: #7A5200;
+  --text-danger: #B91C1C;
+  --text-info: #0B5A73;
+  --placeholder-color: #6B6078;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --elev-1: 0 1px 2px rgba(60, 40, 90, 0.10);
+  --elev-2: 0 4px 12px rgba(60, 40, 90, 0.12);
+  --elev-3: 0 12px 32px rgba(60, 40, 90, 0.18);
+
+  --shadow-color: rgba(60, 40, 90, 0.06);
+  --glass-border: rgba(255, 255, 255, 0.8);
+}
+
+/* Tintas de fundo das luzes de status (derivadas da cor da luz; sem custo de renderização). */
+:root {
+  --status-orcamento-bg: color-mix(in srgb, var(--status-orcamento) 14%, transparent);
+  --status-aprovado-bg: color-mix(in srgb, var(--status-aprovado) 14%, transparent);
+  --status-em-servico-bg: color-mix(in srgb, var(--status-em-servico) 14%, transparent);
+  --status-aguardando-pagamento-bg: color-mix(in srgb, var(--status-aguardando-pagamento) 14%, transparent);
+  --status-finalizado-bg: color-mix(in srgb, var(--status-finalizado) 14%, transparent);
+  --status-arquivado-bg: color-mix(in srgb, var(--status-arquivado) 14%, transparent);
+  --status-atrasado-bg: color-mix(in srgb, var(--status-atrasado) 14%, transparent);
+}
+[data-theme="pastel"] {
+  --status-orcamento-bg: color-mix(in srgb, var(--status-orcamento) 12%, transparent);
+  --status-aprovado-bg: color-mix(in srgb, var(--status-aprovado) 12%, transparent);
+  --status-em-servico-bg: color-mix(in srgb, var(--status-em-servico) 12%, transparent);
+  --status-aguardando-pagamento-bg: color-mix(in srgb, var(--status-aguardando-pagamento) 12%, transparent);
+  --status-finalizado-bg: color-mix(in srgb, var(--status-finalizado) 12%, transparent);
+  --status-arquivado-bg: color-mix(in srgb, var(--status-arquivado) 12%, transparent);
+  --status-atrasado-bg: color-mix(in srgb, var(--status-atrasado) 12%, transparent);
+}
+
+/* --- Base tipográfica --- */
+body {
+  font-family: var(--font-ui);
+  line-height: var(--lh-base);
+  /* O tema pode mudar sem animar a página inteira (0,5 s de transição era pesado). */
+  transition: none;
+}
+/* Números tabulares em dinheiro, km e datas; fonte técnica só em nº de OS e placa. */
+.os-price, .tl-price, .total-display, .stat-value, .money, .tabular { font-variant-numeric: tabular-nums; }
+.os-number, .os-id, .tl-os-number, .plate { font-family: var(--font-tech); font-variant-numeric: tabular-nums; }
+
+/* --- Foco visível global (regras específicas mais fortes continuam valendo) --- */
+:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }

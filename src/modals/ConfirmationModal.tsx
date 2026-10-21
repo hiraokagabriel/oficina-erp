@@ -21,9 +21,9 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   // Define a cor do botão baseado na prop
   const getBtnColor = () => {
       switch(confirmColor) {
-          case 'danger': return 'var(--danger)';
-          case 'success': return 'var(--success)';
-          default: return 'var(--primary)';
+          case 'danger': return 'var(--text-danger)';
+          case 'success': return 'var(--text-success)';
+          default: return 'var(--accent-text)';
       }
   };
 
@@ -45,9 +45,9 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                 Cancelar
             </button>
             <button 
-                className="btn" 
+                className={confirmColor === 'danger' ? 'btn btn-danger' : confirmColor === 'success' ? 'btn btn-success' : 'btn'}
                 onClick={() => { onConfirm(); onClose(); }}
-                style={{backgroundColor: getBtnColor(), color: 'white', minWidth: 100}}
+                style={{minWidth: 100}}
             >
                 {confirmText}
             </button>

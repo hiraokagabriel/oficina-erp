@@ -1,0 +1,157 @@
+/* ==========================================================================
+   COMPONENTES BASE "PAINEL DE INSTRUMENTOS"
+   Só tokens de styles-tokens.css (nada de cor fixa). Sem gradiente em botão, sem scale no hover,
+   sem backdrop-filter, sem transition: all. Movimento de 120 a 180 ms só em opacity/transform/cor.
+   Carregado depois de styles-tokens.css. A regra global de prefers-reduced-motion está em styles.css.
+   ========================================================================== */
+
+:root {
+  /* Preenchimento de ação de sucesso (texto sobre ele precisa >= 4,5:1) */
+  --success-fill: #34D399;
+  --on-success: #0B0B0D;
+  --btn-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+[data-theme="pastel"] {
+  --success-fill: #047857;
+  --on-success: #FFFFFF;
+  --btn-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+/* ---------- BOTÕES ---------- */
+.btn, .btn-secondary, .btn-ghost, .btn-danger, .btn-success {
+  box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2);
+  min-height: var(--control-h); padding: 0 var(--sp-6);
+  border: 1px solid transparent; border-radius: var(--radius-md);
+  font-family: inherit; font-size: var(--fs-sm); font-weight: var(--fw-semibold); line-height: 1.2;
+  cursor: pointer; text-decoration: none; white-space: nowrap;
+  transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease, transform var(--dur-fast) ease, opacity var(--dur-fast) ease;
+}
+.btn:disabled, .btn-secondary:disabled, .btn-ghost:disabled, .btn-danger:disabled, .btn-success:disabled {
+  opacity: 0.55; cursor: not-allowed; box-shadow: none; transform: none;
+}
+.btn:active:not(:disabled), .btn-secondary:active:not(:disabled), .btn-ghost:active:not(:disabled),
+.btn-danger:active:not(:disabled), .btn-success:active:not(:disabled) { transform: translateY(1px); }
+
+/* Ação principal: sólido, realce interno de 1 px no topo */
+.btn { background: var(--accent); color: var(--on-accent); border-color: var(--accent); box-shadow: var(--btn-highlight), var(--elev-1); }
+.btn:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); filter: none; transform: none; }
+
+.btn-secondary { background: var(--surface-2); color: var(--text); border-color: var(--border-strong); box-shadow: none; }
+.btn-secondary:hover:not(:disabled) { background: var(--surface-3); border-color: var(--text-2); color: var(--text); }
+
+.btn-ghost { background: transparent; color: var(--text-2); border-color: transparent; box-shadow: none; }
+.btn-ghost:hover:not(:disabled) { background: var(--surface-3); color: var(--text); border-color: transparent; }
+
+.btn-danger { background: var(--danger-fill); color: var(--on-danger); border-color: var(--danger-fill); box-shadow: var(--btn-highlight), var(--elev-1); }
+.btn-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger-fill) 86%, #000); border-color: color-mix(in srgb, var(--danger-fill) 86%, #000); color: var(--on-danger); }
+
+.btn-success { background: var(--success-fill); color: var(--on-success); border-color: var(--success-fill); box-shadow: var(--btn-highlight), var(--elev-1); }
+.btn-success:hover:not(:disabled) { background: color-mix(in srgb, var(--success-fill) 88%, #000); border-color: color-mix(in srgb, var(--success-fill) 88%, #000); color: var(--on-success); }
+
+/* Botão compacto: alvo mínimo de 40 px */
+.btn-sm {
+  box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-1);
+  min-height: var(--control-h-min); padding: 0 var(--sp-3);
+  font-family: inherit; font-size: var(--fs-xs); font-weight: var(--fw-semibold);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  background: transparent; color: var(--text-2); cursor: pointer;
+  transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.btn-sm:hover:not(:disabled) { border-color: var(--text-2); color: var(--text); background: var(--surface-3); }
+.btn-sm:disabled { opacity: 0.55; cursor: not-allowed; }
+/* Alternador (Mensal/Anual, filtros): item ativo */
+.toggle-group .btn-sm.is-active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: var(--fw-bold); }
+
+/* ---------- CAMPO: rótulo, dica, mensagem de erro ---------- */
+.field { display: flex; flex-direction: column; gap: var(--sp-1); margin-bottom: var(--sp-4); min-width: 0; }
+.field-label { font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--text-2); }
+.field-hint { margin: 0; font-size: var(--fs-xs); color: var(--text-2); }
+.field-error { margin: 0; font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--text-danger); }
+.field--invalid .form-input, .form-input[aria-invalid="true"] { border-color: var(--danger); }
+.form-input:focus { outline: none; border-color: var(--accent); }
+.form-input:focus-visible, select.form-input:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 1px; }
+[data-theme="pastel"] .form-input:focus, [data-theme="pastel"] select.form-input:focus { border-color: var(--accent); }
+
+/* ---------- CHIP ---------- */
+.chip {
+  display: inline-flex; align-items: center; gap: var(--sp-1);
+  min-height: 28px; padding: 0 var(--sp-3); border-radius: 999px;
+  border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text-2);
+  font-family: inherit; font-size: var(--fs-xs); font-weight: var(--fw-semibold); line-height: 1.2; white-space: nowrap;
+}
+button.chip, a.chip { min-height: var(--control-h-min); cursor: pointer; transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease; }
+button.chip:hover, a.chip:hover { background: var(--surface-3); color: var(--text); }
+.chip--accent, .chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-text); }
+
+/* ---------- LUZ DE STATUS: ponto de 10 px + texto (informação nunca só por cor) ---------- */
+.status-light {
+  --_c: var(--status-arquivado); --_t: var(--status-arquivado-text);
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--_t); line-height: 1.2;
+}
+.status-light::before {
+  content: ""; flex: none; box-sizing: border-box; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--_c); box-shadow: 0 0 6px var(--_c);       /* brilho estático, só no escuro */
+}
+[data-theme="pastel"] .status-light::before { box-shadow: none; border: 2px solid var(--_t); }
+.status-light--orcamento { --_c: var(--status-orcamento); --_t: var(--status-orcamento-text); }
+.status-light--aprovado { --_c: var(--status-aprovado); --_t: var(--status-aprovado-text); }
+.status-light--em-servico { --_c: var(--status-em-servico); --_t: var(--status-em-servico-text); }
+.status-light--aguardando-pagamento { --_c: var(--status-aguardando-pagamento); --_t: var(--status-aguardando-pagamento-text); }
+.status-light--finalizado { --_c: var(--status-finalizado); --_t: var(--status-finalizado-text); }
+.status-light--arquivado { --_c: var(--status-arquivado); --_t: var(--status-arquivado-text); }
+.status-light--atrasado { --_c: var(--status-atrasado); --_t: var(--status-atrasado-text); }
+
+/* ---------- JANELA (.modal base e .modal-content) ---------- */
+.modal-overlay { background-color: rgba(0, 0, 0, 0.65); backdrop-filter: none; animation: fadeIn var(--dur-base) ease-out; }
+[data-theme="pastel"] .modal-overlay { background-color: rgba(36, 29, 46, 0.45); backdrop-filter: none; }
+.modal, .modal-content {
+  background-color: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius-xl);
+  box-shadow: var(--elev-3); color: var(--text);
+}
+.modal-content { animation: modalIn var(--dur-base) ease-out; }
+@keyframes modalIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.modal-title { font-size: var(--fs-xl); font-weight: var(--fw-bold); line-height: 1.2; color: var(--text); }
+.modal-actions { gap: var(--sp-3); }
+
+/* ---------- AVISO (toast) ---------- */
+.toast {
+  background: var(--surface-1); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  box-shadow: var(--elev-2); font-size: var(--fs-sm); line-height: var(--lh-base);
+  animation: toastIn var(--dur-base) ease-out;
+}
+@keyframes toastIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
+.toast.success, .toast.error, .toast.info { background: var(--surface-1); color: var(--text); border-color: var(--border); }
+.toast.success { border-left: 4px solid var(--success); }
+.toast.error { border-left: 4px solid var(--danger); }
+.toast.info { border-left: 4px solid var(--info); }
+.toast.success .toast-icon { color: var(--text-success); }
+.toast.error .toast-icon { color: var(--text-danger); }
+.toast.info .toast-icon { color: var(--text-info); }
+
+/* ---------- ESTADO VAZIO ---------- */
+.empty-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+  gap: var(--sp-2); padding: var(--sp-8) var(--sp-6);
+  border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); background: transparent; color: var(--text-2);
+}
+.empty-state-icon { width: 40px; height: 40px; color: var(--text-3); }
+.empty-state-title { margin: 0; font-size: var(--fs-md); font-weight: var(--fw-semibold); color: var(--text); }
+.empty-state-text { margin: 0; max-width: 42ch; font-size: var(--fs-sm); color: var(--text-2); }
+
+/* ---------- CONTROLE SEGMENTADO ---------- */
+.segmented {
+  display: inline-flex; padding: 2px; gap: 2px; max-width: 100%;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-2);
+}
+.segmented > button, .segmented > .segmented-item {
+  box-sizing: border-box; min-height: var(--control-h-min); padding: 0 var(--sp-4);
+  border: 0; border-radius: calc(var(--radius-md) - 3px); background: transparent; color: var(--text-2);
+  font-family: inherit; font-size: var(--fs-sm); font-weight: var(--fw-semibold); cursor: pointer;
+  transition: background-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.segmented > button:hover { background: var(--surface-3); color: var(--text); }
+.segmented > button[aria-pressed="true"], .segmented > button[aria-checked="true"], .segmented > button.is-active {
+  background: var(--accent); color: var(--on-accent);
+}

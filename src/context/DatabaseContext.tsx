@@ -653,11 +653,11 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const blockingScreen = (
     <div style={{
       position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'var(--bg-primary)', color: 'var(--text-main, inherit)', padding: 24, zIndex: 10000,
+      background: 'var(--bg-app)', color: 'var(--text)', padding: 24, zIndex: 10000,
     }}>
       <div style={{
-        maxWidth: 560, width: '100%', padding: 28, borderRadius: 12,
-        background: 'var(--bg-surface)', border: '1px solid var(--danger, #ef4444)',
+        maxWidth: 560, width: '100%', padding: 28, borderRadius: 'var(--radius-xl)',
+        background: 'var(--surface-1)', border: '1px solid var(--danger)',
       }}>
         <h2 style={{ marginTop: 0 }}>
           {loadStatus === 'not_found' ? 'Banco de dados não encontrado' : 'Não foi possível abrir o banco de dados'}
@@ -714,8 +714,8 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         aria-modal="true"
         aria-labelledby="conflito-titulo"
         style={{
-          maxWidth: 600, width: '100%', maxHeight: '90vh', overflow: 'auto', padding: 28, borderRadius: 12,
-          background: 'var(--bg-surface)', color: 'var(--text-main, inherit)', border: '1px solid var(--danger, #ef4444)',
+          maxWidth: 600, width: '100%', maxHeight: '90vh', overflow: 'auto', padding: 28, borderRadius: 'var(--radius-xl)',
+          background: 'var(--surface-1)', color: 'var(--text)', border: '1px solid var(--danger)',
         }}
       >
         <h2 id="conflito-titulo" style={{ marginTop: 0 }}>
@@ -740,7 +740,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           <p style={{ color: 'var(--text-muted)', fontSize: 13, wordBreak: 'break-all' }}>Cópia: {conflict.recoveryPath}</p>
         )}
         {conflict.recoveryError && (
-          <p style={{ color: 'var(--danger, #ef4444)' }}>
+          <p style={{ color: 'var(--text-danger)' }}>
             <strong>Atenção:</strong> não foi possível guardar a cópia ({conflict.recoveryError}). Anote as alterações abaixo antes de recarregar.
           </p>
         )}
@@ -759,7 +759,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             )}
           </ul>
         )}
-        {reloadError && <p style={{ color: 'var(--danger, #ef4444)', marginTop: 12 }}>{reloadError}</p>}
+        {reloadError && <p style={{ color: 'var(--text-danger)', marginTop: 12 }}>{reloadError}</p>}
         <div style={{ marginTop: 20 }}>
           <button className="btn" onClick={() => { void reloadFromDisk(); }} disabled={reloading} autoFocus>
             {reloading ? 'Recarregando...' : 'Recarregar dados do arquivo'}

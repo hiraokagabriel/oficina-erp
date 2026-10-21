@@ -145,12 +145,12 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
 
   const getStatusColor = (status: OSStatus) => {
     const colors = {
-      ORCAMENTO: { bg: 'rgba(0, 188, 212, 0.1)', border: 'var(--info)', text: 'var(--info)' },
-      APROVADO: { bg: 'rgba(251, 169, 76, 0.1)', border: 'var(--warning)', text: 'var(--warning)' },
-      EM_SERVICO: { bg: 'rgba(130, 87, 230, 0.1)', border: 'var(--primary)', text: 'var(--primary)' },
-      AGUARDANDO_PAGAMENTO: { bg: 'rgba(255, 152, 0, 0.1)', border: 'var(--warning)', text: 'var(--warning)' },
-      FINALIZADO: { bg: 'rgba(4, 211, 97, 0.1)', border: 'var(--success)', text: 'var(--success)' },
-      ARQUIVADO: { bg: 'rgba(160, 160, 160, 0.1)', border: 'var(--text-muted)', text: 'var(--text-muted)' }
+      ORCAMENTO: { bg: 'var(--status-orcamento-bg)', border: 'var(--status-orcamento)', text: 'var(--status-orcamento-text)' },
+      APROVADO: { bg: 'var(--status-aprovado-bg)', border: 'var(--status-aprovado)', text: 'var(--status-aprovado-text)' },
+      EM_SERVICO: { bg: 'var(--status-em-servico-bg)', border: 'var(--status-em-servico)', text: 'var(--status-em-servico-text)' },
+      AGUARDANDO_PAGAMENTO: { bg: 'var(--status-aguardando-pagamento-bg)', border: 'var(--status-aguardando-pagamento)', text: 'var(--status-aguardando-pagamento-text)' },
+      FINALIZADO: { bg: 'var(--status-finalizado-bg)', border: 'var(--status-finalizado)', text: 'var(--status-finalizado-text)' },
+      ARQUIVADO: { bg: 'var(--status-arquivado-bg)', border: 'var(--status-arquivado)', text: 'var(--status-arquivado-text)' }
     };
     return colors[status];
   };

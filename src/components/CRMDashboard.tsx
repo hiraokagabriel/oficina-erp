@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Client, WorkOrder, CRMStats } from '../types';
 import { Money } from '../utils/helpers';
 import { ClientReceivable, getClientSpending } from '../services/receivables';
+import { Icon } from './ui/Icon';
 
 interface CRMDashboardProps {
   clients: Client[];
@@ -276,22 +277,12 @@ export const CRMDashboard: React.FC<CRMDashboardProps> = ({
       )}
 
       {stats.pendingServices > 0 && (
-        <div style={{
-          background: 'linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%)',
-          border: '2px solid #fdcb6e',
-          borderRadius: '12px',
-          padding: '20px',
-          marginBottom: '24px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ fontSize: '2rem' }}>⚠️</div>
-            <div>
-              <div style={{ fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '4px' }}>
-                Serviços Pendentes
-              </div>
-              <div style={{ fontSize: '0.95rem' }}>
-                Você tem {stats.pendingServices} serviço(s) em andamento que precisam de atenção
-              </div>
+        <div className="attention-note" role="status">
+          <Icon name="alerta" size={28} className="attention-note-icon" />
+          <div>
+            <div className="attention-note-title">Serviços Pendentes</div>
+            <div className="attention-note-text">
+              Você tem {stats.pendingServices} serviço(s) em andamento que precisam de atenção
             </div>
           </div>
         </div>

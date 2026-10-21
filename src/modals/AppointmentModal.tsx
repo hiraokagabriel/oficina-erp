@@ -4,6 +4,7 @@ import { VehicleCombobox, useShopVehicles } from '../components/VehicleCombobox'
 import { AppointmentInput, appointmentDayKey, resolveAppointmentClient, validateAppointmentInput } from '../services/agenda';
 import { normalizeName } from '../utils/links';
 import { useFocusTrap } from '../hooks/useFocusTrap';
+import { useDirtyGuard } from '../hooks/useDirtyGuard';
 
 export type AppointmentModalMode = 'NOVO' | 'EDITAR' | 'REAGENDAR';
 
@@ -61,12 +62,8 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({ isOpen, mode
 
   useFocusTrap(isOpen, formRef);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [isOpen, onClose]);
+  // Esc, Cancelar: pergunta antes de descartar. Salvar fecha direto (onSave -> setModal(null) na página).
+  const guard = useDirtyGuard({ active: isOpen, onClose });
 
   const sameName = useMemo(() => {
     const n = normalizeName(clientName);
@@ -116,7 +113,8 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({ isOpen, mode
   const onSubmit = (e: React.FormEvent) => { e.preventDefault(); handleSave(); };
 
   return (
-    <div className="modal-overlay">
+    <>
+    <div className="modal-overlay" ref={guard.overlayRef}>
       <form ref={formRef} className="modal-content appt-modal" role="dialog" aria-modal="true" aria-labelledby="appt-title" onSubmit={onSubmit} noValidate>
         <h2 className="modal-title" id="appt-title">{TITLES[mode]}</h2>
 
@@ -161,7 +159,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({ isOpen, mode
           <div className="form-group">
             <label className="form-label" htmlFor="appt-vehicle">Veículo (modelo - PLACA)</label>
             <VehicleCombobox
-              id="appt-vehicle" plateAware value={vehicle} onChange={setVehicle}
+              id="appt-vehicle" plateAware value={vehicle} onChange={v => { if (v !== vehicle) guard.markDirty(); setVehicle(v); }}
               clientVehicles={selectedClient?.vehicles} shopVehicles={shopVehicles}
             />
           </div>
@@ -186,10 +184,12 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({ isOpen, mode
         {error && <p role="alert" className="appt-error-text appt-form-error">{error}</p>}
 
         <div className="modal-actions">
-          <button type="button" className="btn-secondary" onClick={onClose}>Cancelar</button>
+          <button type="button" className="btn-secondary" onClick={guard.requestClose}>Cancelar</button>
           <button type="submit" className="btn" disabled={needsChoice}>{mode === 'REAGENDAR' ? 'Reagendar' : 'Salvar'}</button>
         </div>
       </form>
     </div>
+    {guard.dialog}
+    </>
   );
 };

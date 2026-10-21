@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Client, WorkOrder } from '../types';
 import { VehicleCombobox, useShopVehicles } from '../components/VehicleCombobox';
 import { generateId } from '../utils/helpers';
+import { useDirtyGuard } from '../hooks/useDirtyGuard';
 
 interface ClientEditModalProps {
   isOpen: boolean;
@@ -38,7 +39,10 @@ export const ClientEditModal: React.FC<ClientEditModalProps> = ({
     }
   }, [isOpen, client]);
 
+  const guard = useDirtyGuard({ active: isOpen, onClose, resetKey: client.id });
+
   const handleAddVehicle = () => {
+    guard.markDirty();
     setFormData(prev => ({
       ...prev,
       vehicles: [...prev.vehicles, { id: generateId(), model: '', plate: '' }]
@@ -46,6 +50,7 @@ export const ClientEditModal: React.FC<ClientEditModalProps> = ({
   };
 
   const handleRemoveVehicle = (index: number) => {
+    guard.markDirty();
     setFormData(prev => ({
       ...prev,
       vehicles: prev.vehicles.filter((_, i) => i !== index)
@@ -53,6 +58,7 @@ export const ClientEditModal: React.FC<ClientEditModalProps> = ({
   };
 
   const handleVehicleChange = (index: number, field: 'model' | 'plate', value: string) => {
+    guard.markDirty();
     setFormData(prev => ({
       ...prev,
       vehicles: prev.vehicles.map((v, i) => 
@@ -89,11 +95,12 @@ export const ClientEditModal: React.FC<ClientEditModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <>
+    <div className="modal-overlay" ref={guard.overlayRef} onClick={guard.requestClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
         <div className="modal-header">
           <h2>✏️ Editar Cliente</h2>
-          <button className="btn-icon" onClick={onClose}>✕</button>
+          <button className="btn-icon" onClick={guard.requestClose} aria-label="Fechar">✕</button>
         </div>
 
         <div className="modal-body" style={{ padding: '24px' }}>
@@ -196,7 +203,7 @@ export const ClientEditModal: React.FC<ClientEditModalProps> = ({
         </div>
 
         <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose}>
+          <button className="btn btn-secondary" onClick={guard.requestClose}>
             Cancelar
           </button>
           <button className="btn btn-primary" onClick={handleSave}>
@@ -205,5 +212,7 @@ export const ClientEditModal: React.FC<ClientEditModalProps> = ({
         </div>
       </div>
     </div>
+    {guard.dialog}
+    </>
   );
 };

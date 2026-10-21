@@ -24,15 +24,19 @@ export const PartCategorySelect: React.FC<PartCategorySelectProps> = ({
       }
     };
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key !== 'Escape') return;
+      // Esc fecha só a lista: capture + preventDefault para o guard da janela (decideEscape) ignorar.
+      e.preventDefault();
+      e.stopPropagation();
+      setOpen(false);
     };
     if (open) {
       document.addEventListener('mousedown', handleClickOutside);
-      document.addEventListener('keydown', handleKeyDown);
+      document.addEventListener('keydown', handleKeyDown, true);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keydown', handleKeyDown, true);
     };
   }, [open]);
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { LedgerEntry } from '../types';
 import { getLocalDateString } from '../utils/helpers';
+import { useDirtyGuard } from '../hooks/useDirtyGuard';
 
 interface EntryModalProps {
   isOpen: boolean;
@@ -51,10 +52,13 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
     onSave(description, val, type, date, recurrence, count);
   };
 
+  const guard = useDirtyGuard({ active: isOpen, onClose });
+
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay">
+    <>
+    <div className="modal-overlay" ref={guard.overlayRef}>
       <div className="modal-content" style={{maxWidth: '450px'}}>
         <h2>{initialData ? 'Editar Lançamento' : 'Novo Lançamento'}</h2>
         
@@ -63,21 +67,21 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
                 <button 
                     className="btn-sm" 
                     style={{opacity: recurrence === 'SINGLE' ? 1 : 0.5, border: recurrence === 'SINGLE' ? '1px solid var(--primary)' : '1px solid transparent'}}
-                    onClick={() => setRecurrence('SINGLE')}
+                    onClick={() => { if (recurrence !== 'SINGLE') guard.markDirty(); setRecurrence('SINGLE'); }}
                 >
                     Único
                 </button>
                 <button 
                     className="btn-sm" 
                     style={{opacity: recurrence === 'INSTALLMENT' ? 1 : 0.5, border: recurrence === 'INSTALLMENT' ? '1px solid var(--primary)' : '1px solid transparent'}}
-                    onClick={() => setRecurrence('INSTALLMENT')}
+                    onClick={() => { if (recurrence !== 'INSTALLMENT') guard.markDirty(); setRecurrence('INSTALLMENT'); }}
                 >
                     Parcelado
                 </button>
                 <button 
                     className="btn-sm" 
                     style={{opacity: recurrence === 'RECURRING' ? 1 : 0.5, border: recurrence === 'RECURRING' ? '1px solid var(--primary)' : '1px solid transparent'}}
-                    onClick={() => setRecurrence('RECURRING')}
+                    onClick={() => { if (recurrence !== 'RECURRING') guard.markDirty(); setRecurrence('RECURRING'); }}
                 >
                     Recorrente (Mensal)
                 </button>
@@ -156,7 +160,7 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
                 className={type === 'CREDIT' ? 'btn btn-success' : 'btn btn-secondary'}
                 aria-pressed={type === 'CREDIT'}
                 style={{ flex: 1 }}
-                onClick={() => setType('CREDIT')}
+                onClick={() => { if (type !== 'CREDIT') guard.markDirty(); setType('CREDIT'); }}
             >
                 Receita (+Entrada)
             </button>
@@ -164,7 +168,7 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
                 className={type === 'DEBIT' ? 'btn btn-danger' : 'btn btn-secondary'}
                 aria-pressed={type === 'DEBIT'}
                 style={{ flex: 1 }}
-                onClick={() => setType('DEBIT')}
+                onClick={() => { if (type !== 'DEBIT') guard.markDirty(); setType('DEBIT'); }}
             >
                 Despesa (-Saída)
             </button>
@@ -172,12 +176,14 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
         </div>
 
         <div className="modal-actions">
-          <button className="btn-secondary" onClick={onClose}>Cancelar</button>
+          <button className="btn-secondary" onClick={guard.requestClose}>Cancelar</button>
           <button className="btn" onClick={handleSave}>
             {initialData ? 'Atualizar' : 'Confirmar'}
           </button>
         </div>
       </div>
     </div>
+    {guard.dialog}
+    </>
   );
 };

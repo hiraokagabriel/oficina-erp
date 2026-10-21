@@ -7,7 +7,7 @@ import { diffLocalChanges, LocalChange } from '../utils/conflictDiff';
 import { generateId } from '../utils/helpers';
 import { adoptSecrets, hasSecrets, persistSecrets, stripDbSecrets } from '../utils/secrets';
 import { decideExternalChange, DiskMetaInfo } from '../utils/externalChange';
-import { ToastContainer, ToastMessage, ToastType } from '../components/ui/ToastContainer';
+import { useToast } from './ToastContext';
 
 export type LoadStatus = 'loading' | 'ok' | 'not_found' | 'error';
 
@@ -76,6 +76,12 @@ interface DatabaseContextData {
   readOnly: boolean;
   loadStatus: LoadStatus;
   saveError: string | null;
+  /** ISO do último salvamento concluído nesta sessão (null = ainda não salvou). Só para exibir. */
+  lastSavedAt: string | null;
+  /** Há alteração local ainda não gravada (espera do debounce, retentativa ou gravação em andamento). Só para exibir. */
+  hasPendingChanges: boolean;
+  /** O diálogo de conflito/divergência está aberto. Só para exibir. */
+  hasConflict: boolean;
   dbPath: string;
   setDbPath: React.Dispatch<React.SetStateAction<string>>;
 }
@@ -202,7 +208,9 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [reloadKey, setReloadKey] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [hasPendingChanges, setHasPendingChanges] = useState(false); // espelho de "há o que gravar" (só exibição)
+  const { addToast } = useToast();
   const [pathDraft, setPathDraft] = useState(dbPath);
   const [readOnly, setReadOnly] = useState(false);
   const [conflict, setConflict] = useState<ConflictState | null>(null);
@@ -231,11 +239,6 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     loadStatus,
     db: { ledger, workOrders, clients, catalogParts, catalogServices, catalogTechnicians, appointments, settings },
   };
-
-  const addToast = (message: string, type: ToastType = 'info') => {
-    setToasts(prev => [...prev, { id: crypto.randomUUID(), message, type }]);
-  };
-  const removeToast = (id: string) => setToasts(prev => prev.filter(t => t.id !== id));
 
   const clearTimers = () => {
     if (saveTimeoutRef.current) { clearTimeout(saveTimeoutRef.current); saveTimeoutRef.current = null; }
@@ -278,6 +281,9 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     machineRef.current = machine || 'desconhecido';
     readOnlyRef.current = p.readOnly;
     setReadOnly(p.readOnly);
+    // Dados novos do disco: o horário do último salvamento daqui não vale mais; o efeito de salvar reavalia o pendente.
+    setLastSavedAt(null);
+    setHasPendingChanges(false);
     // O que acabou de ser lido não precisa ser regravado, exceto se foi migrado.
     lastSavedRef.current = buildSnapshot(p.db);
     // Arquivo com segredos antigos: regrava uma vez para que o disco fique sem eles.
@@ -314,6 +320,8 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setConflict(null);
     setReloadError(null);
     setSaveError(null);
+    setLastSavedAt(null);
+    setHasPendingChanges(false);
 
     const resetData = () => {
       setLedger([]);
@@ -433,6 +441,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const snapshot = buildSnapshot(db);
     if (!dirtyRef.current && snapshot === lastSavedRef.current) {
       setSaveError(null);
+      setHasPendingChanges(false);
       return true;
     }
 
@@ -468,6 +477,8 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         dirtyRef.current = false;
         retryCountRef.current = 0;
         setSaveError(null);
+        setLastSavedAt(meta.savedAt);
+        setHasPendingChanges(false);
         return true;
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -495,6 +506,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (loadStatus !== 'ok' || readOnly || conflict) return;
 
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    setHasPendingChanges(dirtyRef.current || buildSnapshot(latestRef.current.db) !== lastSavedRef.current);
     // A ref só indica "gravação armada" enquanto o timer está pendente: zere-a ao disparar e ao cancelar,
     // senão hasPendingEdits() fica sempre verdadeiro e a verificação periódica descarta toda decisão.
     saveTimeoutRef.current = setTimeout(() => {
@@ -780,16 +792,15 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     appointments, setAppointments,
     settings, setSettings,
     isLoading, isSaving, readOnly,
-    loadStatus, saveError,
+    loadStatus, saveError, lastSavedAt, hasPendingChanges, hasConflict: conflict !== null,
     dbPath, setDbPath,
   }), [
     ledger, workOrders, clients, catalogParts, catalogServices, catalogTechnicians,
-    appointments, settings, setSettings, isLoading, isSaving, readOnly, loadStatus, saveError, dbPath,
+    appointments, settings, setSettings, isLoading, isSaving, readOnly, loadStatus, saveError, lastSavedAt, hasPendingChanges, conflict, dbPath,
   ]);
 
   return (
     <DatabaseContext.Provider value={contextValue}>
-      <ToastContainer toasts={toasts} removeToast={removeToast} />
       {blocked ? blockingScreen : children}
       {readOnly && !blocked && (
         <div
@@ -809,8 +820,8 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           role="alert"
           style={{
             position: 'fixed', left: 16, bottom: 16, zIndex: 10001, display: 'flex', alignItems: 'center', gap: 12,
-            padding: '10px 14px', borderRadius: 8, background: 'var(--danger, #ef4444)', color: '#fff',
-            boxShadow: '0 4px 14px rgba(0,0,0,0.4)', maxWidth: 420,
+            padding: '10px 14px', borderRadius: 8, background: 'var(--danger-fill, #b91c1c)', color: 'var(--on-danger, #fff)',
+            boxShadow: '0 4px 14px rgba(0,0,0,0.4)', boxSizing: 'border-box', maxWidth: 'max(240px, min(420px, calc(100vw - 440px)))',
           }}
         >
           <span><strong>Não salvo.</strong> As alterações ainda não foram gravadas; o app tenta de novo sozinho.</span>

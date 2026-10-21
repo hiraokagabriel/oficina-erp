@@ -4,6 +4,7 @@ import { Money, generateId } from '../utils/helpers';
 import { PartCategorySelect } from '../components/PartCategorySelect';
 import { VehicleCombobox, useShopVehicles } from '../components/VehicleCombobox';
 import { normalizeItemCost, parseCostEdit } from '../services/marginView';
+import { useDirtyGuard } from '../hooks/useDirtyGuard';
 
 interface DatabaseModalProps {
   isOpen: boolean;
@@ -45,6 +46,21 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
   const [editingItem, setEditingItem] = useState<CatalogItem | null>(null);
   const [editingTechnician, setEditingTechnician] = useState<Technician | null>(null);
 
+  // Esc, Cancelar e fechar: os editores (cliente, item, técnico) perguntam antes de descartar; a listagem fecha
+  // direto (o campo de busca não conta como alteração). Salvar fecha o editor sem perguntar.
+  const view = editingClient ? 'client' : editingItem ? 'item' : editingTechnician ? 'technician' : 'list';
+  const guard = useDirtyGuard({
+    active: isOpen,
+    resetKey: view,
+    trackInputs: view !== 'list',
+    onClose: () => {
+      if (editingClient) setEditingClient(null);
+      else if (editingItem) setEditingItem(null);
+      else if (editingTechnician) setEditingTechnician(null);
+      else onClose();
+    },
+  });
+
   // --- FILTROS & PERFORMANCE ---
   const filteredList = useMemo(() => {
     const term = searchTerm.toLowerCase();
@@ -70,6 +86,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
   // --- HANDLERS CLIENTES ---
   const handleAddVehicle = () => {
       if (!editingClient) return;
+      guard.markDirty();
       setEditingClient({
           ...editingClient,
           vehicles: [...editingClient.vehicles, { id: generateId(), model: '', plate: '' }]
@@ -78,6 +95,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
 
   const handleRemoveVehicle = (index: number) => {
       if (!editingClient) return;
+      guard.markDirty();
       const newVehicles = [...editingClient.vehicles];
       newVehicles.splice(index, 1);
       setEditingClient({ ...editingClient, vehicles: newVehicles });
@@ -85,6 +103,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
 
   const handleVehicleChange = (index: number, field: 'model' | 'plate', value: string) => {
       if (!editingClient) return;
+      guard.markDirty();
       const newVehicles = [...editingClient.vehicles];
       // Só a placa vai em maiúsculas; o modelo mantém a grafia sugerida (ex.: Honda Civic 2.0 16v 2015).
       newVehicles[index] = { ...newVehicles[index], [field]: field === 'plate' ? value.toUpperCase() : value };
@@ -96,7 +115,8 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
   // 1. EDITOR DE CLIENTE
   if (editingClient) {
       return (
-        <div className="modal-overlay">
+        <>
+        <div className="modal-overlay" ref={guard.overlayRef}>
           <div className="modal-content" style={{ maxWidth: '600px' }}>
             <h2 className="modal-title">Editar Cliente</h2>
             
@@ -132,18 +152,21 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
             </div>
 
             <div className="modal-actions">
-                <button className="btn-secondary" onClick={() => setEditingClient(null)}>Cancelar</button>
+                <button className="btn-secondary" onClick={guard.requestClose}>Cancelar</button>
                 <button className="btn" onClick={() => { onSaveClient(editingClient); setEditingClient(null); }}>Salvar Alterações</button>
             </div>
           </div>
         </div>
+        {guard.dialog}
+        </>
       );
   }
 
   // 2. EDITOR DE ITEM (PEÇA/SERVIÇO)
   if (editingItem) {
       return (
-        <div className="modal-overlay">
+        <>
+        <div className="modal-overlay" ref={guard.overlayRef}>
           <div className="modal-content" style={{ maxWidth: '400px' }}>
              <h2 className="modal-title">{activeTab === 'PARTS' ? 'Editar Peça' : 'Editar Serviço'}</h2>
              
@@ -185,7 +208,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                  <label className="form-label">Categoria</label>
                  <PartCategorySelect
                    value={editingItem.category ?? ''}
-                   onChange={cat => setEditingItem({ ...editingItem, category: cat || undefined })}
+                   onChange={cat => { guard.markDirty(); setEditingItem({ ...editingItem, category: cat || undefined }); }}
                    style={{ width: '100%' }}
                  />
                  {editingItem.category && (
@@ -202,7 +225,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
              )}
 
              <div className="modal-actions">
-                <button className="btn-secondary" onClick={() => setEditingItem(null)}>Cancelar</button>
+                <button className="btn-secondary" onClick={guard.requestClose}>Cancelar</button>
                 <button className="btn" onClick={() => { 
                     onSaveCatalogItem(normalizeItemCost(editingItem), activeTab === 'PARTS' ? 'part' : 'service');
                     setEditingItem(null); 
@@ -210,13 +233,16 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
             </div>
           </div>
         </div>
+        {guard.dialog}
+        </>
       );
   }
 
   // 3. EDITOR DE TÉCNICO
   if (editingTechnician) {
       return (
-        <div className="modal-overlay">
+        <>
+        <div className="modal-overlay" ref={guard.overlayRef}>
           <div className="modal-content" style={{ maxWidth: '400px' }}>
              <h2 className="modal-title">{editingTechnician.id ? 'Editar Técnico' : 'Novo Técnico'}</h2>
              
@@ -232,7 +258,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
              </div>
 
              <div className="modal-actions">
-                <button className="btn-secondary" onClick={() => setEditingTechnician(null)}>Cancelar</button>
+                <button className="btn-secondary" onClick={guard.requestClose}>Cancelar</button>
                 <button 
                     className="btn" 
                     onClick={() => { 
@@ -248,6 +274,8 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
             </div>
           </div>
         </div>
+        {guard.dialog}
+        </>
       );
   }
 
@@ -255,12 +283,13 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay">
+    <>
+    <div className="modal-overlay" ref={guard.overlayRef}>
       <div className="modal-content" style={{ maxWidth: '900px', height: '80vh', display: 'flex', flexDirection: 'column' }}>
         
         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20}}>
             <h2 className="modal-title" style={{margin:0}}>Gerenciador de Cadastros</h2>
-            <button className="btn-icon" onClick={onClose}>✕</button>
+            <button className="btn-icon" onClick={guard.requestClose} aria-label="Fechar">✕</button>
         </div>
 
         {/* ABAS */}
@@ -388,5 +417,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
 
       </div>
     </div>
+    {guard.dialog}
+    </>
   );
 };

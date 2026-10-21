@@ -11,7 +11,9 @@ import { updateClientCascading, updateCatalogItemCascading, updateTechnicianCasc
 import { uploadToDrive } from './services/googleDrive';
 import { Sidebar } from './components/Sidebar';
 import { Confetti } from './components/ui/Confetti';
-import { ToastContainer, ToastMessage, ToastType } from './components/ui/ToastContainer';
+import type { ToastType } from './components/ui/ToastContainer';
+import { ToastProvider, useToast } from './context/ToastContext';
+import { Theme, applyTheme, readStoredTheme, writeStoredTheme } from './utils/theme';
 import { LoadingSkeleton } from './components/ui/LoadingSkeleton';
 import { printOS } from './utils/printOS';
 
@@ -79,7 +81,9 @@ function AppContent() {
 
   const finance = useFinance();
 
-  const [currentTheme, setCurrentTheme] = useState<'dark' | 'pastel'>('dark');
+  // Tema por computador: começa do que está gravado (o index.html já aplicou o atributo antes do primeiro desenho).
+  const [currentTheme, setCurrentThemeState] = useState<Theme>(() => readStoredTheme());
+  const setCurrentTheme = useCallback((t: Theme) => { setCurrentThemeState(t); writeStoredTheme(t); }, []);
   const [activeTab, setActiveTab] = useState<'FINANCEIRO' | 'OFICINA' | 'AGENDA' | 'PROCESSOS' | 'CLIENTES' | 'PECAS' | 'CONFIG'>('OFICINA');
   // Fluxo Agenda -> Criar OS: agendamento de origem e rascunho (objeto estável: o OSModal reinicia o formulário se ele mudar).
   const [osFromAppointment, setOsFromAppointment] = useState<{ appointment: Appointment; draft: OSDraftFromAppointment } | null>(null);
@@ -100,7 +104,7 @@ function AppContent() {
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [isBackuping, setIsBackuping] = useState(false);
   const [driveStatus, setDriveStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const { addToast: pushToast } = useToast();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   useEffect(() => {
@@ -117,13 +121,10 @@ function AppContent() {
   }, [isSidebarCollapsed]);
 
   const addToast = (message: string, type: ToastType = 'info') => {
-    const id = crypto.randomUUID();
-    setToasts(prev => [...prev, { id, message, type }]);
+    pushToast(message, type);
     if (type === 'success') SoundFX.success();
     if (type === 'error') SoundFX.error();
   };
-
-  const removeToast = useCallback((id: string) => setToasts(prev => prev.filter(t => t.id !== id)), []);
 
   const handleGoogleDriveBackup = async () => {
     if (isBackuping) return;
@@ -651,7 +652,7 @@ Abrir OS?`)) {
     setPendingInstallmentOS(null);
   };
 
-  useEffect(() => { document.documentElement.setAttribute('data-theme', currentTheme); }, [currentTheme]);
+  useEffect(() => { applyTheme(currentTheme); }, [currentTheme]);
   // Fechar o modal da OS (salvar, cancelar ou Esc) encerra o fluxo Agenda -> Criar OS; cancelar não altera o agendamento.
   useEffect(() => { if (!isModalOpen) setOsFromAppointment(null); }, [isModalOpen]);
   useEffect(() => { if (showConfetti) setTimeout(() => setShowConfetti(false), 3000); }, [showConfetti]);
@@ -669,11 +670,8 @@ Abrir OS?`)) {
   });
 
   useKeyboard('Escape', () => {
-    if (isModalOpen) setIsModalOpen(false);
-    if (isEntryModalOpen) { setIsEntryModalOpen(false); setEditingEntry(null); }
+    // OSModal, EntryModal, ChecklistModal e DatabaseModal tratam o próprio Esc (useDirtyGuard: perguntam antes de descartar).
     if (isExportModalOpen) setIsExportModalOpen(false);
-    if (isChecklistOpen) setIsChecklistOpen(false);
-    if (isDatabaseModalOpen) setIsDatabaseModalOpen(false);
     if (isInstallmentModalOpen) { setIsInstallmentModalOpen(false); setInstallmentOS(null); }
     if (isInstallmentChoiceOpen) { setIsInstallmentChoiceOpen(false); setPendingInstallmentOS(null); }
     if (deleteModalInfo.isOpen) setDeleteModalInfo({ isOpen: false, entry: null });
@@ -683,7 +681,6 @@ Abrir OS?`)) {
   return (
     <>
       {showConfetti && <Confetti />}
-      <ToastContainer toasts={toasts} removeToast={removeToast} />
 
       <div className="app-container">
         <Sidebar
@@ -989,9 +986,11 @@ Abrir OS?`)) {
 
 function App() {
   return (
-    <DatabaseProvider>
-      <AppContent />
-    </DatabaseProvider>
+    <ToastProvider>
+      <DatabaseProvider>
+        <AppContent />
+      </DatabaseProvider>
+    </ToastProvider>
   );
 }
 

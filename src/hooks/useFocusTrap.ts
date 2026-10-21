@@ -16,6 +16,9 @@ export const useFocusTrap = (active: boolean, ref: RefObject<HTMLElement | null>
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return;
+      // Diálogo de confirmação aberto por cima (ele tem a própria armadilha de foco).
+      const nested = e.target instanceof Element ? e.target.closest('[role="alertdialog"]') : null;
+      if (nested && nested !== ref.current) return;
       const root = ref.current;
       if (!root) return;
       const items = listFocusable(root);

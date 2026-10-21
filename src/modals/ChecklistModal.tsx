@@ -10,6 +10,7 @@ import {
   migrateChecklist,
 } from '../types';
 import { printChecklist } from '../utils/printChecklist';
+import { useDirtyGuard } from '../hooks/useDirtyGuard';
 
 interface ChecklistModalProps {
   isOpen: boolean;
@@ -27,10 +28,14 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
   const [newCategoryLabel, setNewCategoryLabel] = useState('');
   const newItemInputRef = useRef<HTMLInputElement>(null);
   const newCatInputRef  = useRef<HTMLInputElement>(null);
+  // Vistoria como foi carregada: clicar em estado de item não dispara evento de campo, então compara o objeto.
+  const baselineRef = useRef<ChecklistSchema | null>(null);
 
   useEffect(() => {
     if (isOpen && os) {
-      setChecklist(migrateChecklist(os.checklist));
+      const loaded = migrateChecklist(os.checklist);
+      baselineRef.current = loaded;
+      setChecklist(loaded);
       setAddingItemTo(null);
       setAddingCategory(false);
       setNewItemLabel('');
@@ -40,6 +45,13 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
 
   useEffect(() => { if (addingItemTo)   newItemInputRef.current?.focus(); }, [addingItemTo]);
   useEffect(() => { if (addingCategory) newCatInputRef.current?.focus();  }, [addingCategory]);
+
+  // Esc, Cancelar e fechar: perguntam antes de descartar. Salvar Vistoria fecha direto (handleSave).
+  const guard = useDirtyGuard({
+    active: isOpen,
+    onClose,
+    isDirty: () => baselineRef.current !== null && checklist !== baselineRef.current,
+  });
 
   if (!isOpen || !os) return null;
 
@@ -121,7 +133,8 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
     .reduce((acc, item) => { acc[item.status] = (acc[item.status] || 0) + 1; return acc; }, {} as Record<InspectionStatus, number>);
 
   return (
-    <div className="modal-overlay checklist-modal-overlay">
+    <>
+    <div className="modal-overlay checklist-modal-overlay" ref={guard.overlayRef}>
       <div className="modal-content checklist-modal">
 
         {/* ====== HEADER ====== */}
@@ -141,7 +154,7 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
             />
           </div>
 
-          <button className="btn-icon" onClick={onClose} title="Fechar">&#10005;</button>
+          <button className="btn-icon" onClick={guard.requestClose} title="Fechar" aria-label="Fechar">&#10005;</button>
         </div>
 
         {/* ====== LEGENDA + RESUMO ====== */}
@@ -216,7 +229,8 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
                     onChange={e => setNewItemLabel(e.target.value)}
                     onKeyDown={e => {
                       if (e.key === 'Enter') addItem(cat.id);
-                      if (e.key === 'Escape') { setAddingItemTo(null); setNewItemLabel(''); }
+                      // Esc aqui só sai do campo: não fecha a vistoria inteira.
+                      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setAddingItemTo(null); setNewItemLabel(''); }
                     }}
                   />
                   <button className="btn-sm" onClick={() => addItem(cat.id)}>&#10003;</button>
@@ -246,7 +260,7 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
                 onChange={e => setNewCategoryLabel(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === 'Enter') addCategory();
-                  if (e.key === 'Escape') { setAddingCategory(false); setNewCategoryLabel(''); }
+                  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setAddingCategory(false); setNewCategoryLabel(''); }
                 }}
               />
               <button className="btn-sm" onClick={addCategory}>&#10003;</button>
@@ -275,11 +289,13 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
             &#128424; Imprimir
           </button>
           <div style={{ flex: 1 }} />
-          <button className="btn-secondary" onClick={onClose}>Cancelar</button>
+          <button className="btn-secondary" onClick={guard.requestClose}>Cancelar</button>
           <button className="btn" onClick={handleSave}>&#128190; Salvar Vistoria</button>
         </div>
 
       </div>
     </div>
+    {guard.dialog}
+    </>
   );
 };

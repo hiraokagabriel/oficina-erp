@@ -10,6 +10,7 @@ import { PartCategorySelect } from '../components/PartCategorySelect';
 import { VehicleCombobox, useShopVehicles } from '../components/VehicleCombobox';
 import { computeOSMargin, formatPct, marginLabel, marginLevel, suggestPriceForTarget } from '../services/margin';
 import { PriceSuggestion, suggestHistoricalPrice } from '../services/pricing';
+import { useDirtyGuard } from '../hooks/useDirtyGuard';
 import { costToInput, normalizeItemCost, parseCostEdit, parseCostInput, partialMarginNote } from '../services/marginView';
 
 /** Sugestão discreta do histórico de vendas; só sugere, o botão grava apenas o preço da linha. */
@@ -445,10 +446,19 @@ export const OSModal: React.FC<OSModalProps> = ({
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [isOpen, clientName, vehicle, parts, services, osNumber, publicNotes, technician, advanceAmountDisplay, selectedClient, needsClientChoice]);
 
+  // Esc, Cancelar: pergunta antes de descartar o que foi digitado. Salvar fecha direto (handleConfirm -> onSave).
+  // resetKey estável (string): recarregar o formulário com a janela aberta (outra OS, outro rascunho) zera a flag.
+  const guard = useDirtyGuard({
+    active: isOpen,
+    onClose,
+    resetKey: editingOS ? `os:${editingOS.id}` : draft ? `draft:${draft.clientName}|${draft.vehicle}|${draft.notes}` : 'nova',
+  });
+
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay">
+    <>
+    <div className="modal-overlay" ref={guard.overlayRef}>
       <div className="modal-content" style={{ maxWidth: '1100px', width: '95%' }}>
         <h2 className="modal-title">{editingOS ? "Editar OS" : "Nova OS"}</h2>
 
@@ -561,7 +571,7 @@ export const OSModal: React.FC<OSModalProps> = ({
         <div style={{ display: 'flex', gap: 16 }}>
           <div className="form-group" style={{ flex: 2 }}>
             <label className="form-label">Veículo</label>
-            <VehicleCombobox id="os-vehicle" value={vehicle} onChange={setVehicle} clientVehicles={suggestedVehicles} shopVehicles={shopVehicles} />
+            <VehicleCombobox id="os-vehicle" value={vehicle} onChange={v => { if (v !== vehicle) guard.markDirty(); setVehicle(v); }} clientVehicles={suggestedVehicles} shopVehicles={shopVehicles} />
           </div>
           <div className="form-group" style={{ flex: 1 }}>
             <label className="form-label">Placa</label>
@@ -621,7 +631,7 @@ export const OSModal: React.FC<OSModalProps> = ({
 
               <PartCategorySelect
                 value={tempPart.category}
-                onChange={cat => setTempPart({ ...tempPart, category: cat })}
+                onChange={cat => { if (cat !== tempPart.category) guard.markDirty(); setTempPart({ ...tempPart, category: cat }); }}
                 style={{ flex: 0.8 }}
               />
 
@@ -687,7 +697,7 @@ export const OSModal: React.FC<OSModalProps> = ({
 
                         <PartCategorySelect
                           value={p.category ?? ''}
-                          onChange={cat => updateItem(parts, setParts, i, 'category', cat || undefined, catalogParts)}
+                          onChange={cat => { guard.markDirty(); updateItem(parts, setParts, i, 'category', cat || undefined, catalogParts); }}
                           style={{ flex: 0.7 }}
                           placeholder="—"
                         />
@@ -717,7 +727,7 @@ export const OSModal: React.FC<OSModalProps> = ({
 
                         <button
                           className="btn-icon danger"
-                          onClick={() => setParts(parts.filter((_, idx) => idx !== i))}
+                          onClick={() => { guard.markDirty(); setParts(parts.filter((_, idx) => idx !== i)); }}
                           tabIndex={-1}
                         >
                           x
@@ -728,7 +738,7 @@ export const OSModal: React.FC<OSModalProps> = ({
                         suggestion={partHistory[p.id]}
                         currentPrice={p.price}
                         formatMoney={formatMoney}
-                        onUse={(price) => updateItem(parts, setParts, i, 'price', price, catalogParts)}
+                        onUse={(price) => { guard.markDirty(); updateItem(parts, setParts, i, 'price', price, catalogParts); }}
                       />
 
                       {showCostColumn && p.description.trim() !== '' && (
@@ -738,6 +748,7 @@ export const OSModal: React.FC<OSModalProps> = ({
                           formatMoney={formatMoney}
                           minMarginPercent={targetMargin}
                           onSuggestPrice={(suggestedPrice) => {
+                            guard.markDirty();
                             updateItem(parts, setParts, i, 'price', suggestedPrice, catalogParts);
                           }}
                         />
@@ -843,7 +854,7 @@ export const OSModal: React.FC<OSModalProps> = ({
 
                     <button
                       className="btn-icon danger"
-                      onClick={() => setServices(services.filter((_, idx) => idx !== i))}
+                      onClick={() => { guard.markDirty(); setServices(services.filter((_, idx) => idx !== i)); }}
                       tabIndex={-1}
                     >
                       x
@@ -854,7 +865,7 @@ export const OSModal: React.FC<OSModalProps> = ({
                     suggestion={serviceHistory[s.id]}
                     currentPrice={s.price}
                     formatMoney={formatMoney}
-                    onUse={(price) => updateItem(services, setServices, i, 'price', price, catalogServices)}
+                    onUse={(price) => { guard.markDirty(); updateItem(services, setServices, i, 'price', price, catalogServices); }}
                   />
 
                   {showCostColumn && s.description.trim() !== '' && (
@@ -864,6 +875,7 @@ export const OSModal: React.FC<OSModalProps> = ({
                       formatMoney={formatMoney}
                       minMarginPercent={targetMargin}
                       onSuggestPrice={(suggestedPrice) => {
+                        guard.markDirty();
                         updateItem(services, setServices, i, 'price', suggestedPrice, catalogServices);
                       }}
                     />
@@ -966,12 +978,14 @@ export const OSModal: React.FC<OSModalProps> = ({
         </div>
 
         <div className="modal-actions">
-          <button className="btn-secondary" onClick={onClose}>Cancelar</button>
+          <button className="btn-secondary" onClick={guard.requestClose}>Cancelar</button>
           <button className="btn" onClick={handleConfirm} disabled={isSaving || needsClientChoice} title="Atalho: Ctrl + Shift + Enter">
             {isSaving ? '...' : 'Salvar (Ctrl+Shift+Enter)'}
           </button>
         </div>
       </div>
     </div>
+    {guard.dialog}
+    </>
   );
 };

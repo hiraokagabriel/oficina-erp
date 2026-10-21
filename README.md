@@ -16,18 +16,25 @@ Construído sobre a robustez do **Rust (Tauri)** e a flexibilidade do **React**,
   * **Lista de Processos:** Visualização tabular agrupada por status com ordenação independente (por Data, Cliente ou Nº OS) e alteração rápida de status via dropdown.
   * **Gamificação:** Efeitos sonoros e visuais (confetes) ao finalizar serviços e bater metas.
 
+### 🗓️ Agenda e Prazos
+
+  * **Agenda de Entrada:** Agendamentos por dia e semana, com ação "Criar OS" a partir do agendamento.
+  * **Previsão de Entrega:** Selo de OS atrasada ou para hoje no Kanban e em Processos.
+
 ### 💰 Gestão Financeira
 
   * **Dashboard Completo:** Gráficos de fluxo de caixa diário (Área) e distribuição de receita (Pizza: Peças vs. Serviços).
   * **KPIs em Tempo Real:** Acompanhamento de Saldo, Receitas, Despesas e Ticket Médio.
   * **Livro Caixa:** Registro automático de receitas ao finalizar OS e lançamentos manuais de despesas/receitas avulsas.
+  * **Margem e Preço:** Custo por item, meta de margem (Config), selo no Kanban, sugestão de preço e relatório de margem na aba Margem do Financeiro.
   * **Exportação:** Capacidade de exportar relatórios financeiros.
 
 ### 👥 CRM & Clientes
 
   * **Histórico Completo:** Linha do tempo visual (Timeline) mostrando todas as visitas do cliente.
   * **Lembretes Automáticos:** O sistema analisa o histórico e avisa sobre trocas de óleo vencidas ou revisões necessárias.
-  * **Gestão de Frota:** Cadastro de múltiplos veículos por cliente.
+  * **Gestão de Frota:** Cadastro de múltiplos veículos por cliente, com sugestões de marca/modelo/ano (base FIPE embutida; texto livre continua permitido).
+  * **Contas a Receber:** Parcelas, adiantamentos e atrasos por cliente.
 
 ### 🎨 Personalização & UI
 
@@ -53,7 +60,7 @@ O projeto utiliza uma arquitetura híbrida para garantir performance nativa com 
   * **Frontend:** [React](https://reactjs.org/) (TypeScript) - Interface do usuário.
   * **Estilização:** CSS3 Puro (Variáveis CSS para temas dinâmicos).
   * **Gráficos:** [Recharts](https://recharts.org/).
-  * **Drag and Drop:** [@hello-pangea/dnd](https://github.com/hello-pangea/dnd).
+  * **Drag and Drop:** [@dnd-kit](https://dndkit.com/).
 
 -----
 
@@ -63,7 +70,7 @@ O projeto utiliza uma arquitetura híbrida para garantir performance nativa com 
 
 Antes de começar, certifique-se de ter instalado:
 
-1.  **Node.js** (v16 ou superior).
+1.  **Node.js** (v20.19 ou superior, exigido pelo Vite 7).
 2.  **Rust & Cargo** (Necessário para compilar o Tauri).
 3.  **C++ Build Tools** (No Windows, via Visual Studio Installer).
 
@@ -84,19 +91,21 @@ Antes de começar, certifique-se de ter instalado:
     yarn install
     ```
 
-3.  **Instale as dependências específicas:**
-    Certifique-se de que as libs gráficas estão instaladas:
-
-    ```bash
-    npm install recharts @hello-pangea/dnd
-    ```
-
-4.  **Execute em modo de desenvolvimento:**
+3.  **Execute em modo de desenvolvimento:**
     Este comando iniciará o servidor React e abrirá a janela do Tauri.
 
     ```bash
     npm run tauri dev
     ```
+
+### Testes
+
+```bash
+npm test     # Vitest: lógica pura (banco, financeiro, agenda, margem, veículos)
+npm run build  # tsc + vite build
+```
+
+Para atualizar a base de veículos: `npm run vehicles:build` (manual).
 
 ### Compilação (Build)
 
@@ -177,7 +186,7 @@ Na aba Oficina, no cartão da OS, clique no ícone de **Impressora (🖨️)**. 
 
 O sistema utiliza um arquivo local (`C:\OficinaData\database.json` por padrão no Windows) para salvar todos os dados.
 
-  * **Salvamento Atômico:** O sistema salva automaticamente 1.5 segundos após a última alteração.
+  * **Salvamento Atômico:** O sistema salva automaticamente 3 segundos após a última alteração, recusa gravar se outro PC alterou o arquivo e guarda backups rotativos fora da pasta do banco.
   * **Backup Google:** Se configurado, o botão "Fazer Backup" na aba Config envia uma cópia datada para o seu Google Drive.
 
 -----

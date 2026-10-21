@@ -66,6 +66,11 @@ A sessão principal roda no **Sonnet** e orquestra (planeja, delega, verifica, c
 | `verificador` | Sonnet | só o harness em `%TEMP%` | Verificação no navegador (Playwright + Edge, banco sintético), contraste, 800 px, regressões, testes em vários fusos. Relata defeitos, não corrige. |
 | `arquiteto` | Opus | não | Bug obscuro ou em vários arquivos, mudança de schema ou formato do banco, plano de feature grande. |
 | `revisor` | Opus | não | Revisão do diff antes de commit ou push: correção, risco ao banco salvo, compatibilidade entre PCs, `any`, testes faltando. |
+| `gerente` | Sonnet | só `docs/` | Controle de produção: backlog em rodadas, quadro em `docs/PRODUCAO.md`, portões de qualidade de cada rodada, pendências do dono. Não implementa nem aciona outros agentes. |
+| `entregador` | Sonnet | só `docs/` e versões | Entrega: versão, notas em `docs/VERSOES.md`, build do instalador Tauri, checklist, atualização dos PCs no mesmo dia e reversão. |
+| `ux-designer` | Opus | não | Repaginação: auditoria de UX para usuário pouco letrado digitalmente, sistema visual (tokens, tipografia, ícones) e plano de rodadas por tela. |
+| `ui-dev` | Sonnet | sim | Implementa a repaginação (tokens, CSS, componentes visuais, textos) sem mexer em lógica, serviços ou schema. |
+| `ux-revisor` | Sonnet | só o harness em `%TEMP%` | Revisa a interface como novato no navegador (tarefas, cliques, textos, contraste, 800 px, regressão) com capturas. Relata, não corrige. |
 
 Fluxo por tipo de tarefa:
 
@@ -74,6 +79,8 @@ Fluxo por tipo de tarefa:
 - Bug obscuro ou em vários arquivos: `arquiteto` diagnostica, `dev` corrige, `verificador` confere.
 - Feature nova: brainstorming na sessão principal, `arquiteto` planeja se tocar schema ou vários módulos, `dev` implementa (em paralelo só com arquivos disjuntos), `verificador` confere.
 - Mudança de formato do banco: `arquiteto` obrigatório e aprovação do dono antes do `dev`.
+- Repaginação visual e de usabilidade: `ux-designer` audita e propõe (o dono aprova a direção estética), `ui-dev` implementa por rodadas (tokens e componentes base primeiro, depois telas), `ux-revisor` e `verificador` conferem cada rodada. Funcionalidade, regra de negócio e schema não mudam; cada rodada passa por build e testes antes de seguir.
+- Ciclo de produção de uma iniciativa: `arquiteto`/`ux-designer` planejam, `gerente` registra as rodadas e portões em `docs/PRODUCAO.md`, `dev`/`ui-dev` implementam, `verificador`/`ux-revisor` e `revisor` conferem, a sessão principal confere build e testes e commita por assunto, `entregador` prepara a versão e a atualização dos PCs. Subagentes não chamam outros agentes: só a sessão principal aciona.
 - Commit e push (só quando pedido): `revisor` revisa o diff, a sessão principal commita por assunto.
 
 Regras: usar o menor modelo que dá conta. Se o `scout` não resolver, escalar para o `dev`; se o `dev` empacar em algo que cruza vários arquivos, escalar para o `arquiteto`. Defeito achado pelo `verificador` ou pelo `revisor` volta para o `dev`. A sessão principal sempre confere build e testes por conta própria antes de declarar concluído.

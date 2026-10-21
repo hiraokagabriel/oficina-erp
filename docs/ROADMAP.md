@@ -138,7 +138,7 @@ Implementado e publicado (commits `4c9651a`, `5e9419c`, `9c345b1`, `c724c29`, `0
   - **Implantação:** versão antiga do app abre o banco v2 somente leitura, então atualizar todos os PCs no mesmo dia. Ordem: atualizar e abrir um PC, esperar a sincronização da pasta, depois atualizar os outros.
   - **Reversão:** restaurar o backup `pre-v1` (ou o da versão de origem) de `%LOCALAPPDATA%\com.oficinapro.app\backups` e usar a versão antiga do app.
 - [x] Dinheiro em centavos exatos (`Money.fromFloat`, `splitCents`) e datas sem deslocamento de fuso (`src/utils/dates.ts`). Ficou de fora: os filtros por mês do Financeiro ainda leem o trecho UTC da data ISO (seguro de UTC-12 a UTC+11) e lançamentos antigos gravados à meia-noite UTC continuam aparecendo um dia antes.
-- [x] Testes de parcelamento, finalização/reabertura, pagamento, cascade, helpers, datas e contas a receber (`npm test`, 166 testes, fixtures sintéticas, também em vários fusos). Os que sobraram da seção 3.1 **fixam o comportamento atual, inclusive os defeitos**. Falta validar o fluxo na interface.
+- [x] Testes de parcelamento, finalização/reabertura, pagamento, cascade, helpers, datas e contas a receber (`npm test`, 575 testes, fixtures sintéticas, também em vários fusos). Os que sobraram da seção 3.1 **fixam o comportamento atual, inclusive os defeitos**. Falta validar o fluxo na interface.
 - [ ] Atualizar o README.
 
 Critério de pronto: abrir o app nos dois PCs, forçar um salvamento concorrente e ver o aviso de conflito sem perder dado; `npm run build` limpo.
@@ -163,10 +163,10 @@ Implementada e testada (357 testes e verificação no navegador com banco sinté
 
 Critério de pronto: saber o que está atrasado e o que entra amanhã, sem planilha externa.
 
-Segue aberto da Fase 2: `.btn` primário no tema pastel tem contraste 3,46:1 na ponta rosa do gradiente (estilo global antigo, decisão de design); impressão real em A4 e janela Tauri real não foram testadas.
+Contraste: o `.btn` primário no pastel agora vai de `#7C3AED` a `#C026D3` (≥ 4,7:1 com texto branco; antes 3,46:1) e `src/styles-contrast.css` cobre o resto da varredura nos dois temas. Segue aberto da Fase 2: impressão real em A4 e janela Tauri real não foram testadas.
 
 ### Fase 3: Margem e preço
-Implementada e testada (561 testes e verificação no navegador com banco sintético). **Sem mudança de formato do banco** (só `WorkshopSettings.targetMargin?`, opcional).
+Implementada e testada (575 testes e verificação no navegador com banco sintético). **Sem mudança de formato do banco** (só `WorkshopSettings.targetMargin?`, opcional).
 
 - [x] Meta de margem global em Config (padrão 70%, inteiro de 1 a 99; vazio restaura o padrão). Substitui a "margem mínima" local do modal da OS.
 - [x] Custo opcional por item (OS e catálogo). **Custo vazio ou 0 = "não informado"**: o item fica fora da conta de margem e é sinalizado ("N itens sem custo: margem parcial"). Nunca grava `cost: 0`.
@@ -174,13 +174,15 @@ Implementada e testada (561 testes e verificação no navegador com banco sinté
 - [x] Sugestão de preço: "Preço para atingir a meta" (arredonda para cima, nunca fica abaixo da meta) e preço do histórico (`src/services/pricing.ts`: mediana das vendas dos últimos 12 meses, mínimo 3 vendas, só sugere; botão "Usar").
 - [x] Relatório de margem: aba **Margem** no Financeiro (`MarginReport`), por serviço, peça e categoria, com OS abaixo da meta e itens sem custo. Escopo: OS Finalizadas e Aguardando pagamento, por data de criação, no mesmo mês/ano do filtro do Financeiro.
 
-Segue aberto da Fase 3: a 1366 px as tabelas da aba Margem rolam na horizontal dentro do cartão.
+Corrigido: a 1366 px as tabelas da aba Margem cabem sem rolagem horizontal ("Preço mediano praticado" e a dica "Sugestão" ficam numa segunda linha sob o nome do item; a 800 px o layout em blocos continua).
 
 ### Autopreenchimento de veículos
 Implementado (sem mudança de formato do banco). Base brasileira gerada da API pública da FIPE (`npm run vehicles:build`, cache em `scripts/.cache/`, que retoma de onde parou) e embutida em `src/data/veiculos-br.json`, carregada sob demanda. Campo `VehicleCombobox` no modal da OS, cadastro de cliente, gerenciador de cadastros e agendamento: sugestões em grupos (veículos do cliente, já cadastrados na oficina, base brasileira), busca em qualquer ordem ("civic 2.0 2015"), tolerância a 1 erro de digitação, seletor de ano em segundo passo quando o ano não foi digitado, texto livre sempre permitido. Formato: "Marca Modelo Cilindrada Válvulas Ano".
 
-- [ ] Completar a base: a FIPE limita chamadas anônimas por dia (429) e a primeira geração parou em 74 marcas e 4.738 versões. Faltavam Volkswagen, Toyota, Renault, Nissan, Peugeot, Mitsubishi, Volvo, Porsche, Suzuki, MINI e Subaru. Rodar `npm run vehicles:build` de novo (ou usar token gratuito do fipe.api.br).
-- [ ] Conferir os termos de uso da FIPE e da API parallelum (a atribuição aparece na Config).
+- [x] Completar a base de veículos: feito em 2026-10-19, 107 marcas e 7.386 versões (a primeira geração parou em 74 marcas e 4.738 por causa do limite diário da FIPE).
+- Atualização da base de veículos: manual, via `npm run vehicles:build`.
+- Consulta de placa: adiada (não há API gratuita estável; opção paga consultadeplaca.net avaliada em 2026-10-19).
+- [ ] Termos de uso da FIPE e da API parallelum: em verificação pelo dono (a atribuição aparece na Config).
 
 ---
 
@@ -226,7 +228,7 @@ Feito no navegador (Playwright com Edge) contra o front real, com o Rust do Taur
 - No tema pastel o texto "Atrasado" tinha contraste de 2,7:1; agora 5,9:1 (Financeiro) e 5,0:1 (lista do CRM).
 - No CRM com o dashboard visível a lista de clientes encolhia a altura 0; agora tem altura própria e a página rola.
 
-Segue aberto: `installmentConfig.description` da OS parcelada guarda o nome antigo do cliente depois de uma renomeação (as parcelas do caixa e `clientName` são atualizados); em janela estreita (800 px) a tabela "A receber" e a barra do Financeiro cortam à direita; o verde dos KPIs no tema pastel tem contraste 2,4:1 (cor do tema, anterior à Fase 1).
+Itens que estavam abertos aqui e foram resolvidos (reconferidos em 2026-10-21): `installmentConfig.description` acompanha a renomeação do cliente (`cascadeService`, com teste); a 800 px e a 1366 px a barra do Financeiro, a tabela "A receber" e o painel do CRM não cortam nem rolam a página, e "Marcar como pago" fica visível; o verde dos KPIs no pastel usa `#2f6b4d` (≥ 4,5:1) só no texto do valor.
 
 **Não coberto:** o Rust/Tauri real (backups, cópias de recuperação, fechar a janela com `onCloseRequested`), a migração v1 → v2 (não ativada), impressão, Drive, checklist, Processos, Peças e exportação. Esses precisam de teste manual no `npm run tauri dev` com um banco sintético.
 

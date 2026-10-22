@@ -47,9 +47,9 @@ export function diffLocalChanges(baseSnapshot: string | null, current: DatabaseS
     return [];
   }
   return [
-    ...diffList<WorkOrder>(base.workOrders, current.workOrders, 'OS', os => `OS #${os.osNumber}`),
-    ...diffList<LedgerEntry>(base.ledger, current.ledger, 'Lançamento', e => e.description || e.id),
-    ...diffList<Client>(base.clients, current.clients, 'Cliente', c => c.name || c.id),
-    ...diffList<Appointment>(base.appointments, current.appointments ?? [], 'Agendamento', a => `${a.clientName || a.id} (${a.vehicle})`),
+    ...diffList<WorkOrder>(base.workOrders, current.workOrders, 'OS', os => (os.clientName ? `OS #${os.osNumber} (${os.clientName})` : `OS #${os.osNumber}`)),
+    ...diffList<LedgerEntry>(base.ledger, current.ledger, 'Lançamento', e => e.description || 'sem descrição'),
+    ...diffList<Client>(base.clients, current.clients, 'Cliente', c => c.name || 'sem nome'),
+    ...diffList<Appointment>(base.appointments, current.appointments ?? [], 'Agendamento', a => `${a.clientName || 'sem cliente'} (${a.vehicle})`),
   ];
 }

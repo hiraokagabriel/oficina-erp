@@ -713,7 +713,8 @@ input[type=number] {
   border-radius: var(--radius-card);
   border: 1px solid var(--border);
   box-shadow: 0 4px 6px var(--shadow-color);
-  gap: 20px;
+  gap: 12px 20px;
+  flex-wrap: wrap;
 }
 
 [data-theme="pastel"] .kanban-filter-bar {
@@ -723,7 +724,8 @@ input[type=number] {
 
 .search-wrapper {
   position: relative;
-  flex: 1;
+  flex: 1 1 220px;
+  min-width: 180px;
   max-width: 400px;
 }
 
@@ -779,6 +781,7 @@ input[type=number] {
 .btn-clear-search:hover { color: var(--danger); }
 
 .filter-stats {
+  white-space: nowrap;
   font-size: 0.85rem;
   color: var(--text-muted);
 }

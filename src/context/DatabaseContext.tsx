@@ -763,7 +763,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           <ul style={{ margin: 0, paddingLeft: 20, maxHeight: 220, overflow: 'auto' }}>
             {conflict.changes.slice(0, MAX_CHANGES_SHOWN).map(c => (
               <li key={`${c.group}-${c.id}-${c.kind}`}>
-                {c.group} {c.kind}: {c.label} <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>({c.id})</span>
+                {c.group} {c.kind}: {c.label}
               </li>
             ))}
             {conflict.changes.length > MAX_CHANGES_SHOWN && (
@@ -801,35 +801,26 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   return (
     <DatabaseContext.Provider value={contextValue}>
-      {blocked ? blockingScreen : children}
-      {readOnly && !blocked && (
-        <div
-          role="alert"
-          style={{
-            position: 'fixed', top: 0, left: 0, right: 0, zIndex: 10001, padding: '10px 16px', textAlign: 'center',
-            background: 'var(--warning, #f59e0b)', color: '#1a1a1a', fontWeight: 600,
-          }}
-        >
-          Este banco foi salvo por uma versão mais nova. Atualize o OficinaPro neste computador.
-          <span style={{ fontWeight: 400 }}> Modo somente leitura: nenhuma alteração será gravada.</span>
+      <div className="app-shell">
+        {readOnly && !blocked && (
+          <div role="alert" className="app-banner app-banner--warning">
+            Este banco foi salvo por uma versão mais nova. Atualize o OficinaPro neste computador.
+            <span style={{ fontWeight: 400 }}> Modo somente leitura: nenhuma alteração será gravada.</span>
+          </div>
+        )}
+        {saveError && !blocked && !conflict && (
+          <div role="alert" className="app-banner app-banner--danger">
+            <span><strong>Não salvo.</strong> As alterações ainda não foram gravadas; o app tenta de novo sozinho.</span>
+            <button className="btn btn-secondary" onClick={() => { void saveNow(); }} disabled={isSaving}>
+              Tentar agora
+            </button>
+          </div>
+        )}
+        <div className="app-shell-body">
+          {blocked ? blockingScreen : children}
         </div>
-      )}
+      </div>
       {conflict && !blocked && conflictDialog}
-      {saveError && !blocked && !conflict && (
-        <div
-          role="alert"
-          style={{
-            position: 'fixed', left: 16, bottom: 16, zIndex: 10001, display: 'flex', alignItems: 'center', gap: 12,
-            padding: '10px 14px', borderRadius: 8, background: 'var(--danger-fill, #b91c1c)', color: 'var(--on-danger, #fff)',
-            boxShadow: '0 4px 14px rgba(0,0,0,0.4)', boxSizing: 'border-box', maxWidth: 'max(240px, min(420px, calc(100vw - 440px)))',
-          }}
-        >
-          <span><strong>Não salvo.</strong> As alterações ainda não foram gravadas; o app tenta de novo sozinho.</span>
-          <button className="btn btn-secondary" onClick={() => { void saveNow(); }} disabled={isSaving}>
-            Tentar agora
-          </button>
-        </div>
-      )}
     </DatabaseContext.Provider>
   );
 };

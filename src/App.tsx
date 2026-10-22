@@ -106,6 +106,15 @@ function AppContent() {
   const [driveStatus, setDriveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const { addToast: pushToast } = useToast();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  // Janela estreita (< 1100 px): o menu compacta sozinho; o botão alterna só nesta janela, sem mexer na escolha salva.
+  const [isNarrow, setIsNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 1100);
+  const [narrowExpanded, setNarrowExpanded] = useState(false);
+  useEffect(() => {
+    const onResize = () => setIsNarrow(window.innerWidth < 1100);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  const sidebarCollapsed = isNarrow ? !narrowExpanded : isSidebarCollapsed;
 
   useEffect(() => {
     try {
@@ -686,8 +695,8 @@ Abrir OS?`)) {
         <Sidebar
           activeTab={activeTab}
           setActiveTab={setActiveTab}
-          isCollapsed={isSidebarCollapsed}
-          onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
+          isCollapsed={sidebarCollapsed}
+          onToggleCollapse={() => (isNarrow ? setNarrowExpanded(prev => !prev) : setIsSidebarCollapsed(prev => !prev))}
         />
 
         <main className="main-content">

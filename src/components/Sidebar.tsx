@@ -39,8 +39,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isCol
         type="button"
         onClick={onToggleCollapse}
         className="btn-sm side-collapse"
-        title={isCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
-        aria-label={isCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
+        title={isCollapsed ? 'Expandir menu' : 'Compactar menu'}
+        aria-label={isCollapsed ? 'Expandir menu' : 'Compactar menu'}
         aria-expanded={!isCollapsed}
       >
         <Icon name={isCollapsed ? 'proximo' : 'voltar'} size={18} />

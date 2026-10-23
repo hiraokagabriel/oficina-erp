@@ -4,18 +4,21 @@
 .appt-title { margin: 0; font-size: clamp(1.6rem, 3.5vw, 2.2rem); font-weight: 800; color: var(--text-main); }
 .appt-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .appt-range { font-weight: 700; color: var(--text-main); padding: 0 6px; }
-.appt-week-empty { margin: 0; padding: 14px 16px; border: 1px dashed var(--border); border-radius: 10px; color: var(--text-muted); }
 
 .appt-days { display: flex; flex-direction: column; gap: 12px; }
 .appt-day { border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); padding: 12px 14px; min-width: 0; }
-.appt-day--today { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+.appt-day--today { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.appt-day--empty { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; padding: 6px 14px; min-height: 52px; background: transparent; }
+.appt-day--empty .appt-day-title { font-weight: 600; font-size: 0.95rem; flex: 0 1 auto; }
+.appt-day--empty .appt-day-empty { flex: 1 1 auto; }
+.appt-past-title { margin: 8px 0 0; font-size: 0.85rem; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; }
 .appt-day-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
 .appt-day-title { margin: 0; font-size: 1rem; font-weight: 700; color: var(--text-main); text-transform: capitalize; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .appt-day-empty { margin: 0; color: var(--text-muted); font-size: 0.9rem; }
 
-.appt-tag { font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 6px; text-transform: none; border: 1px solid currentColor; }
-.appt-tag--today { color: var(--primary); }
-.appt-tag--tomorrow { color: var(--info, var(--text-main)); }
+/* "Hoje" usa a cor de ação; "Amanhã" é neutro. */
+.appt-tag { font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 6px; text-transform: none; border: 1px solid var(--border-strong); color: var(--text-2); }
+.appt-tag--today { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-text); }
 
 .appt-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .appt-item { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
@@ -26,22 +29,30 @@
 .appt-reason { color: var(--text-muted); font-size: 0.88rem; margin-top: 2px; }
 .appt-muted { color: var(--text-muted); font-weight: 400; }
 .appt-badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.appt-chip { font-size: 0.75rem; font-weight: 700; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-main); white-space: nowrap; }
-.appt-chip--agendado { border-color: var(--primary); color: var(--primary); }
-.appt-chip--compareceu { border-color: var(--success); color: var(--success); }
-.appt-chip--cancelado { color: var(--text-muted); }
-.appt-chip--faltou { border-color: var(--danger); color: var(--danger); }
+/* Status: luz de status do sistema (cor + ícone + texto). Agendado = azul informativo, nunca a cor de ação. */
+.appt-chip { --_c: var(--status-arquivado); --_t: var(--status-arquivado-text); display: inline-flex; align-items: center; gap: 5px; font-size: 0.78rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--_c); background: color-mix(in srgb, var(--_c) 14%, transparent); color: var(--_t); white-space: nowrap; }
+.appt-chip--agendado { --_c: var(--status-orcamento); --_t: var(--status-orcamento-text); }
+.appt-chip--compareceu { --_c: var(--status-finalizado); --_t: var(--status-finalizado-text); }
+.appt-chip--faltou { --_c: var(--status-atrasado); --_t: var(--status-atrasado-text); }
 .appt-os { font-size: 0.78rem; font-weight: 700; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border); color: var(--text-main); white-space: nowrap; }
 
 /* Cancelado e faltou ficam esmaecidos, mas o texto continua legível (opacidade alta). */
 .appt-item--cancelado .appt-info, .appt-item--faltou .appt-info, .appt-item--cancelado .appt-time, .appt-item--faltou .appt-time { opacity: 0.8; }
 .appt-item--cancelado .appt-client { text-decoration: line-through; }
 
-.appt-actions { display: flex; flex-wrap: wrap; gap: 6px; }
-.appt-btn-primary { border-color: var(--primary); color: var(--primary); font-weight: 700; }
-.appt-btn-danger { color: var(--danger); }
+/* Ações: Criar OS em destaque; secundárias agrupadas; cancelar e excluir separados à direita. */
+.appt-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.appt-btn-main { min-height: var(--control-h-min, 40px); }
+.appt-actions-group { display: flex; flex-wrap: wrap; gap: 6px; }
+.appt-btn-sec { background: var(--surface-2); color: var(--text); }
+.appt-btn-sec:hover { background: var(--surface-3); border-color: var(--text-2); }
+.appt-actions-end { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; padding-left: 14px; border-left: 1px solid var(--border); }
+.appt-btn-cancel { color: var(--text-2); }
+.appt-btn-cancel:hover { background: var(--surface-3); color: var(--text); }
+.appt-btn-danger { color: var(--status-atrasado-text); border-color: var(--status-atrasado-text); }
+.appt-btn-danger:hover { background: color-mix(in srgb, var(--status-atrasado) 14%, transparent); }
 .appt-page .btn-sm:focus-visible, .appt-page .btn:focus-visible, .appt-modal button:focus-visible,
-.appt-modal input:focus-visible, .appt-modal textarea:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.appt-modal input:focus-visible, .appt-modal textarea:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 
 /* Modal */
 .appt-modal { max-width: 560px; width: 95%; max-height: 92vh; overflow-y: auto; }
@@ -55,14 +66,6 @@
 
 @media (max-width: 900px) {
   .appt-time { min-width: 0; flex: 1 1 100%; }
+  .appt-actions-end { margin-left: 0; padding-left: 0; border-left: 0; flex: 1 1 100%; }
   .appt-actions .btn-sm { flex: 1 1 auto; }
 }
-
-/* Tema pastel: --danger/--warning/--success são pálidos como TEXTO sobre branco (< 4,5:1); tons escuros. */
-[data-theme="pastel"] .appt-chip--faltou, [data-theme="pastel"] .appt-btn-danger,
-[data-theme="pastel"] .appt-error-text { color: #a8453a; }
-[data-theme="pastel"] .appt-chip--faltou { border-color: #a8453a; }
-[data-theme="pastel"] .appt-chip--compareceu { color: #1f6b3a; border-color: #1f6b3a; }
-[data-theme="pastel"] .appt-tag--today, [data-theme="pastel"] .appt-chip--agendado, [data-theme="pastel"] .appt-btn-primary { color: #5b21b6; }
-[data-theme="pastel"] .appt-tag--tomorrow { color: #0b5a73; }
-[data-theme="pastel"] .appt-homonyms { border-color: #7a5200; }

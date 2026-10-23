@@ -2,6 +2,7 @@ import React from 'react';
 import { WorkshopSettings } from '../types';
 import { VehicleCatalogNote } from '../components/VehicleCatalogNote';
 import { parseTargetMarginDraft } from '../services/margin';
+import { HomeTab, readHomeTab, writeHomeTab } from '../utils/todayPrefs';
 
 interface ConfigPageProps {
   settings: WorkshopSettings;
@@ -20,6 +21,7 @@ interface ConfigPageProps {
 export const ConfigPage: React.FC<ConfigPageProps> = ({
   settings, setSettings, currentTheme, setCurrentTheme, onBackup, onImportData, isBackuping, driveStatus, onOpenDatabase, dbPath, setDbPath
 }) => {
+  const [homeTab, setHomeTab] = React.useState<HomeTab>(() => readHomeTab());
 
   const handleChange = (field: keyof WorkshopSettings, value: string) => {
     setSettings({ ...settings, [field]: value });
@@ -156,6 +158,20 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
         <div className="form-group">
           <label className="form-label">Endereço</label>
           <input className="form-input" value={settings.address} onChange={(e) => handleChange('address', e.target.value)} />
+        </div>
+      </div>
+
+      {/* TELA INICIAL (por computador) */}
+      <div className="card">
+        <h3>Tela inicial</h3>
+        <div className="today-home" role="radiogroup" aria-label="Tela inicial deste computador">
+          <div className="segmented">
+            {([['OFICINA', 'Oficina'], ['HOJE', 'Hoje']] as [HomeTab, string][]).map(([id, label]) => (
+              <button key={id} type="button" role="radio" aria-checked={homeTab === id}
+                onClick={() => { setHomeTab(id); writeHomeTab(id); }}>{label}</button>
+            ))}
+          </div>
+          <small style={{ color: 'var(--text-muted)' }}>É a tela que abre quando você liga o programa. Vale só para este computador.</small>
         </div>
       </div>
 

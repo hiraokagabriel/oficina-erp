@@ -2,7 +2,7 @@ import React from 'react';
 import { Icon, IconName } from './ui/Icon';
 import { SaveIndicator } from './SaveIndicator';
 
-type TabId = 'FINANCEIRO' | 'OFICINA' | 'AGENDA' | 'PROCESSOS' | 'CLIENTES' | 'PECAS' | 'CONFIG';
+type TabId = 'HOJE' | 'FINANCEIRO' | 'OFICINA' | 'AGENDA' | 'PROCESSOS' | 'CLIENTES' | 'PECAS' | 'CONFIG';
 
 interface SidebarProps {
   activeTab: string;
@@ -13,6 +13,7 @@ interface SidebarProps {
 
 // Ordem pelo caminho do carro: entra (Oficina), marca dia (Agenda), acompanha (Processos), quem é (Clientes), cobra (Financeiro).
 const NAV_ITEMS: { id: TabId; label: string; icon: IconName }[] = [
+  { id: 'HOJE',       label: 'Hoje',           icon: 'bandeira' },
   { id: 'OFICINA',    label: 'Oficina',        icon: 'oficina' },
   { id: 'AGENDA',     label: 'Agenda',         icon: 'agenda' },
   { id: 'PROCESSOS',  label: 'Processos',      icon: 'processos' },

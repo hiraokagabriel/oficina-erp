@@ -43,19 +43,12 @@ export const InfiniteScroll: React.FC<InfiniteScrollProps> = ({
     <>
       {children}
       {hasMore && (
-        <div 
-          ref={observerTarget} 
-          style={{ 
-            height: '20px', 
-            display: 'flex', 
-            justifyContent: 'center', 
-            alignItems: 'center',
-            fontSize: '0.75rem',
-            color: 'var(--text-muted)',
-            padding: '10px'
-          }}
-        >
-          {isLoading ? '⏳ Carregando...' : '⬇️ Role para carregar mais'}
+        <div ref={observerTarget} className="kanban-more">
+          {isLoading ? (
+            <span role="status">Carregando mais...</span>
+          ) : (
+            <button type="button" className="btn-secondary" onClick={loadMore}>Mostrar mais</button>
+          )}
         </div>
       )}
     </>

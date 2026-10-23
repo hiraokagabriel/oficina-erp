@@ -1,55 +1,46 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { WorkOrder, OSStatus } from '../types';
-import { ContextMenu } from './ContextMenu';
-import { ActionMenu, MenuItem } from './ActionMenu';
-import { getDeliveryBadge } from '../services/deliveryBadge';
+import { WorkOrder, OSStatus, STATUS_LABELS } from '../types';
+import { KanbanCardMenu, KanbanCardActions } from './KanbanCardMenu';
+import { Icon } from './ui/Icon';
 import { DEFAULT_TARGET_MARGIN } from '../services/margin';
 import { getMarginBadge } from '../services/marginView';
-
-declare global {
-  interface Window {
-    __TAURI__?: {
-      shell: {
-        open: (url: string) => Promise<void>;
-      };
-    };
-  }
-}
+import { deliveryProgress, formatKm, nextStep, splitVehicle, statusClass } from '../services/kanbanCardView';
 
 interface KanbanCardProps {
   os: WorkOrder;
   formatMoney: (val: number) => string;
   status: OSStatus;
-  actions: {
-    onRegress: (id: string) => void;
-    onEdit: (os: WorkOrder) => void;
-    onChecklist: (os: WorkOrder) => void;
-    onPrint: (os: WorkOrder) => void;
-    onPrintClient?: (os: WorkOrder) => void;
-    onPrintShop?: (os: WorkOrder) => void;
-    onDelete: (os: WorkOrder) => void;
-    onAdvance: (id: string) => void;
-    onArchive?: (os: WorkOrder) => void;
-    onRestore?: (os: WorkOrder) => void;
-    onQuickFinish?: (id: string) => void;
-  };
+  actions: KanbanCardActions;
+  /** Mesmo handler do arrastar: o botão de próximo passo cai nos mesmos diálogos de finalização. */
+  onStatusChange: (orderId: string, newStatus: OSStatus) => void;
+  /** Dia de hoje ('AAAA-MM-DD'), calculado uma vez pelo quadro (string: não quebra o React.memo). */
+  today: string;
+  /** Selo de margem: só aparece se a oficina ligou a opção na Configuração. */
+  showMargin?: boolean;
   isDragging?: boolean;
   /** Meta de margem global (%), das Configurações. */
   targetMargin?: number;
 }
+
+const CARD_HELP =
+  'Clique abre a OS. Clique direito ou botão "Mais": todas as ações. Ctrl+clique: finalizar rápido. ' +
+  'Mover com o teclado: tecle M, use as setas e confirme com Enter.';
 
 export const KanbanCard = React.memo(({
   os,
   formatMoney,
   status,
   actions,
+  onStatusChange,
+  today,
+  showMargin = false,
   isDragging: forcedDragging,
   targetMargin = DEFAULT_TARGET_MARGIN
 }: KanbanCardProps) => {
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
-  const [isHovered, setIsHovered] = useState(false);
+  // Só abre com clique no "Mais" ou clique direito; o menu nem é montado enquanto está fechado.
+  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
 
   const {
     attributes,
@@ -60,325 +51,167 @@ export const KanbanCard = React.memo(({
     isDragging,
   } = useSortable({ id: os.id });
 
+  const { onKeyDown: dndKeyDown, ...pointerListeners } = listeners ?? {};
+
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
     zIndex: isDragging || forcedDragging ? 9999 : 'auto',
-    cursor: isDragging ? 'grabbing' : 'grab',
-    opacity: isDragging ? 0.5 : status === 'ARQUIVADO' ? 0.7 : 1,
-    position: 'relative',
-    userSelect: 'none',
-    WebkitUserSelect: 'none',
   };
 
   const cardClassName = [
     'kanban-card',
+    'kcard',
+    `kcard--${statusClass(status)}`,
     isDragging && 'is-dragging',
     forcedDragging && 'is-overlay'
   ].filter(Boolean).join(' ');
 
-  const marginBadge = getMarginBadge(os, targetMargin, formatMoney);
+  const marginBadge = showMargin ? getMarginBadge(os, targetMargin, formatMoney) : null;
+  const delivery = deliveryProgress(os, today);
+  const step = nextStep(status);
+  const { model, plate } = splitVehicle(os.vehicle);
+  const km = formatKm(os.mileage);
+  const technician = (os.technician || '').trim();
 
-  const openWhatsApp = async () => {
-    if (!os.clientPhone) return;
-
-    let cleanPhone = os.clientPhone.replace(/\D/g, '');
-    if (cleanPhone.startsWith('55')) cleanPhone = cleanPhone.substring(2);
-
-    if (cleanPhone.length < 10) {
-      alert(`Telefone inválido: ${os.clientPhone}\n\nPrecisa ter pelo menos 10 dígitos (DDD + número)`);
+  const handleClick = (e: React.MouseEvent) => {
+    if (e.ctrlKey && status !== 'FINALIZADO' && actions.onQuickFinish) {
+      e.preventDefault();
+      e.stopPropagation();
+      actions.onQuickFinish(os.id);
       return;
     }
-
-    const message = encodeURIComponent(
-      `Olá ${os.clientName}, tudo bem?\n\nEstamos entrando em contato da oficina sobre a OS #${os.osNumber} do seu ${os.vehicle}.`
-    );
-
-    const whatsappUrl = `https://wa.me/55${cleanPhone}?text=${message}`;
-
-    if (window.__TAURI__?.shell?.open) {
-      await window.__TAURI__.shell.open(whatsappUrl);
-      return;
-    }
-
-    const newWindow = window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
-    if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-      try {
-        await navigator.clipboard.writeText(whatsappUrl);
-        alert(`Link copiado!\n\nCole no navegador:\n${whatsappUrl}`);
-      } catch {
-        prompt('Copie este link:', whatsappUrl);
-      }
-    }
+    if ((e.target as HTMLElement).closest('button')) return;
+    actions.onEdit(os);
   };
 
-  const menuItems = useMemo(() => {
-    const items: MenuItem[] = [
-      {
-        icon: '✏️',
-        label: 'Editar OS',
-        onClick: () => actions.onEdit(os),
-        variant: 'primary'
-      },
-      {
-        icon: '📋',
-        label: 'Checklist de Inspeção',
-        onClick: () => actions.onChecklist(os)
-      },
-      { divider: true },
-      {
-        icon: '🖨️',
-        label: 'Imprimir OS (ambas assinaturas)',
-        onClick: () => actions.onPrint(os)
-      },
-      {
-        icon: '🧾',
-        label: 'Imprimir via do cliente',
-        onClick: () => (actions.onPrintClient ? actions.onPrintClient(os) : actions.onPrint(os))
-      },
-      {
-        icon: '🏬',
-        label: 'Imprimir via da oficina',
-        onClick: () => (actions.onPrintShop ? actions.onPrintShop(os) : actions.onPrint(os))
-      }
-    ];
-
-    if (os.clientPhone) {
-      items.push({ divider: true });
-      items.push({
-        icon: '💬',
-        label: 'Enviar WhatsApp',
-        onClick: openWhatsApp,
-        variant: 'success'
-      });
+  // Enter/Espaço no cartão focado abrem a OS; o arraste por teclado começa com M (ver KanbanBoard).
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    dndKeyDown?.(e);
+    if (e.target !== e.currentTarget || isDragging || forcedDragging) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      actions.onEdit(os);
     }
-
-    items.push({ divider: true });
-
-    if (status !== 'ARQUIVADO' && status !== 'ORCAMENTO') {
-      items.push({
-        icon: '⬅️',
-        label: 'Voltar Status',
-        onClick: () => actions.onRegress(os.id)
-      });
-    }
-
-    if (status !== 'ARQUIVADO' && status !== 'FINALIZADO') {
-      items.push({
-        icon: '➡️',
-        label: 'Avançar Status',
-        onClick: () => actions.onAdvance(os.id)
-      });
-    }
-
-    items.push({ divider: true });
-
-    if (status === 'ARQUIVADO') {
-      items.push({
-        icon: '↩️',
-        label: 'Restaurar OS',
-        onClick: () => actions.onRestore?.(os),
-        variant: 'success'
-      });
-    } else {
-      items.push({
-        icon: '📦',
-        label: 'Arquivar OS',
-        onClick: () => actions.onArchive?.(os)
-      });
-    }
-
-    items.push({
-      icon: '🗑️',
-      label: 'Excluir Permanentemente',
-      onClick: () => actions.onDelete(os),
-      variant: 'danger'
-    });
-
-    return items;
-  }, [os, status, actions]);
+  };
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setContextMenu({ x: e.clientX, y: e.clientY });
+    setMenuAt({ x: e.clientX, y: e.clientY });
   };
 
-  const deliveryBadge = getDeliveryBadge(os, new Date());
+  const openMore = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    const r = e.currentTarget.getBoundingClientRect();
+    setMenuAt({ x: r.left, y: r.bottom + 4 });
+  };
 
-  const shouldShowHoverEffects = isHovered && !isDragging && !forcedDragging;
+  // Botão não começa arraste: o clique é só do botão.
+  const stopDrag = (e: React.PointerEvent) => e.stopPropagation();
 
   return (
     <>
-      <div 
-        ref={setNodeRef} 
-        style={style} 
-        {...attributes} 
-        {...listeners}
-        onMouseEnter={() => !isDragging && setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+      <div
+        ref={setNodeRef}
+        style={style}
+        className="kcard-wrap"
+        {...attributes}
+        {...pointerListeners}
+        role="group"
+        aria-label={`OS ${os.osNumber}, ${os.clientName}, ${STATUS_LABELS[status]}`}
+        onKeyDown={handleKeyDown}
       >
         <div
           className={cardClassName}
-          title="💡 Clique direito: menu completo | Ctrl+Clique: finalizar rápido"
-          onClick={(e) => {
-            if (e.ctrlKey && status !== 'FINALIZADO' && actions.onQuickFinish) {
-              e.preventDefault();
-              e.stopPropagation();
-              actions.onQuickFinish(os.id);
-            }
-          }}
+          title={CARD_HELP}
+          onClick={handleClick}
           onContextMenu={handleContextMenu}
-          style={{
-            border: isDragging || forcedDragging
-              ? '2px solid var(--primary)' 
-              : '1px solid var(--border)',
-            background: isDragging || forcedDragging
-              ? 'var(--bg-panel)' 
-              : 'var(--bg-card, var(--bg-panel))',
-            color: 'var(--text)',
-            boxShadow: isDragging || forcedDragging
-              ? '0 20px 40px rgba(0, 0, 0, 0.3), 0 0 0 2px var(--primary)'
-              : shouldShowHoverEffects
-                ? '0 8px 24px rgba(0, 0, 0, 0.15)'
-                : '0 2px 8px rgba(0, 0, 0, 0.1)',
-            transition: 'box-shadow 0.2s ease'
-          }}
         >
-          <div className="os-header" style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span className="os-number">#{os.osNumber}</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              <span className="os-price">{formatMoney(os.total)}</span>
-
-              {marginBadge && (
-                <span
-                  className={`margin-badge margin-badge--${marginBadge.level.toLowerCase()}`}
-                  title={marginBadge.title}
-                >
-                  {marginBadge.label}
-                </span>
-              )}
-
-              {shouldShowHoverEffects && (
-                <div style={{ animation: 'fadeInScale 0.2s ease', marginLeft: 4 }}>
-                  <ActionMenu items={menuItems} buttonSize={28} />
-                </div>
-              )}
-            </div>
+          <div className="kcard-top">
+            <span className={`status-light status-light--${statusClass(status)}`}>
+              {STATUS_LABELS[status]}
+            </span>
+            <span className="kcard-num">OS {os.osNumber}</span>
           </div>
 
-          <div className="os-client" style={{ marginBottom: 4, marginTop: 8 }}>{os.clientName}</div>
-          <div className="os-vehicle" style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{os.vehicle}</div>
+          <div className="kcard-client" title={os.clientName}>{os.clientName}</div>
 
-          {deliveryBadge && (
-            <div style={{ marginTop: 6 }}>
-              <span className={`delivery-badge delivery-badge--${deliveryBadge.kind}`} title={deliveryBadge.title}>
-                {deliveryBadge.label}
-              </span>
+          <div className="kcard-vehicle">
+            <span className="kcard-model" title={model}>{model}</span>
+            {km && <span className="kcard-km">{km}</span>}
+            {plate && <span className="kcard-plate" title="Placa">{plate}</span>}
+          </div>
+
+          {delivery && (
+            <div className={`kcard-due kcard-due--${delivery.level}`} title={delivery.title}>
+              <Icon name={delivery.level === 'atrasada' ? 'alerta' : 'calendario'} size={14} />
+              <span>{delivery.label}</span>
             </div>
           )}
 
-          {!!(os.technician || '').trim() && (
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4 }}>
-              🔧 {os.technician}
-            </div>
-          )}
-
-          {os.clientPhone && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                marginTop: 8,
-                paddingTop: 8,
-                borderTop: '1px solid var(--border)',
-                fontSize: '0.8rem',
-                color: 'var(--text-muted)'
-              }}
-            >
-              📞 {os.clientPhone}
-            </div>
-          )}
-
-          {shouldShowHoverEffects && (
-            <div
-              style={{
-                display: 'flex',
-                gap: 6,
-                marginTop: 12,
-                paddingTop: 12,
-                borderTop: '1px solid var(--border)',
-                animation: 'slideUpFade 0.25s cubic-bezier(0.4, 0, 0.2, 1)'
-              }}
-            >
-              <button
-                title="Editar OS"
-                onClick={(e) => { e.stopPropagation(); actions.onEdit(os); }}
-                style={{
-                  flex: 1,
-                  padding: '8px 12px',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                  background: 'var(--primary)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                  boxShadow: '0 2px 8px rgba(130, 87, 230, 0.3)'
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(130, 87, 230, 0.4)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(130, 87, 230, 0.3)'; }}
+          <div className="kcard-foot">
+            <span className="kcard-total">{formatMoney(os.total)}</span>
+            {marginBadge && (
+              <span
+                className={`margin-badge margin-badge--${marginBadge.level.toLowerCase()}`}
+                title={marginBadge.title}
               >
-                ✏️ Editar
-              </button>
+                {marginBadge.label}
+              </span>
+            )}
+            {technician && (
+              <span className="kcard-tech" title={`Técnico: ${technician}`}>
+                <Icon name="chave" size={14} />
+                <span className="kcard-tech-name">{technician}</span>
+              </span>
+            )}
+          </div>
 
-              {os.clientPhone && (
-                <button
-                  title="WhatsApp Rápido"
-                  onClick={(e) => { e.stopPropagation(); openWhatsApp(); }}
-                  style={{
-                    flex: 1,
-                    padding: '8px 12px',
-                    fontSize: '0.8rem',
-                    fontWeight: 600,
-                    background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6,
-                    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                    boxShadow: '0 2px 8px rgba(37, 211, 102, 0.3)'
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(37, 211, 102, 0.4)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(37, 211, 102, 0.3)'; }}
-                >
-                  💬 WhatsApp
-                </button>
-              )}
+          <div className="kcard-actions">
+            {step && (
+              <button
+                type="button"
+                className="btn kcard-next"
+                onPointerDown={stopDrag}
+                onClick={(e) => { e.stopPropagation(); onStatusChange(os.id, step.to); }}
+              >
+                {step.label}
+                <Icon name="proximo" size={16} />
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn-secondary kcard-more"
+              aria-haspopup="menu"
+              aria-expanded={menuAt !== null}
+              title="Editar, vistoria, imprimir, WhatsApp, voltar, arquivar e excluir"
+              onPointerDown={stopDrag}
+              onClick={openMore}
+            >
+              <Icon name="processos" size={16} />
+              Mais
+            </button>
+          </div>
+
+          {delivery && delivery.level !== 'sem' && (
+            <div className={`kcard-bar kcard-bar--${delivery.level}`} aria-hidden="true">
+              <span style={{ width: `${delivery.pct}%` }} />
             </div>
           )}
         </div>
       </div>
 
-      {contextMenu && (
-        <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          items={menuItems}
-          onClose={() => setContextMenu(null)}
+      {menuAt && (
+        <KanbanCardMenu
+          os={os}
+          status={status}
+          actions={actions}
+          x={menuAt.x}
+          y={menuAt.y}
+          onClose={() => setMenuAt(null)}
         />
       )}
-
     </>
   );
 });

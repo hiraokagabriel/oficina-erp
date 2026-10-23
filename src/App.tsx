@@ -737,6 +737,7 @@ Abrir OS?`)) {
                 isLoading={isLoading}
                 formatMoney={Money.format}
                 targetMargin={getTargetMargin(settings)}
+                showMargin={settings.showMarginOnBoard === true}
                 onNewOS={() => {
                   setEditingOS(null);
                   setIsModalOpen(true);

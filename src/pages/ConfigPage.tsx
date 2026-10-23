@@ -80,6 +80,16 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
     e.target.value = '';
   };
 
+  // Ligado grava true; desligado remove a chave (ausente = desligado, como em bancos antigos).
+  const handleShowMarginChange = (on: boolean) => {
+    if (on) {
+      setSettings({ ...settings, showMarginOnBoard: true });
+    } else {
+      const { showMarginOnBoard: _removed, ...rest } = settings;
+      setSettings(rest);
+    }
+  };
+
   // O caminho só é aplicado ao sair do campo ou com Enter: cada troca recarrega o banco.
   const [dbPathDraft, setDbPathDraft] = React.useState(dbPath);
   React.useEffect(() => { setDbPathDraft(dbPath); }, [dbPath]);
@@ -172,6 +182,24 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
           </small>
           {targetError && <span className="margin-config-error" role="alert">{targetError}</span>}
         </div>
+      </div>
+
+      {/* SEÇÃO 1C: QUADRO DA OFICINA */}
+      <div className="card">
+        <h3>Quadro da Oficina</h3>
+        <label className="config-check" htmlFor="cfg-show-margin">
+          <input
+            id="cfg-show-margin"
+            type="checkbox"
+            checked={settings.showMarginOnBoard === true}
+            onChange={(e) => handleShowMarginChange(e.target.checked)}
+            aria-describedby="cfg-show-margin-help"
+          />
+          <span>Mostrar a margem nos cartões do quadro</span>
+        </label>
+        <small id="cfg-show-margin-help" style={{ color: 'var(--text-muted)', marginTop: 5, display: 'block' }}>
+          Desligado por padrão. A margem mostra quanto a oficina ganha em cada serviço. Se o cliente fica no balcão olhando a tela, ele pode ver esse valor.
+        </small>
       </div>
 
       {/* SEÇÃO 2: APARÊNCIA */}

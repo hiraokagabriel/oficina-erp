@@ -25,6 +25,28 @@ describe('settings.targetMargin atravessa carga, edição e gravação', () => {
   });
 });
 
+describe('settings.showMarginOnBoard (selo de margem do quadro) atravessa carga, edição e gravação', () => {
+  const on: WorkshopSettings = { ...fallback, showMarginOnBoard: true };
+  it('banco sem o campo = desligado; com o campo, parseDatabase mantém', () => {
+    expect(parseDatabase(JSON.stringify({ ledger: [], settings: fallback }), fallback).settings.showMarginOnBoard).toBeUndefined();
+    expect(parseDatabase(JSON.stringify({ ledger: [], settings: fallback }), fallback).settings.showMarginOnBoard === true).toBe(false);
+    expect(parseDatabase(JSON.stringify({ ledger: [], settings: on }), fallback).settings.showMarginOnBoard).toBe(true);
+  });
+  it('adoptSecrets, stripSecrets e stripDbSecrets não descartam o campo', () => {
+    const store = { getItem: () => null, setItem: () => undefined, removeItem: () => undefined };
+    expect(adoptSecrets(on, store).showMarginOnBoard).toBe(true);
+    expect(stripSecrets(on).showMarginOnBoard).toBe(true);
+    expect(stripDbSecrets({ settings: on }).settings.showMarginOnBoard).toBe(true);
+  });
+  it('edição por spread preserva o campo e a margem alvo; desligar remove a chave', () => {
+    const both: WorkshopSettings = { ...on, targetMargin: 65 };
+    expect({ ...both, name: 'Y' }).toMatchObject({ showMarginOnBoard: true, targetMargin: 65 });
+    const { showMarginOnBoard: _removed, ...off } = both;
+    expect('showMarginOnBoard' in off).toBe(false);
+    expect(off.targetMargin).toBe(65);
+  });
+});
+
 describe('parseDatabase: appointments', () => {
   it('ausente (banco antigo) vira []', () => {
     expect(parseDatabase(JSON.stringify({ ledger: [] }), fallback).appointments).toEqual([]);

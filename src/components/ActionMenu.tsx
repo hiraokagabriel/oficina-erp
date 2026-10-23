@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom';
 
 /** Item sem `label` é renderizado como divisória (ver `divider`); por isso icon/label/onClick são opcionais. */
 export interface MenuItem {
-  icon?: string;
+  icon?: React.ReactNode;
   label?: string;
   onClick?: () => void;
   variant?: 'default' | 'danger' | 'success' | 'primary';

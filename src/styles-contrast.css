@@ -10,7 +10,6 @@ input.form-input:not(:focus), select.form-input:not(:focus), textarea.form-input
 /* Selo "Margem"/botões de ícone mantêm o próprio visual; ver varredura. */
 
 /* ---- Texto semântico no pastel ---- */
-[data-theme="pastel"] .os-price,
 [data-theme="pastel"] .tl-price,
 [data-theme="pastel"] .total-display,
 [data-theme="pastel"] .total-display span { color: var(--text-success); }
@@ -23,7 +22,6 @@ input.form-input:not(:focus), select.form-input:not(:focus), textarea.form-input
 [data-theme="pastel"] [style^="color: var(--primary)"], [data-theme="pastel"] [style*="; color: var(--primary)"] { color: #6D28D9 !important; }
 [data-theme="pastel"] .toggle-group .btn-sm[style*="var(--danger)"] { border-color: var(--text-danger) !important; }
 .toggle-group .btn-sm[style*="opacity: 0.5"] { opacity: 1 !important; }
-[data-theme="pastel"] .kanban-header > span { color: #5a4f68; }
 .process-group-header > div[style*="opacity"] { opacity: 1 !important; }
 [data-theme="pastel"] .tl-month,
 [data-theme="pastel"] .parts-os-badge,

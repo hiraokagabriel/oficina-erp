@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { WorkOrder, OSStatus } from '../types';
 import { KanbanBoard } from '../components/KanbanBoard';
 import { summarizeDeliveries } from '../services/schedule';
+import { Icon } from '../components/ui/Icon';
 
 interface WorkshopPageProps {
   workOrders: WorkOrder[];
@@ -9,6 +10,8 @@ interface WorkshopPageProps {
   formatMoney: (val: number) => string;
   /** Meta de margem global (%), das Configurações. */
   targetMargin?: number;
+  /** Selo de margem nos cartões (opção da Configuração). */
+  showMargin?: boolean;
   onNewOS: () => void;
   onStatusChange: (osId: string, newStatus: OSStatus) => void;
   kanbanActions: {
@@ -29,13 +32,14 @@ export const WorkshopPage: React.FC<WorkshopPageProps> = ({
   isLoading,
   formatMoney,
   targetMargin,
+  showMargin,
   onNewOS,
   onStatusChange,
   kanbanActions
 }) => {
   const [showArchived, setShowArchived] = useState(false);
 
-  // 🆕 Conta OSs arquivadas
+  // Conta OS arquivadas
   const archivedCount = useMemo(() => 
     workOrders.filter(os => os.status === 'ARQUIVADO').length,
     [workOrders]
@@ -57,42 +61,22 @@ export const WorkshopPage: React.FC<WorkshopPageProps> = ({
               <span className="delivery-today">{deliveries.hoje} com entrega hoje</span>
             </span>
           )}
-          {/* 🆕 BOTÃO DE TOGGLE ARQUIVADAS */}
-          <button 
-            className={showArchived ? "btn" : "btn-secondary"} 
+          <button
+            type="button"
+            className="btn-secondary"
             onClick={() => setShowArchived(!showArchived)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              position: 'relative'
-            }}
           >
-            📦 {showArchived ? 'Voltar ao Kanban' : 'Ver Arquivadas'}
+            <Icon name={showArchived ? 'voltar' : 'caixa'} size={18} />
+            {showArchived ? 'Voltar ao quadro' : 'Ver arquivadas'}
             {archivedCount > 0 && !showArchived && (
-              <span 
-                style={{
-                  position: 'absolute',
-                  top: -8,
-                  right: -8,
-                  background: 'var(--danger)',
-                  color: 'white',
-                  borderRadius: '50%',
-                  width: 20,
-                  height: 20,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '0.7rem',
-                  fontWeight: 'bold'
-                }}
-              >
-                {archivedCount}
-              </span>
+              <span className="count-pill" title={`${archivedCount} OS arquivadas`}>{archivedCount}</span>
             )}
           </button>
-          
-          <button className="btn" onClick={onNewOS}>+ Nova OS (F2)</button>
+
+          <button type="button" className="btn" onClick={onNewOS}>
+            <Icon name="adicionar" size={18} />
+            Nova OS (F2)
+          </button>
         </div>
       </div>
       
@@ -105,6 +89,7 @@ export const WorkshopPage: React.FC<WorkshopPageProps> = ({
             formatMoney={formatMoney}
             showArchived={showArchived}
             targetMargin={targetMargin}
+            showMargin={showMargin}
         />
       </div>
     </div>

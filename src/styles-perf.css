@@ -3,16 +3,6 @@
    componentes (um bloco por cartão/menu). Mesmo visual, uma única folha.
    ========================================================================== */
 
-/* KanbanCard */
-@keyframes fadeInScale {
-  from { opacity: 0; transform: scale(0.8); }
-  to   { opacity: 1; transform: scale(1);   }
-}
-@keyframes slideUpFade {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0);    }
-}
-
 /* ActionMenu e ContextMenu */
 @keyframes dropdownFadeIn {
   from { opacity: 0; transform: scale(0.92) translateY(-8px); }

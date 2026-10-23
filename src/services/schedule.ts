@@ -11,7 +11,7 @@ export type DeliveryStatus = 'ATRASADA' | 'NO_PRAZO' | 'SEM_PREVISAO';
 const COUNTS_FOR_DELIVERY = new Set<WorkOrder['status']>(['APROVADO', 'EM_SERVICO']);
 
 /** Dia local 'AAAA-MM-DD' da previsão; undefined se ausente ou inválida. */
-const expectedDay = (os: Pick<WorkOrder, 'expectedDate'>): string | undefined => {
+export const expectedDay = (os: Pick<WorkOrder, 'expectedDate'>): string | undefined => {
   if (!os.expectedDate) return undefined;
   const d = parseDateFlexible(os.expectedDate);
   return isNaN(d.getTime()) ? undefined : formatDateOnly(d);

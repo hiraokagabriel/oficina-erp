@@ -1,0 +1,139 @@
+/* ==========================================================================
+   QUADRO DA OFICINA ("Painel de instrumentos"): colunas, cartão, filtros.
+   Só tokens de styles-tokens.css. Sem backdrop-filter, sem gradiente, sem scale no hover,
+   sem animação contínua. Carregado depois de styles-components.css.
+   ========================================================================== */
+
+.kanban-wrap { display: flex; flex-direction: column; height: 100%; position: relative; min-height: 0; }
+
+/* ---------- Quadro e colunas ---------- */
+.kanban-board {
+  display: flex; gap: var(--sp-4); flex: 1; min-height: 0; height: auto;
+  overflow-y: hidden; padding: var(--sp-1) 2px var(--sp-3);
+}
+.kanban-column {
+  --_c: var(--status-arquivado);
+  flex: 1 1 280px; min-width: 260px; max-width: 360px; box-sizing: border-box; height: 100%;
+  display: flex; flex-direction: column; padding: var(--sp-2);
+  background: var(--surface-2); border: 1px solid var(--border); border-top: 4px solid var(--_c);
+  border-radius: var(--radius-lg); backdrop-filter: none; transition: none;
+  scroll-snap-align: start;
+}
+.kanban-column--orcamento { --_c: var(--status-orcamento); }
+.kanban-column--aprovado { --_c: var(--status-aprovado); }
+.kanban-column--em-servico { --_c: var(--status-em-servico); }
+.kanban-column--aguardando-pagamento { --_c: var(--status-aguardando-pagamento); }
+.kanban-column--finalizado { --_c: var(--status-finalizado); }
+.kanban-column--arquivado { --_c: var(--status-arquivado); }
+
+.kanban-header {
+  padding: 0 var(--sp-1);
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
+  margin-bottom: var(--sp-2); text-transform: none; letter-spacing: 0;
+  font-size: var(--fs-base); font-weight: var(--fw-bold); color: var(--text);
+}
+.kanban-header .status-light { font-size: var(--fs-base); font-weight: var(--fw-bold); }
+.kanban-count {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 28px; padding: 0 var(--sp-2);
+  box-sizing: border-box; border-radius: 999px; background: var(--surface-3); border: 1px solid var(--border);
+  font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--text); font-variant-numeric: tabular-nums;
+}
+.kanban-partial { padding: 0 var(--sp-1); margin-bottom: var(--sp-2); font-size: var(--fs-xs); color: var(--text-2); }
+
+.kanban-drop {
+  display: flex; flex-direction: column; gap: var(--sp-3); flex: 1; min-height: 200px;
+  padding: var(--sp-1); border: 2px dashed transparent; border-radius: var(--radius-lg);
+  overflow-y: auto; overflow-x: hidden; scrollbar-gutter: auto;
+  transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease;
+}
+.kanban-drop.is-over { background: var(--accent-soft); border-color: var(--accent); }
+.kanban-empty { margin: var(--sp-2) 0; }
+.kanban-more { display: flex; justify-content: center; align-items: center; min-height: 48px; padding: var(--sp-2) 0; font-size: var(--fs-sm); color: var(--text-2); }
+
+.kanban-scroll-btn {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 50;
+  display: flex; align-items: center; justify-content: center; width: 44px; height: 64px;
+  border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface-1); color: var(--text);
+  box-shadow: var(--elev-2); cursor: pointer; transition: background-color var(--dur-fast) ease;
+}
+.kanban-scroll-btn:hover { background: var(--surface-3); }
+.kanban-scroll-btn--left { left: var(--sp-2); }
+.kanban-scroll-btn--right { right: var(--sp-2); }
+
+/* ---------- Cartão ---------- */
+.kcard-wrap { position: relative; border-radius: var(--radius-lg); }
+.kanban-card.kcard {
+  position: relative; overflow: hidden; display: flex; flex-direction: column; gap: var(--sp-2);
+  box-sizing: border-box; width: 100%; padding: var(--sp-3);
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  box-shadow: var(--elev-1); color: var(--text); cursor: pointer; user-select: none; -webkit-user-select: none;
+  transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease;
+}
+.kanban-card.kcard:hover { background: var(--surface-3); border-color: var(--border-strong); transform: none; }
+.kcard-wrap:focus-visible .kcard { border-color: var(--focus-ring); }
+.kanban-card.kcard.is-dragging { opacity: 0.5; border-color: var(--accent); cursor: grabbing; }
+.kanban-card.kcard.is-overlay { background: var(--surface-1); border-color: var(--accent); box-shadow: var(--elev-3); cursor: grabbing; }
+
+.kcard-top { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.kcard-num { font-family: var(--font-tech); font-variant-numeric: tabular-nums; font-size: var(--fs-sm); font-weight: var(--fw-bold); color: var(--text); white-space: nowrap; }
+.kcard-client {
+  font-size: var(--fs-md); font-weight: var(--fw-bold); line-height: 1.25; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.kcard--arquivado .kcard-client { color: var(--text-2); }
+.kcard-vehicle { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-3); font-size: var(--fs-sm); color: var(--text-2); min-width: 0; }
+.kcard-model { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kcard-km { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Plaqueta: fonte técnica, borda de 1 px e faixa azul fina no topo (estilo Mercosul). Só na placa. */
+.kcard-plate {
+  position: relative; display: inline-block; overflow: hidden; padding: 7px var(--sp-2) 1px;
+  border: 1px solid var(--border-strong); border-radius: 4px; background: var(--surface-2); color: var(--text);
+  font-family: var(--font-tech); font-size: var(--fs-xs); font-weight: var(--fw-bold); letter-spacing: 0.06em; line-height: 1.3; white-space: nowrap;
+}
+.kcard-plate::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: #1D4ED8; }
+
+/* Prazo: texto sempre junto da barra de 4 px no pé do cartão */
+.kcard-due { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--text-2); }
+.kcard-due--ok { color: var(--text-success); }
+.kcard-due--hoje { color: var(--text-warning); }
+.kcard-due--atrasada { color: var(--text-danger); }
+.kcard-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: var(--border); }
+.kcard-bar > span { display: block; height: 100%; background: var(--text-success); }
+.kcard-bar--hoje > span { background: var(--text-warning); }
+.kcard-bar--atrasada > span { background: var(--text-danger); }
+
+.kcard-foot {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3);
+  margin-top: var(--sp-1); padding-top: var(--sp-2); border-top: 1px solid var(--border);
+}
+.kcard-total { font-size: var(--fs-md); font-weight: var(--fw-bold); font-variant-numeric: tabular-nums; color: var(--text); white-space: nowrap; }
+.kcard-tech { display: inline-flex; align-items: center; gap: var(--sp-1); min-width: 0; margin-left: auto; font-size: var(--fs-xs); color: var(--text-2); }
+.kcard-tech-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.kcard-actions { display: flex; gap: var(--sp-2); margin-top: var(--sp-1); min-width: 0; }
+.kcard-actions .btn, .kcard-actions .btn-secondary {
+  min-height: var(--control-h); padding: 0 var(--sp-3); font-size: var(--fs-xs); line-height: 1.15; white-space: normal; text-align: center;
+}
+.kcard-next { flex: 1 1 auto; }
+.kcard-more { flex: none; }
+
+/* ---------- Filtros do quadro ---------- */
+.kanban-filter-bar { margin-bottom: var(--sp-4); }
+.kanban-filter-bar .search-icon { color: var(--text-2); display: flex; }
+.kanban-filter-bar .btn-clear-search {
+  right: 2px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--text-2);
+}
+.kanban-tech-filter { display: flex; align-items: center; gap: var(--sp-2); min-width: 240px; }
+.kanban-tech-filter .form-input { flex: 1; min-width: 160px; }
+.kanban-filter-label { font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--text-2); white-space: nowrap; }
+.filter-stats { font-size: var(--fs-sm); color: var(--text-2); }
+.count-pill {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; padding: 0 6px; box-sizing: border-box;
+  border-radius: 999px; background: var(--surface-3); border: 1px solid var(--border-strong);
+  font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--text); font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Configuração: opção do selo de margem ---------- */
+.config-check { display: flex; align-items: center; gap: var(--sp-3); min-height: var(--control-h); cursor: pointer; font-size: var(--fs-base); font-weight: var(--fw-semibold); color: var(--text); }
+.config-check input { flex: none; width: 22px; height: 22px; accent-color: var(--accent); cursor: pointer; }

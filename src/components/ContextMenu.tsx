@@ -36,6 +36,13 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
     }
   }, [x, y]);
 
+  // Teclado: o foco entra no primeiro item ao abrir e volta ao botão de origem ao fechar.
+  useEffect(() => {
+    const origin = document.activeElement as HTMLElement | null;
+    menuRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    return () => { origin?.focus?.(); };
+  }, []);
+
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -44,8 +51,17 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' || e.key === 'Tab') {
         onClose();
+        return;
+      }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        const buttons = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('button') ?? []);
+        if (buttons.length === 0) return;
+        e.preventDefault();
+        const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
+        const next = e.key === 'ArrowDown' ? (at + 1) % buttons.length : (at - 1 + buttons.length) % buttons.length;
+        buttons[next].focus();
       }
     };
 
@@ -87,12 +103,15 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
   const content = (
     <div
       ref={menuRef}
+      role="menu"
       style={{
         position: 'fixed',
         left: position.x,
         top: position.y,
         minWidth: 240,
         maxWidth: 320,
+        maxHeight: 'calc(100vh - 32px)',
+        overflowY: 'auto',
         background: 'var(--bg-panel)',
         border: '1px solid var(--border)',
         borderRadius: 12,
@@ -131,6 +150,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
         return (
           <button
             key={index}
+            role="menuitem"
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();

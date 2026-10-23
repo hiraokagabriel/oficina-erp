@@ -1,31 +1,25 @@
 import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { WorkOrder, OSStatus, STATUS_LABELS } from '../types';
 import { KanbanCard } from '../components/KanbanCard';
+import type { KanbanCardActions } from './KanbanCardMenu';
 import { DroppableColumn } from './DroppableColumn';
 import { usePagination } from '../hooks/usePagination';
 import { InfiniteScroll } from './InfiniteScroll';
+import { Icon } from './ui/Icon';
+import { STATUS_ICON, statusClass } from '../services/kanbanCardView';
+import { toLocalDay } from '../services/receivables';
 
 interface KanbanBoardProps {
   workOrders: WorkOrder[];
   isLoading: boolean;
   onStatusChange: (orderId: string, newStatus: OSStatus) => void;
-  actions: {
-    onRegress: (id: string) => void;
-    onEdit: (os: WorkOrder) => void;
-    onChecklist: (os: WorkOrder) => void;
-    onPrint: (os: WorkOrder) => void;
-    onPrintClient?: (os: WorkOrder) => void;
-    onPrintShop?: (os: WorkOrder) => void;
-    onDelete: (os: WorkOrder) => void;
-    onAdvance: (id: string) => void;
-    onArchive?: (os: WorkOrder) => void;
-    onRestore?: (os: WorkOrder) => void;
-    onQuickFinish?: (id: string) => void;
-  };
+  actions: KanbanCardActions;
   formatMoney: (val: number) => string;
   showArchived?: boolean;
   /** Meta de margem global (%), das Configurações. */
   targetMargin?: number;
+  /** Mostra o selo de margem nos cartões (opção da Configuração; desligado por padrão). */
+  showMargin?: boolean;
 }
 
 // ...restante dos imports DnD
@@ -48,40 +42,37 @@ import {
 
 const POINTER_OPTIONS = { activationConstraint: { distance: 8 } };
 
-const EmptyState = React.memo(({ status }: { status: OSStatus }) => {
-  const messages: Record<OSStatus, { icon: string; text: string }> = {
-    ORCAMENTO: { icon: '📝', text: 'Sem orçamentos pendentes' },
-    APROVADO: { icon: '✅', text: 'Nada aprovado aguardando' },
-    EM_SERVICO: { icon: '🔧', text: 'Nenhum veículo no elevador' },
-    AGUARDANDO_PAGAMENTO: { icon: '💳', text: 'Nenhuma OS aguardando pagamento' },
-    FINALIZADO: { icon: '🏁', text: 'Nenhuma OS finalizada hoje' },
-    ARQUIVADO: { icon: '📦', text: 'Lixeira vazia. Nenhuma OS arquivada.' },
-  };
+// Enter e Espaço abrem a OS no cartão focado; o arraste por teclado começa com M (e termina com Enter ou Espaço).
+const KEYBOARD_OPTIONS = { keyboardCodes: { start: ['KeyM'], cancel: ['Escape'], end: ['Enter', 'Space'] } };
 
-  const info = messages[status] || { icon: '📂', text: 'Lista vazia' };
+const ACCESSIBILITY = {
+  screenReaderInstructions: {
+    draggable:
+      'Enter abre a OS. Para mover a OS com o teclado, tecle M, use as setas para escolher a coluna e confirme com Enter. Esc cancela.',
+  },
+  announcements: {
+    onDragStart: () => 'OS selecionada para mover.',
+    onDragOver: () => 'OS sobre outra posição.',
+    onDragEnd: () => 'OS solta.',
+    onDragCancel: () => 'Movimento cancelado.',
+  },
+};
 
-  return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '40px 20px',
-        opacity: 0.5,
-        textAlign: 'center',
-        border: '2px dashed var(--border)',
-        borderRadius: '12px',
-        margin: '10px',
-      }}
-    >
-      <div style={{ fontSize: '2rem', marginBottom: '10px' }}>{info.icon}</div>
-      <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 500 }}>
-        {info.text}
-      </div>
-    </div>
-  );
-});
+const EMPTY_TITLES: Record<OSStatus, string> = {
+  ORCAMENTO: 'Nenhuma OS aqui',
+  APROVADO: 'Nenhuma OS aqui',
+  EM_SERVICO: 'Nenhuma OS aqui',
+  AGUARDANDO_PAGAMENTO: 'Nenhuma OS aqui',
+  FINALIZADO: 'Nenhuma OS finalizada',
+  ARQUIVADO: 'Nenhuma OS arquivada',
+};
+
+const EmptyState = React.memo(({ status }: { status: OSStatus }) => (
+  <div className="empty-state kanban-empty">
+    <Icon name={STATUS_ICON[status]} size={40} className="empty-state-icon" />
+    <p className="empty-state-title">{EMPTY_TITLES[status]}</p>
+  </div>
+));
 
 const KanbanColumn = React.memo(
   ({
@@ -90,12 +81,18 @@ const KanbanColumn = React.memo(
     actions,
     formatMoney,
     targetMargin,
+    showMargin,
+    onStatusChange,
+    today,
   }: {
     status: OSStatus;
     workOrders: WorkOrder[];
     actions: KanbanBoardProps['actions'];
     formatMoney: (val: number) => string;
     targetMargin?: number;
+    showMargin?: boolean;
+    onStatusChange: (orderId: string, newStatus: OSStatus) => void;
+    today: string;
   }) => {
     const sortedList = useMemo(() => {
       return workOrders
@@ -107,15 +104,6 @@ const KanbanColumn = React.memo(
       items: sortedList,
       itemsPerPage: 50,
     });
-
-    const colColorMap: Record<OSStatus, string> = {
-      ORCAMENTO: 'var(--status-orcamento)',
-      APROVADO: 'var(--status-aprovado)',
-      EM_SERVICO: 'var(--status-em-servico)',
-      AGUARDANDO_PAGAMENTO: 'var(--status-aguardando-pagamento)',
-      FINALIZADO: 'var(--status-finalizado)',
-      ARQUIVADO: 'var(--status-arquivado)',
-    };
 
     // Mesma identidade enquanto os ids não mudam: array novo a cada render faz o
     // SortableContext re-renderizar todos os cartões (digitar no filtro, por exemplo).
@@ -130,28 +118,15 @@ const KanbanColumn = React.memo(
     const itemIds = itemIdsRef.current;
 
     return (
-      <div
-        className="kanban-column"
-        style={{
-          borderTop: `4px solid ${colColorMap[status]}`,
-          boxShadow: '0 6px 20px rgba(0,0,0,0.45)',
-          flex: '0 0 360px',
-          minWidth: 360,
-          maxWidth: 360,
-        }}
-      >
+      <div className={`kanban-column kanban-column--${statusClass(status)}`}>
         <div className="kanban-header">
-          {STATUS_LABELS[status]}
-          <span
-            style={{
-              background: 'rgba(0,0,0,0.12)',
-              padding: '2px 8px',
-              borderRadius: 10,
-            }}
-          >
-            {loadedItems}/{totalItems}
+          <span className={`status-light status-light--${statusClass(status)}`}>
+            <Icon name={STATUS_ICON[status]} size={16} />
+            {STATUS_LABELS[status]}
           </span>
+          <span className="kanban-count" aria-label={`Total: ${totalItems}`}>{totalItems}</span>
         </div>
+        {hasMore && <div className="kanban-partial">Mostrando {loadedItems} de {totalItems}</div>}
 
         <DroppableColumn id={status}>
           {paginatedItems.length === 0 ? (
@@ -166,6 +141,9 @@ const KanbanColumn = React.memo(
                     formatMoney={formatMoney}
                     status={status}
                     actions={actions}
+                    onStatusChange={onStatusChange}
+                    today={today}
+                    showMargin={showMargin}
                     targetMargin={targetMargin}
                   />
                 ))}
@@ -179,16 +157,18 @@ const KanbanColumn = React.memo(
 );
 
 export const KanbanBoard = React.memo<KanbanBoardProps>(
-  ({ workOrders, isLoading, onStatusChange, actions, formatMoney, showArchived = false, targetMargin }) => {
+  ({ workOrders, isLoading, onStatusChange, actions, formatMoney, showArchived = false, targetMargin, showMargin }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [technicianFilter, setTechnicianFilter] = useState<'ALL' | 'NONE' | string>('ALL');
     const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
+    // Hoje, uma vez por render do quadro (string: os cartões memoizados só re-renderizam na virada do dia).
+    const today = toLocalDay(new Date());
 
     // Opções fora do render (POINTER_OPTIONS): objeto novo a cada render recriava os sensores
     // e re-renderizava todos os cartões via contexto do dnd-kit.
     const sensors = useSensors(
       useSensor(PointerSensor, POINTER_OPTIONS),
-      useSensor(KeyboardSensor)
+      useSensor(KeyboardSensor, KEYBOARD_OPTIONS)
     );
 
     const technicianStats = useMemo(() => {
@@ -299,7 +279,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
       if (!scrollRef.current) return;
       const firstColumn = scrollRef.current.querySelector('.kanban-column') as HTMLDivElement | null;
       if (firstColumn) {
-        setColumnWidth(firstColumn.offsetWidth + 24); // largura + gap
+        setColumnWidth(firstColumn.offsetWidth + 16); // largura + gap
       }
     }, [filteredWorkOrders.length, showArchived]);
 
@@ -340,32 +320,44 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
     }
 
     const showArrows = !showArchived;
+    const columnProps = {
+      workOrders: filteredWorkOrders,
+      actions,
+      formatMoney,
+      targetMargin,
+      showMargin,
+      onStatusChange,
+      today,
+    };
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
+      <div className="kanban-wrap">
         <div className="kanban-filter-bar">
           <div className="search-wrapper">
-            <span className="search-icon">🔍</span>
+            <label htmlFor="kanban-search" className="sr-only">Buscar OS</label>
+            <Icon name="buscar" size={18} className="search-icon" />
             <input
+              id="kanban-search"
               type="text"
               className="form-input search-input"
-              placeholder="Buscar por Cliente, OS, Veículo ou Placa..."
+              placeholder="Buscar cliente, OS, veículo ou placa"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
             {searchTerm && (
-              <button className="btn-clear-search" onClick={() => setSearchTerm('')}>
-                ✕
+              <button type="button" className="btn-clear-search" aria-label="Limpar a busca" title="Limpar a busca" onClick={() => setSearchTerm('')}>
+                <Icon name="fechar" size={18} />
               </button>
             )}
           </div>
 
-          <div style={{ minWidth: 220 }}>
+          <div className="kanban-tech-filter">
+            <label htmlFor="kanban-tech" className="kanban-filter-label">Técnico</label>
             <select
+              id="kanban-tech"
               className="form-input"
               value={technicianFilter}
               onChange={(e) => setTechnicianFilter(e.target.value)}
-              title="Filtrar por técnico"
             >
               <option value="ALL">Todos os técnicos</option>
               <option value="NONE">Sem técnico ({technicianStats.noneCount})</option>
@@ -386,74 +378,25 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
           onDragCancel={handleDragCancel}
+          accessibility={ACCESSIBILITY}
         >
           <div
             ref={scrollRef}
             className="kanban-board"
             style={{
-              display: 'flex',
-              gap: 24,
-              height: '100%',
               overflowX: showArchived ? 'hidden' : 'auto',
-              overflowY: 'hidden',
               scrollSnapType: showArchived ? 'none' : 'x mandatory',
             }}
           >
             {showArchived ? (
-              <KanbanColumn
-                status="ARQUIVADO"
-                targetMargin={targetMargin}
-                workOrders={filteredWorkOrders}
-                actions={actions}
-                formatMoney={formatMoney}
-              />
+              <KanbanColumn status="ARQUIVADO" {...columnProps} />
             ) : (
               <>
-                <div style={{ scrollSnapAlign: 'start' }}>
-                  <KanbanColumn
-                    status="ORCAMENTO"
-                    targetMargin={targetMargin}
-                    workOrders={filteredWorkOrders}
-                    actions={actions}
-                    formatMoney={formatMoney}
-                  />
-                </div>
-                <div style={{ scrollSnapAlign: 'start' }}>
-                  <KanbanColumn
-                    status="APROVADO"
-                    targetMargin={targetMargin}
-                    workOrders={filteredWorkOrders}
-                    actions={actions}
-                    formatMoney={formatMoney}
-                  />
-                </div>
-                <div style={{ scrollSnapAlign: 'start' }}>
-                  <KanbanColumn
-                    status="EM_SERVICO"
-                    targetMargin={targetMargin}
-                    workOrders={filteredWorkOrders}
-                    actions={actions}
-                    formatMoney={formatMoney}
-                  />
-                </div>
-                <div style={{ scrollSnapAlign: 'start' }}>
-                  <KanbanColumn
-                    status="AGUARDANDO_PAGAMENTO"
-                    targetMargin={targetMargin}
-                    workOrders={filteredWorkOrders}
-                    actions={actions}
-                    formatMoney={formatMoney}
-                  />
-                </div>
-                <div style={{ scrollSnapAlign: 'start' }}>
-                  <KanbanColumn
-                    status="FINALIZADO"
-                    targetMargin={targetMargin}
-                    workOrders={filteredWorkOrders}
-                    actions={actions}
-                    formatMoney={formatMoney}
-                  />
-                </div>
+                <KanbanColumn status="ORCAMENTO" {...columnProps} />
+                <KanbanColumn status="APROVADO" {...columnProps} />
+                <KanbanColumn status="EM_SERVICO" {...columnProps} />
+                <KanbanColumn status="AGUARDANDO_PAGAMENTO" {...columnProps} />
+                <KanbanColumn status="FINALIZADO" {...columnProps} />
               </>
             )}
           </div>
@@ -463,58 +406,24 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
               {canScrollLeft && (
                 <button
                   type="button"
+                  className="kanban-scroll-btn kanban-scroll-btn--left"
                   onClick={() => handleStepScroll('left')}
-                  style={{
-                    position: 'absolute',
-                    left: 8,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    width: 36,
-                    height: 64,
-                    borderRadius: 999,
-                    border: '1px solid var(--border-strong)',
-                    background: 'var(--surface-1)',
-                    color: 'var(--text)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    boxShadow: '0 6px 18px rgba(0,0,0,0.6)',
-                    transition: 'opacity 0.2s ease, transform 0.2s ease',
-                    zIndex: 50,
-                  }}
-                  title="Painel anterior"
+                  aria-label="Ver colunas anteriores"
+                  title="Ver colunas anteriores"
                 >
-                  ◀
+                  <Icon name="voltar" size={22} />
                 </button>
               )}
 
               {canScrollRight && (
                 <button
                   type="button"
+                  className="kanban-scroll-btn kanban-scroll-btn--right"
                   onClick={() => handleStepScroll('right')}
-                  style={{
-                    position: 'absolute',
-                    right: 8,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    width: 36,
-                    height: 64,
-                    borderRadius: 999,
-                    border: '1px solid var(--border-strong)',
-                    background: 'var(--surface-1)',
-                    color: 'var(--text)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    boxShadow: '0 6px 18px rgba(0,0,0,0.6)',
-                    transition: 'opacity 0.2s ease, transform 0.2s ease',
-                    zIndex: 50,
-                  }}
-                  title="Próximo painel"
+                  aria-label="Ver próximas colunas"
+                  title="Ver próximas colunas"
                 >
-                  ▶
+                  <Icon name="proximo" size={22} />
                 </button>
               )}
             </>
@@ -534,6 +443,9 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
                   formatMoney={formatMoney}
                   status={activeWorkOrder.status}
                   actions={actions}
+                  onStatusChange={onStatusChange}
+                  today={today}
+                  showMargin={showMargin}
                   isDragging
                   targetMargin={targetMargin}
                 />

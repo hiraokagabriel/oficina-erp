@@ -179,6 +179,8 @@ export interface WorkshopSettings {
   exportPath: string;
   /** Meta de margem global em % inteiro (1..99). Ausente = padrão (70). Ver services/margin.ts. */
   targetMargin?: number;
+  /** Mostra o selo de margem nos cartões do quadro. Ausente = desligado (o cliente no balcão pode ver a tela). */
+  showMarginOnBoard?: boolean;
   /** Segredos: ficam só no localStorage deste PC (ver utils/secrets.ts); nunca vão para o database.json. */
   googleDriveToken?: string;
   googleApiKey?: string;

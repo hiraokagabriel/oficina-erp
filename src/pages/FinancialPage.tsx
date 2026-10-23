@@ -2,12 +2,17 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { LedgerEntry, ChartFluxoPoint, ChartPiePoint, WorkOrder, WorkshopSettings, CatalogItem } from '../types';
 import { MarginReport } from '../components/MarginReport';
+import { Icon } from '../components/ui/Icon';
+import { Money as MoneyUtil } from '../utils/helpers';
 import { summarizeReceivables, formatDueDate, getReceivableLabel, getReceivableStatus } from '../services/receivables';
 
 const COLORS = {
   primary: '#8257e6', secondary: '#00bcd4', success: '#04d361', warning: '#ff9800', 
-  danger: '#e54c4c', grid: 'var(--border)', text: 'var(--text-muted)'
+  danger: '#e54c4c', grid: 'var(--border)', text: 'var(--text-2)'
 };
+const PIE_COLORS = [COLORS.secondary, COLORS.warning];
+// Os dados dos gráficos vêm em reais (float); o texto sai no formato brasileiro via Money.
+const brl = (v: number | string): string => MoneyUtil.format(MoneyUtil.fromFloat(Number(v)));
 
 const ITEMS_PER_PAGE = 20;
 
@@ -75,37 +80,41 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
 
   return (
     <>
+      <div className="fin-page">
       <div className="header-area">
         <h1 className="page-title">Painel Financeiro</h1>
-        <div className="financial-actions" style={{display:'flex', gap:10, alignItems: 'center', flexWrap: 'wrap'}}>
+        <div className="financial-actions fin-actions">
 
-          <div className="toggle-group" style={{display: 'flex', background: 'var(--bg-panel)', borderRadius: 8, padding: 2}}>
-             <button 
-                className={`btn-sm${viewMode === 'MONTH' ? ' is-active' : ''}`}
-                aria-pressed={viewMode === 'MONTH'}
-                onClick={() => setViewMode('MONTH')}
-             >
-                Mensal
-             </button>
-             <button 
-                className={`btn-sm${viewMode === 'YEAR' ? ' is-active' : ''}`}
-                aria-pressed={viewMode === 'YEAR'}
-                onClick={() => setViewMode('YEAR')}
-             >
-                Anual
-             </button>
+          <div className="segmented" role="group" aria-label="Período">
+             <button type="button" aria-pressed={viewMode === 'MONTH'} onClick={() => setViewMode('MONTH')}>Mensal</button>
+             <button type="button" aria-pressed={viewMode === 'YEAR'} onClick={() => setViewMode('YEAR')}>Anual</button>
           </div>
 
-          <input 
-            type="month" 
-            className="form-input" 
-            style={{width: 'auto', fontWeight: 'bold', color: 'var(--primary)', cursor: 'pointer'}}
-            value={selectedMonth}
-            onChange={(e) => onMonthChange(e.target.value)}
-          />
+          {viewMode === 'MONTH' ? (
+            <input
+              type="month"
+              className="form-input fin-period-input"
+              aria-label="Mês"
+              value={selectedMonth}
+              onChange={(e) => onMonthChange(e.target.value)}
+            />
+          ) : (
+            <input
+              type="number"
+              className="form-input fin-period-input fin-year-input"
+              aria-label="Ano"
+              min={2000}
+              max={2100}
+              value={selectedMonth.slice(0, 4)}
+              onChange={(e) => {
+                const y = e.target.value.trim();
+                if (/^\d{4}$/.test(y)) onMonthChange(`${y}-${selectedMonth.slice(5, 7) || '01'}`);
+              }}
+            />
+          )}
 
-          <button className="btn-secondary" onClick={onOpenExport}>📄 Exportar</button>
-          <button className="btn" onClick={onOpenEntry}>+ Lançamento</button>
+          <button className="btn-secondary" onClick={onOpenExport}><Icon name="arquivo" size={18} />Exportar</button>
+          <button className="btn" onClick={onOpenEntry}><Icon name="adicionar" size={18} />Lançamento</button>
         </div>
       </div>
 
@@ -130,82 +139,24 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
         />
       ) : (
       <>
-      {isLoading ? (
-          <div className="stats-row">
-             {[1,2,3,4,5,6].map(i => <div key={i} className="skeleton" style={{height: 120, borderRadius: 16}}/>)}
-          </div>
-      ) : (
-          <div className="stats-row">
-            <div className="stat-card">
-               <div className="stat-label">Resultado ({viewMode === 'YEAR' ? 'Ano' : 'Mês'})</div>
-               <div className={kpiData.saldo >= 0 ? 'stat-value stat-value--success' : 'stat-value'} style={{color: kpiData.saldo >= 0 ? 'var(--success)' : 'var(--danger)'}}>{Money.format(kpiData.saldo)}</div>
-               <div className="stat-trend">{kpiData.saldo >= 0 ? 'Lucro do período' : 'Prejuízo do período'}</div>
-            </div>
-            <div className="stat-card"><div className="stat-label">Receitas</div><div className="stat-value stat-value--success" style={{color: 'var(--success)'}}>{Money.format(kpiData.receitas)}</div></div>
-            <div className="stat-card"><div className="stat-label">Despesas</div><div className="stat-value" style={{color: 'var(--danger)'}}>{Money.format(kpiData.despesas)}</div></div>
-            <div className="stat-card" style={{borderColor: 'var(--border)'}}><div className="stat-label">Ticket Médio</div><div className="stat-value">{Money.format(kpiData.ticketMedio)}</div></div>
-            <div className="stat-card">
-               <div className="stat-label">A receber</div>
-               <div className="stat-value">{Money.format(receivables.totalAReceber)}</div>
-               <div className="stat-trend">{receivables.countAReceber} {receivables.countAReceber === 1 ? 'lançamento' : 'lançamentos'} (total geral)</div>
-            </div>
-            <div className="stat-card">
-               <div className="stat-label">Atrasado</div>
-               <div className="stat-value" style={{color: receivables.countAtrasado > 0 ? 'var(--danger)' : undefined}}>{Money.format(receivables.totalAtrasado)}</div>
-               <div className="stat-trend">{receivables.countAtrasado} {receivables.countAtrasado === 1 ? 'lançamento vencido' : 'lançamentos vencidos'} (total geral)</div>
+      <section className="card fin-receber" aria-labelledby="fin-receber-title">
+          <div className="fin-receber-head">
+            <h2 id="fin-receber-title" className="fin-section-title">A receber</h2>
+            <div className="fin-receber-totals">
+              <div className="fin-receber-total">
+                <span className="fin-receber-label">Total a receber</span>
+                <strong className="fin-receber-value">{Money.format(receivables.totalAReceber + receivables.totalAtrasado)}</strong>
+                <span className="fin-receber-sub">{receivables.countAReceber + receivables.countAtrasado} {receivables.countAReceber + receivables.countAtrasado === 1 ? 'lançamento' : 'lançamentos'} (total geral)</span>
+              </div>
+              <div className={receivables.countAtrasado > 0 ? 'fin-receber-total fin-receber-total--late' : 'fin-receber-total'}>
+                <span className="fin-receber-label">
+                  {receivables.countAtrasado > 0 && <Icon name="alerta" size={16} />}Atrasado
+                </span>
+                <strong className="fin-receber-value">{Money.format(receivables.totalAtrasado)}</strong>
+                <span className="fin-receber-sub">{receivables.countAtrasado} {receivables.countAtrasado === 1 ? 'lançamento vencido' : 'lançamentos vencidos'}</span>
+              </div>
             </div>
           </div>
-      )}
-
-      <div className="dashboard-grid">
-        <div className="chart-card">
-            <div className="chart-header"><div className="chart-title">Faturamento ({viewMode === 'YEAR' ? 'Mensal' : 'Diário'})</div></div>
-            <div style={{flex:1}}>
-                <ResponsiveContainer>
-                    <AreaChart data={chartDataFluxo}>
-                        <defs>
-                            <linearGradient id="c" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.5}/>
-                                <stop offset="95%" stopColor="var(--primary)" stopOpacity={0}/>
-                            </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} vertical={false}/>
-                        <XAxis dataKey="name" stroke={COLORS.text} fontSize={10} tickLine={false} axisLine={false}/>
-                        <YAxis stroke={COLORS.text} fontSize={10} tickLine={false} axisLine={false}/>
-                        <Tooltip 
-                            contentStyle={{
-                                backgroundColor: 'var(--bg-panel)', 
-                                borderColor: 'var(--border)', 
-                                color: 'var(--text-main)',
-                                borderRadius: '12px',
-                                boxShadow: '0 10px 20px rgba(0,0,0,0.2)'
-                            }}
-                            itemStyle={{ color: 'var(--text-main)' }}
-                            labelStyle={{ color: 'var(--text-muted)' }}
-                            formatter={(value: number | string) => [`R$ ${Number(value).toFixed(2)}`, 'Valor']}
-                        />
-                        <Area type="monotone" dataKey="valor" stroke="var(--primary)" fill="url(#c)" strokeWidth={3} activeDot={{r: 6}} />
-                    </AreaChart>
-                </ResponsiveContainer>
-            </div>
-        </div>
-        <div className="chart-card">
-            <div className="chart-header"><div className="chart-title">Receita (Peças x Serviços)</div></div>
-            <div style={{flex:1}}>
-                <ResponsiveContainer>
-                    <PieChart>
-                        <Pie data={chartDataPie} cx="50%" cy="50%" innerRadius={60} outerRadius={80} dataKey="value">
-                            <Cell fill={COLORS.secondary}/><Cell fill={COLORS.warning}/>
-                        </Pie>
-                        <Tooltip contentStyle={{ backgroundColor: 'var(--bg-panel)', borderColor: 'var(--border)', borderRadius: '12px' }} />
-                    </PieChart>
-                </ResponsiveContainer>
-            </div>
-        </div>
-      </div>
-      
-      <div className="card" style={{marginBottom: 24}}>
-          <h3 style={{margin: '0 0 15px'}}>A receber</h3>
           <div className="receivables-scroll">
             <table className="data-table receivables-table">
               <thead><tr><th>Vencimento</th><th>Descrição</th><th>Valor</th><th>Situação</th><th>Ação</th></tr></thead>
@@ -219,14 +170,14 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                       <td>{formatDueDate(e)}</td>
                       <td className="receivable-desc" title={e.description}>{e.description}</td>
                       <td style={{fontWeight:'bold'}}>{Money.format(e.amount)}</td>
-                      <td><span className={`receivable-status ${late ? 'late' : 'open'}`}>{getReceivableLabel(e, today)}</span></td>
+                      <td><span className={`receivable-status ${late ? 'late' : 'open'}`}>{late && <Icon name="alerta" size={14} />}{getReceivableLabel(e, today)}</span></td>
                       <td>
                         <button
-                          className="btn-sm receivable-pay"
+                          className="btn btn-success receivable-pay"
                           onClick={() => onTogglePayment(e.id)}
-                          aria-label={`Marcar como pago: ${e.description}`}
+                          aria-label={`Receber pagamento: ${e.description}`}
                         >
-                          Marcar como pago
+                          <Icon name="receber" size={18} />Receber
                         </button>
                       </td>
                     </tr>
@@ -235,38 +186,102 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
               </tbody>
             </table>
           </div>
+      </section>
+
+      {isLoading ? (
+          <div className="stats-row fin-stats">
+             {[1,2,3,4].map(i => <div key={i} className="skeleton" style={{height: 110, borderRadius: 16}}/>)}
+          </div>
+      ) : (
+          <div className="stats-row fin-stats">
+            <div className="stat-card">
+               <div className="stat-label">Resultado ({viewMode === 'YEAR' ? 'ano' : 'mês'})</div>
+               <div className={kpiData.saldo >= 0 ? 'stat-value stat-value--success' : 'stat-value stat-value--danger'}>{Money.format(kpiData.saldo)}</div>
+               <div className="stat-trend">{kpiData.saldo >= 0 ? 'Lucro do período' : 'Prejuízo do período'}</div>
+            </div>
+            <div className="stat-card"><div className="stat-label">Receitas</div><div className="stat-value stat-value--success">{Money.format(kpiData.receitas)}</div></div>
+            <div className="stat-card"><div className="stat-label">Despesas</div><div className="stat-value stat-value--danger">{Money.format(kpiData.despesas)}</div></div>
+            <div className="stat-card"><div className="stat-label">Ticket médio</div><div className="stat-value">{Money.format(kpiData.ticketMedio)}</div></div>
+          </div>
+      )}
+
+      <div className="dashboard-grid">
+        <div className="chart-card">
+            <div className="chart-header"><div className="chart-title">Faturamento ({viewMode === 'YEAR' ? 'mensal' : 'diário'})</div></div>
+            <div style={{flex:1, minHeight: 0}}>
+                <ResponsiveContainer>
+                    <AreaChart data={chartDataFluxo}>
+                        <defs>
+                            <linearGradient id="c" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.5}/>
+                                <stop offset="95%" stopColor="var(--primary)" stopOpacity={0}/>
+                            </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} vertical={false}/>
+                        <XAxis dataKey="name" stroke={COLORS.text} fontSize={12} tickLine={false} axisLine={false}/>
+                        <YAxis stroke={COLORS.text} fontSize={12} tickLine={false} axisLine={false} width={56}/>
+                        <Tooltip
+                            contentStyle={{
+                                backgroundColor: 'var(--bg-panel)',
+                                borderColor: 'var(--border)',
+                                color: 'var(--text-main)',
+                                borderRadius: '12px',
+                                boxShadow: '0 10px 20px rgba(0,0,0,0.2)'
+                            }}
+                            itemStyle={{ color: 'var(--text-main)' }}
+                            labelStyle={{ color: 'var(--text-muted)' }}
+                            formatter={(value: number | string) => [brl(value), 'Valor']}
+                        />
+                        <Area type="monotone" dataKey="valor" stroke="var(--primary)" fill="url(#c)" strokeWidth={3} activeDot={{r: 6}} />
+                    </AreaChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
+        <div className="chart-card">
+            <div className="chart-header"><div className="chart-title">Receita (peças x serviços)</div></div>
+            {chartDataPie.length === 1 && chartDataPie[0].name === '-' ? (
+              <p className="fin-chart-empty">Sem receita no período.</p>
+            ) : (
+              <>
+                <div style={{flex:1, minHeight: 0}}>
+                    <ResponsiveContainer>
+                        <PieChart>
+                            <Pie data={chartDataPie} cx="50%" cy="50%" innerRadius={50} outerRadius={72} dataKey="value" isAnimationActive={false}>
+                                {chartDataPie.map((p, i) => <Cell key={p.name} fill={PIE_COLORS[i % PIE_COLORS.length]}/>)}
+                            </Pie>
+                            <Tooltip
+                              contentStyle={{ backgroundColor: 'var(--bg-panel)', borderColor: 'var(--border)', borderRadius: '12px' }}
+                              itemStyle={{ color: 'var(--text-main)' }}
+                              formatter={(value: number | string, name: string) => [brl(value), name]}
+                            />
+                        </PieChart>
+                    </ResponsiveContainer>
+                </div>
+                <ul className="fin-legend" aria-label="Legenda do gráfico">
+                  {chartDataPie.map((p, i) => (
+                    <li key={p.name}>
+                      <span className="fin-legend-swatch" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} aria-hidden="true" />
+                      <span className="fin-legend-name">{p.name}</span>
+                      <span className="fin-legend-value">{brl(p.value)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+        </div>
       </div>
 
       <div className="card">
-          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 15}}>
-              <h3 style={{margin:0}}>Lançamentos</h3>
-              
-              <div className="toggle-group" style={{display: 'flex', gap: 5}}>
-                  <button 
-                    className="btn-sm" 
-                    style={{opacity: filterType === 'ALL' ? 1 : 0.5, border: filterType === 'ALL' ? '1px solid var(--primary)' : '1px solid transparent'}}
-                    onClick={() => setFilterType('ALL')}
-                  >
-                    Todos
-                  </button>
-                  <button 
-                    className="btn-sm" 
-                    style={{opacity: filterType === 'CREDIT' ? 1 : 0.5, color: 'var(--success)', border: filterType === 'CREDIT' ? '1px solid var(--success)' : '1px solid transparent'}}
-                    onClick={() => setFilterType('CREDIT')}
-                  >
-                    Receitas
-                  </button>
-                  <button 
-                    className="btn-sm" 
-                    style={{opacity: filterType === 'DEBIT' ? 1 : 0.5, color: 'var(--danger)', border: filterType === 'DEBIT' ? '1px solid var(--danger)' : '1px solid transparent'}}
-                    onClick={() => setFilterType('DEBIT')}
-                  >
-                    Despesas
-                  </button>
+          <div className="fin-ledger-head">
+              <h2 className="fin-section-title">Lançamentos</h2>
+              <div className="segmented" role="group" aria-label="Filtrar por tipo">
+                  <button type="button" aria-pressed={filterType === 'ALL'} onClick={() => setFilterType('ALL')}>Todos</button>
+                  <button type="button" aria-pressed={filterType === 'CREDIT'} onClick={() => setFilterType('CREDIT')}>Receitas</button>
+                  <button type="button" aria-pressed={filterType === 'DEBIT'} onClick={() => setFilterType('DEBIT')}>Despesas</button>
               </div>
           </div>
 
-          <table className="data-table">
+          <table className="data-table fin-ledger-table">
             <thead><tr><th>Descrição</th><th>Valor</th><th>Data</th><th>Ações</th></tr></thead>
             <tbody>
                 {paginatedLedger.length === 0 ? (
@@ -277,7 +292,7 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                     paginatedLedger.map(e => {
                         let displayDate: string;
                         let isPaymentDate = false;
-                        
+
                         if (e.type === 'CREDIT') {
                             if (e.paymentDate) {
                                 displayDate = new Date(e.paymentDate).toLocaleDateString('pt-BR');
@@ -289,60 +304,37 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                         } else {
                             displayDate = new Date(e.effectiveDate).toLocaleDateString('pt-BR');
                         }
-                        
+
                         return (
                             <tr key={e.id}>
                                 <td>{e.description}</td>
-                                <td style={{fontWeight:'bold', color: e.type === 'DEBIT' ? 'var(--danger)' : 'var(--success)'}}>
+                                <td className={e.type === 'DEBIT' ? 'fin-amount fin-amount--debit' : 'fin-amount fin-amount--credit'}>
                                     {e.type === 'DEBIT' ? '- ' : '+ '}{Money.format(e.amount)}
                                 </td>
-                                <td style={{fontSize: '0.8rem', color: 'var(--text-muted)'}}>
+                                <td className="fin-date">
                                     {displayDate}
                                     {e.type === 'CREDIT' && isPaymentDate && (
-                                        <span style={{
-                                            marginLeft: '6px',
-                                            fontSize: '0.7rem',
-                                            padding: '2px 6px',
-                                            background: 'rgba(4, 211, 97, 0.15)',
-                                            color: 'var(--success)',
-                                            borderRadius: '4px',
-                                            fontWeight: 600
-                                        }}>
-                                            💵 Pago
-                                        </span>
+                                        <span className="fin-badge fin-badge--paid"><Icon name="check" size={14} />Pago</span>
                                     )}
                                     {e.type === 'CREDIT' && !isPaymentDate && (
-                                        <span style={{
-                                            marginLeft: '6px',
-                                            fontSize: '0.7rem',
-                                            padding: '2px 6px',
-                                            background: 'rgba(255, 152, 0, 0.15)',
-                                            color: 'var(--warning)',
-                                            borderRadius: '4px',
-                                            fontWeight: 600
-                                        }}>
-                                            ⏳ Pendente
-                                        </span>
+                                        <span className="fin-badge fin-badge--pending"><Icon name="relogio" size={14} />Pendente</span>
                                     )}
                                 </td>
                                 <td>
-                                    {/* 🆕 BOTÃO DE CHECK DE PAGAMENTO */}
+                                    <div className="fin-row-actions">
                                     {e.type === 'CREDIT' && (
-                                        <button 
-                                            className="btn-sm" 
+                                        <button
+                                            className={isPaymentDate ? 'btn-sm fin-pay fin-pay--paid' : 'btn-sm fin-pay'}
                                             onClick={() => onTogglePayment(e.id)}
-                                            style={{
-                                                background: isPaymentDate ? 'rgba(4, 211, 97, 0.2)' : 'rgba(255, 152, 0, 0.2)',
-                                                color: isPaymentDate ? 'var(--success)' : 'var(--warning)',
-                                                border: 'none',
-                                                marginRight: '4px'
-                                            }}
+                                            aria-pressed={isPaymentDate}
+                                            aria-label={isPaymentDate ? `Pago, clique para desfazer: ${e.description}` : `Marcar como pago: ${e.description}`}
                                         >
-                                            {isPaymentDate ? '✅' : '⏳'}
+                                            <Icon name="check" size={16} />{isPaymentDate ? 'Pago' : 'Marcar como pago'}
                                         </button>
                                     )}
-                                    <button className="btn-sm" onClick={() => onEditEntry(e.id)}>Edit</button> 
-                                    <button className="btn-sm" onClick={() => onDeleteEntry(e)}>Del</button>
+                                    <button className="btn-sm" onClick={() => onEditEntry(e.id)} aria-label={`Editar: ${e.description}`}><Icon name="editar" size={16} />Editar</button>
+                                    <button className="btn-sm fin-del" onClick={() => onDeleteEntry(e)} aria-label={`Excluir: ${e.description}`}><Icon name="excluir" size={16} />Excluir</button>
+                                    </div>
                                 </td>
                             </tr>
                         );
@@ -353,8 +345,8 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
 
           {totalPages > 1 && (
              <div style={{display:'flex', justifyContent:'center', alignItems:'center', gap: 15, marginTop: 20}}>
-                 <button 
-                    className="btn-secondary" 
+                 <button
+                    className="btn-secondary"
                     disabled={currentPage === 1}
                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                  >
@@ -363,8 +355,8 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                  <span style={{color: 'var(--text-muted)', fontSize: '0.9rem'}}>
                     Página {currentPage} de {totalPages}
                  </span>
-                 <button 
-                    className="btn-secondary" 
+                 <button
+                    className="btn-secondary"
                     disabled={currentPage === totalPages}
                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                  >
@@ -375,6 +367,7 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
       </div>
       </>
       )}
+      </div>
       </div>
     </>
   );

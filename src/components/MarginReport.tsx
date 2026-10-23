@@ -110,31 +110,31 @@ export const MarginReport: React.FC<MarginReportProps> = ({
         Itens sem custo ficam fora do cálculo.
       </p>
 
-      <div className="stats-row mr-stats">
+      <div className="stats-row mr-stats fin-stats">
+        <div className="stat-card">
+          <div className="stat-label">OS abaixo da meta</div>
+          <div className="stat-value">{report.osBelowTarget.length}</div>
+          <div className="stat-trend">de {report.scopeCount} OS no período</div>
+        </div>
         <div className="stat-card">
           <div className="stat-label">Margem geral</div>
           <div className="stat-value">{totals.marginPct === null ? '—' : `${formatPct(totals.marginPct)}%`}</div>
           <div className="stat-trend"><span className={levelClass(level)}>{levelText(level)}</span></div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">Lucro bruto</div>
+          <div className="stat-label">Lucro</div>
           <div className="stat-value">{Money.format(totals.profit)}</div>
           <div className="stat-trend">Só itens com custo</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Receita no período</div>
           <div className="stat-value">{Money.format(totals.revenue)}</div>
-          <div className="stat-trend">{report.scopeCount} OS no escopo</div>
+          <div className="stat-trend">{report.scopeCount} OS no período</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">Cobertura de custo</div>
+          <div className="stat-label">Itens com custo informado</div>
           <div className="stat-value">{formatPct(totals.coveragePct)}%</div>
           <div className="stat-trend">{formatPct(totals.coveragePct)}% da receita tem custo informado</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">OS abaixo da meta</div>
-          <div className="stat-value">{report.osBelowTarget.length}</div>
-          <div className="stat-trend">de {report.scopeCount}</div>
         </div>
       </div>
 

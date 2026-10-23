@@ -59,3 +59,78 @@ button.debtor-row:focus-visible { outline: 2px solid var(--primary); outline-off
 
 /* Tema pastel: o --success (#81b29a) dá ~2,4:1 como texto; use um verde mais escuro só nos KPIs de valor positivo (>= 4,5:1). */
 [data-theme="pastel"] .stat-card .stat-value.stat-value--success { color: #2f6b4d !important; }
+
+/* ==========================================================================
+   FINANCEIRO (rodada 8): A receber no topo, indicadores sem aparência de botão,
+   gráficos com legenda, tabela com botões de texto. Só tokens; sem gradiente nem hover que sobe.
+   ========================================================================== */
+.fin-page .fin-actions { display: flex; gap: var(--sp-3); align-items: center; flex-wrap: wrap; }
+.fin-page .fin-period-input { width: auto; min-height: var(--control-h); font-weight: var(--fw-bold); }
+.fin-page .fin-year-input { width: 110px; }
+.fin-page .fin-section-title { margin: 0; font-size: var(--fs-lg); }
+
+/* A receber */
+.fin-receber { margin-bottom: var(--sp-6); }
+.fin-receber-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: var(--sp-4); margin-bottom: var(--sp-4); }
+.fin-receber-totals { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+.fin-receber-total { display: flex; flex-direction: column; gap: 2px; min-width: 190px; padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-2); }
+.fin-receber-total--late { border-color: var(--text-danger); border-left-width: 5px; }
+.fin-receber-label { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--text-2); }
+.fin-receber-total--late .fin-receber-label, .fin-receber-total--late .fin-receber-value { color: var(--text-danger); }
+.fin-receber-value { font-size: var(--fs-xl); font-weight: var(--fw-bold); line-height: 1.15; font-variant-numeric: tabular-nums; color: var(--text); }
+.fin-receber-sub { font-size: var(--fs-xs); color: var(--text-2); }
+.fin-receber .receivable-status { display: inline-flex; align-items: center; gap: var(--sp-1); }
+.fin-receber .receivable-status.late { color: var(--text-danger); }
+.fin-receber .receivable-pay { min-height: var(--control-h-min); padding: 0 var(--sp-4); font-size: var(--fs-xs); }
+
+/* Indicadores: informativos, não parecem clicáveis */
+.fin-page .fin-stats .stat-card { background: var(--surface-1); box-shadow: none; transform: none; transition: none;
+  border: 1px solid var(--border); padding: var(--sp-4) var(--sp-6); }
+.fin-page .fin-stats .stat-card::before { display: none; }
+.fin-page .fin-stats .stat-card:hover { transform: none; border-color: var(--border); box-shadow: none; }
+.fin-page .fin-stats .stat-label { font-size: var(--fs-xs); letter-spacing: 0.02em; text-transform: none; margin-bottom: var(--sp-1);
+  color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fin-page .fin-stats .stat-value { font-size: var(--fs-xl); line-height: 1.2; font-variant-numeric: tabular-nums; color: var(--text); margin-bottom: 0; }
+.fin-page .fin-stats .stat-value.stat-value--success { color: var(--text-success) !important; }
+.fin-page .fin-stats .stat-value.stat-value--danger { color: var(--text-danger); }
+.fin-page .fin-stats .stat-trend { opacity: 1; color: var(--text-2); font-size: var(--fs-xs); }
+.fin-page .stats-row { gap: var(--sp-4); margin-bottom: var(--sp-6); }
+
+/* Gráficos */
+.fin-page .chart-card { box-shadow: none; }
+.fin-chart-empty { margin: auto; color: var(--text-2); }
+.fin-legend { list-style: none; margin: var(--sp-2) 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); justify-content: center; }
+.fin-legend li { display: inline-flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); color: var(--text); }
+.fin-legend-swatch { width: 14px; height: 14px; border-radius: 3px; flex: none; }
+.fin-legend-value { color: var(--text-2); font-variant-numeric: tabular-nums; }
+
+/* Lançamentos */
+.fin-ledger-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-4); }
+.fin-amount { font-weight: var(--fw-bold); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fin-amount--credit { color: var(--text-success); }
+.fin-amount--debit { color: var(--text-danger); }
+.fin-date { font-size: var(--fs-xs); color: var(--text-2); }
+.fin-badge { display: inline-flex; align-items: center; gap: var(--sp-1); margin-left: var(--sp-2); padding: 2px var(--sp-2);
+  border-radius: var(--radius-sm); font-size: var(--fs-xs); font-weight: var(--fw-semibold); }
+.fin-badge--paid { color: var(--text-success); background: color-mix(in srgb, var(--success) 16%, transparent); }
+.fin-badge--pending { color: var(--text-warning); background: color-mix(in srgb, var(--warning) 16%, transparent); }
+.fin-row-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.fin-pay--paid { color: var(--text-success); border-color: var(--text-success); }
+.fin-del { color: var(--text-danger); }
+.fin-page .btn-sm:focus-visible, .fin-page .segmented > button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .fin-page * { transition: none !important; animation: none !important; } }
+
+/* ChoiceModal (finalizar OS: parcelar ou pagamento único) */
+.choice-overlay { display: flex; align-items: center; justify-content: center; }
+.choice-modal { position: relative; width: 90%; max-width: 500px; }
+.choice-close { position: absolute; top: var(--sp-3); right: var(--sp-3); min-height: var(--control-h-min); padding: 0 var(--sp-3); font-size: var(--fs-xs); }
+.choice-head { display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); margin: var(--sp-6) 0; text-align: center; }
+.choice-icon { display: inline-flex; width: 64px; height: 64px; align-items: center; justify-content: center;
+  border-radius: 50%; background: var(--accent-soft); color: var(--accent-text); }
+.choice-title { margin: 0; font-size: var(--fs-xl); color: var(--text); }
+.choice-message { white-space: pre-line; font-size: var(--fs-base); line-height: 1.6; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.choice-actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); }
+.choice-btn { flex-direction: column; min-height: 88px; padding: var(--sp-4); white-space: normal; text-align: center; }
+@media (max-width: 480px) { .choice-actions { grid-template-columns: 1fr; } }
+.fin-receber .receivables-scroll { max-height: 360px; overflow-y: auto; }

@@ -39,14 +39,22 @@ describe('getRemainingAmount', () => {
 describe('finalizeOSSingle com adiantamento', () => {
   it('receita à vista = total - adiantamento', () => {
     const r = finalizeOSSingle(os({ total: 10000, advanceAmount: 3000, advanceEntryId: 'a1' }), { now: NOW, newId: () => 'n' });
-    expect(r.entry.amount).toBe(7000);
+    expect(r.entry!.amount).toBe(7000);
   });
   it('OS legada com adiantamento sem advanceEntryId usa o total cheio', () => {
-    expect(finalizeOSSingle(os({ total: 10000, advanceAmount: 3000 }), { now: NOW, newId: () => 'n' }).entry.amount).toBe(10000);
+    expect(finalizeOSSingle(os({ total: 10000, advanceAmount: 3000 }), { now: NOW, newId: () => 'n' }).entry!.amount).toBe(10000);
   });
-  it('restante 0: mantém o comportamento atual (cria o lançamento de 0)', () => {
+  // CORRIGIDO (adiantamentos v4): restante 0 não cria lançamento de R$ 0,00.
+  it('restante 0: fecha a OS sem criar lançamento zerado', () => {
     const r = finalizeOSSingle(os({ total: 3000, advanceAmount: 3000, advanceEntryId: 'a1' }), { now: NOW, newId: () => 'n' });
-    expect(r.entry.amount).toBe(0);
+    expect(r.entry).toBeUndefined();
+    expect(r.os).toMatchObject({ status: 'FINALIZADO', financialId: undefined, paymentDate: NOW });
+  });
+  it('restante 0 com advances (v4): sem lançamento; restante > 0: lançamento do restante', () => {
+    const adv = (amount: number) => [{ id: 'a', date: '2026-03-01T15:00:00.000Z', amount, entryId: 'e' }];
+    expect(finalizeOSSingle(os({ total: 3000, advances: adv(3000) }), { now: NOW }).entry).toBeUndefined();
+    expect(finalizeOSSingle(os({ total: 3000, advances: adv(5000) }), { now: NOW }).entry).toBeUndefined();
+    expect(finalizeOSSingle(os({ total: 3000, advances: adv(1000) }), { now: NOW, newId: () => 'n' }).entry!.amount).toBe(2000);
   });
 });
 

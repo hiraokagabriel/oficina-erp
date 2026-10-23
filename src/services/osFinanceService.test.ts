@@ -280,11 +280,11 @@ describe('finalizeOSSingle', () => {
   it('cria receita à vista já paga e finaliza a OS', () => {
     const o = os({ createdAt: '2026-01-10T12:00:00.000Z', total: 25000 });
     const r = finalizeOSSingle(o, { now: NOW, newId: () => 'novo' });
-    expect(r.entry).toMatchObject({
+    expect(r.entry!).toMatchObject({
       id: 'novo', description: 'Receita OS #1 - Fulano Teste', amount: 25000, type: 'CREDIT',
       effectiveDate: '2026-01-10T12:00:00.000Z', createdAt: NOW, paymentDate: NOW,
     });
-    expect(r.entry.groupId).toBeUndefined();
+    expect(r.entry!.groupId).toBeUndefined();
     expect(r.os).toMatchObject({ status: 'FINALIZADO', financialId: 'novo', paymentDate: NOW });
     expect(o.status).toBe('EM_SERVICO');
   });
@@ -293,29 +293,31 @@ describe('finalizeOSSingle', () => {
   // não a data do pagamento. OS aberta em janeiro e paga em março cai em janeiro nos relatórios.
   it('usa createdAt da OS como effectiveDate, não a data de pagamento', () => {
     const r = finalizeOSSingle(os({ createdAt: '2026-01-10T12:00:00.000Z' }), { now: NOW, newId: () => 'n' });
-    expect(r.entry.effectiveDate).toBe('2026-01-10T12:00:00.000Z');
-    expect(r.entry.effectiveDate).not.toBe(r.entry.paymentDate);
+    expect(r.entry!.effectiveDate).toBe('2026-01-10T12:00:00.000Z');
+    expect(r.entry!.effectiveDate).not.toBe(r.entry!.paymentDate);
   });
 
   // COMPORTAMENTO ATUAL (suspeito): a OS não guarda paymentMethod 'SINGLE' ao finalizar à vista
-  // (o tipo existe, mas esse fluxo não o preenche) e valor total 0 gera receita de 0.
-  it('não define paymentMethod; total 0 gera lançamento de 0', () => {
+  // (o tipo existe, mas esse fluxo não o preenche).
+  // CORRIGIDO (adiantamentos v4): valor 0 (total 0 ou adiantamento cobrindo tudo) não cria lançamento de R$ 0,00.
+  it('não define paymentMethod; total 0 fecha a OS sem lançamento', () => {
     const r = finalizeOSSingle(os({ total: 0 }), { now: NOW, newId: () => 'n' });
     expect(r.os.paymentMethod).toBeUndefined();
-    expect(r.entry.amount).toBe(0);
+    expect(r.entry).toBeUndefined();
+    expect(r.os).toMatchObject({ status: 'FINALIZADO', financialId: undefined, paymentDate: NOW });
   });
 
   it('equivale ao createEntry original (mesmos campos)', async () => {
     const { createEntry } = await import('../utils/helpers');
     const o = os();
-    const a = finalizeOSSingle(o, { now: new Date().toISOString(), newId: () => 'x' }).entry;
+    const a = finalizeOSSingle(o, { now: new Date().toISOString(), newId: () => 'x' }).entry!;
     const b = createEntry(`Receita OS #${o.osNumber} - ${o.clientName}`, o.total, 'CREDIT', o.createdAt, undefined, a.paymentDate);
     expect({ ...a, id: '', createdAt: '' }).toEqual({ ...b, id: '', createdAt: '' });
   });
 
   it('sem injeção gera id e now automáticos', () => {
     const r = finalizeOSSingle(os());
-    expect(r.entry.id).toBeTruthy();
-    expect(r.os.financialId).toBe(r.entry.id);
+    expect(r.entry!.id).toBeTruthy();
+    expect(r.os.financialId).toBe(r.entry!.id);
   });
 });

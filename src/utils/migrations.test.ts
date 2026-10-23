@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { CURRENT_SCHEMA_VERSION, migrate, v1ToV2, v2ToV3, countUnresolvedLinks } from './migrations';
+import { CURRENT_SCHEMA_VERSION, migrate, v1ToV2, v2ToV3, v3ToV4, countUnresolvedLinks } from './migrations';
 import { diffLocalChanges } from './conflictDiff';
 import type { DatabaseSchema } from '../types';
 
 // Fixtures sintéticas (nada do banco real).
 // Bancos antigos não têm `appointments` (schema v3): o literal é tipado sem ele e convertido aqui.
-const legacy = (d: Omit<DatabaseSchema, 'appointments'>): DatabaseSchema => d as DatabaseSchema;
+const legacy = (d: Omit<DatabaseSchema, 'appointments' | 'auditLog'>): DatabaseSchema => d as DatabaseSchema;
 
 const v0 = (): DatabaseSchema => legacy({
   ledger: [
@@ -76,15 +76,16 @@ describe('migrate v0 -> v3', () => {
     const r = migrate(vazio);
     expect(r.changed).toBe(true);
     expect(r.db.ledger).toEqual([]);
-    expect(r.db.meta?.schemaVersion).toBe(3);
+    expect(r.db.meta?.schemaVersion).toBe(4);
     expect(r.db.appointments).toEqual([]);
+    expect(r.db.auditLog).toEqual([]);
   });
 
   it('preserva o meta existente (revision/history) ao subir a versão', () => {
     const input = v0();
     input.meta = { schemaVersion: 0, revision: 'r1', history: ['r0'], savedAt: 't', savedBy: 'PC' };
     const { db } = migrate(input);
-    expect(db.meta).toEqual({ schemaVersion: 3, revision: 'r1', history: ['r0'], savedAt: 't', savedBy: 'PC' });
+    expect(db.meta).toEqual({ schemaVersion: 4, revision: 'r1', history: ['r0'], savedAt: 't', savedBy: 'PC' });
   });
 });
 
@@ -321,17 +322,18 @@ describe('countUnresolvedLinks', () => {
   });
 });
 
-describe('pipeline completo (schema 3)', () => {
+describe('pipeline completo (schema 4)', () => {
   const meta = (v: number) => ({ schemaVersion: v, revision: 'r', history: [], savedAt: '', savedBy: '' });
 
-  it('CURRENT_SCHEMA_VERSION é 3', () => {
-    expect(CURRENT_SCHEMA_VERSION).toBe(3);
+  it('CURRENT_SCHEMA_VERSION é 4', () => {
+    expect(CURRENT_SCHEMA_VERSION).toBe(4);
   });
-  it('v0 -> v3 aplica v0ToV1, v1ToV2 e v2ToV3', () => {
+  it('v0 -> v4 aplica v0ToV1, v1ToV2, v2ToV3 e v3ToV4', () => {
     const r = migrate(v0());
     expect(r.from).toBe(0);
     expect(r.changed).toBe(true);
-    expect(r.db.meta?.schemaVersion).toBe(3);
+    expect(r.db.meta?.schemaVersion).toBe(4);
+    expect(r.db.auditLog).toEqual([]);
     expect(r.db.appointments).toEqual([]);
     expect(r.db.workOrders[0].paymentDate).toBe('2025-01-10'); // v0ToV1
     expect(r.db.catalogTechnicians.map(t => t.name)).toEqual(['Ana', 'Beto']); // v0ToV1
@@ -346,11 +348,12 @@ describe('pipeline completo (schema 3)', () => {
     expect(os0(r.db).clientId).toBe('C1');
     expect(r.db.clients[0].vehicles[0].id).toBe('C1:v0');
   });
-  it('v1 -> v3 liga ids, acrescenta appointments e sobe a versão', () => {
+  it('v1 -> v4 liga ids, acrescenta appointments e sobe a versão', () => {
     const r = migrate({ ...dbV1(), meta: meta(1) });
     expect(r.from).toBe(1);
     expect(r.changed).toBe(true);
-    expect(r.db.meta?.schemaVersion).toBe(3);
+    expect(r.db.meta?.schemaVersion).toBe(4);
+    expect(r.db.auditLog).toEqual([]);
     expect(r.db.appointments).toEqual([]);
     expect(os0(r.db).clientId).toBe('C1');
     expect(os0(r.db).vehicleId).toBe('C1:v0');
@@ -358,32 +361,44 @@ describe('pipeline completo (schema 3)', () => {
     expect(r.db.ledger).toEqual(dbV1().ledger);
     expect(os0(r.db).clientName).toBe('Maria');
   });
-  it('v2 -> v3: só acrescenta appointments e sobe a versão; o resto fica idêntico', () => {
+  it('v2 -> v4: só acrescenta auditLog e sobe a versão; o resto fica idêntico', () => {
     const v2 = { ...v1ToV2(dbV1()), meta: meta(2) };
     const antes = JSON.stringify(v2);
     const r = migrate(v2);
     expect(r.changed).toBe(true);
     expect(r.from).toBe(2);
-    expect(r.db.meta).toEqual(meta(3));
+    expect(r.db.meta).toEqual(meta(4));
     expect(r.db.appointments).toEqual([]);
-    const { appointments: _a, meta: _m, ...resto } = r.db;
+    expect(r.db.auditLog).toEqual([]);
+    const { appointments: _a, auditLog: _l, meta: _m, ...resto } = r.db;
     const { meta: _m2, ...restoAntes } = v2;
     expect(resto).toEqual(restoAntes);
     expect(JSON.stringify(v2)).toBe(antes); // pura
   });
-  it('v3 volta inalterado', () => {
+  it('v3 -> v4 só acrescenta auditLog e sobe a versão', () => {
     const v3 = { ...v2ToV3(v1ToV2(dbV1())), meta: meta(3) };
     const r = migrate(v3);
-    expect(r.changed).toBe(false);
+    expect(r.changed).toBe(true);
     expect(r.from).toBe(3);
-    expect(r.db).toBe(v3);
+    expect(r.db.meta).toEqual(meta(4));
+    expect(r.db.auditLog).toEqual([]);
+    const { auditLog: _l, meta: _m, ...resto } = r.db;
+    const { meta: _m3, ...restoAntes } = v3;
+    expect(resto).toEqual(restoAntes);
   });
-  it('versão futura (4) fica intacta', () => {
-    const fut = { ...dbV1(), meta: meta(4) };
+  it('v4 volta inalterado', () => {
+    const v4 = { ...v3ToV4(v2ToV3(v1ToV2(dbV1()))), meta: meta(4) };
+    const r = migrate(v4);
+    expect(r.changed).toBe(false);
+    expect(r.from).toBe(4);
+    expect(r.db).toBe(v4);
+  });
+  it('versão futura (5) fica intacta', () => {
+    const fut = { ...dbV1(), meta: meta(5) };
     const antes = JSON.stringify(fut);
     const r = migrate(fut);
     expect(r.changed).toBe(false);
-    expect(r.from).toBe(4);
+    expect(r.from).toBe(5);
     expect(r.db).toBe(fut);
     expect(JSON.stringify(r.db)).toBe(antes);
     expect(os0(r.db).clientId).toBeUndefined();
@@ -428,5 +443,112 @@ describe('v2ToV3', () => {
     expect(JSON.stringify(input)).toBe(antes);
     const { appointments: _a, ...resto } = r;
     expect(resto).toEqual(input);
+  });
+});
+
+
+// ---- v3 -> v4: adiantamentos com data (fixtures sintéticas) ----
+describe('v3ToV4', () => {
+  const noon = (y: number, m: number, d: number) => new Date(y, m - 1, d, 12).toISOString();
+  const v3db = (over: Record<string, unknown> = {}): DatabaseSchema => ({
+    ...v2ToV3(v1ToV2(dbV1())),
+    meta: { schemaVersion: 3, revision: 'r', history: [], savedAt: '', savedBy: '' },
+    ...over,
+  } as DatabaseSchema);
+  const adv = (id: string, effectiveDate: string) =>
+    ({ id, description: 'Adiantamento OS #1 - Maria', amount: 3000, type: 'CREDIT' as const, effectiveDate, createdAt: effectiveDate, paymentDate: effectiveDate });
+  const osAdv = (over: Record<string, unknown> = {}) =>
+    mkOS({ id: 'WA', total: 10000, advanceAmount: 3000, advanceEntryId: 'EA', createdAt: '2026-01-05T15:00:00.000Z', ...over });
+  const getOS = (db: DatabaseSchema, id: string) => db.workOrders.find(o => o.id === id)!;
+  const remaining = (os: DatabaseSchema['workOrders'][number]) =>
+    os.advances ? Math.max(os.total - os.advances.reduce((a, x) => a + x.amount, 0), 0)
+      : os.advanceEntryId ? Math.max(os.total - (os.advanceAmount || 0), 0) : os.total;
+
+  it('OS com lançamento ligado: advances com a data do lançamento, sem os campos antigos', () => {
+    const db = v3db({ workOrders: [osAdv()], ledger: [adv('EA', noon(2026, 2, 10))] });
+    const out = v3ToV4(db);
+    const o = getOS(out, 'WA');
+    expect(o.advances).toEqual([{ id: 'WA:a0', amount: 3000, entryId: 'EA', date: noon(2026, 2, 10) }]);
+    expect('advanceAmount' in o).toBe(false);
+    expect('advanceEntryId' in o).toBe(false);
+    expect(out.auditLog).toEqual([]);
+  });
+  it('data só-dia do lançamento vira meio-dia local do mesmo dia', () => {
+    const db = v3db({ workOrders: [osAdv()], ledger: [adv('EA', '2026-02-10')] });
+    expect(getOS(v3ToV4(db), 'WA').advances![0].date).toBe(noon(2026, 2, 10));
+  });
+  it('advanceEntryId para lançamento inexistente: usa o dia do createdAt da OS', () => {
+    const out = v3ToV4(v3db({ workOrders: [osAdv({ createdAt: noon(2026, 1, 5) })], ledger: [] }));
+    expect(getOS(out, 'WA').advances).toEqual([{ id: 'WA:a0', amount: 3000, entryId: 'EA', date: noon(2026, 1, 5) }]);
+  });
+  it('só advanceAmount antigo (sem advanceEntryId): fica como está', () => {
+    const o = mkOS({ id: 'WL', total: 10000, advanceAmount: 3000 });
+    const out = v3ToV4(v3db({ workOrders: [o] }));
+    expect(getOS(out, 'WL')).toBe(o);
+  });
+  it('OS finalizada com adiantamento também converte', () => {
+    const out = v3ToV4(v3db({
+      workOrders: [osAdv({ status: 'FINALIZADO', financialId: 'EF' })],
+      ledger: [adv('EA', noon(2026, 2, 10))],
+    }));
+    const o = getOS(out, 'WA');
+    expect(o.status).toBe('FINALIZADO');
+    expect(o.financialId).toBe('EF');
+    expect(o.advances).toHaveLength(1);
+  });
+  it('OS que já tem advances fica intocada (mesmo objeto)', () => {
+    const o = mkOS({ id: 'WN', total: 5000, advances: [{ id: 'x', amount: 100, entryId: 'e', date: noon(2026, 1, 1) }], advanceAmount: 999, advanceEntryId: 'zz' });
+    const out = v3ToV4(v3db({ workOrders: [o] }));
+    expect(getOS(out, 'WN')).toBe(o);
+  });
+  it('banco sem auditLog ganha []; auditLog existente é mantido', () => {
+    expect(v3ToV4(v3db()).auditLog).toEqual([]);
+    const db = v3db({ auditLog: [] });
+    expect(v3ToV4(db)).toBe(db);
+    const log = [{ id: 'e', at: 'x', machine: 'PC', action: 'ADIANTAMENTO_CRIADO', osId: 'o', osNumber: 1, advanceId: 'a' }];
+    expect(v3ToV4(v3db({ auditLog: log })).auditLog).toBe(log);
+  });
+  it('restante a receber igual antes/depois; ledger igual em profundidade; entrada não mutada; idempotente', () => {
+    const ledger = [adv('EA', noon(2026, 2, 10)), adv('EB', noon(2026, 3, 1))];
+    const wos = [
+      osAdv(),
+      mkOS({ id: 'WB', total: 8000, advanceAmount: 8000, advanceEntryId: 'EB', status: 'FINALIZADO' }),
+      mkOS({ id: 'WL', total: 7000, advanceAmount: 1000 }),
+      mkOS({ id: 'WC', total: 2000 }),
+    ];
+    const db = v3db({ workOrders: wos, ledger });
+    const antes = JSON.stringify(db);
+    const out = v3ToV4(db);
+    expect(JSON.stringify(db)).toBe(antes);
+    expect(out.ledger).toEqual(JSON.parse(JSON.stringify(ledger)));
+    out.workOrders.forEach((o, i) => expect(remaining(o)).toBe(remaining(db.workOrders[i])));
+    expect(v3ToV4(out)).toBe(out);
+    expect(migrate(migrate(db).db).db).toEqual(migrate(db).db);
+  });
+  it('v3 -> v4 via migrate sobe a versão e converte', () => {
+    const r = migrate(v3db({ workOrders: [osAdv()], ledger: [adv('EA', noon(2026, 2, 10))] }));
+    expect(r.from).toBe(3);
+    expect(r.db.meta?.schemaVersion).toBe(4);
+    expect(getOS(r.db, 'WA').advances).toHaveLength(1);
+  });
+  it('v0, v1 e v2 chegam à v4 com adiantamento convertido', () => {
+    const comAdv = (db: DatabaseSchema, v: number): DatabaseSchema => ({
+      ...db,
+      workOrders: [...db.workOrders, osAdv()] as DatabaseSchema['workOrders'],
+      ledger: [...db.ledger, adv('EA', noon(2026, 2, 10))],
+      meta: { schemaVersion: v, revision: 'r', history: [], savedAt: '', savedBy: '' },
+    });
+    for (const [base, v] of [[dbV1(), 0], [dbV1(), 1], [v1ToV2(dbV1()), 2]] as const) {
+      const r = migrate(comAdv(base, v));
+      expect(r.db.meta?.schemaVersion).toBe(4);
+      expect(getOS(r.db, 'WA').advances).toEqual([{ id: 'WA:a0', amount: 3000, entryId: 'EA', date: noon(2026, 2, 10) }]);
+      expect(r.db.auditLog).toEqual([]);
+    }
+  });
+  it('versão futura (5) abre intacta', () => {
+    const fut = v3db({ workOrders: [osAdv()], meta: { schemaVersion: 5, revision: 'r', history: [], savedAt: '', savedBy: '' } });
+    const r = migrate(fut);
+    expect(r.changed).toBe(false);
+    expect(r.db).toBe(fut);
   });
 });

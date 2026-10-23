@@ -73,6 +73,8 @@ function AppContent() {
     setCatalogTechnicians,
     appointments,
     setAppointments,
+    auditLog,
+    setAuditLog,
     settings,
     setSettings,
     isLoading,
@@ -158,7 +160,7 @@ function AppContent() {
     addToast('Criando backup...', 'info');
 
     try {
-      const fullDb = { ledger, workOrders, clients, catalogParts, catalogServices, catalogTechnicians, appointments, settings };
+      const fullDb = { ledger, workOrders, clients, catalogParts, catalogServices, catalogTechnicians, appointments, auditLog, settings };
       const content = JSON.stringify(stripDbSecrets(fullDb), null, 2); // sem token/API key
       const now = new Date();
       const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}`;
@@ -458,6 +460,11 @@ Abrir OS?`)) {
 
   const handleInstallmentConfirm = (config: InstallmentConfig) => {
     const newEntries = buildInstallmentEntries(config);
+    if (newEntries.length === 0) { // restante 0 ou sem parcelas: nada a lançar
+      setIsInstallmentModalOpen(false);
+      setInstallmentOS(null);
+      return;
+    }
 
     setLedger(prev => [...newEntries, ...prev]);
 
@@ -588,6 +595,7 @@ Abrir OS?`)) {
     setCatalogServices(db.catalogServices);
     setCatalogTechnicians(db.catalogTechnicians);
     setAppointments(db.appointments);
+    setAuditLog(db.auditLog);
     setSettings(adoptSecrets(db.settings)); // segredos do backup só entram se o local estiver vazio
     const semCliente = changed ? countUnresolvedLinks(db).osSemCliente : 0;
     const aviso = semCliente > 0
@@ -654,10 +662,10 @@ Abrir OS?`)) {
       setIsInstallmentModalOpen(true);
     } else {
       const { entry, os: finalizedOS } = finalizeOSSingle(pendingInstallmentOS);
-      setLedger(prev => [entry, ...prev]);
+      if (entry) setLedger(prev => [entry, ...prev]);
       setWorkOrders(prev => prev.map(o =>
         o.id === pendingInstallmentOS.id
-          ? markOSFinalized(o, entry.id, finalizedOS.paymentDate!)
+          ? markOSFinalized(o, entry?.id, finalizedOS.paymentDate!)
           : o
       ));
       addToast('OS Finalizada!', 'success');

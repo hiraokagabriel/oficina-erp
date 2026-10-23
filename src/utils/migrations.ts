@@ -3,10 +3,11 @@ import { CatalogItem, Client, DatabaseSchema, LedgerEntry, OrderItem, Technician
 /** Settings de bancos v0 podiam ter `technician` (hoje é o catálogo de técnicos). */
 type LegacySettings = WorkshopSettings & { technician?: unknown };
 import { learnTechnician } from './helpers';
+import { formatDateOnly, parseDateFlexible, parseDateOnly } from './dates';
 import { matchClientId, normalizeName, resolveCatalogItemId, resolveTechnicianId, resolveVehicleId } from './links';
 
 // Versão do formato do banco. Subir aqui e acrescentar um passo em STEPS.
-export const CURRENT_SCHEMA_VERSION = 3;
+export const CURRENT_SCHEMA_VERSION = 4;
 
 export interface MigrationResult {
   db: DatabaseSchema;
@@ -116,6 +117,41 @@ export const v1ToV2 = (db: DatabaseSchema): DatabaseSchema => {
 export const v2ToV3 = (db: DatabaseSchema): DatabaseSchema =>
   Array.isArray(db.appointments) ? db : { ...db, appointments: [] };
 
+/** Meio-dia local (ISO) do dia local de `value` (data só-dia ou ISO); undefined se inválido. */
+const noonOfDay = (value: string | undefined): string | undefined => {
+  if (!value) return undefined;
+  const d = parseDateFlexible(value);
+  if (Number.isNaN(d.getTime())) return undefined;
+  return parseDateOnly(formatDateOnly(d)).toISOString();
+};
+
+/**
+ * v3 -> v4 (PURA, registrada em STEPS).
+ * (a) `auditLog` que não é lista vira [] (lista existente é mantida).
+ * (b) OS sem `advances`, com `advanceEntryId` e `advanceAmount` > 0: vira `advances = [{ id: `${os.id}:a0`, amount, entryId, date }]`
+ *     e perde `advanceAmount`/`advanceEntryId`. O valor vem da OS (não do lançamento), então o restante a receber não muda.
+ *     `date` = dia (meio-dia local) do effectiveDate do lançamento ligado; se o lançamento não existir (ou a data for inválida),
+ *     o dia do createdAt da OS; se nem isso for válido, o createdAt como está.
+ *     Vale também para OS finalizada/travada. OS com `advances` fica intocada; OS só com `advanceAmount` (sem advanceEntryId) fica como está.
+ * Não grava eventos de auditoria, não toca no ledger, não muta a entrada. Determinística e idempotente.
+ */
+export const v3ToV4 = (db: DatabaseSchema): DatabaseSchema => {
+  const ledgerById = new Map(db.ledger.map(e => [e.id, e]));
+  const workOrders: WorkOrder[] = db.workOrders.map(os => {
+    if (os.advances) return os;
+    const amount = os.advanceAmount;
+    if (!os.advanceEntryId || typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) return os;
+    const linked = ledgerById.get(os.advanceEntryId);
+    const date = noonOfDay(linked?.effectiveDate) ?? noonOfDay(os.createdAt) ?? os.createdAt;
+    const { advanceAmount: _a, advanceEntryId: _e, ...rest } = os;
+    return { ...rest, advances: [{ id: `${os.id}:a0`, amount, entryId: os.advanceEntryId, date }] };
+  });
+  const changedOS = workOrders.some((o, i) => o !== db.workOrders[i]);
+  const hasLog = Array.isArray(db.auditLog);
+  if (!changedOS && hasLog) return db;
+  return { ...db, workOrders: changedOS ? workOrders : db.workOrders, auditLog: hasLog ? db.auditLog : [] };
+};
+
 export interface UnresolvedLinks {
   osSemCliente: number;
   osSemVeiculo: number;
@@ -144,7 +180,7 @@ export const countUnresolvedLinks = (db: DatabaseSchema): UnresolvedLinks => {
 };
 
 // STEPS[n] leva da versão n para n+1.
-const STEPS: Array<(db: DatabaseSchema) => DatabaseSchema> = [v0ToV1, v1ToV2, v2ToV3];
+const STEPS: Array<(db: DatabaseSchema) => DatabaseSchema> = [v0ToV1, v1ToV2, v2ToV3, v3ToV4];
 
 /**
  * Migra o banco até CURRENT_SCHEMA_VERSION. Pura (não altera a entrada) e idempotente.

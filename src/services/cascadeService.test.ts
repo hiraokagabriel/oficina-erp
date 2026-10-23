@@ -454,3 +454,35 @@ describe('updateClientCascading: agendamentos (schema v3)', () => {
     expect(r.hasChanges).toBe(false);
   });
 });
+
+describe('updateClientCascading: adiantamentos v4 (advances[].entryId)', () => {
+  it('renomeia o lançamento de TODOS os adiantamentos e o legado, sem tocar nos de outra OS', () => {
+    const old = client();
+    const a = (id: string, entryId: string) => ({ id, entryId, amount: 1000, date: '2026-03-01T15:00:00.000Z' });
+    const r = updateClientCascading(
+      old, { ...old, name: 'Beltrano Teste' },
+      [
+        os({ osNumber: 7, advances: [a('a1', 'ea1'), a('a2', 'ea2')] }),
+        os({ id: 'os2', osNumber: 8, clientId: 'c2', clientName: 'Outro', advances: [a('b1', 'eb1')] }),
+      ],
+      [
+        entry('ea1', 'Adiantamento OS #7 - Fulano Teste'),
+        entry('ea2', 'Adiantamento OS #7 - Fulano Teste'),
+        entry('eb1', 'Adiantamento OS #8 - Outro'),
+      ]
+    );
+    expect(r.hasChanges).toBe(true);
+    expect(r.newLedger.map(e => e.description)).toEqual([
+      'Adiantamento OS #7 - Beltrano Teste',
+      'Adiantamento OS #7 - Beltrano Teste',
+      'Adiantamento OS #8 - Outro',
+    ]);
+    expect(r.newWorkOrders[0].advances).toHaveLength(2); // advances preservados
+  });
+  it('legado advanceEntryId continua renomeando', () => {
+    const old = client();
+    const r = updateClientCascading(old, { ...old, name: 'Beltrano Teste' },
+      [os({ osNumber: 7, advanceEntryId: 'e2', advanceAmount: 500 })], [entry('e2', 'Adiantamento OS #7 - Fulano Teste')]);
+    expect(r.newLedger[0].description).toBe('Adiantamento OS #7 - Beltrano Teste');
+  });
+});

@@ -42,11 +42,50 @@ export interface WorkOrder {
   paymentMethod?: 'SINGLE' | 'INSTALLMENT';
   installmentConfig?: InstallmentConfig;
   technician?: string;
+  /** @deprecated Schema v4: a migração v3ToV4 move para `advances`. Só lido em OS legadas ainda sem `advances`. */
   advanceAmount?: number;
-  /** Lançamento CREDIT do adiantamento no caixa (ver syncAdvanceEntry). Ausente em OS legadas. */
+  /** @deprecated Schema v4: ver `advances`. Lançamento CREDIT do adiantamento legado (syncAdvanceEntry). */
   advanceEntryId?: string;
+  /** Adiantamentos da OS com data (schema v4). Cada um tem seu lançamento CREDIT já recebido. Ausente = OS legada. */
+  advances?: OSAdvance[];
   /** Previsão de entrega prometida (schema v3; ISO do meio-dia local; só a data conta). Opcional. */
   expectedDate?: string;
+}
+
+/** Adiantamento de uma OS (schema v4). */
+export interface OSAdvance {
+  id: string;
+  /** ISO do meio-dia local do dia do adiantamento (hoje ou passado). */
+  date: string;
+  /** Centavos inteiros > 0. */
+  amount: number;
+  /** Lançamento CREDIT já recebido no Financeiro (travado lá: edição só pela OS). */
+  entryId: string;
+}
+
+/** Rascunho de adiantamento vindo do modal da OS (sem `id` = novo). `date` é 'AAAA-MM-DD' (ou ISO). */
+export interface OSAdvanceDraft {
+  id?: string;
+  date: string;
+  amount: number;
+}
+
+export type AuditAction = 'ADIANTAMENTO_CRIADO' | 'ADIANTAMENTO_ALTERADO' | 'ADIANTAMENTO_REMOVIDO';
+
+/** Trilha de auditoria somente-acréscimo (schema v4; oculta na tela). */
+export interface AuditEvent {
+  id: string;
+  /** ISO do momento da ação. */
+  at: string;
+  /** Nome do PC que fez a ação. */
+  machine: string;
+  action: AuditAction;
+  osId: string;
+  osNumber: number;
+  advanceId: string;
+  before?: { date: string; amount: number };
+  after?: { date: string; amount: number };
+  reason?: 'OS_EXCLUIDA';
 }
 
 export type AppointmentStatus = 'AGENDADO' | 'COMPARECEU' | 'CANCELADO' | 'FALTOU';
@@ -208,7 +247,10 @@ export interface OSModalPayload {
   services: OrderItem[];
   publicNotes: string;
   technician?: string;
+  /** @deprecated Schema v4: use `advances`. Mantido só até o OSModal/App serem ligados. */
   advanceAmount?: number;
+  /** Adiantamentos com data (schema v4). Lista completa: o que sumir da lista é removido. */
+  advances?: OSAdvanceDraft[];
 }
 
 /** Ponto do gráfico de fluxo de caixa (useFinance.chartFluxo). */
@@ -232,6 +274,8 @@ export interface DatabaseSchema {
   catalogTechnicians: Technician[];
   /** Agendamentos (schema v3). Ausente em bancos antigos = []. */
   appointments: Appointment[];
+  /** Trilha de auditoria (schema v4). Ausente em bancos antigos = []. */
+  auditLog: AuditEvent[];
   settings: WorkshopSettings;
   /** Ausente = banco v0 (anterior ao controle de versão). */
   meta?: DatabaseMeta;

@@ -195,12 +195,12 @@ Os testes marcam os que seguem abertos com `// COMPORTAMENTO ATUAL (suspeito)` e
 - (4.5) `Money.fromFloat(1.005)` dava 100; agora 101. `'YYYY-MM-DD'` em `createEntry` virava meia-noite UTC; agora é meio-dia local. A divisão de lançamentos parcelados perdia o resto; agora soma exato.
 - (5.4) Marcar uma parcela como paga só sincronizava a OS pela 1ª parcela e pagar todas as parcelas não finalizava a OS; agora a OS é finalizada ao pagar a última e volta a `AGUARDANDO_PAGAMENTO` se uma parcela for desmarcada.
 - (5.4) Arquivar uma OS finalizada pedia a restauração financeira e apagaria as receitas; agora só muda o status.
+- (schema v4) Adiantamento igual ao total da OS (restante 0) criava lançamento ou parcelas de R$ 0,00; agora `finalizeOSSingle` fecha a OS sem lançamento (`entry` indefinido, sem `financialId`) e `buildInstallmentEntries` devolve lista vazia quando o total a parcelar é 0. Teste `CORRIGIDO (adiantamentos v4)`.
 
 **Dinheiro e parcelas (abertos)**
 - O pagamento à vista usa o `createdAt` da OS como data de competência da receita, e não deixa `paymentMethod` como `SINGLE`.
 - Editar uma OS já finalizada recalcula o total sem atualizar o lançamento no Ledger.
 - `config` do parcelamento não é validado: 0 parcelas gera lista vazia e quebra o `App` (lê `newEntries[0]`); data inválida lança erro; valores negativos são aceitos.
-- Adiantamento igual ao total da OS: o restante é 0 e o app cria um lançamento (ou parcelas) de R$ 0,00.
 
 **Reabrir e desarquivar OS**
 - `restoreFinancial` apaga qualquer lançamento com o mesmo `groupId`, inclusive de outra origem, e reabre a OS em silêncio se o `financialId` estiver órfão.

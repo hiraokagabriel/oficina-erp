@@ -87,6 +87,7 @@ export const updateClientCascading = (
         affected.forEach(os => {
             if (os.financialId) byEntryId.set(os.financialId, os);
             if (os.advanceEntryId) byEntryId.set(os.advanceEntryId, os);
+            os.advances?.forEach(a => byEntryId.set(a.entryId, os));
             if (os.installmentConfig?.groupId) byGroup.set(os.installmentConfig.groupId, os);
         });
         newLedger = ledger.map(entry => {

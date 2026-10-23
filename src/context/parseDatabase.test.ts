@@ -66,3 +66,15 @@ describe('parseDatabase: appointments', () => {
     expect(parseDatabase(JSON.stringify({ appointments: [] }), fallback).appointments).toEqual([]);
   });
 });
+
+describe('parseDatabase: auditLog (schema v4)', () => {
+  const ev = { id: 'E1', at: '2026-03-10T15:00:00.000Z', machine: 'PC', action: 'ADIANTAMENTO_CRIADO', osId: 'o', osNumber: 1, advanceId: 'a' };
+  it('ausente ou null vira []', () => {
+    expect(parseDatabase(JSON.stringify({ ledger: [] }), fallback).auditLog).toEqual([]);
+    expect(parseDatabase(JSON.stringify({ ledger: [], auditLog: null }), fallback).auditLog).toEqual([]);
+  });
+  it('lista é mantida; não-lista é erro', () => {
+    expect(parseDatabase(JSON.stringify({ ledger: [], auditLog: [ev] }), fallback).auditLog).toEqual([ev]);
+    expect(() => parseDatabase(JSON.stringify({ ledger: [], auditLog: {} }), fallback)).toThrow(/auditLog/);
+  });
+});

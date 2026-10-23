@@ -30,6 +30,8 @@ export const buildInstallmentEntries = (
   { now = new Date().toISOString(), newId = () => crypto.randomUUID() }: Injectables = {}
 ): LedgerEntry[] => {
   const newEntries: LedgerEntry[] = [];
+  // Nada a parcelar (restante 0 ou negativo, ou nenhuma parcela): não cria lançamento zerado.
+  if (config.totalAmount <= 0 || config.installments <= 0) return newEntries;
   const baseDate = parseDateFlexible(config.firstPaymentDate);
   const groupId = config.groupId;
 
@@ -216,7 +218,8 @@ export const statusChangeEffects = (
 };
 
 // Marca a OS como FINALIZADO ligada ao lançamento à vista.
-export const markOSFinalized = (os: WorkOrder, entryId: string, paymentDate: string): WorkOrder => ({
+// `entryId` ausente = restante 0 (adiantamentos cobriram o total): a OS fecha sem lançamento.
+export const markOSFinalized = (os: WorkOrder, entryId: string | undefined, paymentDate: string): WorkOrder => ({
   ...os,
   status: 'FINALIZADO' as OSStatus,
   financialId: entryId,
@@ -225,15 +228,18 @@ export const markOSFinalized = (os: WorkOrder, entryId: string, paymentDate: str
 
 // Finalização à vista: receita com competência = createdAt da OS, já paga em `now`.
 // Equivale a createEntry(desc, total, 'CREDIT', os.createdAt, undefined, now).
+// CORRIGIDO (adiantamentos v4): restante 0 NÃO cria lançamento de R$ 0,00 (`entry` fica undefined; a OS fecha sem financialId).
 export const finalizeOSSingle = (
   os: WorkOrder,
   { now = new Date().toISOString(), newId = generateId }: Injectables = {}
-): { entry: LedgerEntry; os: WorkOrder } => {
+): { entry: LedgerEntry | undefined; os: WorkOrder } => {
   const paymentDate = now;
+  const amount = getRemainingAmount(os);
+  if (amount <= 0) return { entry: undefined, os: markOSFinalized(os, undefined, paymentDate) };
   const entry: LedgerEntry = {
     id: newId(),
     description: `Receita OS #${os.osNumber} - ${os.clientName}`,
-    amount: getRemainingAmount(os),
+    amount,
     type: 'CREDIT',
     effectiveDate: new Date(os.createdAt).toISOString(),
     createdAt: now,
@@ -243,16 +249,40 @@ export const finalizeOSSingle = (
   return { entry, os: markOSFinalized(os, entry.id, paymentDate) };
 };
 
-// Valor ainda a receber da OS: total - adiantamento, só quando o adiantamento está no caixa
-// (advanceEntryId). OS legada (advanceAmount sem advanceEntryId) usa o total cheio (D3).
-export const getRemainingAmount = (os: WorkOrder): number =>
-  os.advanceEntryId ? Math.max(os.total - (os.advanceAmount || 0), 0) : os.total;
+// Soma dos adiantamentos da OS (schema v4). OS legada sem `advances`: 0 (use getRemainingAmount para a regra antiga).
+export const sumAdvances = (os: Pick<WorkOrder, 'advances'>): number =>
+  (os.advances ?? []).reduce((acc, a) => acc + a.amount, 0);
+
+// Valor ainda a receber da OS. Com `advances` (v4): max(total - soma, 0).
+// OS legada sem `advances`: total - adiantamento só quando o adiantamento está no caixa (advanceEntryId);
+// advanceAmount sem advanceEntryId usa o total cheio (D3).
+export const getRemainingAmount = (os: WorkOrder): number => {
+  if (os.advances) return Math.max(os.total - sumAdvances(os), 0);
+  return os.advanceEntryId ? Math.max(os.total - (os.advanceAmount || 0), 0) : os.total;
+};
+
+// Receita à vista de OS finalizada editada: o lançamento (financialId) passa a valer o RESTANTE
+// (total - adiantamentos), não o total (defeito: o adiantamento já está no caixa). Competência = createdAt da OS.
+// Lançamento de OS parcelada (paymentMethod 'INSTALLMENT' ou com grupo de parcelas) NUNCA é tocado.
+export const refreshFinishedReceipt = (os: WorkOrder, ledger: LedgerEntry[]): LedgerEntry[] => {
+  if (!os.financialId || os.paymentMethod === 'INSTALLMENT') return ledger;
+  return ledger.map(e => {
+    if (e.id !== os.financialId || e.installmentGroupId) return e;
+    return {
+      ...e,
+      effectiveDate: os.createdAt,
+      amount: getRemainingAmount(os),
+      description: `Receita OS #${os.osNumber} - ${os.clientName}`,
+    };
+  });
+};
 
 // D3: OS FINALIZADO, ARQUIVADO com financeiro ou com financialId não sincroniza o adiantamento.
 export const isAdvanceSyncLocked = (os: WorkOrder): boolean =>
   os.status === 'FINALIZADO' || (os.status === 'ARQUIVADO' && !!os.financialId) || !!os.financialId;
 
 // Mantém o lançamento de adiantamento (CREDIT já recebido) da OS no caixa.
+// @deprecated Schema v4: use syncAdvances (services/advances.ts). Vale só para OS ainda SEM `advances` que a UI antiga alimenta.
 // D3: OS FINALIZADO, ARQUIVADO com financeiro ou com financialId não sincroniza (ledger intacto).
 export const syncAdvanceEntry = ({ os, advanceAmount, ledger, now = new Date().toISOString(), newId = generateId }: {
   os: WorkOrder;

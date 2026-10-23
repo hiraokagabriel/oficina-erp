@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { Appointment, LedgerEntry, WorkOrder, Client, CatalogItem, Technician, WorkshopSettings, DatabaseSchema, DatabaseMeta } from '../types';
+import { Appointment, AuditEvent, LedgerEntry, WorkOrder, Client, CatalogItem, Technician, WorkshopSettings, DatabaseSchema, DatabaseMeta } from '../types';
 import { CURRENT_SCHEMA_VERSION, countUnresolvedLinks, migrate } from '../utils/migrations';
 import { diffLocalChanges, LocalChange } from '../utils/conflictDiff';
 import { generateId } from '../utils/helpers';
@@ -69,6 +69,9 @@ interface DatabaseContextData {
   setCatalogTechnicians: React.Dispatch<React.SetStateAction<Technician[]>>;
   appointments: Appointment[];
   setAppointments: React.Dispatch<React.SetStateAction<Appointment[]>>;
+  /** Trilha de auditoria (schema v4; oculta na tela). */
+  auditLog: AuditEvent[];
+  setAuditLog: React.Dispatch<React.SetStateAction<AuditEvent[]>>;
   settings: WorkshopSettings;
   setSettings: React.Dispatch<React.SetStateAction<WorkshopSettings>>;
   isLoading: boolean;
@@ -119,7 +122,7 @@ const formatTime = (iso: string | null): string | null => {
   return isNaN(d.getTime()) ? null : d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 };
 
-const COLLECTION_KEYS = ['ledger', 'workOrders', 'clients', 'catalogParts', 'catalogServices', 'catalogTechnicians', 'appointments'] as const;
+const COLLECTION_KEYS = ['ledger', 'workOrders', 'clients', 'catalogParts', 'catalogServices', 'catalogTechnicians', 'appointments', 'auditLog'] as const;
 
 // Valida o conteúdo lido. Campos ausentes (bancos antigos) viram []/padrão;
 // JSON inválido ou tipos errados são erro (nunca mascarados com `|| []`).
@@ -176,6 +179,7 @@ export function parseDatabase(content: string, fallbackSettings: WorkshopSetting
     catalogServices: list<CatalogItem>('catalogServices'),
     catalogTechnicians: list<Technician>('catalogTechnicians'),
     appointments: list<Appointment>('appointments'),
+    auditLog: list<AuditEvent>('auditLog'),
     settings: (s as WorkshopSettings | undefined | null) || fallbackSettings,
     // Sem meta = banco v0. Meta sem versão válida também conta como v0.
     ...(m ? { meta: normalizeMeta(m as Record<string, unknown>) } : {}),
@@ -192,6 +196,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [catalogServices, setCatalogServices] = useState<CatalogItem[]>([]);
   const [catalogTechnicians, setCatalogTechnicians] = useState<Technician[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [auditLog, setAuditLog] = useState<AuditEvent[]>([]);
   const [settings, setSettingsRaw] = useState<WorkshopSettings>(() => adoptSecrets(DEFAULT_SETTINGS));
   // Quem edita as configurações (ConfigPage) também grava os segredos no localStorage deste PC.
   // useCallback: identidade estável para o `value` do contexto não mudar a cada render.
@@ -237,7 +242,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   latestRef.current = {
     dbPath,
     loadStatus,
-    db: { ledger, workOrders, clients, catalogParts, catalogServices, catalogTechnicians, appointments, settings },
+    db: { ledger, workOrders, clients, catalogParts, catalogServices, catalogTechnicians, appointments, auditLog, settings },
   };
 
   const clearTimers = () => {
@@ -295,6 +300,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setCatalogServices(p.db.catalogServices);
     setCatalogTechnicians(p.db.catalogTechnicians);
     setAppointments(p.db.appointments);
+    setAuditLog(p.db.auditLog);
     // Segredos do arquivo entram no localStorage só se estiver vazio; em memória vale o valor local.
     setSettingsRaw(adoptSecrets(p.db.settings));
     if (p.migratedFrom !== null) {
@@ -331,6 +337,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setCatalogServices([]);
       setCatalogTechnicians([]);
       setAppointments([]);
+      setAuditLog([]);
       setSettingsRaw(adoptSecrets(DEFAULT_SETTINGS));
     };
 
@@ -517,7 +524,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return () => {
       if (saveTimeoutRef.current) { clearTimeout(saveTimeoutRef.current); saveTimeoutRef.current = null; }
     };
-  }, [ledger, workOrders, clients, catalogParts, catalogServices, catalogTechnicians, appointments, settings, dbPath, loadStatus, readOnly, conflict]);
+  }, [ledger, workOrders, clients, catalogParts, catalogServices, catalogTechnicians, appointments, auditLog, settings, dbPath, loadStatus, readOnly, conflict]);
 
   useEffect(() => () => clearTimers(), []);
 
@@ -790,13 +797,14 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     catalogServices, setCatalogServices,
     catalogTechnicians, setCatalogTechnicians,
     appointments, setAppointments,
+    auditLog, setAuditLog,
     settings, setSettings,
     isLoading, isSaving, readOnly,
     loadStatus, saveError, lastSavedAt, hasPendingChanges, hasConflict: conflict !== null,
     dbPath, setDbPath,
   }), [
     ledger, workOrders, clients, catalogParts, catalogServices, catalogTechnicians,
-    appointments, settings, setSettings, isLoading, isSaving, readOnly, loadStatus, saveError, lastSavedAt, hasPendingChanges, conflict, dbPath,
+    appointments, auditLog, settings, setSettings, isLoading, isSaving, readOnly, loadStatus, saveError, lastSavedAt, hasPendingChanges, conflict, dbPath,
   ]);
 
   return (

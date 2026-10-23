@@ -132,7 +132,7 @@ export const MarginReport: React.FC<MarginReportProps> = ({
           <div className="stat-trend">{report.scopeCount} OS no período</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">Itens com custo informado</div>
+          <div className="stat-label">Receita com custo informado</div>
           <div className="stat-value">{formatPct(totals.coveragePct)}%</div>
           <div className="stat-trend">{formatPct(totals.coveragePct)}% da receita tem custo informado</div>
         </div>

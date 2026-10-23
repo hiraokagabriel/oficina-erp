@@ -2,6 +2,7 @@ import React, { useState, useEffect, useId } from 'react';
 import { LedgerEntry } from '../types';
 import { getLocalDateString } from '../utils/helpers';
 import { useDirtyGuard } from '../hooks/useDirtyGuard';
+import { MoneyField } from '../components/MoneyField';
 
 interface EntryModalProps {
   isOpen: boolean;
@@ -13,7 +14,9 @@ interface EntryModalProps {
 export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave, initialData }) => {
   const uid = useId();
   const [description, setDescription] = useState('');
-  const [amount, setAmount] = useState('');
+  const [cents, setCents] = useState<number | undefined>(undefined);
+  const [amountInvalid, setAmountInvalid] = useState(false);
+  const [tried, setTried] = useState(false);
   const [type, setType] = useState<'CREDIT' | 'DEBIT'>('DEBIT');
   const [date, setDate] = useState('');
   
@@ -22,12 +25,11 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
 
   useEffect(() => {
     if (isOpen) {
+        setTried(false);
         if (initialData) {
             setDescription(initialData.description);
             
-            // --- CORREÇÃO DOS DECIMAIS ---
-            // Divide por 100 para exibir corretamente (ex: 1500 virar 15.00)
-            setAmount((initialData.amount / 100).toFixed(2));
+            setCents(initialData.amount);
             
             setType(initialData.type);
             setDate(initialData.effectiveDate.split('T')[0]);
@@ -35,7 +37,7 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
             setCount(1);
         } else {
             setDescription('');
-            setAmount('');
+            setCents(undefined);
             setType('DEBIT');
             setDate(getLocalDateString()); // 🔧 CORREÇÃO: Usa data local do computador
             setRecurrence('SINGLE');
@@ -45,12 +47,11 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
   }, [isOpen, initialData]);
 
   const handleSave = () => {
-    if (!description || !amount) return alert("Preencha descrição e valor.");
-    
-    const val = parseFloat(amount.replace(',', '.'));
-    if (isNaN(val)) return alert("Valor inválido");
-
-    onSave(description, val, type, date, recurrence, count);
+    setTried(true);
+    if (amountInvalid) return;
+    if (!description.trim() || cents === undefined) return alert("Preencha descrição e valor.");
+    // O App recebe o valor em reais (float) e converte com Money.fromFloat; cents/100 é exato o bastante para isso.
+    onSave(description, cents / 100, type, date, recurrence, count);
   };
 
   const guard = useDirtyGuard({ active: isOpen, onClose });
@@ -109,14 +110,15 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
           <label htmlFor={`${uid}-valor`}>
               {recurrence === 'INSTALLMENT' ? 'Valor da Compra (R$)' : 'Valor (R$)'}
           </label>
-          <input 
+          <MoneyField
             id={`${uid}-valor`}
-            className="form-input" 
-            type="number" 
-            step="0.01" 
-            value={amount} 
-            onChange={e => setAmount(e.target.value)} 
-            placeholder="0,00" 
+            className="form-input"
+            kind="optional"
+            value={cents}
+            onChange={c => { guard.markDirty(); setCents(c); }}
+            onInvalidChange={(_id, inv) => setAmountInvalid(inv)}
+            showError={tried}
+            placeholder="0,00"
           />
         </div>
 

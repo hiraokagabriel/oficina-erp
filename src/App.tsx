@@ -43,6 +43,7 @@ import {
   togglePayment,
 } from './services/osFinanceService';
 import { Money, updateWorkOrderData, generateId } from './utils/helpers';
+import { buildFinalizeMessage, buildInstallmentMessage } from './services/finalizeText';
 import { linkClient, linkCatalogItems, linkTechnician, preferredClientId } from './utils/links';
 import { toISOFromDateInput } from './utils/dates';
 import { getTargetMargin } from './services/margin';
@@ -957,10 +958,7 @@ Abrir OS?`)) {
             onYes={() => handleInstallmentChoice(true)}
             onNo={() => handleInstallmentChoice(false)}
             title="Deseja Parcelar?"
-            message={`Valor total da OS: ${Money.format(pendingInstallmentOS.total)}${getRemainingAmount(pendingInstallmentOS) !== pendingInstallmentOS.total ? `
-Restante a pagar: ${Money.format(getRemainingAmount(pendingInstallmentOS))}` : ''}
-
-Escolha como deseja receber o pagamento`}
+            message={buildInstallmentMessage(pendingInstallmentOS.total, getRemainingAmount(pendingInstallmentOS))}
             yesText="Parcelar"
             noText="Pagamento único"
             yesIcon="receber"
@@ -993,9 +991,7 @@ Escolha como deseja receber o pagamento`}
                 : pendingAction?.type === 'ARCHIVE_OS'
                 ? 'A OS sairá do quadro Kanban.'
                 : pendingAction?.type === 'FINISH_OS_FINANCIAL'
-                ? `Valor total da OS: ${Money.format(pendingAction.data?.total || 0)}.${pendingAction.data && getRemainingAmount(pendingAction.data) !== pendingAction.data.total ? `
-Restante a pagar: ${Money.format(getRemainingAmount(pendingAction.data))}.` : ''}
-Lançar nas Receitas?`
+                ? buildFinalizeMessage(pendingAction.data?.total || 0, pendingAction.data ? getRemainingAmount(pendingAction.data) : 0)
                 : pendingAction?.type === 'RESTORE_FINANCIAL'
                 ? 'Removerá o lançamento financeiro.'
                 : pendingAction?.type === 'IMPORT_DATA'

@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { LedgerEntry, ChartFluxoPoint, ChartPiePoint, WorkOrder, WorkshopSettings, CatalogItem } from '../types';
 import { MarginReport } from '../components/MarginReport';
 import { Icon } from '../components/ui/Icon';
 import { Money as MoneyUtil } from '../utils/helpers';
+import { formatAxisBRL, parseYearDraft, YEAR_INVALID_MESSAGE } from '../services/financeView';
+import { shouldIgnoreStep } from '../services/kanbanCardView';
 import { summarizeReceivables, formatDueDate, getReceivableLabel, getReceivableStatus } from '../services/receivables';
 
 const COLORS = {
@@ -52,6 +54,31 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
 }) => {
 
   const [currentPage, setCurrentPage] = useState(1);
+  // Rascunho do ano (modo Anual): só vale ao sair do campo ou no Enter.
+  const [yearDraft, setYearDraft] = useState(selectedMonth.slice(0, 4));
+  const [yearError, setYearError] = useState(false);
+  useEffect(() => { setYearDraft(selectedMonth.slice(0, 4)); setYearError(false); }, [selectedMonth, viewMode]);
+  const commitYear = () => {
+    const y = parseYearDraft(yearDraft);
+    if (y === null) {
+      setYearError(true);
+      setYearDraft(selectedMonth.slice(0, 4));
+      return;
+    }
+    setYearError(false);
+    onMonthChange(`${y}-${selectedMonth.slice(5, 7) || '01'}`);
+  };
+
+  // Trava do duplo clique em Receber/Marcar como pago: a linha some e a de baixo sobe para o mesmo lugar.
+  const lastPayAt = useRef<number | null>(null);
+  const payClick = (e: React.MouseEvent, id: string) => {
+    if (e.detail > 1) return;
+    const now = Date.now();
+    if (shouldIgnoreStep(lastPayAt.current, now)) return;
+    lastPayAt.current = now;
+    onTogglePayment(id);
+  };
+
   const [tab, setTab] = useState<'GERAL' | 'MARGEM'>('GERAL');
 
   // Setas, Home e End alternam as abas (padrão WAI-ARIA); o foco acompanha a aba ativa.
@@ -99,18 +126,22 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
               onChange={(e) => onMonthChange(e.target.value)}
             />
           ) : (
-            <input
-              type="number"
-              className="form-input fin-period-input fin-year-input"
-              aria-label="Ano"
-              min={2000}
-              max={2100}
-              value={selectedMonth.slice(0, 4)}
-              onChange={(e) => {
-                const y = e.target.value.trim();
-                if (/^\d{4}$/.test(y)) onMonthChange(`${y}-${selectedMonth.slice(5, 7) || '01'}`);
-              }}
-            />
+            <>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={4}
+                className="form-input fin-period-input fin-year-input"
+                aria-label="Ano"
+                aria-invalid={yearError ? true : undefined}
+                aria-describedby={yearError ? 'fin-year-error' : undefined}
+                value={yearDraft}
+                onChange={(e) => setYearDraft(e.target.value.replace(/\D/g, ''))}
+                onBlur={commitYear}
+                onKeyDown={(e) => { if (e.key === 'Enter') commitYear(); }}
+              />
+              {yearError && <p id="fin-year-error" className="field-error" role="alert">{YEAR_INVALID_MESSAGE}</p>}
+            </>
           )}
 
           <button className="btn-secondary" onClick={onOpenExport}><Icon name="arquivo" size={18} />Exportar</button>
@@ -144,7 +175,7 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
             <h2 id="fin-receber-title" className="fin-section-title">A receber</h2>
             <div className="fin-receber-totals">
               <div className="fin-receber-total">
-                <span className="fin-receber-label">Total a receber</span>
+                <span className="fin-receber-label">Total a receber (inclui atrasado)</span>
                 <strong className="fin-receber-value">{Money.format(receivables.totalAReceber + receivables.totalAtrasado)}</strong>
                 <span className="fin-receber-sub">{receivables.countAReceber + receivables.countAtrasado} {receivables.countAReceber + receivables.countAtrasado === 1 ? 'lançamento' : 'lançamentos'} (total geral)</span>
               </div>
@@ -174,7 +205,7 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                       <td>
                         <button
                           className="btn btn-success receivable-pay"
-                          onClick={() => onTogglePayment(e.id)}
+                          onClick={(ev) => payClick(ev, e.id)}
                           aria-label={`Receber pagamento: ${e.description}`}
                         >
                           <Icon name="receber" size={18} />Receber
@@ -219,7 +250,7 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} vertical={false}/>
                         <XAxis dataKey="name" stroke={COLORS.text} fontSize={12} tickLine={false} axisLine={false}/>
-                        <YAxis stroke={COLORS.text} fontSize={12} tickLine={false} axisLine={false} width={56}/>
+                        <YAxis stroke={COLORS.text} fontSize={12} tickLine={false} axisLine={false} width={76} tickFormatter={(v: number) => formatAxisBRL(Number(v))}/>
                         <Tooltip
                             contentStyle={{
                                 backgroundColor: 'var(--bg-panel)',
@@ -325,11 +356,11 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                                     {e.type === 'CREDIT' && (
                                         <button
                                             className={isPaymentDate ? 'btn-sm fin-pay fin-pay--paid' : 'btn-sm fin-pay'}
-                                            onClick={() => onTogglePayment(e.id)}
+                                            onClick={(ev) => payClick(ev, e.id)}
                                             aria-pressed={isPaymentDate}
                                             aria-label={isPaymentDate ? `Pago, clique para desfazer: ${e.description}` : `Marcar como pago: ${e.description}`}
                                         >
-                                            <Icon name="check" size={16} />{isPaymentDate ? 'Pago' : 'Marcar como pago'}
+                                            <Icon name="check" size={16} />{isPaymentDate ? 'Desfazer pagamento' : 'Marcar como pago'}
                                         </button>
                                     )}
                                     <button className="btn-sm" onClick={() => onEditEntry(e.id)} aria-label={`Editar: ${e.description}`}><Icon name="editar" size={16} />Editar</button>

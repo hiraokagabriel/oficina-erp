@@ -957,12 +957,15 @@ Abrir OS?`)) {
             onYes={() => handleInstallmentChoice(true)}
             onNo={() => handleInstallmentChoice(false)}
             title="Deseja Parcelar?"
-            message={`Valor total: ${Money.format(getRemainingAmount(pendingInstallmentOS))}\n\nEscolha como deseja receber o pagamento`}
+            message={`Valor total da OS: ${Money.format(pendingInstallmentOS.total)}${getRemainingAmount(pendingInstallmentOS) !== pendingInstallmentOS.total ? `
+Restante a pagar: ${Money.format(getRemainingAmount(pendingInstallmentOS))}` : ''}
+
+Escolha como deseja receber o pagamento`}
             yesText="Parcelar"
-            noText="Pagamento Único"
-            yesIcon="💳"
-            noIcon="💵"
-            icon="💰"
+            noText="Pagamento único"
+            yesIcon="receber"
+            noIcon="financeiro"
+            icon="cifrao"
           />
         )}
 
@@ -977,7 +980,7 @@ Abrir OS?`)) {
                 : pendingAction?.type === 'ARCHIVE_OS'
                 ? 'Arquivar OS?'
                 : pendingAction?.type === 'FINISH_OS_FINANCIAL'
-                ? 'OS Finalizada'
+                ? 'Finalizar OS?'
                 : pendingAction?.type === 'RESTORE_FINANCIAL'
                 ? 'Reabrir OS?'
                 : pendingAction?.type === 'IMPORT_DATA'
@@ -990,7 +993,9 @@ Abrir OS?`)) {
                 : pendingAction?.type === 'ARCHIVE_OS'
                 ? 'A OS sairá do quadro Kanban.'
                 : pendingAction?.type === 'FINISH_OS_FINANCIAL'
-                ? `Lançar ${Money.format(pendingAction.data?.total || 0)} nas Receitas?`
+                ? `Valor total da OS: ${Money.format(pendingAction.data?.total || 0)}.${pendingAction.data && getRemainingAmount(pendingAction.data) !== pendingAction.data.total ? `
+Restante a pagar: ${Money.format(getRemainingAmount(pendingAction.data))}.` : ''}
+Lançar nas Receitas?`
                 : pendingAction?.type === 'RESTORE_FINANCIAL'
                 ? 'Removerá o lançamento financeiro.'
                 : pendingAction?.type === 'IMPORT_DATA'

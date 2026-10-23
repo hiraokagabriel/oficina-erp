@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import { LedgerEntry } from '../types';
 import { getLocalDateString } from '../utils/helpers';
 import { useDirtyGuard } from '../hooks/useDirtyGuard';
@@ -11,6 +11,7 @@ interface EntryModalProps {
 }
 
 export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave, initialData }) => {
+  const uid = useId();
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<'CREDIT' | 'DEBIT'>('DEBIT');
@@ -62,35 +63,40 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
       <div className="modal-content" style={{maxWidth: '450px'}}>
         <h2>{initialData ? 'Editar Lançamento' : 'Novo Lançamento'}</h2>
         
+        <div className="form-group">
+          <span className="field-label" id={`${uid}-tipo`}>Tipo</span>
+          <div role="group" aria-labelledby={`${uid}-tipo`} style={{display: 'flex', gap: 10}}>
+            <button 
+                className={type === 'CREDIT' ? 'btn btn-success' : 'btn btn-secondary'}
+                aria-pressed={type === 'CREDIT'}
+                style={{ flex: 1 }}
+                onClick={() => { if (type !== 'CREDIT') guard.markDirty(); setType('CREDIT'); }}
+            >
+                Receita (entrada)
+            </button>
+            <button 
+                className={type === 'DEBIT' ? 'btn btn-danger' : 'btn btn-secondary'}
+                aria-pressed={type === 'DEBIT'}
+                style={{ flex: 1 }}
+                onClick={() => { if (type !== 'DEBIT') guard.markDirty(); setType('DEBIT'); }}
+            >
+                Despesa (saída)
+            </button>
+          </div>
+        </div>
+
         {!initialData && (
-            <div className="toggle-group" style={{display: 'flex', marginBottom: 15, justifyContent: 'center'}}>
-                <button 
-                    className="btn-sm" 
-                    style={{opacity: recurrence === 'SINGLE' ? 1 : 0.5, border: recurrence === 'SINGLE' ? '1px solid var(--primary)' : '1px solid transparent'}}
-                    onClick={() => { if (recurrence !== 'SINGLE') guard.markDirty(); setRecurrence('SINGLE'); }}
-                >
-                    Único
-                </button>
-                <button 
-                    className="btn-sm" 
-                    style={{opacity: recurrence === 'INSTALLMENT' ? 1 : 0.5, border: recurrence === 'INSTALLMENT' ? '1px solid var(--primary)' : '1px solid transparent'}}
-                    onClick={() => { if (recurrence !== 'INSTALLMENT') guard.markDirty(); setRecurrence('INSTALLMENT'); }}
-                >
-                    Parcelado
-                </button>
-                <button 
-                    className="btn-sm" 
-                    style={{opacity: recurrence === 'RECURRING' ? 1 : 0.5, border: recurrence === 'RECURRING' ? '1px solid var(--primary)' : '1px solid transparent'}}
-                    onClick={() => { if (recurrence !== 'RECURRING') guard.markDirty(); setRecurrence('RECURRING'); }}
-                >
-                    Recorrente (Mensal)
-                </button>
+            <div className="segmented" role="group" aria-label="Repetição" style={{marginBottom: 15}}>
+                <button type="button" aria-pressed={recurrence === 'SINGLE'} onClick={() => { if (recurrence !== 'SINGLE') guard.markDirty(); setRecurrence('SINGLE'); }}>Único</button>
+                <button type="button" aria-pressed={recurrence === 'INSTALLMENT'} onClick={() => { if (recurrence !== 'INSTALLMENT') guard.markDirty(); setRecurrence('INSTALLMENT'); }}>Parcelado</button>
+                <button type="button" aria-pressed={recurrence === 'RECURRING'} onClick={() => { if (recurrence !== 'RECURRING') guard.markDirty(); setRecurrence('RECURRING'); }}>Mensal (repete)</button>
             </div>
         )}
 
         <div className="form-group">
-          <label>Descrição</label>
+          <label htmlFor={`${uid}-desc`}>Descrição</label>
           <input 
+            id={`${uid}-desc`}
             className="form-input" 
             value={description} 
             onChange={e => setDescription(e.target.value)} 
@@ -100,23 +106,25 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
         </div>
 
         <div className="form-group">
-          <label>
+          <label htmlFor={`${uid}-valor`}>
               {recurrence === 'INSTALLMENT' ? 'Valor da Compra (R$)' : 'Valor (R$)'}
           </label>
           <input 
+            id={`${uid}-valor`}
             className="form-input" 
             type="number" 
             step="0.01" 
             value={amount} 
             onChange={e => setAmount(e.target.value)} 
-            placeholder="0.00" 
+            placeholder="0,00" 
           />
         </div>
 
         {recurrence === 'INSTALLMENT' && (
             <div className="form-group">
-                <label>Quantidade de Parcelas</label>
+                <label htmlFor={`${uid}-parc`}>Quantidade de parcelas</label>
                 <input 
+                    id={`${uid}-parc`}
                     className="form-input" 
                     type="number" 
                     min="2" 
@@ -129,8 +137,9 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
 
         {recurrence === 'RECURRING' && (
             <div className="form-group">
-                <label>Repetir por quantos meses?</label>
+                <label htmlFor={`${uid}-meses`}>Repetir por quantos meses?</label>
                 <input 
+                    id={`${uid}-meses`}
                     className="form-input" 
                     type="number" 
                     min="2" 
@@ -139,40 +148,19 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
                     onChange={e => setCount(parseInt(e.target.value, 10))} 
                     placeholder="Ex: 12 meses"
                 />
-                <small style={{color:'var(--text-muted)'}}>Isso lançará o valor mensalmente a partir da data selecionada.</small>
+                <small className="field-hint">Isso lançará o valor mensalmente a partir da data selecionada.</small>
             </div>
         )}
 
         <div className="form-group">
-          <label>Data {recurrence !== 'SINGLE' ? 'da 1ª Parcela/Mês' : 'de Competência'}</label>
+          <label htmlFor={`${uid}-data`}>{recurrence !== 'SINGLE' ? 'Data da 1ª parcela/mês' : 'Data do lançamento'}</label>
           <input 
+            id={`${uid}-data`}
             className="form-input" 
             type="date" 
             value={date} 
             onChange={e => setDate(e.target.value)} 
           />
-        </div>
-
-        <div className="form-group">
-          <label>Tipo</label>
-          <div style={{display: 'flex', gap: 10}}>
-            <button 
-                className={type === 'CREDIT' ? 'btn btn-success' : 'btn btn-secondary'}
-                aria-pressed={type === 'CREDIT'}
-                style={{ flex: 1 }}
-                onClick={() => { if (type !== 'CREDIT') guard.markDirty(); setType('CREDIT'); }}
-            >
-                Receita (+Entrada)
-            </button>
-            <button 
-                className={type === 'DEBIT' ? 'btn btn-danger' : 'btn btn-secondary'}
-                aria-pressed={type === 'DEBIT'}
-                style={{ flex: 1 }}
-                onClick={() => { if (type !== 'DEBIT') guard.markDirty(); setType('DEBIT'); }}
-            >
-                Despesa (-Saída)
-            </button>
-          </div>
         </div>
 
         <div className="modal-actions">

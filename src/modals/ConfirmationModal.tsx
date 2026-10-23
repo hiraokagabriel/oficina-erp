@@ -43,7 +43,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
       <div ref={dialogRef} className="modal-content" role="alertdialog" aria-modal="true" aria-labelledby={titleId} style={{maxWidth: '400px', textAlign: 'center'}}>
         <h2 id={titleId} style={{color: getBtnColor(), marginTop: 0}}>{title}</h2>
         
-        <p style={{marginBottom: 25, color: 'var(--text-muted)', fontSize: '1.1rem'}}>
+        <p style={{marginBottom: 25, color: 'var(--text-muted)', fontSize: '1.1rem', whiteSpace: 'pre-line'}}>
           {message}
         </p>
 

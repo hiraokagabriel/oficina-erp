@@ -41,6 +41,9 @@ import "./styles-tokens.css";
 // COMPONENTES BASE (botões, campo, chip, luz de status, janela, aviso, vazio, segmentado)
 import "./styles-components.css";
 
+// JANELA DA OS (seções)
+import "./styles-osmodal.css";
+
 // CONTRASTE WCAG AA (carregar por último)
 import "./styles-contrast.css";
 

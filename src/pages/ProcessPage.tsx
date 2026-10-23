@@ -2,43 +2,68 @@ import React, { useState, useMemo } from 'react';
 import { WorkOrder, OSStatus, STATUS_LABELS } from '../types';
 import { compareByExpectedDate, getDeliveryBadge } from '../services/deliveryBadge';
 import { getDeliveryStatus } from '../services/schedule';
+import { PAGE_STEP, pageSlice, nextVisible, nextBatchSize, pageCounterLabel } from '../services/pagination';
+import { Icon, IconName } from '../components/ui/Icon';
+import '../styles-processos.css';
 
 interface ProcessPageProps {
   workOrders: WorkOrder[];
   onOpenNew: () => void;
   onUpdateStatus: (id: string, newStatus: OSStatus) => void;
+  /** Abre a OS na janela de edição (a mesma ação do Kanban). */
+  onEdit?: (os: WorkOrder) => void;
+  /** Abre a tela já com o filtro "Só atrasadas" ligado (botão "Ver todas" do Painel Hoje). */
+  initialOnlyLate?: boolean;
 }
 
 type SortKey = 'osNumber' | 'clientName' | 'createdAt' | 'total' | 'paymentDate' | 'expectedDate';
 
-export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew, onUpdateStatus }) => {
+const STATUS_ICON: Record<OSStatus, IconName> = {
+  ORCAMENTO: 'prancheta',
+  APROVADO: 'check',
+  EM_SERVICO: 'oficina',
+  AGUARDANDO_PAGAMENTO: 'cifrao',
+  FINALIZADO: 'bandeira',
+  ARQUIVADO: 'caixa',
+};
+
+/** Classe da luz de status (status-light--em-servico etc.). */
+const lightClass = (status: OSStatus): string =>
+  `status-light status-light--${status.toLowerCase().replace(/_/g, '-')}`;
+
+const ALL_STATUSES: OSStatus[] = ['ORCAMENTO', 'APROVADO', 'EM_SERVICO', 'AGUARDANDO_PAGAMENTO', 'FINALIZADO', 'ARQUIVADO'];
+
+const formatMoney = (val: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val / 100);
+
+const formatDate = (dateStr: string) => new Date(dateStr).toLocaleDateString('pt-BR');
+
+export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew, onUpdateStatus, onEdit, initialOnlyLate = false }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<OSStatus | 'ALL'>('ALL');
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
   const [sortBy, setSortBy] = useState<SortKey>('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [expandedGroups, setExpandedGroups] = useState<Set<OSStatus>>(new Set(['ORCAMENTO', 'APROVADO', 'EM_SERVICO']));
-  const [selectedOS, setSelectedOS] = useState<string | null>(null);
-  const [onlyLate, setOnlyLate] = useState(false);
+  const [onlyLate, setOnlyLate] = useState(initialOnlyLate);
+  // Quantas linhas cada grupo mostra (50 por vez)
+  const [visibleByStatus, setVisibleByStatus] = useState<Partial<Record<OSStatus, number>>>({});
 
-  // 📊 ESTATÍSTICAS GLOBAIS
+  // Estatísticas globais
   const stats = useMemo(() => {
     const total = workOrders.length;
     const totalValue = workOrders.reduce((sum, os) => sum + os.total, 0);
     const avgValue = total > 0 ? totalValue / total : 0;
-    const finalized = workOrders.filter(os => os.status === 'FINALIZADO').length;
-    const pending = workOrders.filter(os => os.status === 'ORCAMENTO' || os.status === 'APROVADO').length;
-    
-    return { total, totalValue, avgValue, finalized, pending };
+    return { total, totalValue, avgValue };
   }, [workOrders]);
 
-  // 🔍 FILTROS
+  // Filtros
   const filteredOrders = useMemo(() => {
     let result = [...workOrders];
 
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      result = result.filter(os => 
+      result = result.filter(os =>
         os.clientName.toLowerCase().includes(term) ||
         os.vehicle.toLowerCase().includes(term) ||
         os.osNumber.toString().includes(term)
@@ -54,7 +79,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
       result = result.filter(os => {
         const osDate = new Date(os.createdAt);
         const daysDiff = Math.floor((now.getTime() - osDate.getTime()) / (1000 * 60 * 60 * 24));
-        
+
         if (dateFilter === 'today') return daysDiff === 0;
         if (dateFilter === 'week') return daysDiff <= 7;
         if (dateFilter === 'month') return daysDiff <= 30;
@@ -94,7 +119,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
     return result;
   }, [workOrders, searchTerm, selectedStatus, dateFilter, onlyLate, sortBy, sortDirection]);
 
-  // 📋 ESTATÍSTICAS POR STATUS
+  // Estatísticas por status
   const groupStats = useMemo(() => {
     const groups: Record<OSStatus, { count: number; total: number }> = {
       ORCAMENTO: { count: 0, total: 0 },
@@ -134,485 +159,245 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
     }
   };
 
-  const formatMoney = (val: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val / 100);
+  const showMore = (status: OSStatus, total: number) => {
+    setVisibleByStatus(prev => ({ ...prev, [status]: nextVisible(prev[status] ?? PAGE_STEP, total) }));
   };
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('pt-BR');
-  };
+  const sortTh = (column: SortKey, label: React.ReactNode, className?: string) => (
+    <th
+      scope="col"
+      className={className}
+      aria-sort={sortBy === column ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
+      <button type="button" className="pr-sort" onClick={() => handleSort(column)}>
+        {label}
+        {sortBy === column && (
+          <>
+            <Icon name="proximo" size={14} className={`pr-sort-ic pr-sort-ic--${sortDirection}`} />
+            <span className="pr-sr">{sortDirection === 'asc' ? '(ordem crescente)' : '(ordem decrescente)'}</span>
+          </>
+        )}
+      </button>
+    </th>
+  );
 
-  const getStatusColor = (status: OSStatus) => {
-    const colors = {
-      ORCAMENTO: { bg: 'var(--status-orcamento-bg)', border: 'var(--status-orcamento)', text: 'var(--status-orcamento-text)' },
-      APROVADO: { bg: 'var(--status-aprovado-bg)', border: 'var(--status-aprovado)', text: 'var(--status-aprovado-text)' },
-      EM_SERVICO: { bg: 'var(--status-em-servico-bg)', border: 'var(--status-em-servico)', text: 'var(--status-em-servico-text)' },
-      AGUARDANDO_PAGAMENTO: { bg: 'var(--status-aguardando-pagamento-bg)', border: 'var(--status-aguardando-pagamento)', text: 'var(--status-aguardando-pagamento-text)' },
-      FINALIZADO: { bg: 'var(--status-finalizado-bg)', border: 'var(--status-finalizado)', text: 'var(--status-finalizado-text)' },
-      ARQUIVADO: { bg: 'var(--status-arquivado-bg)', border: 'var(--status-arquivado)', text: 'var(--status-arquivado-text)' }
-    };
-    return colors[status];
-  };
-
-  const SortIcon = ({ column }: { column: SortKey }) => {
-    if (sortBy !== column) return <span style={{ opacity: 0.3, marginLeft: 5 }}>⇅</span>;
-    return <span style={{ marginLeft: 5 }}>{sortDirection === 'asc' ? '⬆️' : '⬇️'}</span>;
-  };
-
-  const allStatuses: OSStatus[] = ['ORCAMENTO', 'APROVADO', 'EM_SERVICO', 'AGUARDANDO_PAGAMENTO', 'FINALIZADO', 'ARQUIVADO'];
+  const hasFilter = !!(searchTerm || selectedStatus !== 'ALL' || dateFilter !== 'all' || onlyLate);
+  const now = new Date();
 
   return (
-    <div>
-      {/* 🏝️ ILHA FLUTUANTE */}
-      <div style={{
-        background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)',
-        borderRadius: '24px',
-        padding: '40px',
-        marginBottom: '32px',
-        color: '#fff',
-        position: 'relative',
-        overflow: 'hidden',
-        boxShadow: '0 20px 60px rgba(130, 87, 230, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)',
-        border: '1px solid rgba(255, 255, 255, 0.15)'
-      }}>
-        {/* Orbes decorativos */}
-        <div style={{
-          position: 'absolute',
-          top: '-100px',
-          right: '-100px',
-          width: '300px',
-          height: '300px',
-          background: 'rgba(255,255,255,0.12)',
-          borderRadius: '50%',
-          filter: 'blur(70px)',
-          pointerEvents: 'none'
-        }}/>
-        
-        <div style={{
-          position: 'absolute',
-          bottom: '-60px',
-          left: '-60px',
-          width: '200px',
-          height: '200px',
-          background: 'rgba(255,255,255,0.08)',
-          borderRadius: '50%',
-          filter: 'blur(50px)',
-          pointerEvents: 'none'
-        }}/>
-        
-        {/* Conteúdo do Header */}
-        <div style={{ position: 'relative', zIndex: 1 }}>
-          {/* Título e Botão */}
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center', 
-            marginBottom: '32px',
-            flexWrap: 'wrap',
-            gap: '16px'
-          }}>
-            <div>
-              <div style={{ 
-                fontSize: '0.75rem', 
-                textTransform: 'uppercase', 
-                letterSpacing: '2px', 
-                opacity: 0.9, 
-                marginBottom: '8px',
-                fontWeight: 600
-              }}>
-                Gestão de
-              </div>
-              <h1 style={{ 
-                margin: 0, 
-                fontSize: 'clamp(1.8rem, 4vw, 2.5rem)', 
-                fontWeight: 800, 
-                lineHeight: 1,
-                textShadow: '0 2px 20px rgba(0,0,0,0.15)'
-              }}>
-                Processos & Ordens de Serviço
-              </h1>
-            </div>
-            
-            <button 
-              className="btn"
-              onClick={onOpenNew}
-              style={{ 
-                background: 'rgba(255,255,255,0.25)',
-                backdropFilter: 'blur(10px)',
-                border: '1px solid rgba(255,255,255,0.4)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              ➕ Novo Processo
-            </button>
-          </div>
+    <div className="pr-page">
+      <header className="pr-head">
+        <div className="pr-head-main">
+          <h1 className="pr-title">Processos</h1>
+          <ul className="pr-summary" aria-label="Resumo das OS">
+            <li className="chip">Total: <strong>{stats.total} OS</strong></li>
+            <li className="chip">Valor total: <strong>{formatMoney(stats.totalValue)}</strong></li>
+            <li className="chip">Valor médio por OS: <strong>{formatMoney(stats.avgValue)}</strong></li>
+          </ul>
+        </div>
+        <button type="button" className="btn" onClick={onOpenNew}>
+          <Icon name="adicionar" size={18} />
+          Nova OS
+        </button>
+      </header>
 
-          {/* Grid de Estatísticas Responsivo */}
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', 
-            gap: '16px'
-          }}>
-            {[
-              { label: 'Total', value: stats.total, suffix: 'processos' },
-              { label: 'Valor Total', value: formatMoney(stats.totalValue), suffix: 'acumulado' },
-              { label: 'Ticket Médio', value: formatMoney(stats.avgValue), suffix: 'por processo' },
-              { label: 'Finalizados', value: stats.finalized, suffix: stats.total > 0 ? `${Math.round((stats.finalized / stats.total) * 100)}% completo` : '0%' },
-              { label: 'Pendentes', value: stats.pending, suffix: 'aguardando' }
-            ].map((stat, idx) => (
-              <div key={idx} style={{
-                background: 'rgba(255,255,255,0.18)',
-                backdropFilter: 'blur(10px)',
-                padding: '20px',
-                borderRadius: '16px',
-                border: '1px solid rgba(255,255,255,0.25)',
-                boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
-              }}>
-                <div style={{ 
-                  fontSize: '0.7rem', 
-                  textTransform: 'uppercase', 
-                  letterSpacing: '1px', 
-                  opacity: 0.85, 
-                  marginBottom: '8px',
-                  fontWeight: 600
-                }}>
-                  {stat.label}
-                </div>
-                <div style={{ 
-                  fontSize: typeof stat.value === 'number' ? '2.2rem' : '1.6rem', 
-                  fontWeight: 800, 
-                  lineHeight: 1,
-                  wordBreak: 'break-word'
-                }}>
-                  {stat.value}
-                </div>
-                <div style={{ 
-                  fontSize: '0.75rem', 
-                  opacity: 0.85, 
-                  marginTop: '6px' 
-                }}>
-                  {stat.suffix}
-                </div>
-              </div>
+      <section className="pr-filters" aria-label="Filtros">
+        <div className="form-group pr-f">
+          <label className="form-label" htmlFor="pr-search">Buscar</label>
+          <input
+            id="pr-search"
+            type="text"
+            className="form-input"
+            placeholder="Cliente, veículo, OS..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <div className="form-group pr-f">
+          <label className="form-label" htmlFor="pr-status">Status</label>
+          <select id="pr-status" className="form-input" value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value as OSStatus | 'ALL')}>
+            <option value="ALL">Todos os status</option>
+            {ALL_STATUSES.map(status => (
+              <option key={status} value={status}>{STATUS_LABELS[status]}</option>
             ))}
-          </div>
+          </select>
         </div>
-      </div>
-
-      {/* 🔍 FILTROS AVANÇADOS */}
-      <div className="card" style={{ marginBottom: '24px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', alignItems: 'end' }}>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">🔍 Buscar</label>
-            <input
-              type="text"
-              className="form-input"
-              placeholder="Cliente, veículo, OS..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">📋 Status</label>
-            <div className="custom-select-wrapper">
-              <select 
-                className="form-input" 
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value as OSStatus | 'ALL')}
-              >
-                <option value="ALL">Todos os Status</option>
-                {allStatuses.map(status => (
-                  <option key={status} value={status}>{STATUS_LABELS[status]}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">📅 Período</label>
-            <div className="custom-select-wrapper">
-              <select 
-                className="form-input"
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value as 'all' | 'today' | 'week' | 'month')}
-              >
-                <option value="all">Todo o período</option>
-                <option value="today">Hoje</option>
-                <option value="week">Semana</option>
-                <option value="month">Mês</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="delivery-only-late">
-              <input type="checkbox" checked={onlyLate} onChange={(e) => setOnlyLate(e.target.checked)} />
-              Só atrasadas
-            </label>
-          </div>
+        <div className="form-group pr-f">
+          <label className="form-label" htmlFor="pr-period">Período</label>
+          <select id="pr-period" className="form-input" value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value as 'all' | 'today' | 'week' | 'month')}>
+            <option value="all">Todo o período</option>
+            <option value="today">Hoje</option>
+            <option value="week">Semana</option>
+            <option value="month">Mês</option>
+          </select>
         </div>
-
-        {(searchTerm || selectedStatus !== 'ALL' || dateFilter !== 'all' || onlyLate) && (
-          <div style={{ marginTop: '16px', textAlign: 'right' }}>
-            <button 
-              className="btn-sm"
-              onClick={() => {
-                setSearchTerm('');
-                setSelectedStatus('ALL');
-                setDateFilter('all');
-                setOnlyLate(false);
-              }}
-            >
-              ✕ Limpar Filtros
-            </button>
-          </div>
+        <label className="delivery-only-late pr-late">
+          <input type="checkbox" checked={onlyLate} onChange={(e) => setOnlyLate(e.target.checked)} />
+          Só atrasadas
+        </label>
+        {hasFilter && (
+          <button type="button" className="btn-secondary pr-clear" onClick={() => {
+            setSearchTerm(''); setSelectedStatus('ALL'); setDateFilter('all'); setOnlyLate(false);
+          }}>
+            <Icon name="fechar" size={16} />
+            Limpar filtros
+          </button>
         )}
-      </div>
+      </section>
 
-      {/* 📋 LISTAGEM EM FORMATO DE TABELA */}
       {filteredOrders.length === 0 ? (
-        <div className="card" style={{
-          textAlign: 'center',
-          padding: '60px 20px',
-          color: 'var(--text-muted)'
-        }}>
-          <div style={{ fontSize: '5rem', marginBottom: '16px', opacity: 0.3 }}>📋</div>
-          <h3 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '8px', color: 'var(--text-main)' }}>
-            Nenhum processo encontrado
-          </h3>
-          <p style={{ fontSize: '1rem', opacity: 0.7 }}>
-            {searchTerm || selectedStatus !== 'ALL' || dateFilter !== 'all' || onlyLate
-              ? 'Tente ajustar os filtros acima'
-              : 'Crie seu primeiro processo clicando no botão acima'}
+        <div className="empty-state">
+          <Icon name="prancheta" size={40} className="empty-state-icon" />
+          <h3 className="empty-state-title">Nenhuma OS encontrada</h3>
+          <p className="empty-state-text">
+            {hasFilter ? 'Tente ajustar os filtros acima.' : 'Crie a primeira OS no botão "Nova OS".'}
           </p>
         </div>
       ) : (
-        <div className="process-view" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {allStatuses.map(status => {
+        <div className="pr-groups">
+          {ALL_STATUSES.map(status => {
             const groupOrders = filteredOrders.filter(os => os.status === status);
             if (groupOrders.length === 0 && selectedStatus === 'ALL') return null;
-            
+
             const isExpanded = expandedGroups.has(status);
-            const colors = getStatusColor(status);
+            const visible = visibleByStatus[status] ?? PAGE_STEP;
+            const shown = pageSlice(groupOrders, visible);
+            const panelId = `pr-panel-${status}`;
 
             return (
-              <div key={status} className="process-group" style={{ animation: 'fadeIn 0.3s ease-out' }}>
-                <div 
-                  className={`process-group-header status-${status}`}
-                  onClick={() => toggleGroup(status)}
-                  style={{ 
-                    cursor: 'pointer',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    transition: 'all 0.2s ease'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.transform = 'translateX(4px)'}
-                  onMouseLeave={(e) => e.currentTarget.style.transform = 'translateX(0)'}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ fontSize: '1.2rem' }}>
-                      {isExpanded ? '🔽' : '🔺'}
+              <section key={status} className="pr-group">
+                <h2 className="pr-group-title">
+                  <button
+                    type="button"
+                    className="pr-group-btn"
+                    aria-expanded={isExpanded}
+                    aria-controls={panelId}
+                    onClick={() => toggleGroup(status)}
+                  >
+                    <Icon name="proximo" size={18} className={`pr-chev${isExpanded ? ' is-open' : ''}`} />
+                    <span className={lightClass(status)}>
+                      <Icon name={STATUS_ICON[status]} size={16} />
+                      {STATUS_LABELS[status]}
                     </span>
-                    <span>{STATUS_LABELS[status]}</span>
                     <span className="count-badge">{groupOrders.length}</span>
-                  </div>
-                  <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>
-                    {formatMoney(groupStats[status].total)}
-                  </div>
-                </div>
-                
+                    <span className="pr-group-total">{formatMoney(groupStats[status].total)}</span>
+                    <span className="pr-sr">{isExpanded ? '(recolher)' : '(expandir)'}</span>
+                  </button>
+                </h2>
+
                 {isExpanded && (
-                  <div className="card" style={{ 
-                    padding: 0, 
-                    overflow: 'visible', 
-                    borderTopLeftRadius: 0, 
-                    marginTop: -1,
-                    animation: 'slideDown 0.3s ease-out'
-                  }}>
-                    <table className="process-table">
-                      <thead>
-                        <tr>
-                          <th 
-                            style={{ width: '10%', cursor: 'pointer' }} 
-                            onClick={() => handleSort('osNumber')}
-                            className="sortable-th"
-                          > 
-                            Nº OS <SortIcon column="osNumber" />
-                          </th>
-                          <th 
-                            onClick={() => handleSort('clientName')} 
-                            className="sortable-th"
-                            style={{ cursor: 'pointer' }}
-                          >
-                            Cliente / Veículo <SortIcon column="clientName"/>
-                          </th>
-                          <th 
-                            style={{ width: '12%', cursor: 'pointer' }} 
-                            onClick={() => handleSort('createdAt')}
-                            className="sortable-th"
-                          >
-                            Data <SortIcon column="createdAt" />
-                          </th>
-                          <th 
-                            style={{ width: '13%', cursor: 'pointer' }}
-                            onClick={() => handleSort('paymentDate')}
-                            className="sortable-th"
-                          >
-                            💵 Pagamento <SortIcon column="paymentDate" />
-                          </th>
-                          <th 
-                            style={{ width: '14%', cursor: 'pointer' }}
-                            onClick={() => handleSort('expectedDate')}
-                            className="sortable-th"
-                          >
-                            🚚 Previsão de entrega <SortIcon column="expectedDate" />
-                          </th>
-                          <th 
-                            style={{ width: '12%', cursor: 'pointer' }}
-                            onClick={() => handleSort('total')}
-                            className="sortable-th"
-                          >
-                            Valor <SortIcon column="total" />
-                          </th>
-                          <th style={{ width: '15%' }}>Status (Alterar)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {groupOrders.map((os, index) => (
-                          <tr 
-                            key={os.id} 
-                            className="process-row"
-                            style={{
-                              // atraso escalonado limitado: só os primeiros itens animam em sequência
-                              animation: `slideIn 0.3s ease-out ${Math.min(index, 12) * 0.03}s both`,
-                              transition: 'transform 0.2s ease, background-color 0.2s ease'
-                            }}
-                          >
-                            <td>
-                              <span className="os-number" style={{
-                                background: colors.bg,
-                                border: `1px solid ${colors.border}`,
-                                color: colors.text,
-                                padding: '4px 10px',
-                                borderRadius: '6px',
-                                fontWeight: 700,
-                                fontSize: '0.85rem'
-                              }}>#{os.osNumber}</span>
-                            </td>
-                            <td>
-                              <div className="cell-primary">{os.clientName}</div>
-                              <div className="cell-secondary">🚗 {os.vehicle}</div>
-                            </td>
-                            <td className="cell-secondary">
-                              📅 {formatDate(os.createdAt)}
-                            </td>
-                            <td>
-                              {os.paymentDate ? (
-                                <span style={{
-                                  display: 'inline-block',
-                                  padding: '4px 10px',
-                                  background: 'rgba(4, 211, 97, 0.15)',
-                                  border: '1px solid rgba(4, 211, 97, 0.4)',
-                                  borderRadius: '6px',
-                                  color: 'var(--success)',
-                                  fontWeight: 600,
-                                  fontSize: '0.85rem'
-                                }}>
-                                  ✅ {formatDate(os.paymentDate)}
-                                </span>
-                              ) : (
-                                <span style={{
-                                  color: 'var(--text-muted)',
-                                  fontSize: '0.85rem',
-                                  fontStyle: 'italic'
-                                }}>
-                                  Pendente
-                                </span>
-                              )}
-                            </td>
-                            <td>
-                              {os.expectedDate ? (() => {
-                                const badge = getDeliveryBadge(os, new Date());
-                                return (
-                                  <div className="process-expected">
-                                    <span className="cell-secondary">{formatDate(os.expectedDate)}</span>
-                                    {badge && badge.kind === 'atrasada' && (
-                                      <span className={`delivery-badge delivery-badge--${badge.kind}`}>{badge.label}</span>
-                                    )}
-                                  </div>
-                                );
-                              })() : (
-                                <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Sem previsão</span>
-                              )}
-                            </td>
-                            <td>
-                              <span style={{
-                                fontWeight: 700,
-                                color: 'var(--success)',
-                                fontSize: '1.05rem',
-                                fontFamily: 'monospace'
-                              }}>
-                                {formatMoney(os.total)}
-                              </span>
-                            </td>
-                            
-                            <td className="status-cell">
-                              <span 
-                                className={`status-badge st-${os.status} clickable`}
+                  <div id={panelId} className="pr-panel">
+                    <div className="pr-scroll" tabIndex={0} role="region" aria-label={`Tabela: ${STATUS_LABELS[status]}`}>
+                      <table className="pr-table">
+                        <thead>
+                          <tr>
+                            {sortTh('osNumber', 'Nº OS', 'pr-c-os')}
+                            {sortTh('clientName', 'Cliente / veículo', 'pr-c-client')}
+                            {sortTh('createdAt', 'Data', 'pr-c-opt')}
+                            {sortTh('paymentDate', 'Pagamento', 'pr-c-opt')}
+                            {sortTh('expectedDate', 'Previsão de entrega', 'pr-c-opt')}
+                            {sortTh('total', 'Valor', 'pr-c-total')}
+                            <th scope="col" className="pr-c-status">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {shown.map((os) => {
+                            const badge = os.expectedDate ? getDeliveryBadge(os, now) : null;
+                            const late = badge && badge.kind === 'atrasada' ? badge : null;
+                            return (
+                              <tr
+                                key={os.id}
+                                className="pr-row"
+                                tabIndex={onEdit ? 0 : undefined}
+                                aria-label={onEdit ? `Abrir OS #${os.osNumber}, ${os.clientName}` : undefined}
                                 onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedOS(selectedOS === os.id ? null : os.id);
+                                  if ((e.target as HTMLElement).closest('select, button, a')) return;
+                                  if (onEdit) onEdit(os);
                                 }}
-                                style={{
-                                  cursor: 'pointer',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '6px',
-                                  transition: 'all 0.2s ease'
+                                onKeyDown={(e) => {
+                                  if (e.target !== e.currentTarget) return;
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    if (onEdit) onEdit(os);
+                                  }
                                 }}
                               >
-                                {STATUS_LABELS[os.status]} 
-                                <span className="dropdown-arrow">▼</span>
-                              </span>
-
-                              {selectedOS === os.id && (
-                                <div className="status-dropdown-menu">
-                                  {allStatuses.map(optStatus => (
-                                    <div 
-                                      key={optStatus}
-                                      className={`status-option ${optStatus === os.status ? 'selected' : ''}`}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        onUpdateStatus(os.id, optStatus);
-                                        setSelectedOS(null);
-                                      }}
-                                    >
-                                      {optStatus === os.status && <span>✔️</span>}
-                                      {STATUS_LABELS[optStatus]}
+                                <td className="pr-c-os">
+                                  <span className={`pr-os ${lightClass(os.status)}`}>#{os.osNumber}</span>
+                                </td>
+                                <td className="pr-c-client">
+                                  <div className="cell-primary">{os.clientName}</div>
+                                  <div className="cell-secondary">{os.vehicle}</div>
+                                  {late && (
+                                    <span className={`delivery-badge delivery-badge--${late.kind} pr-late-inline`}>{late.label}</span>
+                                  )}
+                                </td>
+                                <td className="pr-c-opt cell-secondary">{formatDate(os.createdAt)}</td>
+                                <td className="pr-c-opt">
+                                  {os.paymentDate ? (
+                                    <span className="pr-paid">
+                                      <Icon name="check" size={14} />
+                                      Pago em {formatDate(os.paymentDate)}
+                                    </span>
+                                  ) : os.status === 'ORCAMENTO' ? (
+                                    <span className="cell-secondary" title="Sem cobrança: o orçamento ainda não foi aprovado">
+                                      —<span className="pr-sr"> Sem cobrança ainda</span>
+                                    </span>
+                                  ) : (
+                                    <span className="cell-secondary">A receber</span>
+                                  )}
+                                </td>
+                                <td className="pr-c-opt">
+                                  {os.expectedDate ? (
+                                    <div className="process-expected">
+                                      <span className="cell-secondary">{formatDate(os.expectedDate)}</span>
+                                      {late && (
+                                        <span className={`delivery-badge delivery-badge--${late.kind}`}>{late.label}</span>
+                                      )}
                                     </div>
-                                  ))}
-                                </div>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                                  ) : (
+                                    <span className="cell-secondary">Sem previsão</span>
+                                  )}
+                                </td>
+                                <td className="pr-c-total"><span className="pr-money">{formatMoney(os.total)}</span></td>
+                                <td className="pr-c-status">
+                                  <div className="pr-status">
+                                    <span className={`${lightClass(os.status)} pr-dot`} aria-hidden="true" />
+                                    <select
+                                      className="form-input pr-status-select"
+                                      aria-label={`Status da OS #${os.osNumber}`}
+                                      value={os.status}
+                                      onChange={(e) => onUpdateStatus(os.id, e.target.value as OSStatus)}
+                                    >
+                                      {ALL_STATUSES.map(opt => (
+                                        <option key={opt} value={opt}>{STATUS_LABELS[opt]}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="pr-more">
+                      <span className="pr-counter" role="status">{pageCounterLabel(visible, groupOrders.length)}</span>
+                      {nextBatchSize(visible, groupOrders.length) > 0 && (
+                        <button type="button" className="btn-secondary" onClick={() => showMore(status, groupOrders.length)}>
+                          Mostrar mais {nextBatchSize(visible, groupOrders.length)}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
-              </div>
+              </section>
             );
           })}
         </div>
       )}
-
     </div>
   );
 };

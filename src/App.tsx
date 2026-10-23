@@ -715,7 +715,7 @@ Abrir OS?`)) {
                 onNewOS={() => { setEditingOS(null); setIsModalOpen(true); }}
                 onSaveAppointment={input => handleSaveAppointment(input, null, 'NOVO')}
                 onCreateOSFromAppointment={handleCreateOSFromAppointment}
-                onOpenOS={handleOpenOSFromCRM}
+                onOpenOS={os => { setEditingOS(os); setIsModalOpen(true); }}
                 onGoProcesses={() => setActiveTab('PROCESSOS')}
                 onGoAgenda={() => setActiveTab('AGENDA')}
                 onGoFinance={() => setActiveTab('FINANCEIRO')}

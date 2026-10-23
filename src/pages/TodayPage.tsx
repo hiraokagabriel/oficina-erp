@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { parseDateOnly } from '../utils/dates';
 import { Appointment, Client, LedgerEntry, WorkOrder, WorkshopSettings } from '../types';
 import { AppointmentInput, statusLabel } from '../services/agenda';
 import { formatExpectedDate } from '../services/schedule';
@@ -30,11 +31,25 @@ export const TodayPage: React.FC<TodayPageProps> = ({
   onNewOS, onSaveAppointment, onCreateOSFromAppointment, onOpenOS,
   onGoProcesses, onGoAgenda, onGoFinance, onGoConfig, onGoClients,
 }) => {
-  const [now] = useState<Date>(() => new Date());
+  // Chave do dia (AAAA-MM-DD local): atualiza ao focar a janela e a cada 60 s, para a virada do dia valer sem reabrir o app.
+  const [dayKey, setDayKey] = useState<string>(() => todayKeyOf(new Date()));
+  useEffect(() => {
+    const refresh = () => setDayKey(prev => { const k = todayKeyOf(new Date()); return k === prev ? prev : k; });
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', onVisible);
+    const timer = window.setInterval(refresh, 60000);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.clearInterval(timer);
+    };
+  }, []);
+  const now = useMemo(() => parseDateOnly(dayKey), [dayKey]);
   const [apptOpen, setApptOpen] = useState(false);
   const [guideHidden, setGuideHidden] = useState<boolean>(() => readGuideDismissed());
 
-  const sum = useMemo(() => buildTodaySummary(workOrders, appointments, ledger, now), [workOrders, appointments, ledger, now]);
+  const sum = useMemo(() => buildTodaySummary(workOrders, appointments, ledger, dayKey), [workOrders, appointments, ledger, dayKey]);
   const steps = useMemo(() => buildOnboarding(settings, clients, workOrders, readPrintedOnce()), [settings, clients, workOrders]);
   const doneCount = steps.filter(s => s.done).length;
 
@@ -98,7 +113,7 @@ export const TodayPage: React.FC<TodayPageProps> = ({
         <section className="today-card" aria-labelledby="today-late-title">
           <div className="today-card-head">
             <h2 id="today-late-title" className="today-card-title">Atrasadas</h2>
-            {sum.atrasadas.length > 0 && <span className="today-count today-count--bad">{sum.atrasadas.length}</span>}
+            {sum.atrasadas.length > 0 && <span className="today-count today-count--bad" role="img" aria-label={`${sum.atrasadas.length} ${sum.atrasadas.length === 1 ? 'OS atrasada' : 'OS atrasadas'}`}>{sum.atrasadas.length}</span>}
           </div>
           {sum.atrasadas.length === 0 ? empty('check', 'Nenhuma OS atrasada') : (
             <ul className="today-list">
@@ -114,13 +129,13 @@ export const TodayPage: React.FC<TodayPageProps> = ({
               ))}
             </ul>
           )}
-          {seeAll(sum.atrasadas.length, onGoProcesses, 'Ver todas')}
+          {seeAll(sum.atrasadas.length, onGoProcesses, 'Abrir Processos')}
         </section>
 
         <section className="today-card" aria-labelledby="today-deliv-title">
           <div className="today-card-head">
             <h2 id="today-deliv-title" className="today-card-title">Entregas de hoje</h2>
-            {sum.entregasHoje.length > 0 && <span className="today-count">{sum.entregasHoje.length}</span>}
+            {sum.entregasHoje.length > 0 && <span className="today-count" role="img" aria-label={`${sum.entregasHoje.length} ${sum.entregasHoje.length === 1 ? 'entrega hoje' : 'entregas hoje'}`}>{sum.entregasHoje.length}</span>}
           </div>
           {sum.entregasHoje.length === 0 ? empty('caixa', 'Nenhuma entrega para hoje') : (
             <ul className="today-list">
@@ -135,13 +150,13 @@ export const TodayPage: React.FC<TodayPageProps> = ({
               ))}
             </ul>
           )}
-          {seeAll(sum.entregasHoje.length, onGoProcesses, 'Ver todas')}
+          {seeAll(sum.entregasHoje.length, onGoProcesses, 'Abrir Processos')}
         </section>
 
         <section className="today-card" aria-labelledby="today-appt-title">
           <div className="today-card-head">
             <h2 id="today-appt-title" className="today-card-title">Agendamentos de hoje</h2>
-            {sum.agendamentosHoje.length > 0 && <span className="today-count">{sum.agendamentosHoje.length}</span>}
+            {sum.agendamentosHoje.length > 0 && <span className="today-count" role="img" aria-label={`${sum.agendamentosHoje.length} ${sum.agendamentosHoje.length === 1 ? 'agendamento hoje' : 'agendamentos hoje'}`}>{sum.agendamentosHoje.length}</span>}
           </div>
           {sum.agendamentosHoje.length === 0 ? empty('agenda', 'Nenhum veículo agendado para hoje') : (
             <ul className="today-list">
@@ -165,7 +180,7 @@ export const TodayPage: React.FC<TodayPageProps> = ({
         <section className="today-card" aria-labelledby="today-due-title">
           <div className="today-card-head">
             <h2 id="today-due-title" className="today-card-title">Contas vencidas</h2>
-            {sum.countVencido > 0 && <span className="today-count today-count--bad">{sum.countVencido}</span>}
+            {sum.countVencido > 0 && <span className="today-count today-count--bad" role="img" aria-label={`${sum.countVencido} ${sum.countVencido === 1 ? 'conta vencida' : 'contas vencidas'}`}>{sum.countVencido}</span>}
           </div>
           {sum.contasVencidas.length === 0 ? empty('cifrao', 'Nenhuma conta vencida') : (
             <>

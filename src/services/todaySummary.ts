@@ -1,6 +1,5 @@
 import { Appointment, Client, LedgerEntry, WorkOrder, WorkshopSettings } from '../types';
 import { formatDateOnly } from '../utils/dates';
-import { canCreateOS } from './agenda';
 import { getDaysOverdue, summarizeReceivables, toLocalDay } from './receivables';
 import { getDaysLate, getDeliveryStatus, groupAppointmentsByDay, startOfWeek, summarizeDeliveries } from './schedule';
 
@@ -18,8 +17,6 @@ export interface TodaySummary {
   atrasadas: TodayLate[];
   /** Agendamentos de hoje que ainda valem (sem cancelados e faltas), por hora. */
   agendamentosHoje: Appointment[];
-  /** Quantos agendamentos de hoje podem virar OS. */
-  podemVirarOS: number;
   /** Parcelas vencidas, a mais antiga primeiro. */
   contasVencidas: TodayOverdue[];
   totalVencido: number;
@@ -51,7 +48,6 @@ export const buildTodaySummary = (
     entregasHoje,
     atrasadas: deliveries.atrasadas.map(os => ({ os, daysLate: getDaysLate(os, today) })),
     agendamentosHoje,
-    podemVirarOS: agendamentosHoje.filter(canCreateOS).length,
     contasVencidas: vencidas,
     totalVencido: rec.totalAtrasado,
     countVencido: rec.countAtrasado,

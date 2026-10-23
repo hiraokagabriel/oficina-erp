@@ -20,13 +20,12 @@ describe('buildTodaySummary', () => {
     expect(s.entregasHoje.map(o => o.osNumber)).toEqual([1]);
     expect(s.atrasadas.map(a => [a.os.osNumber, a.daysLate])).toEqual([[3, 12], [2, 2]]);
   });
-  it('agendamentos de hoje: sem cancelados e faltas, por hora; conta os que viram OS', () => {
+  it('agendamentos de hoje: sem cancelados e faltas, por hora', () => {
     const s = buildTodaySummary([], [
       ap('a', today, 'AGENDADO', '14:00'), ap('b', today, 'AGENDADO', '09:00'), ap('c', today, 'CANCELADO', '08:00'),
       ap('d', today, 'FALTOU'), ap('e', today, 'COMPARECEU', '10:00', 'o1'), ap('f', '2026-10-23', 'AGENDADO'),
     ], [], today);
     expect(s.agendamentosHoje.map(a => a.id)).toEqual(['b', 'e', 'a']);
-    expect(s.podemVirarOS).toBe(2);
   });
   it('contas vencidas: só crédito em aberto e vencido, mais antiga primeiro, com total', () => {
     const s = buildTodaySummary([], [], [

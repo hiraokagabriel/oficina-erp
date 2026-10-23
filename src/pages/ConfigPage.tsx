@@ -160,10 +160,10 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
       {/* TELA INICIAL (por computador) */}
       <div className="card">
         <h3>Tela inicial</h3>
-        <div className="today-home" role="radiogroup" aria-label="Tela inicial deste computador">
+        <div className="today-home" role="group" aria-label="Tela inicial deste computador">
           <div className="segmented">
             {([['OFICINA', 'Oficina'], ['HOJE', 'Hoje']] as [HomeTab, string][]).map(([id, label]) => (
-              <button key={id} type="button" role="radio" aria-checked={homeTab === id}
+              <button key={id} type="button" aria-pressed={homeTab === id}
                 onClick={() => { setHomeTab(id); writeHomeTab(id); }}>{label}</button>
             ))}
           </div>

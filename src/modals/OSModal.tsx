@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { WorkOrder, Client, OrderItem, CatalogItem, Technician, PartCategory, PART_CATEGORY_META, OSModalPayload } from '../types';
-import { getLocalDateString, Money } from '../utils/helpers';
+import { getLocalDateString } from '../utils/helpers';
 import { normalizeName, resolveCatalogItemId, resolveClientId, resolveTechnicianId, splitVehicle } from '../utils/links';
 import type { OSDraftFromAppointment } from '../services/schedule';
 import { appendNote } from '../services/agenda';
@@ -11,8 +11,8 @@ import { VehicleCombobox, useShopVehicles } from '../components/VehicleCombobox'
 import { computeOSMargin, formatPct, marginLabel, marginLevel, suggestPriceForTarget } from '../services/margin';
 import { PriceSuggestion, suggestHistoricalPrice } from '../services/pricing';
 import { useDirtyGuard } from '../hooks/useDirtyGuard';
-import { costToInput, normalizeItemCost, parseCostEdit, parseCostInput, partialMarginNote } from '../services/marginView';
-import { firstErrorField, OSFieldErrors, OSFieldId, parsePriceText, sanitizeMoneyText, validateOSFields } from '../services/osModalView';
+import { normalizeItemCost, partialMarginNote } from '../services/marginView';
+import { firstErrorField, OSFieldErrors, OSFieldId, validateOSFields } from '../services/osModalView';
 import { MoneyField } from '../components/MoneyField';
 import { Icon } from '../components/ui/Icon';
 
@@ -93,7 +93,7 @@ export const OSModal: React.FC<OSModalProps> = ({
   const [vehicle, setVehicle] = useState("");
   const [plate, setPlate] = useState("");
   const [mileage, setMileage] = useState("");
-  const [advanceAmountDisplay, setAdvanceAmountDisplay] = useState(""); // 🆕 Campo de adiantamento (em reais, string)
+  const [advanceCents, setAdvanceCents] = useState<number | undefined>(undefined); // adiantamento em centavos (vazio = sem)
 
   const [parts, setParts] = useState<OrderItem[]>([]);
   const [services, setServices] = useState<OrderItem[]>([]);
@@ -103,10 +103,24 @@ export const OSModal: React.FC<OSModalProps> = ({
   const clearError = (f: OSFieldId) => setErrors(prev => (prev[f] ? { ...prev, [f]: undefined } : prev));
 
   // --- ESTADOS TEMPORÁRIOS ---
-  const [tempPart, setTempPart] = useState({ description: '', price: '', cost: '', category: '' as PartCategory | '' });
-  const [tempService, setTempService] = useState({ description: '', price: '', cost: '' });
+  const [tempPart, setTempPart] = useState<{ description: string; price: number | undefined; cost: number | undefined; category: PartCategory | '' }>(
+    { description: '', price: undefined, cost: undefined, category: '' });
+  const [tempService, setTempService] = useState<{ description: string; price: number | undefined; cost: number | undefined }>(
+    { description: '', price: undefined, cost: undefined });
 
-  const fromFloat = Money.fromFloat;
+  // Campos de dinheiro com texto inválido (ids) e se os erros já devem aparecer (tentou salvar/adicionar).
+  const moneyInvalid = useRef(new Set<string>());
+  const [moneyShown, setMoneyShown] = useState(false);
+  const trackMoney = (id: string, invalid: boolean) => { if (invalid) moneyInvalid.current.add(id); else moneyInvalid.current.delete(id); };
+  /** Há campo de dinheiro inválido (entre os ids dados, ou em qualquer um)? Mostra o erro e foca o primeiro, na ordem da tela. */
+  const blockedByMoney = (ids?: string[]): boolean => {
+    const bad = [...moneyInvalid.current].filter(i => !ids || ids.includes(i));
+    if (bad.length === 0) return false;
+    setMoneyShown(true);
+    document.querySelector<HTMLElement>(bad.map(i => `#${CSS.escape(i)}`).join(','))?.focus();
+    return true;
+  };
+
 
   // --- CÁLCULOS FINANCEIROS MEMOIZADOS ---
   const partsTotal = useMemo(() => parts.reduce((acc, i) => acc + i.price, 0), [parts]);
@@ -202,6 +216,7 @@ export const OSModal: React.FC<OSModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     setErrors({});
+    setMoneyShown(false);
     setShowProfit(false);
 
     if (editingOS) {
@@ -221,11 +236,7 @@ export const OSModal: React.FC<OSModalProps> = ({
       setPublicNotes(editingOS.publicNotes || "");
 
       // 🆕 Pré-preencher adiantamento (se existir na OS) em reais
-      setAdvanceAmountDisplay(
-        typeof editingOS.advanceAmount === 'number' && editingOS.advanceAmount > 0
-          ? (editingOS.advanceAmount / 100).toString()
-          : ""
-      );
+      setAdvanceCents(typeof editingOS.advanceAmount === 'number' && editingOS.advanceAmount > 0 ? editingOS.advanceAmount : undefined);
 
       const sep = editingOS.vehicle.lastIndexOf(" - ");
       if (sep > 0) {
@@ -254,7 +265,7 @@ export const OSModal: React.FC<OSModalProps> = ({
       setMileage("");
       setParts([]);
       setServices([]);
-      setAdvanceAmountDisplay("");
+      setAdvanceCents(undefined);
     }
     // Rascunho (Agenda -> Criar OS): só valores iniciais ao CRIAR. clientId só vale se o cliente ainda existe.
     if (!editingOS && draft) {
@@ -344,34 +355,36 @@ export const OSModal: React.FC<OSModalProps> = ({
   // --- HANDLERS ---
   const addPart = (toServices: boolean) => {
     if (!tempPart.description) return;
-    const priceVal = parseFloat(tempPart.price.replace(',', '.')) || 0;
+    if (blockedByMoney(['os-new-part-cost', 'os-new-part-price'])) return;
+    guard.markDirty();
     const partLinkId = resolveCatalogItemId({ description: tempPart.description }, catalogParts);
     const newItem: OrderItem = {
       id: crypto.randomUUID(),
       ...(partLinkId ? { catalogItemId: partLinkId } : {}),
       description: tempPart.description,
-      price: fromFloat(priceVal),
-      cost: parseCostInput(tempPart.cost),
+      price: tempPart.price ?? 0,
+      cost: tempPart.cost && tempPart.cost > 0 ? tempPart.cost : undefined,
       category: tempPart.category || undefined
     };
     setParts(prev => [...prev, newItem]);
-    setTempPart({ description: '', price: '', cost: '', category: '' });
+    setTempPart({ description: '', price: undefined, cost: undefined, category: '' });
     if (toServices) serviceInputRef.current?.focus(); else partInputRef.current?.focus();
   };
 
   const addService = (toParts: boolean) => {
     if (!tempService.description) return;
-    const priceVal = parseFloat(tempService.price.replace(',', '.')) || 0;
+    if (blockedByMoney(['os-new-service-cost', 'os-new-service-price'])) return;
+    guard.markDirty();
     const serviceLinkId = resolveCatalogItemId({ description: tempService.description }, catalogServices);
     const newItem: OrderItem = {
       id: crypto.randomUUID(),
       ...(serviceLinkId ? { catalogItemId: serviceLinkId } : {}),
       description: tempService.description,
-      price: fromFloat(priceVal),
-      cost: parseCostInput(tempService.cost)
+      price: tempService.price ?? 0,
+      cost: tempService.cost && tempService.cost > 0 ? tempService.cost : undefined
     };
     setServices(prev => [...prev, newItem]);
-    setTempService({ description: '', price: '', cost: '' });
+    setTempService({ description: '', price: undefined, cost: undefined });
     if (toParts) partInputRef.current?.focus(); else serviceInputRef.current?.focus();
   };
 
@@ -388,8 +401,8 @@ export const OSModal: React.FC<OSModalProps> = ({
     setTempPart({
       ...tempPart,
       description: val,
-      price: match ? (match.price / 100).toString() : tempPart.price,
-      cost: match ? costToInput(match.cost) : tempPart.cost,
+      price: match ? match.price : tempPart.price,
+      cost: match ? (match.cost && match.cost > 0 ? match.cost : undefined) : tempPart.cost,
       // 🆕 Issue #42: auto-fill categoria aprendida do catálogo
       category: match?.category ?? tempPart.category
     });
@@ -399,8 +412,8 @@ export const OSModal: React.FC<OSModalProps> = ({
     const match = catalogServices.find(c => c.description.toLowerCase() === val.toLowerCase());
     setTempService({
       description: val,
-      price: match ? (match.price / 100).toString() : tempService.price,
-      cost: match ? costToInput(match.cost) : tempService.cost
+      price: match ? match.price : tempService.price,
+      cost: match ? (match.cost && match.cost > 0 ? match.cost : undefined) : tempService.cost
     });
   };
 
@@ -409,20 +422,16 @@ export const OSModal: React.FC<OSModalProps> = ({
     const first = firstErrorField(found);
     if (first) {
       setErrors(found);
+      if (moneyInvalid.current.size > 0) setMoneyShown(true);
       document.getElementById(first)?.focus();
       return;
     }
     setErrors({});
+    if (blockedByMoney()) return;
     const numOS = parseInt(osNumber, 10);
     const fullVehicle = plate ? `${vehicle} - ${plate.toUpperCase()}` : vehicle;
 
-    const advanceAmount = (() => {
-      const trimmed = advanceAmountDisplay.trim();
-      if (!trimmed) return undefined;
-      const val = parseFloat(trimmed.replace(',', '.'));
-      if (isNaN(val) || val <= 0) return undefined;
-      return fromFloat(val);
-    })();
+    const advanceAmount = advanceCents !== undefined && advanceCents > 0 ? advanceCents : undefined;
 
     onSave({
       osNumber: numOS,
@@ -447,18 +456,21 @@ export const OSModal: React.FC<OSModalProps> = ({
   };
 
   // --- HOTKEY ---
+  // handleConfirm é recriado a cada render com o estado atual; o ref garante que o atalho nunca use uma versão velha.
+  const confirmRef = useRef(handleConfirm);
+  confirmRef.current = handleConfirm;
   useEffect(() => {
     if (!isOpen) return;
 
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.shiftKey && e.key === 'Enter') {
         e.preventDefault();
-        handleConfirm();
+        confirmRef.current();
       }
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [isOpen, clientName, vehicle, parts, services, osNumber, publicNotes, technician, advanceAmountDisplay, selectedClient, needsClientChoice]);
+  }, [isOpen]);
 
   // Esc, Cancelar: pergunta antes de descartar o que foi digitado. Salvar fecha direto (handleConfirm -> onSave).
   // resetKey estável (string): recarregar o formulário com a janela aberta (outra OS, outro rascunho) zera a flag.
@@ -525,7 +537,7 @@ export const OSModal: React.FC<OSModalProps> = ({
           {hasHomonyms && (
             <fieldset className="osm-homonyms">
               <legend className="form-label">Qual cliente?</legend>
-              <div role="radiogroup" aria-label="Qual cliente?" aria-required="true" aria-describedby="os-client-choice-error" className="osm-radios">
+              <div role="radiogroup" aria-label="Qual cliente?" aria-required="true" aria-describedby={needsClientChoice ? 'os-client-choice-error' : undefined} className="osm-radios">
                 {sameNameClients.map((c, idx) => (
                   <label key={c.id} className="osm-radio">
                     <input
@@ -612,12 +624,14 @@ export const OSModal: React.FC<OSModalProps> = ({
                   style={{ flex: '1 1 140px' }}
                 />
                 {showCostColumn && (
-                  <input className="form-input osm-num" type="text" inputMode="decimal" aria-label="Custo da nova peça" value={tempPart.cost}
-                    onChange={e => setTempPart({ ...tempPart, cost: sanitizeMoneyText(e.target.value) })} onKeyDown={handlePartKeyDown} placeholder="Custo" />
+                  <MoneyField id="os-new-part-cost" kind="cost" className="form-input osm-num" aria-label="Custo da nova peça" value={tempPart.cost}
+                    onChange={c => setTempPart(prev => ({ ...prev, cost: c }))} onInvalidChange={trackMoney} showError={moneyShown}
+                    onKeyDown={handlePartKeyDown} placeholder="Custo" />
                 )}
-                <input className="form-input osm-num" type="text" inputMode="decimal" aria-label="Preço da nova peça" value={tempPart.price}
-                  onChange={e => setTempPart({ ...tempPart, price: sanitizeMoneyText(e.target.value) })} onKeyDown={handlePartKeyDown} placeholder="Preço" />
-                <button type="button" className="btn-secondary osm-add-btn" onClick={() => { guard.markDirty(); addPart(false); }}>
+                <MoneyField id="os-new-part-price" kind="price" className="form-input osm-num" aria-label="Preço da nova peça" value={tempPart.price}
+                  onChange={c => setTempPart(prev => ({ ...prev, price: c }))} onInvalidChange={trackMoney} showError={moneyShown}
+                  onKeyDown={handlePartKeyDown} placeholder="Preço" />
+                <button type="button" className="btn-secondary osm-add-btn" onClick={() => addPart(false)}>
                   <Icon name="adicionar" size={16} /> Adicionar
                 </button>
               </div>
@@ -641,12 +655,14 @@ export const OSModal: React.FC<OSModalProps> = ({
                             placeholder="—"
                           />
                           {showCostColumn && (
-                            <MoneyField className="form-input margin-cost-field osm-num" value={p.cost} parse={parseCostEdit}
+                            <MoneyField id={`os-part-${p.id}-cost`} kind="cost" className="form-input margin-cost-field osm-num" value={p.cost}
+                              onInvalidChange={trackMoney} showError={moneyShown}
                               onChange={c => updateItem(parts, setParts, i, 'cost', c, catalogParts)}
                               placeholder="Custo" title="Custo interno de aquisição (vazio = sem custo, fora da margem)"
                               aria-label={`Custo de ${p.description || 'peça'}`} />
                           )}
-                          <MoneyField className="form-input osm-num" value={p.price} parse={parsePriceText}
+                          <MoneyField id={`os-part-${p.id}-price`} kind="price" className="form-input osm-num" value={p.price}
+                            onInvalidChange={trackMoney} showError={moneyShown}
                             onChange={c => updateItem(parts, setParts, i, 'price', c ?? 0, catalogParts)}
                             aria-label={`Preço de ${p.description || 'peça'}`} />
                           {removeBtn(() => { guard.markDirty(); setParts(parts.filter((_, idx) => idx !== i)); }, p.description)}
@@ -681,12 +697,14 @@ export const OSModal: React.FC<OSModalProps> = ({
                   ))}
                 </datalist>
                 {showCostColumn && (
-                  <input className="form-input osm-num" type="text" inputMode="decimal" aria-label="Custo do novo serviço" value={tempService.cost}
-                    onChange={e => setTempService({ ...tempService, cost: sanitizeMoneyText(e.target.value) })} onKeyDown={handleServiceKeyDown} placeholder="Custo" />
+                  <MoneyField id="os-new-service-cost" kind="cost" className="form-input osm-num" aria-label="Custo do novo serviço" value={tempService.cost}
+                    onChange={c => setTempService(prev => ({ ...prev, cost: c }))} onInvalidChange={trackMoney} showError={moneyShown}
+                    onKeyDown={handleServiceKeyDown} placeholder="Custo" />
                 )}
-                <input className="form-input osm-num" type="text" inputMode="decimal" aria-label="Preço do novo serviço" value={tempService.price}
-                  onChange={e => setTempService({ ...tempService, price: sanitizeMoneyText(e.target.value) })} onKeyDown={handleServiceKeyDown} placeholder="Preço" />
-                <button type="button" className="btn-secondary osm-add-btn" onClick={() => { guard.markDirty(); addService(false); }}>
+                <MoneyField id="os-new-service-price" kind="price" className="form-input osm-num" aria-label="Preço do novo serviço" value={tempService.price}
+                  onChange={c => setTempService(prev => ({ ...prev, price: c }))} onInvalidChange={trackMoney} showError={moneyShown}
+                  onKeyDown={handleServiceKeyDown} placeholder="Preço" />
+                <button type="button" className="btn-secondary osm-add-btn" onClick={() => addService(false)}>
                   <Icon name="adicionar" size={16} /> Adicionar
                 </button>
               </div>
@@ -698,12 +716,14 @@ export const OSModal: React.FC<OSModalProps> = ({
                       <input className="form-input osm-desc" aria-label="Descrição do serviço" value={s.description}
                         onChange={e => updateItem(services, setServices, i, 'description', e.target.value, catalogServices)} />
                       {showCostColumn && (
-                        <MoneyField className="form-input margin-cost-field osm-num" value={s.cost} parse={parseCostEdit}
+                        <MoneyField id={`os-service-${s.id}-cost`} kind="cost" className="form-input margin-cost-field osm-num" value={s.cost}
+                          onInvalidChange={trackMoney} showError={moneyShown}
                           onChange={c => updateItem(services, setServices, i, 'cost', c, catalogServices)}
                           placeholder="Custo" title="Custo interno (vazio = sem custo, fora da margem)"
                           aria-label={`Custo de ${s.description || 'serviço'}`} />
                       )}
-                      <MoneyField className="form-input osm-num" value={s.price} parse={parsePriceText}
+                      <MoneyField id={`os-service-${s.id}-price`} kind="price" className="form-input osm-num" value={s.price}
+                        onInvalidChange={trackMoney} showError={moneyShown}
                         onChange={c => updateItem(services, setServices, i, 'price', c ?? 0, catalogServices)}
                         aria-label={`Preço de ${s.description || 'serviço'}`} />
                       {removeBtn(() => { guard.markDirty(); setServices(services.filter((_, idx) => idx !== i)); }, s.description)}
@@ -726,8 +746,9 @@ export const OSModal: React.FC<OSModalProps> = ({
           <h3 id="osm-h-valores" className="osm-h"><Icon name="cifrao" size={18} /> Valores</h3>
           <div className="form-group osm-advance">
             <label className="form-label" htmlFor="os-advance">Valor adiantado <span className="osm-opt">(opcional)</span></label>
-            <input id="os-advance" className="form-input" type="text" inputMode="decimal" autoComplete="off" value={advanceAmountDisplay}
-              onChange={e => setAdvanceAmountDisplay(sanitizeMoneyText(e.target.value))} placeholder="Ex: 200,00" aria-describedby="os-advance-hint" />
+            <MoneyField id="os-advance" kind="optional" className="form-input" value={advanceCents}
+              onChange={c => { guard.markDirty(); setAdvanceCents(c); }} onInvalidChange={trackMoney} showError={moneyShown}
+              placeholder="Ex: 200,00" aria-describedby="os-advance-hint" />
             <small id="os-advance-hint" className="field-hint">Use só se o cliente já deixou algum valor. Deixe vazio se não houver.</small>
           </div>
 
@@ -737,8 +758,8 @@ export const OSModal: React.FC<OSModalProps> = ({
                 onClick={() => setShowProfit(v => !v)}>
                 <Icon name="financeiro" size={16} /> {showProfit ? 'Esconder lucro e margem' : 'Ver lucro e margem'}
               </button>
-              {showProfit && (
-                <div id="osm-profit-body" className="osm-profit-body">
+              <div id="osm-profit-body" className="osm-profit-body" hidden={!showProfit}>
+                {showProfit && (<>
                   <div className="osm-profit-grid">
                     <div><div className="osm-k">Receita total</div><div className="osm-v osm-v--ok">{formatMoney(totalRevenue)}</div></div>
                     <div><div className="osm-k">Custo (itens com custo)</div><div className="osm-v">{formatMoney(margin.cost)}</div></div>
@@ -770,8 +791,8 @@ export const OSModal: React.FC<OSModalProps> = ({
                       )}
                     </div>
                   )}
-                </div>
-              )}
+                </>)}
+              </div>
             </div>
           )}
 

@@ -1,5 +1,4 @@
 // Lógica pura da janela da OS: validação por campo e texto de dinheiro. Sem React.
-import { Money } from '../utils/helpers';
 
 /** Ids dos campos que podem ficar com erro (na ordem em que aparecem na janela). */
 export type OSFieldId = 'os-client' | 'os-vehicle' | 'os-client-choice' | 'os-number';
@@ -32,17 +31,85 @@ export function firstErrorField(errors: OSFieldErrors): OSFieldId | null {
   return FIELD_ORDER.find(f => errors[f]) ?? null;
 }
 
-/** Texto de dinheiro: só dígitos, vírgula e ponto (campo de texto no lugar do type=number). */
+/** Texto de dinheiro: só dígitos, vírgula, ponto e "-" (este só na primeira posição). */
 export function sanitizeMoneyText(raw: string): string {
-  return raw.replace(/[^0-9.,]/g, '');
+  const kept = raw.replace(/[^0-9.,-]/g, '');
+  return kept.charAt(0) === '-' ? '-' + kept.slice(1).replace(/-/g, '') : kept.replace(/-/g, '');
 }
 
-/** Texto de preço digitado (aceita vírgula) em centavos; vazio ou inválido = 0. Igual ao parse antigo da janela. */
-export function parsePriceText(raw: string): number {
-  return Money.fromFloat(parseFloat(raw.replace(',', '.')) || 0);
+export type MoneyParse =
+  | { status: 'empty' }
+  | { status: 'ok'; cents: number }
+  | { status: 'invalid' };
+
+const THOUSANDS = /^\d{1,3}(\.\d{3})+$/;
+
+/**
+ * Texto de dinheiro em reais para centavos inteiros, sem float. Formato pt-BR:
+ * - com vírgula: os pontos antes dela são milhar ("1.234,50" = 123450); depois da vírgula, até 2 dígitos ("12," = 1200);
+ * - sem vírgula e com ponto: ponto + exatamente 3 dígitos com parte inteira de 1 a 3 dígitos (não "0") é milhar
+ *   ("1.500" = 150000, "1.234.567" = 123456700); senão é decimal de até 2 dígitos ("1.5" = 150);
+ * - "-" só na primeira posição (valor negativo é preservado);
+ * - mais de 2 casas decimais ("0,005"), mistura ("1,234.50"), vários decimais ("1.2.3") ou lixo = inválido,
+ *   nunca arredondado em silêncio. Vazio = empty.
+ */
+export function parseMoneyText(raw: string): MoneyParse {
+  let t = raw.trim().replace(/\s+/g, '');
+  if (t === '') return { status: 'empty' };
+  let negative = false;
+  if (t.charAt(0) === '-') { negative = true; t = t.slice(1); }
+  if (!/^[0-9.,]+$/.test(t) || !/\d/.test(t)) return { status: 'invalid' };
+
+  let intPart: string;
+  let fracPart = '';
+  const commas = t.split(',').length - 1;
+  if (commas > 1) return { status: 'invalid' };
+  if (commas === 1) {
+    const [left, right] = t.split(',');
+    if (!(left === '' || /^\d+$/.test(left) || THOUSANDS.test(left))) return { status: 'invalid' };
+    if (!/^\d*$/.test(right) || right.length > 2) return { status: 'invalid' };
+    intPart = left.replace(/\./g, '');
+    fracPart = right;
+  } else if (t.includes('.')) {
+    const dots = t.split('.').length - 1;
+    if (THOUSANDS.test(t) && !(dots === 1 && t.startsWith('0.'))) {
+      intPart = t.replace(/\./g, '');
+    } else if (dots === 1) {
+      const [left, right] = t.split('.');
+      if (!/^\d*$/.test(left) || !/^\d*$/.test(right) || right.length > 2) return { status: 'invalid' };
+      intPart = left;
+      fracPart = right;
+    } else {
+      return { status: 'invalid' };
+    }
+  } else {
+    intPart = t;
+  }
+  if (intPart.length > 12) return { status: 'invalid' };
+  const cents = parseInt(intPart || '0', 10) * 100 + parseInt((fracPart + '00').slice(0, 2), 10);
+  return { status: 'ok', cents: negative && cents !== 0 ? -cents : cents };
 }
 
-/** Centavos para o campo de texto (reais, vírgula decimal): 1250 vira "12,5". */
+/** Tipos de campo de dinheiro: preço (vazio = 0), custo (vazio = sem custo; 0 ou negativo = 0) e opcional (vazio = sem valor). */
+export type MoneyFieldKind = 'price' | 'cost' | 'optional';
+
+export type MoneyFieldParse = { ok: true; value: number | undefined } | { ok: false };
+
+/** Texto digitado para o valor do campo; inválido não muda o valor gravado. */
+export function parseMoneyField(kind: MoneyFieldKind, raw: string): MoneyFieldParse {
+  const p = parseMoneyText(raw);
+  if (p.status === 'invalid') return { ok: false };
+  if (p.status === 'empty') return { ok: true, value: kind === 'price' ? 0 : undefined };
+  if (kind === 'cost') return { ok: true, value: p.cents > 0 ? p.cents : 0 };
+  return { ok: true, value: p.cents };
+}
+
+export const MONEY_INVALID_MESSAGE = 'Valor inválido. Use o formato 1.234,50';
+
+/** Centavos para o campo de texto no formato pt-BR: 123450 vira "1.234,50", -500 vira "-5,00". */
 export function centsToMoneyText(cents: number): string {
-  return String(Money.toFloat(cents)).replace('.', ',');
+  const abs = Math.abs(Math.round(cents));
+  const int = String(Math.floor(abs / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  const frac = String(abs % 100).padStart(2, '0');
+  return `${cents < 0 && abs !== 0 ? '-' : ''}${int},${frac}`;
 }

@@ -44,13 +44,20 @@
 .appt-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
 .appt-btn-main { min-height: var(--control-h-min, 40px); }
 .appt-actions-group { display: flex; flex-wrap: wrap; gap: 6px; }
-.appt-btn-sec { background: var(--surface-2); color: var(--text); }
-.appt-btn-sec:hover { background: var(--surface-3); border-color: var(--text-2); }
+/* Especificidade acima de .btn-sm (styles-components.css, importado depois). */
+.appt-actions .appt-btn-sec { background: var(--surface-2); color: var(--text); }
+.appt-actions .appt-btn-sec:hover:not(:disabled) { background: var(--surface-3); border-color: var(--text-2); color: var(--text); }
 .appt-actions-end { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; padding-left: 14px; border-left: 1px solid var(--border); }
-.appt-btn-cancel { color: var(--text-2); }
-.appt-btn-cancel:hover { background: var(--surface-3); color: var(--text); }
-.appt-btn-danger { color: var(--status-atrasado-text); border-color: var(--status-atrasado-text); }
-.appt-btn-danger:hover { background: color-mix(in srgb, var(--status-atrasado) 14%, transparent); }
+.appt-actions .appt-btn-cancel { color: var(--text-2); border-color: var(--border-strong, var(--border)); background: transparent; }
+.appt-actions .appt-btn-cancel:hover:not(:disabled) { background: var(--surface-3); color: var(--text); border-color: var(--text-2); }
+.appt-actions .appt-btn-danger { color: var(--text-danger); border-color: var(--text-danger); background: transparent; }
+.appt-actions .appt-btn-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--text-danger); border-color: var(--text-danger); }
+.appt-pending { border-radius: 10px; justify-content: flex-start; text-align: left; }
+.appt-pending .btn-sm { background: #1a1a1a; border-color: #1a1a1a; color: #fff; }
+.appt-pending .btn-sm:hover:not(:disabled) { background: #000; border-color: #000; color: #fff; }
+.appt-pending .btn-sm:focus-visible { outline: 2px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 4px #1a1a1a; }
+.appt-group { display: flex; flex-direction: column; gap: 12px; }
+.appt-day-title:focus-visible, .appt-chip:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .appt-page .btn-sm:focus-visible, .appt-page .btn:focus-visible, .appt-modal button:focus-visible,
 .appt-modal input:focus-visible, .appt-modal textarea:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 

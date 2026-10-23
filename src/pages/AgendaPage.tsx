@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { listPastPending } from '../services/agendaPending';
 import { Appointment, Client, WorkOrder } from '../types';
 import { AppointmentAction, AppointmentInput, canApplyAction, canCreateOS, statusLabel, weekRangeLabel } from '../services/agenda';
 import { groupAppointmentsByDay, shiftWeek, startOfWeek } from '../services/schedule';
@@ -39,13 +40,60 @@ export const AgendaPage: React.FC<AgendaPageProps> = ({ appointments, workOrders
   const [modal, setModal] = useState<ModalState | null>(null);
   const [toDelete, setToDelete] = useState<Appointment | null>(null);
 
-  const today = new Date();
-  const todayKey = formatDateOnly(today);
+  // Chave do dia (AAAA-MM-DD local): atualiza ao focar a janela e a cada 60 s (como o Painel Hoje),
+  // para a virada do dia valer sem reabrir o app.
+  const [todayKey, setTodayKey] = useState<string>(() => formatDateOnly(new Date()));
+  const prevTodayRef = useRef(todayKey);
+  useEffect(() => {
+    const refresh = () => setTodayKey(prev => { const k = formatDateOnly(new Date()); return k === prev ? prev : k; });
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', onVisible);
+    const timer = window.setInterval(refresh, 60000);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.clearInterval(timer);
+    };
+  }, []);
+  // Se o usuário olhava a semana do "dia antigo", acompanha o dia novo.
+  useEffect(() => {
+    const prev = prevTodayRef.current;
+    if (prev === todayKey) return;
+    prevTodayRef.current = todayKey;
+    setWeekStart(w => (formatDateOnly(w) === formatDateOnly(startOfWeek(parseDateOnly(prev))) ? startOfWeek(parseDateOnly(todayKey)) : w));
+  }, [todayKey]);
+
+  const todayDate = useMemo(() => parseDateOnly(todayKey), [todayKey]);
   const days = useMemo(
-    () => groupAppointmentsByDay(appointments, weekStart, new Date()),
-    [appointments, weekStart]
+    () => groupAppointmentsByDay(appointments, weekStart, todayDate),
+    [appointments, weekStart, todayDate]
   );
   const weekTotal = days.reduce((n, d) => n + d.items.length, 0);
+  const pending = useMemo(() => listPastPending(appointments, todayKey), [appointments, todayKey]);
+
+  // Foco estável após ações: tenta já e de novo quando a lista/semana mudar.
+  const pendingFocus = useRef<string | null>(null);
+  const tryFocus = () => {
+    const id = pendingFocus.current;
+    if (!id) return;
+    const el = document.getElementById(id);
+    if (el) { pendingFocus.current = null; el.focus(); }
+  };
+  const focusLater = (id: string) => { pendingFocus.current = id; window.requestAnimationFrame(tryFocus); };
+  useEffect(() => { window.requestAnimationFrame(tryFocus); }, [appointments, weekStart]);
+
+  const goToFirstPending = () => {
+    const first = pending[0];
+    if (!first) return;
+    setWeekStart(startOfWeek(parseDateFlexible(first.date)));
+    focusLater(`appt-chip-${first.id}`);
+  };
+
+  const runAction = (ap: Appointment, action: Exclude<AppointmentAction, 'REAGENDAR'>) => {
+    onAction(ap.id, action);
+    focusLater(`appt-chip-${ap.id}`);
+  };
 
   const osById = useMemo(() => new Map(workOrders.map(o => [o.id, o])), [workOrders]);
 
@@ -59,6 +107,8 @@ export const AgendaPage: React.FC<AgendaPageProps> = ({ appointments, workOrders
     [days, todayIdx]
   );
   const firstPastIdx = todayIdx > 0 ? days.length - todayIdx : -1;
+  const upcomingDays = firstPastIdx > 0 ? ordered.slice(0, firstPastIdx) : ordered;
+  const pastDays = firstPastIdx > 0 ? ordered.slice(firstPastIdx) : [];
 
   // Esc fecha a confirmação de exclusão (o App não conhece esse estado).
   useEffect(() => {
@@ -92,7 +142,7 @@ export const AgendaPage: React.FC<AgendaPageProps> = ({ appointments, workOrders
           {ap.reason && <div className="appt-reason">{ap.reason}</div>}
         </div>
         <div className="appt-badges">
-          <span className={`appt-chip appt-chip--${ap.status.toLowerCase()}`}>
+          <span id={`appt-chip-${ap.id}`} tabIndex={-1} className={`appt-chip appt-chip--${ap.status.toLowerCase()}`}>
             <Icon name={STATUS_ICON[ap.status]} size={14} />
             {statusLabel(ap.status)}
           </span>
@@ -105,14 +155,14 @@ export const AgendaPage: React.FC<AgendaPageProps> = ({ appointments, workOrders
             <Icon name="prancheta" size={18} />Criar OS
           </button>
         )}
-        <div className="appt-actions-group" role="group" aria-label="Outras ações">
+        <div className="appt-actions-group" role="group" aria-label={`Outras ações: ${ap.clientName}`}>
           {canApplyAction(ap, 'COMPARECEU') && (
-            <button type="button" className="btn-sm appt-btn-sec" onClick={() => onAction(ap.id, 'COMPARECEU')}>
+            <button type="button" className="btn-sm appt-btn-sec" onClick={() => runAction(ap, 'COMPARECEU')}>
               <Icon name="check" size={16} />Compareceu
             </button>
           )}
           {canApplyAction(ap, 'FALTOU') && (
-            <button type="button" className="btn-sm appt-btn-sec" onClick={() => onAction(ap.id, 'FALTOU')}>
+            <button type="button" className="btn-sm appt-btn-sec" onClick={() => runAction(ap, 'FALTOU')}>
               <Icon name="alerta" size={16} />Faltou
             </button>
           )}
@@ -127,7 +177,7 @@ export const AgendaPage: React.FC<AgendaPageProps> = ({ appointments, workOrders
         </div>
         <div className="appt-actions-end">
           {canApplyAction(ap, 'CANCELAR') && (
-            <button type="button" className="btn-sm appt-btn-cancel" onClick={() => onAction(ap.id, 'CANCELAR')}>
+            <button type="button" className="btn-sm appt-btn-cancel" onClick={() => runAction(ap, 'CANCELAR')}>
               <Icon name="fechar" size={16} />Cancelar agendamento
             </button>
           )}
@@ -138,6 +188,35 @@ export const AgendaPage: React.FC<AgendaPageProps> = ({ appointments, workOrders
       </div>
     </li>
   );
+
+  const renderDay = (day: { dayKey: string; isToday: boolean; isTomorrow: boolean; items: Appointment[] }) => {
+    const titleId = `appt-day-${day.dayKey}`;
+    const title = (
+      <h3 className="appt-day-title" id={titleId} tabIndex={-1}>{dayTitle(day.dayKey)}{renderTags(day)}</h3>
+    );
+    if (day.items.length === 0) {
+      return (
+        <section key={day.dayKey} className={`appt-day appt-day--empty${day.isToday ? ' appt-day--today' : ''}`} aria-labelledby={titleId}>
+          {title}
+          <span className="appt-day-empty">Sem agendamentos</span>
+          <button type="button" className="btn-sm" onClick={() => openNew(day.dayKey)}>
+            <Icon name="adicionar" size={16} />Agendar
+          </button>
+        </section>
+      );
+    }
+    return (
+      <section key={day.dayKey} className={`appt-day${day.isToday ? ' appt-day--today' : ''}`} aria-labelledby={titleId}>
+        <div className="appt-day-head">
+          {title}
+          <button type="button" className="btn-sm" onClick={() => openNew(day.dayKey)}>
+            <Icon name="adicionar" size={16} />Agendar neste dia
+          </button>
+        </div>
+        <ul className="appt-list">{day.items.map(renderItem)}</ul>
+      </section>
+    );
+  };
 
   return (
     <div className="appt-page">
@@ -158,43 +237,44 @@ export const AgendaPage: React.FC<AgendaPageProps> = ({ appointments, workOrders
         </button>
       </header>
 
-      {weekTotal === 0 && (
+      {pending.length > 0 && (
+        <div className="app-banner app-banner--warning appt-pending">
+          <Icon name="alerta" size={18} />
+          <span>
+            {pending.length === 1
+              ? '1 agendamento de dia anterior sem registro de comparecimento.'
+              : `${pending.length} agendamentos de dias anteriores sem registro de comparecimento.`}
+            {' '}Registre Compareceu ou Faltou.
+          </span>
+          <button type="button" className="btn-sm" onClick={goToFirstPending}>Ver</button>
+        </div>
+      )}
+
+      {weekTotal === 0 ? (
         <div className="empty-state">
           <Icon name="agenda" size={40} className="empty-state-icon" />
           <h2 className="empty-state-title">Nenhum agendamento nesta semana</h2>
           <p className="empty-state-text">Marque a entrada de um veículo para não esquecer do cliente.</p>
           <button type="button" className="btn" onClick={() => openNew(isCurrentWeek ? todayKey : days[0].dayKey)}>
-            <Icon name="adicionar" size={18} />Novo agendamento
+            <Icon name="adicionar" size={18} />Agendar
           </button>
         </div>
+      ) : (
+        <div className="appt-days">
+          <section aria-labelledby="appt-group-main" className="appt-group">
+            <h2 id="appt-group-main" className="sr-only">
+              {isCurrentWeek ? 'Hoje e próximos dias' : 'Dias da semana'}
+            </h2>
+            {upcomingDays.map(renderDay)}
+          </section>
+          {pastDays.length > 0 && (
+            <section aria-labelledby="appt-group-past" className="appt-group">
+              <h2 id="appt-group-past" className="appt-past-title">Dias que já passaram nesta semana</h2>
+              {pastDays.map(renderDay)}
+            </section>
+          )}
+        </div>
       )}
-
-      <div className="appt-days">
-        {ordered.map((day, idx) => (
-          <React.Fragment key={day.dayKey}>
-            {idx === firstPastIdx && <h2 className="appt-past-title">Dias que já passaram nesta semana</h2>}
-            {day.items.length === 0 ? (
-              <div className={`appt-day appt-day--empty${day.isToday ? ' appt-day--today' : ''}`}>
-                <span className="appt-day-title">{dayTitle(day.dayKey)}{renderTags(day)}</span>
-                <span className="appt-day-empty">Sem agendamentos</span>
-                <button type="button" className="btn-sm" onClick={() => openNew(day.dayKey)}>
-                  <Icon name="adicionar" size={16} />Agendar
-                </button>
-              </div>
-            ) : (
-              <section className={`appt-day${day.isToday ? ' appt-day--today' : ''}`} aria-labelledby={`appt-day-${day.dayKey}`}>
-                <div className="appt-day-head">
-                  <h2 className="appt-day-title" id={`appt-day-${day.dayKey}`}>{dayTitle(day.dayKey)}{renderTags(day)}</h2>
-                  <button type="button" className="btn-sm" onClick={() => openNew(day.dayKey)}>
-                    <Icon name="adicionar" size={16} />Agendar neste dia
-                  </button>
-                </div>
-                <ul className="appt-list">{day.items.map(renderItem)}</ul>
-              </section>
-            )}
-          </React.Fragment>
-        ))}
-      </div>
 
       {modal && (
         <AppointmentModal
@@ -215,9 +295,10 @@ export const AgendaPage: React.FC<AgendaPageProps> = ({ appointments, workOrders
           title="Excluir agendamento?"
           message={`O agendamento de ${toDelete.clientName} em ${parseDateFlexible(toDelete.date).toLocaleDateString('pt-BR')} será removido. A OS ligada a ele, se houver, não é afetada.`}
           confirmText="Excluir"
+          cancelText="Não excluir"
           confirmColor="danger"
           onClose={() => setToDelete(null)}
-          onConfirm={() => onDelete(toDelete.id)}
+          onConfirm={() => { onDelete(toDelete.id); focusLater(`appt-day-${formatDateOnly(parseDateFlexible(toDelete.date))}`); }}
         />
       )}
     </div>

@@ -88,6 +88,8 @@ function AppContent() {
   const [currentTheme, setCurrentThemeState] = useState<Theme>(() => readStoredTheme());
   const setCurrentTheme = useCallback((t: Theme) => { setCurrentThemeState(t); writeStoredTheme(t); }, []);
   const [activeTab, setActiveTab] = useState<'HOJE' | 'FINANCEIRO' | 'OFICINA' | 'AGENDA' | 'PROCESSOS' | 'CLIENTES' | 'PECAS' | 'CONFIG'>(() => readHomeTab());
+  // Filtro inicial de Processos quando vindo do painel Hoje (Ver atrasadas).
+  const [processOnlyLate, setProcessOnlyLate] = useState(false);
   // Fluxo Agenda -> Criar OS: agendamento de origem e rascunho (objeto estável: o OSModal reinicia o formulário se ele mudar).
   const [osFromAppointment, setOsFromAppointment] = useState<{ appointment: Appointment; draft: OSDraftFromAppointment } | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
@@ -717,7 +719,7 @@ Abrir OS?`)) {
                 onSaveAppointment={input => handleSaveAppointment(input, null, 'NOVO')}
                 onCreateOSFromAppointment={handleCreateOSFromAppointment}
                 onOpenOS={os => { setEditingOS(os); setIsModalOpen(true); }}
-                onGoProcesses={() => setActiveTab('PROCESSOS')}
+                onGoProcesses={(onlyLate) => { setProcessOnlyLate(!!onlyLate); setActiveTab('PROCESSOS'); }}
                 onGoAgenda={() => setActiveTab('AGENDA')}
                 onGoFinance={() => setActiveTab('FINANCEIRO')}
                 onGoConfig={() => setActiveTab('CONFIG')}
@@ -790,8 +792,9 @@ Abrir OS?`)) {
                   setEditingOS(null);
                   setIsModalOpen(true);
                 }}
-                onUpdateStatus={handleUpdateStatus}
+                onUpdateStatus={kanbanStatusChange}
                 onEdit={kanbanActions.onEdit}
+                initialOnlyLate={processOnlyLate}
               />
             )}
 

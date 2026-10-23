@@ -19,7 +19,7 @@ interface TodayPageProps {
   onSaveAppointment: (input: AppointmentInput) => void;
   onCreateOSFromAppointment: (appointment: Appointment) => void;
   onOpenOS: (os: WorkOrder) => void;
-  onGoProcesses: () => void;
+  onGoProcesses: (onlyLate?: boolean) => void;
   onGoAgenda: () => void;
   onGoFinance: () => void;
   onGoConfig: () => void;
@@ -129,7 +129,7 @@ export const TodayPage: React.FC<TodayPageProps> = ({
               ))}
             </ul>
           )}
-          {seeAll(sum.atrasadas.length, onGoProcesses, 'Abrir Processos')}
+          {seeAll(sum.atrasadas.length, () => onGoProcesses(true), 'Ver atrasadas')}
         </section>
 
         <section className="today-card" aria-labelledby="today-deliv-title">
@@ -150,7 +150,7 @@ export const TodayPage: React.FC<TodayPageProps> = ({
               ))}
             </ul>
           )}
-          {seeAll(sum.entregasHoje.length, onGoProcesses, 'Abrir Processos')}
+          {seeAll(sum.entregasHoje.length, () => onGoProcesses(false), 'Abrir Processos')}
         </section>
 
         <section className="today-card" aria-labelledby="today-appt-title">

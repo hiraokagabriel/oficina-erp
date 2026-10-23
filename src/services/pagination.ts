@@ -19,3 +19,18 @@ export const pageSlice = <T,>(items: readonly T[], visible: number): T[] =>
 
 export const pageCounterLabel = (visible: number, total: number): string =>
   `Mostrando ${clampVisible(visible, total)} de ${total}`;
+
+/**
+ * Regra de reinício da paginação: sem status zera todos os grupos (mudou busca, filtro ou ordem);
+ * com status zera só aquele grupo (grupo recolhido). Devolve o mesmo objeto quando nada muda.
+ */
+export const resetVisible = <K extends string>(
+  map: Partial<Record<K, number>>,
+  status?: K,
+): Partial<Record<K, number>> => {
+  if (status === undefined) return Object.keys(map).length === 0 ? map : {};
+  if (!(status in map)) return map;
+  const next = { ...map };
+  delete next[status];
+  return next;
+};

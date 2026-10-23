@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PAGE_STEP, clampVisible, nextVisible, nextBatchSize, pageSlice, pageCounterLabel } from './pagination';
+import { PAGE_STEP, clampVisible, nextVisible, nextBatchSize, pageSlice, pageCounterLabel, resetVisible } from './pagination';
 
 describe('pagination', () => {
   it('passo padrão é 50', () => expect(PAGE_STEP).toBe(50));
@@ -27,5 +27,17 @@ describe('pagination', () => {
   it('pageCounterLabel', () => {
     expect(pageCounterLabel(50, 300)).toBe('Mostrando 50 de 300');
     expect(pageCounterLabel(50, 12)).toBe('Mostrando 12 de 12');
+  });
+
+  it('resetVisible sem status zera tudo e mantém o objeto se já vazio', () => {
+    const vazio = {};
+    expect(resetVisible(vazio)).toBe(vazio);
+    expect(resetVisible({ A: 100, B: 150 })).toEqual({});
+  });
+  it('resetVisible com status zera só o grupo', () => {
+    const m: Partial<Record<string, number>> = { A: 100, B: 150 };
+    expect(resetVisible(m, 'A')).toEqual({ B: 150 });
+    expect(m).toEqual({ A: 100, B: 150 });
+    expect(resetVisible(m, 'C')).toBe(m);
   });
 });

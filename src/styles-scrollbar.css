@@ -272,15 +272,3 @@ select.form-input option:hover {
 [data-theme="pastel"] .custom-select-wrapper:hover::after {
   color: #8B5CF6;
 }
-
-/* Estilo especial quando o select está com valor selecionado (não "Todos") */
-select.form-input:not([value="ALL"]):not([value="all"]) {
-  background: linear-gradient(90deg, rgba(130, 87, 230, 0.1) 0%, transparent 100%);
-  border-left: 3px solid var(--primary);
-  font-weight: 600;
-}
-
-[data-theme="pastel"] select.form-input:not([value="ALL"]):not([value="all"]) {
-  background: linear-gradient(90deg, rgba(139, 92, 246, 0.08) 0%, transparent 100%);
-  border-left: 3px solid #8B5CF6;
-}

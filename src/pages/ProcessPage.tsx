@@ -1,9 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { WorkOrder, OSStatus, STATUS_LABELS } from '../types';
-import { compareByExpectedDate, getDeliveryBadge } from '../services/deliveryBadge';
+import { compareByExpectedDate, getDeliveryBadge, DeliveryBadge } from '../services/deliveryBadge';
 import { getDeliveryStatus } from '../services/schedule';
-import { PAGE_STEP, pageSlice, nextVisible, nextBatchSize, pageCounterLabel } from '../services/pagination';
+import { PAGE_STEP, pageSlice, nextVisible, nextBatchSize, pageCounterLabel, resetVisible } from '../services/pagination';
+import { Money } from '../utils/helpers';
 import { Icon, IconName } from '../components/ui/Icon';
+import { ProcessRow, ALL_STATUSES } from '../components/ProcessRow';
 import '../styles-processos.css';
 
 interface ProcessPageProps {
@@ -18,6 +20,17 @@ interface ProcessPageProps {
 
 type SortKey = 'osNumber' | 'clientName' | 'createdAt' | 'total' | 'paymentDate' | 'expectedDate';
 
+const SORT_LABELS: Record<SortKey, string> = {
+  osNumber: 'Nº OS',
+  clientName: 'Cliente',
+  createdAt: 'Data',
+  total: 'Valor',
+  paymentDate: 'Pagamento',
+  expectedDate: 'Previsão de entrega',
+};
+/** Colunas que somem em janela estreita (ver @container em styles-processos.css). */
+const NARROW_HIDDEN: SortKey[] = ['createdAt', 'paymentDate', 'expectedDate'];
+
 const STATUS_ICON: Record<OSStatus, IconName> = {
   ORCAMENTO: 'prancheta',
   APROVADO: 'check',
@@ -31,12 +44,12 @@ const STATUS_ICON: Record<OSStatus, IconName> = {
 const lightClass = (status: OSStatus): string =>
   `status-light status-light--${status.toLowerCase().replace(/_/g, '-')}`;
 
-const ALL_STATUSES: OSStatus[] = ['ORCAMENTO', 'APROVADO', 'EM_SERVICO', 'AGUARDANDO_PAGAMENTO', 'FINALIZADO', 'ARQUIVADO'];
+interface Group {
+  orders: WorkOrder[];
+  total: number;
+}
 
-const formatMoney = (val: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val / 100);
-
-const formatDate = (dateStr: string) => new Date(dateStr).toLocaleDateString('pt-BR');
+type PendingFocus = { kind: 'row'; id: string } | { kind: 'more'; status: OSStatus } | null;
 
 export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew, onUpdateStatus, onEdit, initialOnlyLate = false }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -46,14 +59,26 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [expandedGroups, setExpandedGroups] = useState<Set<OSStatus>>(new Set(['ORCAMENTO', 'APROVADO', 'EM_SERVICO']));
   const [onlyLate, setOnlyLate] = useState(initialOnlyLate);
-  // Quantas linhas cada grupo mostra (50 por vez)
+  // Quantas linhas cada grupo mostra (50 por vez). Zera quando busca, filtros ou ordem mudam.
   const [visibleByStatus, setVisibleByStatus] = useState<Partial<Record<OSStatus, number>>>({});
+  const resetPaging = useCallback(() => setVisibleByStatus(prev => resetVisible(prev)), []);
+
+  // Callbacks estáveis: as linhas são memoizadas e não podem re-renderizar a cada tecla da busca.
+  const latest = useRef({ onUpdateStatus, onEdit });
+  latest.current = { onUpdateStatus, onEdit };
+  const pendingFocus = useRef<PendingFocus>(null);
+  const handleStatus = useCallback((id: string, status: OSStatus) => {
+    pendingFocus.current = { kind: 'row', id };
+    latest.current.onUpdateStatus(id, status);
+  }, []);
+  const handleOpen = useCallback((os: WorkOrder) => latest.current.onEdit?.(os), []);
+  const canOpen = !!onEdit;
 
   // Estatísticas globais
   const stats = useMemo(() => {
     const total = workOrders.length;
     const totalValue = workOrders.reduce((sum, os) => sum + os.total, 0);
-    const avgValue = total > 0 ? totalValue / total : 0;
+    const avgValue = total > 0 ? Math.round(totalValue / total) : 0;
     return { total, totalValue, avgValue };
   }, [workOrders]);
 
@@ -119,38 +144,62 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
     return result;
   }, [workOrders, searchTerm, selectedStatus, dateFilter, onlyLate, sortBy, sortDirection]);
 
-  // Estatísticas por status
-  const groupStats = useMemo(() => {
-    const groups: Record<OSStatus, { count: number; total: number }> = {
-      ORCAMENTO: { count: 0, total: 0 },
-      APROVADO: { count: 0, total: 0 },
-      EM_SERVICO: { count: 0, total: 0 },
-      AGUARDANDO_PAGAMENTO: { count: 0, total: 0 },
-      FINALIZADO: { count: 0, total: 0 },
-      ARQUIVADO: { count: 0, total: 0 },
+  // Uma passada só: agrupa por status, soma o valor e calcula o selo de atraso de cada OS.
+  const { groups, lateById } = useMemo(() => {
+    const g: Record<OSStatus, Group> = {
+      ORCAMENTO: { orders: [], total: 0 },
+      APROVADO: { orders: [], total: 0 },
+      EM_SERVICO: { orders: [], total: 0 },
+      AGUARDANDO_PAGAMENTO: { orders: [], total: 0 },
+      FINALIZADO: { orders: [], total: 0 },
+      ARQUIVADO: { orders: [], total: 0 },
     };
-
-    filteredOrders.forEach(os => {
-      const group = groups[os.status];
-      if (group) {
-        group.count++;
-        group.total += os.total;
+    const late = new Map<string, DeliveryBadge>();
+    const now = new Date();
+    for (const os of filteredOrders) {
+      const group = g[os.status];
+      if (!group) continue;
+      group.orders.push(os);
+      group.total += os.total;
+      if (os.expectedDate) {
+        const badge = getDeliveryBadge(os, now);
+        if (badge && badge.kind === 'atrasada') late.set(os.id, badge);
       }
-    });
-
-    return groups;
+    }
+    return { groups: g, lateById: late };
   }, [filteredOrders]);
 
+  // Devolve o foco a um alvo estável quando a linha some ou muda de grupo (o foco cairia no body).
+  useEffect(() => {
+    const target = pendingFocus.current;
+    if (!target) return;
+    pendingFocus.current = null;
+    const active = document.activeElement;
+    if (active && active !== document.body) return; // outro elemento (menu, diálogo) já tem o foco
+    if (target.kind === 'row') {
+      const btn = document.querySelector<HTMLElement>(`[data-status-btn="${CSS.escape(target.id)}"]`);
+      if (btn) { btn.focus(); return; }
+      const moved = workOrders.find(o => o.id === target.id);
+      const header = moved ? document.querySelector<HTMLElement>(`[data-group-btn="${moved.status}"]`) : null;
+      (header ?? document.getElementById('pr-search'))?.focus();
+    } else {
+      document.querySelector<HTMLElement>(`[data-counter="${target.status}"]`)?.focus();
+    }
+  });
+
   const toggleGroup = (status: OSStatus) => {
+    const wasOpen = expandedGroups.has(status);
     setExpandedGroups(prev => {
       const newSet = new Set(prev);
       if (newSet.has(status)) newSet.delete(status);
       else newSet.add(status);
       return newSet;
     });
+    if (wasOpen) setVisibleByStatus(prev => resetVisible(prev, status));
   };
 
   const handleSort = (key: SortKey) => {
+    resetPaging();
     if (sortBy === key) {
       setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
     } else {
@@ -160,6 +209,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
   };
 
   const showMore = (status: OSStatus, total: number) => {
+    pendingFocus.current = { kind: 'more', status };
     setVisibleByStatus(prev => ({ ...prev, [status]: nextVisible(prev[status] ?? PAGE_STEP, total) }));
   };
 
@@ -182,7 +232,9 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
   );
 
   const hasFilter = !!(searchTerm || selectedStatus !== 'ALL' || dateFilter !== 'all' || onlyLate);
-  const now = new Date();
+  const sortNote = NARROW_HIDDEN.includes(sortBy)
+    ? `Ordenado por ${SORT_LABELS[sortBy]} (${sortDirection === 'asc' ? 'crescente' : 'decrescente'})`
+    : null;
 
   return (
     <div className="pr-page">
@@ -191,8 +243,8 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
           <h1 className="pr-title">Processos</h1>
           <ul className="pr-summary" aria-label="Resumo das OS">
             <li className="chip">Total: <strong>{stats.total} OS</strong></li>
-            <li className="chip">Valor total: <strong>{formatMoney(stats.totalValue)}</strong></li>
-            <li className="chip">Valor médio por OS: <strong>{formatMoney(stats.avgValue)}</strong></li>
+            <li className="chip">Valor total: <strong>{Money.format(stats.totalValue)}</strong></li>
+            <li className="chip">Valor médio por OS: <strong>{Money.format(stats.avgValue)}</strong></li>
           </ul>
         </div>
         <button type="button" className="btn" onClick={onOpenNew}>
@@ -210,13 +262,13 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
             className="form-input"
             placeholder="Cliente, veículo, OS..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => { resetPaging(); setSearchTerm(e.target.value); }}
           />
         </div>
         <div className="form-group pr-f">
           <label className="form-label" htmlFor="pr-status">Status</label>
           <select id="pr-status" className="form-input" value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value as OSStatus | 'ALL')}>
+            onChange={(e) => { resetPaging(); setSelectedStatus(e.target.value as OSStatus | 'ALL'); }}>
             <option value="ALL">Todos os status</option>
             {ALL_STATUSES.map(status => (
               <option key={status} value={status}>{STATUS_LABELS[status]}</option>
@@ -226,7 +278,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
         <div className="form-group pr-f">
           <label className="form-label" htmlFor="pr-period">Período</label>
           <select id="pr-period" className="form-input" value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value as 'all' | 'today' | 'week' | 'month')}>
+            onChange={(e) => { resetPaging(); setDateFilter(e.target.value as 'all' | 'today' | 'week' | 'month'); }}>
             <option value="all">Todo o período</option>
             <option value="today">Hoje</option>
             <option value="week">Semana</option>
@@ -234,11 +286,12 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
           </select>
         </div>
         <label className="delivery-only-late pr-late">
-          <input type="checkbox" checked={onlyLate} onChange={(e) => setOnlyLate(e.target.checked)} />
+          <input type="checkbox" checked={onlyLate} onChange={(e) => { resetPaging(); setOnlyLate(e.target.checked); }} />
           Só atrasadas
         </label>
         {hasFilter && (
           <button type="button" className="btn-secondary pr-clear" onClick={() => {
+            resetPaging();
             setSearchTerm(''); setSelectedStatus('ALL'); setDateFilter('all'); setOnlyLate(false);
           }}>
             <Icon name="fechar" size={16} />
@@ -246,6 +299,11 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
           </button>
         )}
       </section>
+
+      {/* Um único aviso para leitor de tela (os contadores por grupo não anunciam a cada tecla) */}
+      <div className="pr-sr" role="status" aria-live="polite">
+        {filteredOrders.length === 1 ? '1 OS encontrada' : `${filteredOrders.length} OS encontradas`}
+      </div>
 
       {filteredOrders.length === 0 ? (
         <div className="empty-state">
@@ -258,12 +316,13 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
       ) : (
         <div className="pr-groups">
           {ALL_STATUSES.map(status => {
-            const groupOrders = filteredOrders.filter(os => os.status === status);
+            const group = groups[status];
+            const groupOrders = group.orders;
             if (groupOrders.length === 0 && selectedStatus === 'ALL') return null;
 
             const isExpanded = expandedGroups.has(status);
             const visible = visibleByStatus[status] ?? PAGE_STEP;
-            const shown = pageSlice(groupOrders, visible);
+            const shown = isExpanded ? pageSlice(groupOrders, visible) : [];
             const panelId = `pr-panel-${status}`;
 
             return (
@@ -272,8 +331,9 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                   <button
                     type="button"
                     className="pr-group-btn"
+                    data-group-btn={status}
                     aria-expanded={isExpanded}
-                    aria-controls={panelId}
+                    aria-controls={isExpanded ? panelId : undefined}
                     onClick={() => toggleGroup(status)}
                   >
                     <Icon name="proximo" size={18} className={`pr-chev${isExpanded ? ' is-open' : ''}`} />
@@ -282,7 +342,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                       {STATUS_LABELS[status]}
                     </span>
                     <span className="count-badge">{groupOrders.length}</span>
-                    <span className="pr-group-total">{formatMoney(groupStats[status].total)}</span>
+                    <span className="pr-group-total">{Money.format(group.total)}</span>
                     <span className="pr-sr">{isExpanded ? '(recolher)' : '(expandir)'}</span>
                   </button>
                 </h2>
@@ -303,88 +363,22 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                           </tr>
                         </thead>
                         <tbody>
-                          {shown.map((os) => {
-                            const badge = os.expectedDate ? getDeliveryBadge(os, now) : null;
-                            const late = badge && badge.kind === 'atrasada' ? badge : null;
-                            return (
-                              <tr
-                                key={os.id}
-                                className="pr-row"
-                                tabIndex={onEdit ? 0 : undefined}
-                                aria-label={onEdit ? `Abrir OS #${os.osNumber}, ${os.clientName}` : undefined}
-                                onClick={(e) => {
-                                  if ((e.target as HTMLElement).closest('select, button, a')) return;
-                                  if (onEdit) onEdit(os);
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.target !== e.currentTarget) return;
-                                  if (e.key === 'Enter' || e.key === ' ') {
-                                    e.preventDefault();
-                                    if (onEdit) onEdit(os);
-                                  }
-                                }}
-                              >
-                                <td className="pr-c-os">
-                                  <span className={`pr-os ${lightClass(os.status)}`}>#{os.osNumber}</span>
-                                </td>
-                                <td className="pr-c-client">
-                                  <div className="cell-primary">{os.clientName}</div>
-                                  <div className="cell-secondary">{os.vehicle}</div>
-                                  {late && (
-                                    <span className={`delivery-badge delivery-badge--${late.kind} pr-late-inline`}>{late.label}</span>
-                                  )}
-                                </td>
-                                <td className="pr-c-opt cell-secondary">{formatDate(os.createdAt)}</td>
-                                <td className="pr-c-opt">
-                                  {os.paymentDate ? (
-                                    <span className="pr-paid">
-                                      <Icon name="check" size={14} />
-                                      Pago em {formatDate(os.paymentDate)}
-                                    </span>
-                                  ) : os.status === 'ORCAMENTO' ? (
-                                    <span className="cell-secondary" title="Sem cobrança: o orçamento ainda não foi aprovado">
-                                      —<span className="pr-sr"> Sem cobrança ainda</span>
-                                    </span>
-                                  ) : (
-                                    <span className="cell-secondary">A receber</span>
-                                  )}
-                                </td>
-                                <td className="pr-c-opt">
-                                  {os.expectedDate ? (
-                                    <div className="process-expected">
-                                      <span className="cell-secondary">{formatDate(os.expectedDate)}</span>
-                                      {late && (
-                                        <span className={`delivery-badge delivery-badge--${late.kind}`}>{late.label}</span>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <span className="cell-secondary">Sem previsão</span>
-                                  )}
-                                </td>
-                                <td className="pr-c-total"><span className="pr-money">{formatMoney(os.total)}</span></td>
-                                <td className="pr-c-status">
-                                  <div className="pr-status">
-                                    <span className={`${lightClass(os.status)} pr-dot`} aria-hidden="true" />
-                                    <select
-                                      className="form-input pr-status-select"
-                                      aria-label={`Status da OS #${os.osNumber}`}
-                                      value={os.status}
-                                      onChange={(e) => onUpdateStatus(os.id, e.target.value as OSStatus)}
-                                    >
-                                      {ALL_STATUSES.map(opt => (
-                                        <option key={opt} value={opt}>{STATUS_LABELS[opt]}</option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
+                          {shown.map((os) => (
+                            <ProcessRow
+                              key={os.id}
+                              os={os}
+                              late={lateById.get(os.id) ?? null}
+                              canOpen={canOpen}
+                              onOpen={handleOpen}
+                              onUpdateStatus={handleStatus}
+                            />
+                          ))}
                         </tbody>
                       </table>
                     </div>
+                    {sortNote && <p className="pr-sort-note">{sortNote}</p>}
                     <div className="pr-more">
-                      <span className="pr-counter" role="status">{pageCounterLabel(visible, groupOrders.length)}</span>
+                      <span className="pr-counter" data-counter={status} tabIndex={-1}>{pageCounterLabel(visible, groupOrders.length)}</span>
                       {nextBatchSize(visible, groupOrders.length) > 0 && (
                         <button type="button" className="btn-secondary" onClick={() => showMore(status, groupOrders.length)}>
                           Mostrar mais {nextBatchSize(visible, groupOrders.length)}

@@ -11,6 +11,7 @@ import {
 } from '../types';
 import { printChecklist } from '../utils/printChecklist';
 import { useDirtyGuard } from '../hooks/useDirtyGuard';
+import { Icon } from '../components/ui/Icon';
 
 interface ChecklistModalProps {
   isOpen: boolean;
@@ -19,6 +20,14 @@ interface ChecklistModalProps {
   os: WorkOrder | null;
   settings?: WorkshopSettings;
 }
+
+// Luz de status de cada estado da vistoria (mesmos tokens do Kanban: cor + palavra, nunca só cor).
+const STATE_LIGHT: Record<InspectionStatus, string> = {
+  pending: 'status-light--arquivado',
+  ok: 'status-light--finalizado',
+  attention: 'status-light--em-servico',
+  urgent: 'status-light--atrasado',
+};
 
 export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose, onSave, os, settings }) => {
   const [checklist, setChecklist] = useState<ChecklistSchema>(createEmptyChecklist());
@@ -140,13 +149,14 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
         {/* ====== HEADER ====== */}
         <div className="checklist-header">
           <div className="checklist-header-info">
-            <h2 className="checklist-title">&#128269; Inspeção Veicular</h2>
+            <h2 className="checklist-title">Vistoria do veículo</h2>
             <span className="checklist-subtitle">{os.vehicle} &mdash; {os.clientName}</span>
           </div>
 
           <div className="checklist-header-km">
-            <label className="checklist-km-label">KM entrada</label>
+            <label className="checklist-km-label" htmlFor="checklist-km">KM de entrada</label>
             <input
+              id="checklist-km"
               type="number"
               className="form-input checklist-km-input"
               value={checklist.mileageIn ?? os.mileage}
@@ -154,20 +164,18 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
             />
           </div>
 
-          <button className="btn-icon" onClick={guard.requestClose} title="Fechar" aria-label="Fechar">&#10005;</button>
+          <button type="button" className="btn-icon" onClick={guard.requestClose} title="Fechar" aria-label="Fechar"><Icon name="fechar" size={20} /></button>
         </div>
 
         {/* ====== LEGENDA + RESUMO ====== */}
         <div className="checklist-legend">
           {(Object.entries(INSPECTION_STATUS_META) as [InspectionStatus, { label: string; color: string; emoji: string }][]).map(([key, meta]) => (
-            <span key={key} className="legend-item">
-              {/* Bolinha CSS pura — sem emoji */}
-              <span className="legend-dot" style={{ backgroundColor: meta.color }} />
+            <span key={key} className={`legend-item status-light ${STATE_LIGHT[key]}`}>
               <span>{meta.label}</span>
-              {counts[key] ? <strong style={{ color: meta.color }}>({counts[key]})</strong> : null}
+              {counts[key] ? <strong>({counts[key]})</strong> : null}
             </span>
           ))}
-          <span className="legend-hint">Clique no item para alternar o status</span>
+          <span className="legend-hint">Toque no estado de um item para mudar: Não inspecionado, OK, Necessita trocar, Urgente.</span>
         </div>
 
         {/* ====== GRID DE CATEGORIAS ====== */}
@@ -179,36 +187,39 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
                 <span>{cat.label}</span>
                 {cat.custom && (
                   <button
+                    type="button"
                     className="btn-icon danger"
                     title="Remover categoria"
-                    style={{ fontSize: '0.75rem', padding: '0 4px' }}
+                    aria-label={`Remover categoria ${cat.label}`}
                     onClick={() => removeCategory(cat.id)}
-                  >&#10005;</button>
+                  ><Icon name="excluir" size={18} /></button>
                 )}
               </div>
 
               <ul className="checklist-items">
                 {cat.items.map(item => {
                   const meta = INSPECTION_STATUS_META[item.status];
+                  const next = INSPECTION_STATUS_META[NEXT_INSPECTION_STATUS[item.status]];
                   return (
-                    <li
-                      key={item.id}
-                      className={`checklist-item status-${item.status}`}
-                      onClick={() => cycleStatus(cat.id, item.id)}
-                      title="Clique para alterar status"
-                    >
-                      {/* Círculo CSS puro — sem emoji, sem bullet do <li> */}
-                      <span
-                        className="status-dot"
-                        style={{ backgroundColor: meta.color }}
-                      />
+                    <li key={item.id} className={`checklist-item status-${item.status}`}>
                       <span className="item-label">{item.label}</span>
+                      <button
+                        type="button"
+                        className={`item-state status-light ${STATE_LIGHT[item.status]}`}
+                        onClick={() => cycleStatus(cat.id, item.id)}
+                        aria-label={`${item.label}: ${meta.label}. Ativar para mudar para ${next.label}`}
+                        title={`Mudar para: ${next.label}`}
+                      >
+                        {meta.label}
+                      </button>
                       {item.custom && (
                         <button
+                          type="button"
                           className="item-delete btn-icon danger"
                           title="Remover item"
-                          onClick={e => { e.stopPropagation(); removeItem(cat.id, item.id); }}
-                        >&#10005;</button>
+                          aria-label={`Remover item ${item.label}`}
+                          onClick={() => removeItem(cat.id, item.id)}
+                        ><Icon name="excluir" size={16} /></button>
                       )}
                     </li>
                   );
@@ -225,6 +236,7 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
                     ref={newItemInputRef}
                     className="form-input"
                     placeholder="Nome do item..."
+                    aria-label={`Nome do novo item em ${cat.label}`}
                     value={newItemLabel}
                     onChange={e => setNewItemLabel(e.target.value)}
                     onKeyDown={e => {
@@ -233,15 +245,15 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
                       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setAddingItemTo(null); setNewItemLabel(''); }
                     }}
                   />
-                  <button className="btn-sm" onClick={() => addItem(cat.id)}>&#10003;</button>
-                  <button className="btn-sm btn-secondary" onClick={() => { setAddingItemTo(null); setNewItemLabel(''); }}>&#10005;</button>
+                  <button type="button" className="btn-sm" onClick={() => addItem(cat.id)}><Icon name="check" size={16} /> Adicionar</button>
+                  <button type="button" className="btn-sm btn-secondary" onClick={() => { setAddingItemTo(null); setNewItemLabel(''); }}>Cancelar</button>
                 </div>
               ) : (
                 <button
                   className="add-item-btn"
                   onClick={() => { setAddingItemTo(cat.id); setNewItemLabel(''); }}
                 >
-                  + Novo item
+                  <Icon name="adicionar" size={16} /> Novo item
                 </button>
               )}
             </div>
@@ -256,6 +268,7 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
                 ref={newCatInputRef}
                 className="form-input"
                 placeholder="Nome da categoria..."
+                aria-label="Nome da nova categoria"
                 value={newCategoryLabel}
                 onChange={e => setNewCategoryLabel(e.target.value)}
                 onKeyDown={e => {
@@ -263,18 +276,19 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
                   if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setAddingCategory(false); setNewCategoryLabel(''); }
                 }}
               />
-              <button className="btn-sm" onClick={addCategory}>&#10003;</button>
-              <button className="btn-sm btn-secondary" onClick={() => { setAddingCategory(false); setNewCategoryLabel(''); }}>&#10005;</button>
+              <button type="button" className="btn-sm" onClick={addCategory}><Icon name="check" size={16} /> Adicionar</button>
+              <button type="button" className="btn-sm btn-secondary" onClick={() => { setAddingCategory(false); setNewCategoryLabel(''); }}>Cancelar</button>
             </div>
           ) : (
-            <button className="btn-ghost" onClick={() => setAddingCategory(true)}>+ Nova categoria</button>
+            <button type="button" className="btn-ghost" onClick={() => setAddingCategory(true)}><Icon name="adicionar" size={16} /> Nova categoria</button>
           )}
         </div>
 
         {/* ====== OBSERVAÇÕES ====== */}
         <div className="checklist-notes-section">
-          <label className="form-label">&#128221; Observações</label>
+          <label className="form-label" htmlFor="checklist-notes">Observações</label>
           <textarea
+            id="checklist-notes"
             className="form-input form-textarea"
             placeholder="Riscos, amassados, observações adicionais..."
             value={checklist.notes}
@@ -285,12 +299,12 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
 
         {/* ====== AÇÕES ====== */}
         <div className="modal-actions checklist-actions">
-          <button className="btn-ghost checklist-print-btn" onClick={handlePrint} title="Imprimir vistoria">
-            &#128424; Imprimir
+          <button type="button" className="btn-ghost checklist-print-btn" onClick={handlePrint} title="Imprimir vistoria">
+            <Icon name="imprimir" size={18} /> Imprimir
           </button>
           <div style={{ flex: 1 }} />
-          <button className="btn-secondary" onClick={guard.requestClose}>Cancelar</button>
-          <button className="btn" onClick={handleSave}>&#128190; Salvar Vistoria</button>
+          <button type="button" className="btn-secondary" onClick={guard.requestClose}>Cancelar</button>
+          <button type="button" className="btn" onClick={handleSave}><Icon name="salvar" size={18} /> Salvar vistoria</button>
         </div>
 
       </div>

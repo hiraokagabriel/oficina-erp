@@ -5,6 +5,7 @@ import {
   InspectionStatus,
   INSPECTION_STATUS_META,
 } from '../types';
+import { escapeHtml } from './html';
 
 // Cor sólida por status para impressão (sem rgba)
 const STATUS_PRINT_COLOR: Record<InspectionStatus, string> = {
@@ -32,16 +33,12 @@ function sanitizeForFilename(text: string): string {
     .substring(0, 50);
 }
 
-export function printChecklist(
+/** Monta o HTML e o título do checklist (sem imprimir): separado para poder ser testado. */
+export function buildPrintChecklistHtml(
   os: WorkOrder,
   checklist: ChecklistSchema,
   settings: WorkshopSettings,
-) {
-  if (!os || !checklist) {
-    console.error('Dados insuficientes para imprimir o checklist');
-    return;
-  }
-
+): { printContent: string; docTitle: string } {
   const formatDate = (iso?: string) =>
     iso ? new Date(iso).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR');
 
@@ -76,13 +73,13 @@ export function printChecklist(
         <td class="item-dot-cell">
           <span class="item-dot" style="background:${STATUS_PRINT_COLOR[item.status]}"></span>
         </td>
-        <td class="item-label-cell">${item.label}</td>
+        <td class="item-label-cell">${escapeHtml(item.label)}</td>
       </tr>
     `).join('');
 
     return `
       <div class="category-card">
-        <div class="category-title">${cat.label.toUpperCase()}</div>
+        <div class="category-title">${escapeHtml(cat.label.toUpperCase())}</div>
         <table class="items-table">
           <tbody>
             ${itemsHtml}
@@ -343,22 +340,22 @@ export function printChecklist(
       <!-- CABEÇALHO -->
       <div class="doc-header">
         <div class="header-shop">
-          <div class="shop-name">${settings.name || 'OFICINA'}</div>
-          <div class="shop-sub">${settings.address || ''}</div>
-          <div class="shop-sub">${settings.cnpj ? `CNPJ: ${settings.cnpj}` : ''}</div>
+          <div class="shop-name">${escapeHtml(settings.name || 'OFICINA')}</div>
+          <div class="shop-sub">${escapeHtml(settings.address || '')}</div>
+          <div class="shop-sub">${settings.cnpj ? `CNPJ: ${escapeHtml(settings.cnpj)}` : ''}</div>
         </div>
 
         <div class="header-center">
           <div class="doc-title">Checklist de Inspeção Veicular</div>
           <div class="doc-os">OS #${os.osNumber} &mdash; ${formatDate(checklist.inspectedAt)}</div>
-          ${os.technician ? `<div class="doc-os">Téc: ${os.technician}</div>` : ''}
+          ${os.technician ? `<div class="doc-os">Téc: ${escapeHtml(os.technician)}</div>` : ''}
         </div>
 
         <div class="header-vehicle">
-          <div class="vehicle-name">${os.vehicle}</div>
-          <p><strong>Cliente:</strong> ${os.clientName}</p>
-          <p><strong>Telefone:</strong> ${os.clientPhone || '-'}</p>
-          <p><strong>KM entrada:</strong> ${checklist.mileageIn ?? os.mileage ?? '-'}</p>
+          <div class="vehicle-name">${escapeHtml(os.vehicle)}</div>
+          <p><strong>Cliente:</strong> ${escapeHtml(os.clientName)}</p>
+          <p><strong>Telefone:</strong> ${escapeHtml(os.clientPhone || '-')}</p>
+          <p><strong>KM entrada:</strong> ${escapeHtml(String(checklist.mileageIn ?? os.mileage ?? '-'))}</p>
         </div>
       </div>
 
@@ -378,7 +375,7 @@ export function printChecklist(
       <!-- OBSERVAÇÕES -->
       <div class="obs-section">
         <div class="obs-title">Observações</div>
-        <div class="obs-text">${checklist.notes || 'Nenhuma observação.'}</div>
+        <div class="obs-text">${escapeHtml(checklist.notes || 'Nenhuma observação.')}</div>
       </div>
 
       <!-- RODAPÉ -->
@@ -386,12 +383,12 @@ export function printChecklist(
         <div class="signature-area">
           <div class="signature-block">
             <div class="sign-line"></div>
-            <span class="sign-name">${os.technician || settings.name || 'Responsável'}</span>
+            <span class="sign-name">${escapeHtml(os.technician || settings.name || 'Responsável')}</span>
             <span class="sign-label">Técnico Responsável</span>
           </div>
           <div class="signature-block">
             <div class="sign-line"></div>
-            <span class="sign-name">${os.clientName}</span>
+            <span class="sign-name">${escapeHtml(os.clientName)}</span>
             <span class="sign-label">Cliente</span>
           </div>
           <div class="signature-block">
@@ -411,6 +408,20 @@ export function printChecklist(
     </body>
     </html>
   `;
+
+  return { printContent, docTitle };
+}
+
+export function printChecklist(
+  os: WorkOrder,
+  checklist: ChecklistSchema,
+  settings: WorkshopSettings,
+) {
+  if (!os || !checklist) {
+    console.error('Dados insuficientes para imprimir o checklist');
+    return;
+  }
+  const { printContent, docTitle } = buildPrintChecklistHtml(os, checklist, settings);
 
   const originalTitle = document.title;
   document.title = docTitle;

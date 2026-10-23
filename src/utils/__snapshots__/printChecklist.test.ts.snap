@@ -1,0 +1,397 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildPrintChecklistHtml: dados normais > HTML do checklist 1`] = `
+"
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="UTF-8">
+      <title>Checklist_OS77_Fiat_Uno_ABC_1D23</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        @page {
+          size: A4;
+          margin: 12mm 14mm;
+        }
+
+        body {
+          font-family: 'Inter', Arial, sans-serif;
+          background: #fff;
+          color: #111;
+          font-size: 10px;
+          line-height: 1.4;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+
+        /* ---- Cabeçalho ---- */
+        .doc-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 10px;
+          padding-bottom: 10px;
+          border-bottom: 2px solid #111;
+        }
+        .header-shop {
+          flex: 1;
+        }
+        .shop-name {
+          font-size: 1.3rem;
+          font-weight: 900;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          color: #000;
+          margin-bottom: 2px;
+        }
+        .shop-sub {
+          font-size: 0.75rem;
+          color: #555;
+        }
+        .header-center {
+          flex: 1;
+          text-align: center;
+        }
+        .doc-title {
+          font-size: 1rem;
+          font-weight: 900;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: #8B5CF6;
+          margin-bottom: 2px;
+        }
+        .doc-os {
+          font-size: 0.75rem;
+          color: #555;
+        }
+        .header-vehicle {
+          flex: 1;
+          text-align: right;
+        }
+        .vehicle-name {
+          font-size: 1rem;
+          font-weight: 800;
+          color: #000;
+          margin-bottom: 2px;
+        }
+        .header-vehicle p {
+          font-size: 0.78rem;
+          color: #444;
+          margin: 1px 0;
+        }
+
+        /* ---- Resumo de inspecção ---- */
+        .inspection-summary {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          background: #F5F5F5;
+          border-radius: 5px;
+          padding: 5px 10px;
+          margin-bottom: 8px;
+          font-size: 0.78rem;
+        }
+        .summary-progress {
+          font-weight: 700;
+          color: #8B5CF6;
+        }
+        .legend-bar {
+          display: flex;
+          gap: 12px;
+          align-items: center;
+        }
+        .legend-item {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          color: #333;
+          font-size: 0.75rem;
+        }
+        .legend-dot {
+          width: 9px;
+          height: 9px;
+          border-radius: 50%;
+          display: inline-block;
+          flex-shrink: 0;
+        }
+
+        /* ---- Grid de categorias ---- */
+        .categories-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 7px;
+          margin-bottom: 10px;
+        }
+
+        .category-card {
+          border: 1px solid #ddd;
+          border-radius: 5px;
+          overflow: hidden;
+          break-inside: avoid;
+          page-break-inside: avoid;
+        }
+
+        .category-title {
+          background: #F0EBFF;
+          color: #5B21B6;
+          font-size: 0.65rem;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+          padding: 4px 8px;
+          border-bottom: 1px solid #DDD6FE;
+        }
+
+        /* ---- Tabela de itens ---- */
+        .items-table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+
+        .items-table tr {
+          border-bottom: 1px solid #F0F0F0;
+        }
+
+        .items-table tr:last-child {
+          border-bottom: none;
+        }
+
+        .item-dot-cell {
+          width: 20px;
+          padding: 3px 5px;
+          vertical-align: middle;
+        }
+
+        .item-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          display: inline-block;
+        }
+
+        .item-label-cell {
+          padding: 3px 6px 3px 0;
+          font-size: 0.82rem;
+          color: #222;
+        }
+
+        .empty-cat {
+          padding: 4px 8px;
+          font-style: italic;
+          color: #999;
+          font-size: 0.75rem;
+        }
+
+        /* ---- Observações ---- */
+        .obs-section {
+          border: 1px solid #ddd;
+          border-radius: 5px;
+          padding: 7px 10px;
+          margin-bottom: 12px;
+          break-inside: avoid;
+          page-break-inside: avoid;
+        }
+        .obs-title {
+          font-size: 0.65rem;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: #8B5CF6;
+          margin-bottom: 4px;
+        }
+        .obs-text {
+          font-size: 0.85rem;
+          color: #333;
+          white-space: pre-wrap;
+          min-height: 20px;
+        }
+
+        /* ---- Rodapé / assinatura ---- */
+        .doc-footer {
+          border-top: 1px dashed #aaa;
+          padding-top: 10px;
+          break-inside: avoid;
+          page-break-inside: avoid;
+        }
+        .signature-area {
+          display: flex;
+          justify-content: space-between;
+          gap: 20px;
+          margin-bottom: 8px;
+        }
+        .signature-block {
+          flex: 1;
+          text-align: center;
+        }
+        .sign-line {
+          border-bottom: 1px solid #000;
+          height: 14mm;
+          margin-bottom: 4px;
+        }
+        .sign-name  { font-size: 0.78rem; font-weight: 700; }
+        .sign-label { font-size: 0.6rem; color: #666; text-transform: uppercase; letter-spacing: 0.05em; }
+        .footer-center {
+          text-align: center;
+          border-top: 1px dashed #ddd;
+          padding-top: 6px;
+          margin-top: 8px;
+        }
+        .footer-declaration { font-size: 0.65rem; color: #444; margin-bottom: 3px; }
+        .footer-thankyou {
+          font-size: 0.68rem;
+          font-weight: 900;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: #8B5CF6;
+        }
+      </style>
+    </head>
+    <body>
+
+      <!-- CABEÇALHO -->
+      <div class="doc-header">
+        <div class="header-shop">
+          <div class="shop-name">Oficina Teste</div>
+          <div class="shop-sub">Rua das Flores, 100 - Centro</div>
+          <div class="shop-sub">CNPJ: 12.345.678/0001-90</div>
+        </div>
+
+        <div class="header-center">
+          <div class="doc-title">Checklist de Inspeção Veicular</div>
+          <div class="doc-os">OS #77 &mdash; 10/03/2026</div>
+          <div class="doc-os">Téc: Carlos</div>
+        </div>
+
+        <div class="header-vehicle">
+          <div class="vehicle-name">Fiat Uno ABC-1D23</div>
+          <p><strong>Cliente:</strong> João da Silva</p>
+          <p><strong>Telefone:</strong> (11) 99999-0000</p>
+          <p><strong>KM entrada:</strong> 85100</p>
+        </div>
+      </div>
+
+      <!-- RESUMO DE INSPECÇÃO -->
+      <div class="inspection-summary">
+        <span class="summary-progress">
+          Itens inspecionados: 3 / 3
+        </span>
+        <div class="legend-bar">
+      <span class="legend-item">
+        <span class="legend-dot" style="background:#BDBDBD"></span>
+        Não inspecionado
+        
+      </span>
+    
+      <span class="legend-item">
+        <span class="legend-dot" style="background:#43A047"></span>
+        OK / Feito
+        <strong>(1)</strong>
+      </span>
+    
+      <span class="legend-item">
+        <span class="legend-dot" style="background:#FB8C00"></span>
+        Necessita trocar
+        <strong>(1)</strong>
+      </span>
+    
+      <span class="legend-item">
+        <span class="legend-dot" style="background:#E53935"></span>
+        Urgente!
+        <strong>(1)</strong>
+      </span>
+    </div>
+      </div>
+
+      <!-- GRID DE CATEGORIAS -->
+      <div class="categories-grid">
+        
+      <div class="category-card">
+        <div class="category-title">FREIOS</div>
+        <table class="items-table">
+          <tbody>
+            
+      <tr style="background:#FFF3E0">
+        <td class="item-dot-cell">
+          <span class="item-dot" style="background:#FB8C00"></span>
+        </td>
+        <td class="item-label-cell">Pastilhas dianteiras</td>
+      </tr>
+    
+      <tr style="background:#E8F5E9">
+        <td class="item-dot-cell">
+          <span class="item-dot" style="background:#43A047"></span>
+        </td>
+        <td class="item-label-cell">Fluido de freio</td>
+      </tr>
+    
+            
+          </tbody>
+        </table>
+      </div>
+    
+      <div class="category-card">
+        <div class="category-title">MOTOR</div>
+        <table class="items-table">
+          <tbody>
+            
+      <tr style="background:#FFEBEE">
+        <td class="item-dot-cell">
+          <span class="item-dot" style="background:#E53935"></span>
+        </td>
+        <td class="item-label-cell">Correia dentada</td>
+      </tr>
+    
+            
+          </tbody>
+        </table>
+      </div>
+    
+      <div class="category-card">
+        <div class="category-title">VAZIA</div>
+        <table class="items-table">
+          <tbody>
+            
+            <tr><td colspan="2" class="empty-cat">Nenhum item</td></tr>
+          </tbody>
+        </table>
+      </div>
+    
+      </div>
+
+      <!-- OBSERVAÇÕES -->
+      <div class="obs-section">
+        <div class="obs-title">Observações</div>
+        <div class="obs-text">Risco na porta direita.</div>
+      </div>
+
+      <!-- RODAPÉ -->
+      <div class="doc-footer">
+        <div class="signature-area">
+          <div class="signature-block">
+            <div class="sign-line"></div>
+            <span class="sign-name">Carlos</span>
+            <span class="sign-label">Técnico Responsável</span>
+          </div>
+          <div class="signature-block">
+            <div class="sign-line"></div>
+            <span class="sign-name">João da Silva</span>
+            <span class="sign-label">Cliente</span>
+          </div>
+          <div class="signature-block">
+            <div class="sign-line"></div>
+            <span class="sign-name">_____ / _____ / _________</span>
+            <span class="sign-label">Data</span>
+          </div>
+        </div>
+        <div class="footer-center">
+          <p class="footer-declaration">
+            Declaro que o veículo foi recebido e inspecionado conforme os itens acima.
+          </p>
+          <p class="footer-thankyou">Obrigado pela preferência!</p>
+        </div>
+      </div>
+
+    </body>
+    </html>
+  "
+`;

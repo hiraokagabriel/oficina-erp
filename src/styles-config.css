@@ -1,0 +1,62 @@
+/* CONFIGURAÇÕES. Só tokens do tema; sem gradiente, sem blur, sem animação. */
+.cfg-page { max-width: 1000px; margin: 0 auto; min-width: 0; }
+.cfg-page-title { margin: 0 0 var(--sp-4); font-size: var(--fs-xl); font-weight: var(--fw-bold); color: var(--text); }
+.cfg-card { color: var(--text); }
+.cfg-title { display: flex; align-items: center; gap: var(--sp-2); margin: 0 0 var(--sp-1); font-size: var(--fs-md); font-weight: var(--fw-semibold); color: var(--text); }
+.cfg-title svg { color: var(--accent-text); flex: none; }
+.cfg-subtitle { margin: 0 0 var(--sp-2); font-size: var(--fs-base); font-weight: var(--fw-semibold); color: var(--text); }
+.cfg-help { margin: var(--sp-1) 0 0; font-size: var(--fs-xs); line-height: var(--lh-base); color: var(--text-2); }
+.cfg-block { padding-top: var(--sp-4); margin-top: var(--sp-4); border-top: 1px solid var(--border); }
+.cfg-title + .cfg-block { margin-top: var(--sp-3); }
+.cfg-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4); flex-wrap: wrap; }
+.cfg-row--start { justify-content: flex-start; margin-top: var(--sp-4); }
+.cfg-row-text { flex: 1 1 280px; min-width: 0; }
+.cfg-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--sp-4); margin-top: var(--sp-4); }
+.cfg-narrow { max-width: 260px; }
+.cfg-page a { color: var(--accent-text); }
+.cfg-page .btn, .cfg-page .btn-secondary { min-height: var(--control-h-min); }
+
+/* Escolha de tema: dois botões com prévia fiel aos tokens */
+.cfg-themes { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--sp-4); margin-top: var(--sp-4); }
+.cfg-theme {
+  display: flex; flex-direction: column; gap: var(--sp-3); text-align: left; padding: var(--sp-4);
+  min-height: var(--control-h); font-family: inherit; color: var(--text); cursor: pointer;
+  background: var(--surface-2); border: 2px solid var(--border-strong); border-radius: var(--radius-lg);
+}
+.cfg-theme:hover { background: var(--surface-3); }
+.cfg-theme.is-active { border-color: var(--accent); background: var(--accent-soft); }
+.cfg-theme:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.cfg-theme-preview {
+  position: relative; display: block; height: 76px; border: 1px solid; border-radius: var(--radius-md); overflow: hidden;
+}
+.cfg-theme-card {
+  position: absolute; left: 12px; top: 12px; right: 56px; bottom: 12px; display: flex; flex-direction: column; justify-content: center;
+  gap: 8px; padding: 0 12px; border: 1px solid; border-radius: var(--radius-sm);
+}
+.cfg-theme-line { display: block; height: 6px; border-radius: 3px; width: 100%; }
+.cfg-theme-line--short { width: 55%; }
+.cfg-theme-accent { position: absolute; right: 12px; top: 12px; width: 32px; height: 32px; border-radius: 50%; }
+.cfg-theme-info { display: flex; flex-direction: column; gap: 2px; }
+.cfg-theme-name { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); font-size: var(--fs-md); font-weight: var(--fw-semibold); color: var(--text); }
+.cfg-theme-check { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-xs); color: var(--accent-text); }
+
+/* Backup */
+.cfg-restore { padding: var(--sp-4); border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); margin-top: var(--sp-3); }
+.cfg-file-input { display: none; }
+.cfg-file-name { font-size: var(--fs-sm); color: var(--text-2); overflow-wrap: anywhere; flex: 1 1 200px; }
+.cfg-drive { padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-2); margin-top: var(--sp-4); }
+.cfg-ok { display: inline-flex; align-items: center; gap: var(--sp-1); font-weight: var(--fw-semibold); color: var(--text-success); }
+.cfg-bad { display: inline-flex; align-items: center; gap: var(--sp-1); font-weight: var(--fw-semibold); color: var(--text-danger); }
+.cfg-warn {
+  display: flex; align-items: flex-start; gap: var(--sp-2); margin: var(--sp-4) 0; padding: var(--sp-3);
+  border: 1px solid var(--text-warning); border-radius: var(--radius-md); font-size: var(--fs-sm); color: var(--text-warning);
+}
+.cfg-warn svg { flex: none; margin-top: 2px; }
+
+/* Avançado */
+.cfg-advanced-summary {
+  display: flex; align-items: center; gap: var(--sp-2); min-height: var(--control-h); cursor: pointer;
+  font-size: var(--fs-md); font-weight: var(--fw-semibold); color: var(--text);
+}
+.cfg-advanced-summary:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; border-radius: var(--radius-sm); }
+.cfg-advanced[open] .cfg-advanced-summary { margin-bottom: var(--sp-2); }

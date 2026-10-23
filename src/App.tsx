@@ -791,6 +791,7 @@ Abrir OS?`)) {
                   setIsModalOpen(true);
                 }}
                 onUpdateStatus={handleUpdateStatus}
+                onEdit={kanbanActions.onEdit}
               />
             )}
 

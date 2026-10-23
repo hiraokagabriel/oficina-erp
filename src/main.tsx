@@ -41,6 +41,9 @@ import "./styles-tokens.css";
 // COMPONENTES BASE (botões, campo, chip, luz de status, janela, aviso, vazio, segmentado)
 import "./styles-components.css";
 
+// PAINEL HOJE
+import "./styles-today.css";
+
 // CONTRASTE WCAG AA (carregar por último)
 import "./styles-contrast.css";
 

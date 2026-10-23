@@ -16,9 +16,11 @@ import { ToastProvider, useToast } from './context/ToastContext';
 import { Theme, applyTheme, readStoredTheme, writeStoredTheme } from './utils/theme';
 import { LoadingSkeleton } from './components/ui/LoadingSkeleton';
 import { printOS } from './utils/printOS';
+import { markPrintedOnce, readHomeTab } from './utils/todayPrefs';
 
 const FinancialPage = lazy(() => import('./pages/FinancialPage').then(m => ({ default: m.FinancialPage })));
 const WorkshopPage = lazy(() => import('./pages/WorkshopPage').then(m => ({ default: m.WorkshopPage })));
+const TodayPage = lazy(() => import('./pages/TodayPage').then(m => ({ default: m.TodayPage })));
 const AgendaPage = lazy(() => import('./pages/AgendaPage').then(m => ({ default: m.AgendaPage })));
 const CRMPage = lazy(() => import('./pages/CRMPage').then(m => ({ default: m.CRMPage })));
 const ProcessPage = lazy(() => import('./pages/ProcessPage').then(m => ({ default: m.ProcessPage })));
@@ -84,7 +86,7 @@ function AppContent() {
   // Tema por computador: começa do que está gravado (o index.html já aplicou o atributo antes do primeiro desenho).
   const [currentTheme, setCurrentThemeState] = useState<Theme>(() => readStoredTheme());
   const setCurrentTheme = useCallback((t: Theme) => { setCurrentThemeState(t); writeStoredTheme(t); }, []);
-  const [activeTab, setActiveTab] = useState<'FINANCEIRO' | 'OFICINA' | 'AGENDA' | 'PROCESSOS' | 'CLIENTES' | 'PECAS' | 'CONFIG'>('OFICINA');
+  const [activeTab, setActiveTab] = useState<'HOJE' | 'FINANCEIRO' | 'OFICINA' | 'AGENDA' | 'PROCESSOS' | 'CLIENTES' | 'PECAS' | 'CONFIG'>(() => readHomeTab());
   // Fluxo Agenda -> Criar OS: agendamento de origem e rascunho (objeto estável: o OSModal reinicia o formulário se ele mudar).
   const [osFromAppointment, setOsFromAppointment] = useState<{ appointment: Appointment; draft: OSDraftFromAppointment } | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
@@ -480,6 +482,7 @@ Abrir OS?`)) {
 
   const handlePrintOS = (os: WorkOrder) => {
     addToast(`Imprimindo OS #${os.osNumber}...`, 'info');
+    markPrintedOnce();
     printOS(os, settings);
   };
 
@@ -701,6 +704,26 @@ Abrir OS?`)) {
 
         <main className="main-content">
           <Suspense fallback={<LoadingSkeleton type="page" />}>
+            {activeTab === 'HOJE' && (
+              <TodayPage
+                workOrders={workOrders}
+                appointments={appointments}
+                ledger={ledger}
+                clients={clients}
+                settings={settings}
+                formatMoney={Money.format}
+                onNewOS={() => { setEditingOS(null); setIsModalOpen(true); }}
+                onSaveAppointment={input => handleSaveAppointment(input, null, 'NOVO')}
+                onCreateOSFromAppointment={handleCreateOSFromAppointment}
+                onOpenOS={handleOpenOSFromCRM}
+                onGoProcesses={() => setActiveTab('PROCESSOS')}
+                onGoAgenda={() => setActiveTab('AGENDA')}
+                onGoFinance={() => setActiveTab('FINANCEIRO')}
+                onGoConfig={() => setActiveTab('CONFIG')}
+                onGoClients={() => setActiveTab('CLIENTES')}
+              />
+            )}
+
             {activeTab === 'FINANCEIRO' && (
               <FinancialPage
                 isLoading={isLoading}

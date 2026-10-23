@@ -28,6 +28,8 @@ interface VehicleComboboxProps {
   className?: string;
   style?: React.CSSProperties;
   onFocus?: React.FocusEventHandler<HTMLInputElement>;
+  invalid?: boolean;
+  describedBy?: string;
 }
 
 const Highlighted: React.FC<{ text: string; query: string }> = ({ text, query }) => (
@@ -37,7 +39,7 @@ const Highlighted: React.FC<{ text: string; query: string }> = ({ text, query })
 );
 
 export const VehicleCombobox: React.FC<VehicleComboboxProps> = ({
-  id, value, onChange, clientVehicles, shopVehicles, plateAware = false, placeholder, ariaLabel, className = 'form-input', style, onFocus,
+  id, value, onChange, clientVehicles, shopVehicles, plateAware = false, placeholder, ariaLabel, className = 'form-input', style, onFocus, invalid, describedBy,
 }) => {
   const uid = useId();
   const listId = `${uid}-list`;
@@ -207,6 +209,8 @@ export const VehicleCombobox: React.FC<VehicleComboboxProps> = ({
         aria-autocomplete="list"
         aria-activedescendant={showList ? (step ? `${uid}-year-${yearActive}` : active >= 0 ? optId(active) : undefined) : undefined}
         aria-label={ariaLabel}
+        aria-invalid={invalid || undefined}
+        aria-describedby={describedBy}
         autoComplete="off"
         spellCheck={false}
         placeholder={placeholder}

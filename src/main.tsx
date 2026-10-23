@@ -47,6 +47,9 @@ import "./styles-kanban.css";
 // PAINEL HOJE
 import "./styles-today.css";
 
+// JANELA DA OS (seções)
+import "./styles-osmodal.css";
+
 // CONTRASTE WCAG AA (carregar por último)
 import "./styles-contrast.css";
 

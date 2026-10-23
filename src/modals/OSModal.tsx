@@ -12,6 +12,9 @@ import { computeOSMargin, formatPct, marginLabel, marginLevel, suggestPriceForTa
 import { PriceSuggestion, suggestHistoricalPrice } from '../services/pricing';
 import { useDirtyGuard } from '../hooks/useDirtyGuard';
 import { costToInput, normalizeItemCost, parseCostEdit, parseCostInput, partialMarginNote } from '../services/marginView';
+import { firstErrorField, OSFieldErrors, OSFieldId, parsePriceText, sanitizeMoneyText, validateOSFields } from '../services/osModalView';
+import { MoneyField } from '../components/MoneyField';
+import { Icon } from '../components/ui/Icon';
 
 /** Sugestão discreta do histórico de vendas; só sugere, o botão grava apenas o preço da linha. */
 const HistoryHint: React.FC<{
@@ -95,12 +98,14 @@ export const OSModal: React.FC<OSModalProps> = ({
   const [parts, setParts] = useState<OrderItem[]>([]);
   const [services, setServices] = useState<OrderItem[]>([]);
   const [showCostColumn, setShowCostColumn] = useState(true);
+  const [showProfit, setShowProfit] = useState(false); // análise de lucro recolhida por padrão
+  const [errors, setErrors] = useState<OSFieldErrors>({});
+  const clearError = (f: OSFieldId) => setErrors(prev => (prev[f] ? { ...prev, [f]: undefined } : prev));
 
   // --- ESTADOS TEMPORÁRIOS ---
   const [tempPart, setTempPart] = useState({ description: '', price: '', cost: '', category: '' as PartCategory | '' });
   const [tempService, setTempService] = useState({ description: '', price: '', cost: '' });
 
-  const toFloat = Money.toFloat;
   const fromFloat = Money.fromFloat;
 
   // --- CÁLCULOS FINANCEIROS MEMOIZADOS ---
@@ -196,6 +201,8 @@ export const OSModal: React.FC<OSModalProps> = ({
   // Inicialização
   useEffect(() => {
     if (!isOpen) return;
+    setErrors({});
+    setShowProfit(false);
 
     if (editingOS) {
       setOsNumber(editingOS.osNumber.toString());
@@ -335,43 +342,45 @@ export const OSModal: React.FC<OSModalProps> = ({
   };
 
   // --- HANDLERS ---
+  const addPart = (toServices: boolean) => {
+    if (!tempPart.description) return;
+    const priceVal = parseFloat(tempPart.price.replace(',', '.')) || 0;
+    const partLinkId = resolveCatalogItemId({ description: tempPart.description }, catalogParts);
+    const newItem: OrderItem = {
+      id: crypto.randomUUID(),
+      ...(partLinkId ? { catalogItemId: partLinkId } : {}),
+      description: tempPart.description,
+      price: fromFloat(priceVal),
+      cost: parseCostInput(tempPart.cost),
+      category: tempPart.category || undefined
+    };
+    setParts(prev => [...prev, newItem]);
+    setTempPart({ description: '', price: '', cost: '', category: '' });
+    if (toServices) serviceInputRef.current?.focus(); else partInputRef.current?.focus();
+  };
+
+  const addService = (toParts: boolean) => {
+    if (!tempService.description) return;
+    const priceVal = parseFloat(tempService.price.replace(',', '.')) || 0;
+    const serviceLinkId = resolveCatalogItemId({ description: tempService.description }, catalogServices);
+    const newItem: OrderItem = {
+      id: crypto.randomUUID(),
+      ...(serviceLinkId ? { catalogItemId: serviceLinkId } : {}),
+      description: tempService.description,
+      price: fromFloat(priceVal),
+      cost: parseCostInput(tempService.cost)
+    };
+    setServices(prev => [...prev, newItem]);
+    setTempService({ description: '', price: '', cost: '' });
+    if (toParts) partInputRef.current?.focus(); else serviceInputRef.current?.focus();
+  };
+
   const handlePartKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      if (!tempPart.description) return;
-      const priceVal = parseFloat(tempPart.price.replace(',', '.')) || 0;
-      const partLinkId = resolveCatalogItemId({ description: tempPart.description }, catalogParts);
-      const newItem: OrderItem = {
-        id: crypto.randomUUID(),
-        ...(partLinkId ? { catalogItemId: partLinkId } : {}),
-        description: tempPart.description,
-        price: fromFloat(priceVal),
-        cost: parseCostInput(tempPart.cost),
-        category: tempPart.category || undefined
-      };
-      setParts(prev => [...prev, newItem]);
-      setTempPart({ description: '', price: '', cost: '', category: '' });
-      if (e.shiftKey) serviceInputRef.current?.focus(); else partInputRef.current?.focus();
-    }
+    if (e.key === 'Enter') { e.preventDefault(); addPart(e.shiftKey); }
   };
 
   const handleServiceKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      if (!tempService.description) return;
-      const priceVal = parseFloat(tempService.price.replace(',', '.')) || 0;
-      const serviceLinkId = resolveCatalogItemId({ description: tempService.description }, catalogServices);
-      const newItem: OrderItem = {
-        id: crypto.randomUUID(),
-        ...(serviceLinkId ? { catalogItemId: serviceLinkId } : {}),
-        description: tempService.description,
-        price: fromFloat(priceVal),
-        cost: parseCostInput(tempService.cost)
-      };
-      setServices(prev => [...prev, newItem]);
-      setTempService({ description: '', price: '', cost: '' });
-      if (e.shiftKey) partInputRef.current?.focus(); else serviceInputRef.current?.focus();
-    }
+    if (e.key === 'Enter') { e.preventDefault(); addService(e.shiftKey); }
   };
 
   const handleTempPartChange = (val: string) => {
@@ -396,10 +405,15 @@ export const OSModal: React.FC<OSModalProps> = ({
   };
 
   const handleConfirm = () => {
-    if (!clientName || !vehicle) { alert("Preencha cliente e veículo."); return; }
-    if (needsClientChoice) { alert("Há mais de um cliente com esse nome. Escolha o cliente em \"Qual cliente?\"."); return; }
+    const found = validateOSFields({ clientName, vehicle, needsClientChoice, osNumber });
+    const first = firstErrorField(found);
+    if (first) {
+      setErrors(found);
+      document.getElementById(first)?.focus();
+      return;
+    }
+    setErrors({});
     const numOS = parseInt(osNumber, 10);
-    if (isNaN(numOS)) { alert("Número OS inválido."); return; }
     const fullVehicle = plate ? `${vehicle} - ${plate.toUpperCase()}` : vehicle;
 
     const advanceAmount = (() => {
@@ -456,531 +470,350 @@ export const OSModal: React.FC<OSModalProps> = ({
 
   if (!isOpen) return null;
 
+  const costToggle = (
+    <label className="osm-check">
+      <input type="checkbox" checked={showCostColumn} onChange={e => setShowCostColumn(e.target.checked)} />
+      Mostrar custos
+    </label>
+  );
+
+  const removeBtn = (onClick: () => void, desc: string) => (
+    <button type="button" className="osm-remove" onClick={onClick} aria-label={`Remover item ${desc}`.trim()} title="Remover item">
+      <Icon name="excluir" size={18} />
+    </button>
+  );
+
   return (
     <>
     <div className="modal-overlay" ref={guard.overlayRef}>
-      <div className="modal-content" style={{ maxWidth: '1100px', width: '95%' }}>
-        <h2 className="modal-title">{editingOS ? "Editar OS" : "Nova OS"}</h2>
-
-        {/* DADOS GERAIS */}
-        <div style={{ display: 'flex', gap: 16 }}>
-          <div className="form-group" style={{ flex: 1 }}>
-            <label className="form-label">Nº OS</label>
-            <input className="form-input" value={osNumber} onChange={e => setOsNumber(e.target.value)} style={{ fontWeight: 'bold', color: 'var(--primary)' }} />
-          </div>
-          <div className="form-group" style={{ flex: 1 }}>
-            <label className="form-label">Data</label>
-            <input className="form-input" type="date" value={date} onChange={e => setDate(e.target.value)} style={{ color: 'var(--text-main)' }} />
-          </div>
-          <div className="form-group" style={{ flex: 1 }}>
-            <label className="form-label">📅 Data Pagamento <span style={{ opacity: 0.6, fontSize: '0.8rem' }}>(Opcional)</span></label>
-            <input
-              className="form-input"
-              type="date"
-              value={paymentDate}
-              onChange={e => setPaymentDate(e.target.value)}
-              style={{ color: paymentDate ? 'var(--success)' : 'var(--text-muted)', fontWeight: paymentDate ? 'bold' : 'normal' }}
-            />
-          </div>
-          <div className="form-group" style={{ flex: 1 }}>
-            <label className="form-label" htmlFor="os-expected-date">🚚 Previsão de entrega <span style={{ opacity: 0.6, fontSize: '0.8rem' }}>(Opcional)</span></label>
-            <input
-              id="os-expected-date"
-              className="form-input"
-              type="date"
-              value={expectedDate}
-              onChange={e => setExpectedDate(e.target.value)}
-              style={{ color: 'var(--text-main)' }}
-            />
-          </div>
-          <div className="form-group" style={{ flex: 2 }}>
-            <label className="form-label">Cliente</label>
-            <input ref={clientInputRef} className="form-input" list="clients_list" value={clientName} onChange={e => setClientName(e.target.value)} autoFocus={!editingOS} />
-            <datalist id="clients_list">{[...new Set(suggestedClients.map(c => c.name))].map(n => <option key={n} value={n} />)}</datalist>
-          </div>
-        </div>
-
-        {hasHomonyms && (
-          <fieldset
-            className="form-group"
-            style={{ border: '1px solid var(--warning, var(--border))', borderRadius: 6, padding: '8px 12px', margin: '0 0 12px' }}
-          >
-            <legend className="form-label" style={{ padding: '0 6px' }}>Qual cliente?</legend>
-            <div role="radiogroup" aria-label="Qual cliente?" aria-required="true" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {sameNameClients.map(c => (
-                <label key={c.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', fontSize: '0.9rem' }}>
-                  <input
-                    type="radio"
-                    name="os-client-choice"
-                    checked={chosenClientId === c.id}
-                    onChange={() => { setChosenClientId(c.id); setContact(c.phone || ""); }}
-                  />
-                  <span>
-                    <strong>{c.name}</strong> · {c.phone ? c.phone : 'sem telefone'}
-                    <br />
-                    <span style={{ color: 'var(--text-muted)' }}>
-                      {c.vehicles.length > 0 ? c.vehicles.map(v => (v.plate ? `${v.model} - ${v.plate}` : v.model)).join(', ') : 'sem veículos'}
-                    </span>
-                  </span>
-                </label>
-              ))}
+      <div className="modal-content osm" role="dialog" aria-modal="true" aria-labelledby="os-modal-title" style={{ maxWidth: '1100px', width: '95%' }}>
+        <header className="osm-head">
+          <h2 id="os-modal-title" className="modal-title">{editingOS ? "Editar OS" : "Nova OS"}</h2>
+          <div className="osm-meta">
+            <div className="osm-meta-field">
+              <label htmlFor="os-number">Nº da OS</label>
+              <input id="os-number" className="form-input" inputMode="numeric" value={osNumber}
+                aria-invalid={errors['os-number'] ? true : undefined} aria-describedby={errors['os-number'] ? 'os-number-error' : undefined}
+                onChange={e => { setOsNumber(e.target.value); clearError('os-number'); }} />
             </div>
-            {needsClientChoice && (
-              <small role="alert" style={{ display: 'block', marginTop: 6, color: 'var(--danger, #e53935)' }}>
-                Existe mais de um cliente com este nome. Escolha qual é para poder salvar a OS.
-              </small>
-            )}
-          </fieldset>
-        )}
-
-        <div style={{ display: 'flex', gap: 16 }}>
-          <div className="form-group" style={{ flex: 1 }}>
-            <label className="form-label">Contato / Telefone</label>
-            <input className="form-input" value={contact} onChange={e => setContact(e.target.value)} />
+            <div className="osm-meta-field">
+              <label htmlFor="os-date">Data</label>
+              <input id="os-date" className="form-input" type="date" value={date} onChange={e => setDate(e.target.value)} />
+            </div>
           </div>
-          <div className="form-group" style={{ flex: 1 }}>
-            <label className="form-label">🔧 Técnico Responsável <span style={{ opacity: 0.6, fontSize: '0.8rem' }}>(Opcional)</span></label>
-            <input className="form-input" list="tech_list" value={technician} onChange={e => setTechnician(e.target.value)} />
+          {errors['os-number'] && <p id="os-number-error" className="field-error osm-head-error" role="alert">{errors['os-number']}</p>}
+        </header>
+
+        {/* 1. CLIENTE E VEÍCULO */}
+        <section className="osm-section" aria-labelledby="osm-h-cliente">
+          <h3 id="osm-h-cliente" className="osm-h"><Icon name="clientes" size={18} /> Cliente e veículo</h3>
+          <div className="osm-grid">
+            <div className="form-group osm-w2">
+              <label className="form-label" htmlFor="os-client">Cliente</label>
+              <input ref={clientInputRef} id="os-client" className="form-input" list="clients_list" value={clientName}
+                aria-invalid={errors['os-client'] ? true : undefined} aria-describedby={errors['os-client'] ? 'os-client-error' : undefined}
+                onChange={e => { setClientName(e.target.value); clearError('os-client'); clearError('os-client-choice'); }} autoFocus={!editingOS} />
+              <datalist id="clients_list">{[...new Set(suggestedClients.map(c => c.name))].map(n => <option key={n} value={n} />)}</datalist>
+              {errors['os-client'] && <p id="os-client-error" className="field-error" role="alert">{errors['os-client']}</p>}
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="os-contact">Contato / Telefone</label>
+              <input id="os-contact" className="form-input" value={contact} onChange={e => setContact(e.target.value)} />
+            </div>
+          </div>
+
+          {hasHomonyms && (
+            <fieldset className="osm-homonyms">
+              <legend className="form-label">Qual cliente?</legend>
+              <div role="radiogroup" aria-label="Qual cliente?" aria-required="true" aria-describedby="os-client-choice-error" className="osm-radios">
+                {sameNameClients.map((c, idx) => (
+                  <label key={c.id} className="osm-radio">
+                    <input
+                      id={idx === 0 ? 'os-client-choice' : undefined}
+                      type="radio"
+                      name="os-client-choice"
+                      checked={chosenClientId === c.id}
+                      onChange={() => { setChosenClientId(c.id); setContact(c.phone || ""); clearError('os-client-choice'); }}
+                    />
+                    <span>
+                      <strong>{c.name}</strong> · {c.phone ? c.phone : 'sem telefone'}
+                      <br />
+                      <span className="osm-muted">
+                        {c.vehicles.length > 0 ? c.vehicles.map(v => (v.plate ? `${v.model} - ${v.plate}` : v.model)).join(', ') : 'sem veículos'}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              {needsClientChoice && (
+                <p id="os-client-choice-error" className="field-error" role="alert">
+                  Existe mais de um cliente com este nome. Escolha qual é para poder salvar a OS.
+                </p>
+              )}
+            </fieldset>
+          )}
+
+          <div className="osm-grid">
+            <div className="form-group osm-w2">
+              <label className="form-label" htmlFor="os-vehicle">Veículo</label>
+              <VehicleCombobox id="os-vehicle" value={vehicle}
+                invalid={!!errors['os-vehicle']} describedBy={errors['os-vehicle'] ? 'os-vehicle-error' : undefined}
+                onChange={v => { if (v !== vehicle) guard.markDirty(); setVehicle(v); clearError('os-vehicle'); }}
+                clientVehicles={suggestedVehicles} shopVehicles={shopVehicles} />
+              {errors['os-vehicle'] && <p id="os-vehicle-error" className="field-error" role="alert">{errors['os-vehicle']}</p>}
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="os-plate">Placa</label>
+              <input id="os-plate" className="form-input" value={plate} onChange={e => setPlate(e.target.value.toUpperCase())} maxLength={8} />
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="os-km">Km</label>
+              <input id="os-km" className="form-input" type="number" value={mileage} onChange={e => setMileage(e.target.value)} />
+            </div>
+          </div>
+        </section>
+
+        {/* 2. O QUE SERÁ FEITO */}
+        <section className="osm-section" aria-labelledby="osm-h-itens">
+          <div className="osm-h-row">
+            <h3 id="osm-h-itens" className="osm-h"><Icon name="oficina" size={18} /> O que será feito</h3>
+            {costToggle}
+          </div>
+          <div className="form-group osm-tech">
+            <label className="form-label" htmlFor="os-tech">Técnico responsável <span className="osm-opt">(opcional)</span></label>
+            <input id="os-tech" className="form-input" list="tech_list" value={technician} onChange={e => setTechnician(e.target.value)} />
             <datalist id="tech_list">{suggestedTechnicians.map(t => <option key={t.id} value={t.name} />)}</datalist>
           </div>
-        </div>
+          {showCostColumn && (
+            <div className="margin-goal-note">Meta de margem: <strong>{targetMargin}%</strong> (altere em Config)</div>
+          )}
 
-        {/* Campo sutil de adiantamento */}
-        <div className="form-group" style={{ marginTop: 8 }}>
-          <label className="form-label">💵 Valor adiantado (Opcional)</label>
-          <input
-            className="form-input"
-            type="number"
-            min="0"
-            step="0.01"
-            value={advanceAmountDisplay}
-            onChange={e => setAdvanceAmountDisplay(e.target.value)}
-            placeholder="Ex: 200,00"
-          />
-          <small style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            Use apenas se o cliente já deixou algum valor adiantado. Deixe vazio se não houver adiantamento.
-          </small>
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Obs. Interna (Visível apenas aqui)</label>
-          <textarea className="form-input form-textarea" value={notes} onChange={e => setNotes(e.target.value)} style={{ minHeight: 60 }} />
-        </div>
-
-        {/* VEÍCULO */}
-        <div style={{ display: 'flex', gap: 16 }}>
-          <div className="form-group" style={{ flex: 2 }}>
-            <label className="form-label">Veículo</label>
-            <VehicleCombobox id="os-vehicle" value={vehicle} onChange={v => { if (v !== vehicle) guard.markDirty(); setVehicle(v); }} clientVehicles={suggestedVehicles} shopVehicles={shopVehicles} />
-          </div>
-          <div className="form-group" style={{ flex: 1 }}>
-            <label className="form-label">Placa</label>
-            <input className="form-input" value={plate} onChange={e => setPlate(e.target.value.toUpperCase())} maxLength={8} />
-          </div>
-          <div className="form-group" style={{ flex: 1 }}>
-            <label className="form-label">Km</label>
-            <input className="form-input" type="number" value={mileage} onChange={e => setMileage(e.target.value)} />
-          </div>
-        </div>
-
-        <hr style={{ borderColor: 'var(--border)', margin: '20px 0', opacity: 0.3 }} />
-
-        {/* Meta de margem (global, das Configurações) */}
-        <div className="margin-goal-note">
-          Meta de margem: <strong>{targetMargin}%</strong> (altere em Config)
-        </div>
-
-        {/* COLUNAS PEÇAS / SERVIÇOS */}
-        <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
-
-          {/* PEÇAS */}
-          <div className="items-list-container" style={{ flex: 1, backgroundColor: 'rgba(0, 188, 212, 0.03)', border: '1px solid rgba(0, 188, 212, 0.2)' }}>
-            <div className="items-header" style={{ color: 'var(--info)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>🔧 Peças</span>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <label style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={showCostColumn}
-                    onChange={e => setShowCostColumn(e.target.checked)}
-                    style={{ cursor: 'pointer' }}
-                  />
-                  Custo
-                </label>
+          <div className="osm-columns">
+            {/* PEÇAS */}
+            <div className="items-list-container osm-box osm-box--parts">
+              <div className="items-header osm-box-head">
+                <span><Icon name="pecas" size={16} /> Peças</span>
                 <span>{formatMoney(partsTotal)}</span>
               </div>
-            </div>
 
-            {/* Linha de nova peça */}
-            <div className="item-row" style={{ borderBottom: '2px dashed var(--info)', paddingBottom: 10, marginBottom: 10 }}>
-              <input
-                ref={partInputRef}
-                className="form-input"
-                list="cat-parts"
-                value={tempPart.description}
-                onChange={e => handleTempPartChange(e.target.value)}
-                onKeyDown={handlePartKeyDown}
-                style={{ flex: 2 }}
-                placeholder="Nova peça (Enter)..."
-              />
-              <datalist id="cat-parts">
-                {suggestedParts.map((cp, idx) => (
-                  <option key={idx} value={cp.description}>{formatMoney(cp.price)}</option>
-                ))}
-              </datalist>
-
-              <PartCategorySelect
-                value={tempPart.category}
-                onChange={cat => { if (cat !== tempPart.category) guard.markDirty(); setTempPart({ ...tempPart, category: cat }); }}
-                style={{ flex: 0.8 }}
-              />
-
-              {showCostColumn && (
-                <input
-                  className="form-input"
-                  type="number"
-                  value={tempPart.cost}
-                  onChange={e => setTempPart({ ...tempPart, cost: e.target.value })}
-                  onKeyDown={handlePartKeyDown}
-                  placeholder="Custo"
-                  style={{ flex: 0.8, fontSize: '0.85rem' }}
-                />
-              )}
-
-              <input
-                className="form-input"
-                type="number"
-                value={tempPart.price}
-                onChange={e => setTempPart({ ...tempPart, price: e.target.value })}
-                onKeyDown={handlePartKeyDown}
-                style={{ flex: 1 }}
-                placeholder="Preço"
-              />
-            </div>
-
-            {/* 🆕 Issue #41: Listagem agrupada por categoria */}
-            <div style={{ maxHeight: 250, overflowY: 'auto' }}>
-              {groupedParts.map(({ category: cat, items }) => (
-                <div key={cat}>
-
-                  {/*
-                   * Cabeçalho do grupo:
-                   * className="category-group-header" + --category-color no style.
-                   * Toda a aparência (borda, cor, fonte) vive em styles-part-categories.css.
-                   */}
-                  <div
-                    className="category-group-header"
-                    style={{ '--category-color': PART_CATEGORY_META[cat].color } as React.CSSProperties}
-                  >
-                    {PART_CATEGORY_META[cat].label}
-                  </div>
-
-                  {items.map(({ part: p, idx: i }) => (
-                    <div key={p.id} style={{ marginBottom: showCostColumn ? '12px' : '0' }}>
-                      {/*
-                       * Linha de peça:
-                       * className="item-row part-row" + --category-color no style.
-                       * A borda esquerda colorida vive em styles-part-categories.css.
-                       */}
-                      <div
-                        className="item-row part-row"
-                        style={{
-                          '--category-color': PART_CATEGORY_META[p.category ?? 'OUTROS'].color
-                        } as React.CSSProperties}
-                      >
-                        <input
-                          className="form-input"
-                          value={p.description}
-                          onChange={e => updateItem(parts, setParts, i, 'description', e.target.value, catalogParts)}
-                          style={{ flex: 2 }}
-                        />
-
-                        <PartCategorySelect
-                          value={p.category ?? ''}
-                          onChange={cat => { guard.markDirty(); updateItem(parts, setParts, i, 'category', cat || undefined, catalogParts); }}
-                          style={{ flex: 0.7 }}
-                          placeholder="—"
-                        />
-
-                        {showCostColumn && (
-                          <input
-                            className="form-input margin-cost-field"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={p.cost === undefined ? '' : toFloat(p.cost)}
-                            onChange={e => updateItem(parts, setParts, i, 'cost', parseCostEdit(e.target.value), catalogParts)}
-                            style={{ flex: 0.8, fontSize: '0.85rem' }}
-                            placeholder="Custo"
-                            title="Custo interno de aquisição (vazio = sem custo, fora da margem)"
-                            aria-label={`Custo de ${p.description || 'peça'}`}
-                          />
-                        )}
-
-                        <input
-                          className="form-input"
-                          type="number"
-                          value={toFloat(p.price)}
-                          onChange={e => updateItem(parts, setParts, i, 'price', fromFloat(parseFloat(e.target.value) || 0), catalogParts)}
-                          style={{ flex: 1 }}
-                        />
-
-                        <button
-                          className="btn-icon danger"
-                          onClick={() => { guard.markDirty(); setParts(parts.filter((_, idx) => idx !== i)); }}
-                          tabIndex={-1}
-                        >
-                          x
-                        </button>
-                      </div>
-
-                      <HistoryHint
-                        suggestion={partHistory[p.id]}
-                        currentPrice={p.price}
-                        formatMoney={formatMoney}
-                        onUse={(price) => { guard.markDirty(); updateItem(parts, setParts, i, 'price', price, catalogParts); }}
-                      />
-
-                      {showCostColumn && p.description.trim() !== '' && (
-                        <MarginIndicator
-                          cost={p.cost}
-                          price={p.price}
-                          formatMoney={formatMoney}
-                          minMarginPercent={targetMargin}
-                          onSuggestPrice={(suggestedPrice) => {
-                            guard.markDirty();
-                            updateItem(parts, setParts, i, 'price', suggestedPrice, catalogParts);
-                          }}
-                        />
-                      )}
-                    </div>
+              <div className="item-row osm-row osm-add">
+                <label className="sr-only" htmlFor="os-new-part">Nova peça</label>
+                <input id="os-new-part" ref={partInputRef} className="form-input osm-desc" list="cat-parts" value={tempPart.description}
+                  onChange={e => handleTempPartChange(e.target.value)} onKeyDown={handlePartKeyDown} placeholder="Nova peça (Enter)..." />
+                <datalist id="cat-parts">
+                  {suggestedParts.map((cp, idx) => (
+                    <option key={idx} value={cp.description}>{formatMoney(cp.price)}</option>
                   ))}
-                </div>
-              ))}
-            </div>
-          </div>
+                </datalist>
+                <PartCategorySelect
+                  ariaLabel="Categoria da nova peça"
+                  value={tempPart.category}
+                  onChange={cat => { if (cat !== tempPart.category) guard.markDirty(); setTempPart({ ...tempPart, category: cat }); }}
+                  style={{ flex: '1 1 140px' }}
+                />
+                {showCostColumn && (
+                  <input className="form-input osm-num" type="text" inputMode="decimal" aria-label="Custo da nova peça" value={tempPart.cost}
+                    onChange={e => setTempPart({ ...tempPart, cost: sanitizeMoneyText(e.target.value) })} onKeyDown={handlePartKeyDown} placeholder="Custo" />
+                )}
+                <input className="form-input osm-num" type="text" inputMode="decimal" aria-label="Preço da nova peça" value={tempPart.price}
+                  onChange={e => setTempPart({ ...tempPart, price: sanitizeMoneyText(e.target.value) })} onKeyDown={handlePartKeyDown} placeholder="Preço" />
+                <button type="button" className="btn-secondary osm-add-btn" onClick={() => { guard.markDirty(); addPart(false); }}>
+                  <Icon name="adicionar" size={16} /> Adicionar
+                </button>
+              </div>
 
-          {/* SERVIÇOS */}
-          <div className="items-list-container" style={{ flex: 1, backgroundColor: 'rgba(130, 87, 230, 0.03)', border: '1px solid rgba(130, 87, 230, 0.2)' }}>
-            <div className="items-header" style={{ color: 'var(--primary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>🛠️ Serviços</span>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <label style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={showCostColumn}
-                    onChange={e => setShowCostColumn(e.target.checked)}
-                    style={{ cursor: 'pointer' }}
-                  />
-                  Custo
-                </label>
+              <div className="osm-list">
+                {groupedParts.map(({ category: cat, items }) => (
+                  <div key={cat}>
+                    <div className="category-group-header" style={{ '--category-color': PART_CATEGORY_META[cat].color } as React.CSSProperties}>
+                      {PART_CATEGORY_META[cat].label}
+                    </div>
+                    {items.map(({ part: p, idx: i }) => (
+                      <div key={p.id} className="osm-item">
+                        <div className="item-row part-row osm-row" style={{ '--category-color': PART_CATEGORY_META[p.category ?? 'OUTROS'].color } as React.CSSProperties}>
+                          <input className="form-input osm-desc" aria-label="Descrição da peça" value={p.description}
+                            onChange={e => updateItem(parts, setParts, i, 'description', e.target.value, catalogParts)} />
+                          <PartCategorySelect
+                            ariaLabel={`Categoria de ${p.description || 'peça'}`}
+                            value={p.category ?? ''}
+                            onChange={cat2 => { guard.markDirty(); updateItem(parts, setParts, i, 'category', cat2 || undefined, catalogParts); }}
+                            style={{ flex: '1 1 140px' }}
+                            placeholder="—"
+                          />
+                          {showCostColumn && (
+                            <MoneyField className="form-input margin-cost-field osm-num" value={p.cost} parse={parseCostEdit}
+                              onChange={c => updateItem(parts, setParts, i, 'cost', c, catalogParts)}
+                              placeholder="Custo" title="Custo interno de aquisição (vazio = sem custo, fora da margem)"
+                              aria-label={`Custo de ${p.description || 'peça'}`} />
+                          )}
+                          <MoneyField className="form-input osm-num" value={p.price} parse={parsePriceText}
+                            onChange={c => updateItem(parts, setParts, i, 'price', c ?? 0, catalogParts)}
+                            aria-label={`Preço de ${p.description || 'peça'}`} />
+                          {removeBtn(() => { guard.markDirty(); setParts(parts.filter((_, idx) => idx !== i)); }, p.description)}
+                        </div>
+                        <HistoryHint suggestion={partHistory[p.id]} currentPrice={p.price} formatMoney={formatMoney}
+                          onUse={(price) => { guard.markDirty(); updateItem(parts, setParts, i, 'price', price, catalogParts); }} />
+                        {showCostColumn && p.description.trim() !== '' && (
+                          <MarginIndicator cost={p.cost} price={p.price} formatMoney={formatMoney} minMarginPercent={targetMargin}
+                            onSuggestPrice={(sp) => { guard.markDirty(); updateItem(parts, setParts, i, 'price', sp, catalogParts); }} />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* SERVIÇOS */}
+            <div className="items-list-container osm-box osm-box--services">
+              <div className="items-header osm-box-head">
+                <span><Icon name="chave" size={16} /> Serviços</span>
                 <span>{formatMoney(servicesTotal)}</span>
               </div>
-            </div>
 
-            <div className="item-row" style={{ borderBottom: '2px dashed var(--primary)', paddingBottom: 10, marginBottom: 10 }}>
-              <input
-                ref={serviceInputRef}
-                className="form-input"
-                list="cat-serv"
-                value={tempService.description}
-                onChange={e => handleTempServiceChange(e.target.value)}
-                onKeyDown={handleServiceKeyDown}
-                style={{ flex: 2 }}
-                placeholder="Novo serviço (Enter)..."
-              />
-              <datalist id="cat-serv">
-                {suggestedServices.map((cs, idx) => (
-                  <option key={idx} value={cs.description}>{formatMoney(cs.price)}</option>
-                ))}
-              </datalist>
+              <div className="item-row osm-row osm-add">
+                <label className="sr-only" htmlFor="os-new-service">Novo serviço</label>
+                <input id="os-new-service" ref={serviceInputRef} className="form-input osm-desc" list="cat-serv" value={tempService.description}
+                  onChange={e => handleTempServiceChange(e.target.value)} onKeyDown={handleServiceKeyDown} placeholder="Novo serviço (Enter)..." />
+                <datalist id="cat-serv">
+                  {suggestedServices.map((cs, idx) => (
+                    <option key={idx} value={cs.description}>{formatMoney(cs.price)}</option>
+                  ))}
+                </datalist>
+                {showCostColumn && (
+                  <input className="form-input osm-num" type="text" inputMode="decimal" aria-label="Custo do novo serviço" value={tempService.cost}
+                    onChange={e => setTempService({ ...tempService, cost: sanitizeMoneyText(e.target.value) })} onKeyDown={handleServiceKeyDown} placeholder="Custo" />
+                )}
+                <input className="form-input osm-num" type="text" inputMode="decimal" aria-label="Preço do novo serviço" value={tempService.price}
+                  onChange={e => setTempService({ ...tempService, price: sanitizeMoneyText(e.target.value) })} onKeyDown={handleServiceKeyDown} placeholder="Preço" />
+                <button type="button" className="btn-secondary osm-add-btn" onClick={() => { guard.markDirty(); addService(false); }}>
+                  <Icon name="adicionar" size={16} /> Adicionar
+                </button>
+              </div>
 
-              {showCostColumn && (
-                <input
-                  className="form-input"
-                  type="number"
-                  value={tempService.cost}
-                  onChange={e => setTempService({ ...tempService, cost: e.target.value })}
-                  onKeyDown={handleServiceKeyDown}
-                  placeholder="Custo"
-                  style={{ flex: 0.8, fontSize: '0.85rem' }}
-                />
-              )}
-
-              <input
-                className="form-input"
-                type="number"
-                value={tempService.price}
-                onChange={e => setTempService({ ...tempService, price: e.target.value })}
-                onKeyDown={handleServiceKeyDown}
-                style={{ flex: 1 }}
-                placeholder="Preço"
-              />
-            </div>
-
-            <div style={{ maxHeight: 250, overflowY: 'auto' }}>
-              {services.map((s, i) => (
-                <div key={s.id} style={{ marginBottom: showCostColumn ? '12px' : '0' }}>
-                  <div className="item-row">
-                    <input
-                      className="form-input"
-                      value={s.description}
-                      onChange={e => updateItem(services, setServices, i, 'description', e.target.value, catalogServices)}
-                      style={{ flex: 2 }}
-                    />
-
-                    {showCostColumn && (
-                      <input
-                        className="form-input margin-cost-field"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={s.cost === undefined ? '' : toFloat(s.cost)}
-                        onChange={e => updateItem(services, setServices, i, 'cost', parseCostEdit(e.target.value), catalogServices)}
-                        style={{ flex: 0.8, fontSize: '0.85rem' }}
-                        placeholder="Custo"
-                        title="Custo interno (vazio = sem custo, fora da margem)"
-                        aria-label={`Custo de ${s.description || 'serviço'}`}
-                      />
+              <div className="osm-list">
+                {services.map((s, i) => (
+                  <div key={s.id} className="osm-item">
+                    <div className="item-row osm-row">
+                      <input className="form-input osm-desc" aria-label="Descrição do serviço" value={s.description}
+                        onChange={e => updateItem(services, setServices, i, 'description', e.target.value, catalogServices)} />
+                      {showCostColumn && (
+                        <MoneyField className="form-input margin-cost-field osm-num" value={s.cost} parse={parseCostEdit}
+                          onChange={c => updateItem(services, setServices, i, 'cost', c, catalogServices)}
+                          placeholder="Custo" title="Custo interno (vazio = sem custo, fora da margem)"
+                          aria-label={`Custo de ${s.description || 'serviço'}`} />
+                      )}
+                      <MoneyField className="form-input osm-num" value={s.price} parse={parsePriceText}
+                        onChange={c => updateItem(services, setServices, i, 'price', c ?? 0, catalogServices)}
+                        aria-label={`Preço de ${s.description || 'serviço'}`} />
+                      {removeBtn(() => { guard.markDirty(); setServices(services.filter((_, idx) => idx !== i)); }, s.description)}
+                    </div>
+                    <HistoryHint suggestion={serviceHistory[s.id]} currentPrice={s.price} formatMoney={formatMoney}
+                      onUse={(price) => { guard.markDirty(); updateItem(services, setServices, i, 'price', price, catalogServices); }} />
+                    {showCostColumn && s.description.trim() !== '' && (
+                      <MarginIndicator cost={s.cost} price={s.price} formatMoney={formatMoney} minMarginPercent={targetMargin}
+                        onSuggestPrice={(sp) => { guard.markDirty(); updateItem(services, setServices, i, 'price', sp, catalogServices); }} />
                     )}
-
-                    <input
-                      className="form-input"
-                      type="number"
-                      value={toFloat(s.price)}
-                      onChange={e => updateItem(services, setServices, i, 'price', fromFloat(parseFloat(e.target.value) || 0), catalogServices)}
-                      style={{ flex: 1 }}
-                    />
-
-                    <button
-                      className="btn-icon danger"
-                      onClick={() => { guard.markDirty(); setServices(services.filter((_, idx) => idx !== i)); }}
-                      tabIndex={-1}
-                    >
-                      x
-                    </button>
                   </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
 
-                  <HistoryHint
-                    suggestion={serviceHistory[s.id]}
-                    currentPrice={s.price}
-                    formatMoney={formatMoney}
-                    onUse={(price) => { guard.markDirty(); updateItem(services, setServices, i, 'price', price, catalogServices); }}
-                  />
+        {/* 3. VALORES */}
+        <section className="osm-section" aria-labelledby="osm-h-valores">
+          <h3 id="osm-h-valores" className="osm-h"><Icon name="cifrao" size={18} /> Valores</h3>
+          <div className="form-group osm-advance">
+            <label className="form-label" htmlFor="os-advance">Valor adiantado <span className="osm-opt">(opcional)</span></label>
+            <input id="os-advance" className="form-input" type="text" inputMode="decimal" autoComplete="off" value={advanceAmountDisplay}
+              onChange={e => setAdvanceAmountDisplay(sanitizeMoneyText(e.target.value))} placeholder="Ex: 200,00" aria-describedby="os-advance-hint" />
+            <small id="os-advance-hint" className="field-hint">Use só se o cliente já deixou algum valor. Deixe vazio se não houver.</small>
+          </div>
 
-                  {showCostColumn && s.description.trim() !== '' && (
-                    <MarginIndicator
-                      cost={s.cost}
-                      price={s.price}
-                      formatMoney={formatMoney}
-                      minMarginPercent={targetMargin}
-                      onSuggestPrice={(suggestedPrice) => {
-                        guard.markDirty();
-                        updateItem(services, setServices, i, 'price', suggestedPrice, catalogServices);
-                      }}
-                    />
+          {showCostColumn && (
+            <div className="osm-profit">
+              <button type="button" className="btn-secondary osm-profit-toggle" aria-expanded={showProfit} aria-controls="osm-profit-body"
+                onClick={() => setShowProfit(v => !v)}>
+                <Icon name="financeiro" size={16} /> {showProfit ? 'Esconder lucro e margem' : 'Ver lucro e margem'}
+              </button>
+              {showProfit && (
+                <div id="osm-profit-body" className="osm-profit-body">
+                  <div className="osm-profit-grid">
+                    <div><div className="osm-k">Receita total</div><div className="osm-v osm-v--ok">{formatMoney(totalRevenue)}</div></div>
+                    <div><div className="osm-k">Custo (itens com custo)</div><div className="osm-v">{formatMoney(margin.cost)}</div></div>
+                    <div><div className="osm-k">Lucro bruto (itens com custo)</div><div className={`osm-v margin-text--${marginLvl.toLowerCase()}`}>{formatMoney(margin.profit)}</div></div>
+                    <div><div className="osm-k">Retorno sobre o custo</div><div className="osm-v">{roi === null ? 'Sem custo' : `${formatPct(roi)}%`}</div></div>
+                  </div>
+                  <div className="osm-profit-line">
+                    Margem de lucro: <strong className={`margin-text--${marginLvl.toLowerCase()}`}>{marginLabel(marginLvl, margin.marginPct)}</strong> (meta {targetMargin}%)
+                  </div>
+                  {partialNote && <div className="margin-partial-note" role="status">{partialNote}</div>}
+                  {minSuggestedRevenue !== null && margin.marginPct !== null && (
+                    <div className={`margin-min-box${marginLvl === 'ABAIXO' || marginLvl === 'ATENCAO' ? ' margin-min-box--abaixo' : ''}`}>
+                      <div className="osm-min-row">
+                        <div>
+                          <div className="osm-k osm-k--up">Valor mínimo sugerido ({targetMargin}% de margem{partialNote ? ', só itens com custo' : ''})</div>
+                          <div className="osm-v osm-v--big">{formatMoney(minSuggestedRevenue)}</div>
+                        </div>
+                        <div className="osm-min-diff">
+                          <div className="osm-k">{revenueDifference >= 0 ? 'Acima do mínimo' : 'Abaixo do mínimo'}</div>
+                          <div className={`osm-v ${revenueDifference >= 0 ? 'margin-text--na_meta' : 'margin-text--abaixo'}`}>
+                            {revenueDifference >= 0 ? '+' : ''}{formatMoney(revenueDifference)}
+                          </div>
+                        </div>
+                      </div>
+                      {marginLvl !== 'NA_META' && (
+                        <div className="margin-min-box__alert osm-alert" role="status">
+                          <Icon name="alerta" size={16} /> Esta OS está abaixo da meta de margem ({targetMargin}%). Considere ajustar os preços. Você ainda pode salvar.
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
-              ))}
+              )}
+            </div>
+          )}
+
+          <div className="total-display osm-total">
+            <span>Total geral</span>
+            <span>{formatMoney(totalRevenue)}</span>
+          </div>
+        </section>
+
+        {/* 4. PRAZO E PAGAMENTO */}
+        <section className="osm-section" aria-labelledby="osm-h-prazo">
+          <h3 id="osm-h-prazo" className="osm-h"><Icon name="calendario" size={18} /> Prazo e pagamento</h3>
+          <div className="osm-grid">
+            <div className="form-group">
+              <label className="form-label osm-nowrap" htmlFor="os-expected-date">Previsão de entrega <span className="osm-opt">(opcional)</span></label>
+              <input id="os-expected-date" className="form-input" type="date" value={expectedDate} onChange={e => setExpectedDate(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label osm-nowrap" htmlFor="os-payment-date">Data de pagamento <span className="osm-opt">(opcional)</span></label>
+              <input id="os-payment-date" className="form-input" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} />
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* ANÁLISE FINANCEIRA */}
-        {showCostColumn && (
-          <div style={{
-            marginTop: 20,
-            padding: 16,
-            backgroundColor: 'rgba(130, 87, 230, 0.05)',
-            borderRadius: 8,
-            border: '1px solid var(--border)'
-          }}>
-            <h4 style={{ margin: '0 0 12px 0', color: 'var(--primary)' }}>📊 Análise Financeira</h4>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-              <div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Receita Total</div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--success)' }}>
-                  {formatMoney(totalRevenue)}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Custo (itens com custo)</div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--text-main)' }}>
-                  {formatMoney(margin.cost)}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Lucro Bruto (itens com custo)</div>
-                <div className={`margin-text--${marginLvl.toLowerCase()}`} style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
-                  {formatMoney(margin.profit)}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ROI</div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--text-main)' }}>
-                  {roi === null ? 'Sem custo' : `${formatPct(roi)}%`}
-                </div>
-              </div>
-            </div>
-
-            <div style={{ marginTop: 12, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Margem de Lucro: <strong className={`margin-text--${marginLvl.toLowerCase()}`}>{marginLabel(marginLvl, margin.marginPct)}</strong>
-              {' '}(meta {targetMargin}%)
-            </div>
-            {partialNote && <div className="margin-partial-note" role="status">{partialNote}</div>}
-
-            {minSuggestedRevenue !== null && margin.marginPct !== null && (
-              <div className={`margin-min-box${marginLvl === 'ABAIXO' || marginLvl === 'ATENCAO' ? ' margin-min-box--abaixo' : ''}`}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 12, flexWrap: 'wrap' }}>
-                  <div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 'bold' }}>
-                      🎯 Valor Mínimo Sugerido ({targetMargin}% margem{partialNote ? ', só itens com custo' : ''})
-                    </div>
-                    <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: 'var(--primary)' }}>
-                      {formatMoney(minSuggestedRevenue)}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                      {revenueDifference >= 0 ? 'Acima do mínimo' : 'Abaixo do mínimo'}
-                    </div>
-                    <div className={revenueDifference >= 0 ? 'margin-text--na_meta' : 'margin-text--abaixo'} style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
-                      {revenueDifference >= 0 ? '+' : ''}{formatMoney(revenueDifference)}
-                    </div>
-                  </div>
-                </div>
-                {marginLvl !== 'NA_META' && (
-                  <div className="margin-min-box__alert" role="status">
-                    ⚠️ Esta OS está abaixo da meta de margem ({targetMargin}%). Considere ajustar os preços. Você ainda pode salvar.
-                  </div>
-                )}
-              </div>
-            )}
+        {/* 5. OBSERVAÇÕES */}
+        <section className="osm-section" aria-labelledby="osm-h-obs">
+          <h3 id="osm-h-obs" className="osm-h"><Icon name="prancheta" size={18} /> Observações</h3>
+          <div className="form-group">
+            <label className="form-label" htmlFor="os-notes">Obs. interna (visível só aqui)</label>
+            <textarea id="os-notes" className="form-input form-textarea" value={notes} onChange={e => setNotes(e.target.value)} style={{ minHeight: 60 }} />
           </div>
-        )}
-
-        {/* OBSERVAÇÕES PARA IMPRESSÃO */}
-        <div className="form-group" style={{ marginTop: 24 }}>
-          <label className="form-label">Observações da OS (Visível na Impressão)</label>
-          <textarea
-            className="form-input form-textarea"
-            value={publicNotes}
-            onChange={e => setPublicNotes(e.target.value)}
-            placeholder="Ex: Garantia de 3 meses, detalhes técnicos, peças trazidas pelo cliente..."
-            style={{ minHeight: 60 }}
-          />
-        </div>
-
-        <div className="total-display" style={{ marginTop: 10 }}>
-          <span>Total Geral</span>
-          <span>{formatMoney(totalRevenue)}</span>
-        </div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="os-public-notes">Observações da OS (visíveis na impressão)</label>
+            <textarea id="os-public-notes" className="form-input form-textarea" value={publicNotes} onChange={e => setPublicNotes(e.target.value)}
+              placeholder="Ex: Garantia de 3 meses, detalhes técnicos, peças trazidas pelo cliente..." style={{ minHeight: 60 }} />
+          </div>
+        </section>
 
         <div className="modal-actions">
-          <button className="btn-secondary" onClick={guard.requestClose}>Cancelar</button>
-          <button className="btn" onClick={handleConfirm} disabled={isSaving || needsClientChoice} title="Atalho: Ctrl + Shift + Enter">
-            {isSaving ? '...' : 'Salvar (Ctrl+Shift+Enter)'}
+          <button type="button" className="btn-secondary" onClick={guard.requestClose}>Cancelar</button>
+          <button type="button" className="btn" onClick={handleConfirm} disabled={isSaving || needsClientChoice} aria-busy={isSaving} title="Atalho: Ctrl + Shift + Enter">
+            {isSaving ? 'Salvando...' : 'Salvar (Ctrl+Shift+Enter)'}
           </button>
         </div>
       </div>

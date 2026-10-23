@@ -6,6 +6,8 @@ interface PartCategorySelectProps {
   onChange: (val: PartCategory | '') => void;
   placeholder?: string;
   style?: React.CSSProperties;
+  /** Nome acessível do botão (sem ele, vale o texto visível). */
+  ariaLabel?: string;
 }
 
 export const PartCategorySelect: React.FC<PartCategorySelectProps> = ({
@@ -13,6 +15,7 @@ export const PartCategorySelect: React.FC<PartCategorySelectProps> = ({
   onChange,
   placeholder = 'Categoria...',
   style,
+  ariaLabel,
 }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -47,6 +50,10 @@ export const PartCategorySelect: React.FC<PartCategorySelectProps> = ({
       {/* Trigger button */}
       <button
         type="button"
+        className="pcs-trigger"
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
         onClick={() => setOpen(o => !o)}
         style={{
           width: '100%',

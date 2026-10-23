@@ -104,3 +104,14 @@ export const splitVehicle = (vehicle: string): VehicleParts => {
 /** "45.000 km"; vazio quando a quilometragem não foi informada. */
 export const formatKm = (mileage: number | undefined): string =>
   typeof mileage === 'number' && isFinite(mileage) && mileage > 0 ? `${Math.round(mileage).toLocaleString('pt-BR')} km` : '';
+
+/** Janela (ms) em que um segundo "próximo passo" vindo do botão do cartão é ignorado. */
+export const STEP_LOCK_MS = 600;
+
+/**
+ * Trava do clique duplo no botão de próximo passo: o 1º clique tira o cartão da coluna e o de baixo
+ * sobe para o mesmo lugar; o 2º clique avançaria outra OS sem ninguém pedir.
+ * `lastAt` é o instante do último passo aceito (null = nenhum).
+ */
+export const shouldIgnoreStep = (lastAt: number | null, now: number, windowMs: number = STEP_LOCK_MS): boolean =>
+  lastAt !== null && now - lastAt >= 0 && now - lastAt < windowMs;

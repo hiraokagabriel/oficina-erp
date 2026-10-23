@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseDatabase } from './DatabaseContext';
 import type { WorkshopSettings } from '../types';
+import { setShowMarginOnBoard } from '../utils/showMarginSetting';
 import { adoptSecrets, stripDbSecrets, stripSecrets } from '../utils/secrets';
 
 const fallback: WorkshopSettings = { name: 'X', cnpj: '', address: '', exportPath: '' };
@@ -41,7 +42,7 @@ describe('settings.showMarginOnBoard (selo de margem do quadro) atravessa carga,
   it('edição por spread preserva o campo e a margem alvo; desligar remove a chave', () => {
     const both: WorkshopSettings = { ...on, targetMargin: 65 };
     expect({ ...both, name: 'Y' }).toMatchObject({ showMarginOnBoard: true, targetMargin: 65 });
-    const { showMarginOnBoard: _removed, ...off } = both;
+    const off = setShowMarginOnBoard(both, false);
     expect('showMarginOnBoard' in off).toBe(false);
     expect(off.targetMargin).toBe(65);
   });

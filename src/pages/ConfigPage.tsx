@@ -2,6 +2,7 @@ import React from 'react';
 import { WorkshopSettings } from '../types';
 import { VehicleCatalogNote } from '../components/VehicleCatalogNote';
 import { parseTargetMarginDraft } from '../services/margin';
+import { setShowMarginOnBoard } from '../utils/showMarginSetting';
 import { HomeTab, readHomeTab, writeHomeTab } from '../utils/todayPrefs';
 
 interface ConfigPageProps {
@@ -84,12 +85,7 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
 
   // Ligado grava true; desligado remove a chave (ausente = desligado, como em bancos antigos).
   const handleShowMarginChange = (on: boolean) => {
-    if (on) {
-      setSettings({ ...settings, showMarginOnBoard: true });
-    } else {
-      const { showMarginOnBoard: _removed, ...rest } = settings;
-      setSettings(rest);
-    }
+    setSettings(setShowMarginOnBoard(settings, on));
   };
 
   // O caminho só é aplicado ao sair do campo ou com Enter: cada troca recarrega o banco.

@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { WorkOrder, OSStatus } from '../types';
-import { ContextMenu } from './ContextMenu';
-import { MenuItem } from './ActionMenu';
+import { ContextMenu, MenuItem } from './ContextMenu';
 import { Icon } from './ui/Icon';
 
 declare global {

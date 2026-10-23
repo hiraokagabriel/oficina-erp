@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { OSStatus } from '../types';
-import { deliveryProgress, formatKm, nextStep, splitVehicle, statusClass } from './kanbanCardView';
+import { deliveryProgress, formatKm, nextStep, shouldIgnoreStep, splitVehicle, statusClass, STEP_LOCK_MS } from './kanbanCardView';
 
 const noon = (y: number, m: number, d: number) => new Date(y, m - 1, d, 12).toISOString();
 const TODAY = '2026-10-22';
@@ -68,5 +68,26 @@ describe('splitVehicle e formatKm', () => {
   });
   it('classe do status', () => {
     expect(statusClass('AGUARDANDO_PAGAMENTO')).toBe('aguardando-pagamento');
+  });
+});
+
+describe('shouldIgnoreStep (trava do clique duplo)', () => {
+  it('primeiro passo nunca é ignorado', () => {
+    expect(shouldIgnoreStep(null, 1000)).toBe(false);
+  });
+  it('segundo passo dentro da janela é ignorado', () => {
+    expect(shouldIgnoreStep(1000, 1001, 600)).toBe(true);
+    expect(shouldIgnoreStep(1000, 1599, 600)).toBe(true);
+  });
+  it('na borda da janela e depois dela passa', () => {
+    expect(shouldIgnoreStep(1000, 1600, 600)).toBe(false);
+    expect(shouldIgnoreStep(1000, 5000, 600)).toBe(false);
+  });
+  it('relógio que andou para trás não trava', () => {
+    expect(shouldIgnoreStep(1000, 900, 600)).toBe(false);
+  });
+  it('janela padrão é STEP_LOCK_MS', () => {
+    expect(shouldIgnoreStep(0, STEP_LOCK_MS - 1)).toBe(true);
+    expect(shouldIgnoreStep(0, STEP_LOCK_MS)).toBe(false);
   });
 });

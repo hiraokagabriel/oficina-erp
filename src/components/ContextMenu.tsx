@@ -1,7 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 
-import { MenuItem } from './ActionMenu';
+/** Item sem `label` é renderizado como divisória (ver `divider`); por isso icon/label/onClick são opcionais. */
+export interface MenuItem {
+  icon?: React.ReactNode;
+  label?: string;
+  onClick?: () => void;
+  variant?: 'default' | 'danger' | 'success' | 'primary';
+  divider?: boolean;
+}
 
 interface ContextMenuProps {
   x: number;
@@ -13,6 +20,10 @@ interface ContextMenuProps {
 export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }) => {
   const menuRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ x, y });
+  // Só Esc/Tab devolvem o foco ao botão de origem; ao escolher uma ação (que pode abrir outra janela) ou clicar fora, não se disputa o foco.
+  const restoreFocusRef = useRef(false);
+  // Lido na 1ª renderização (não no efeito): o StrictMode remonta o efeito e o foco já estaria no menu.
+  const [origin] = useState(() => document.activeElement as HTMLElement | null);
 
   useEffect(() => {
     // Ajusta posição para não sair da tela
@@ -38,10 +49,9 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
 
   // Teclado: o foco entra no primeiro item ao abrir e volta ao botão de origem ao fechar.
   useEffect(() => {
-    const origin = document.activeElement as HTMLElement | null;
     menuRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
-    return () => { origin?.focus?.(); };
-  }, []);
+    return () => { if (restoreFocusRef.current && origin?.isConnected) origin.focus?.(); };
+  }, [origin]);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -52,6 +62,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' || e.key === 'Tab') {
+        restoreFocusRef.current = true;
         onClose();
         return;
       }

@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo, useEffect } from 'react';
+import React, { useCallback, useRef, useState, useMemo, useEffect } from 'react';
 import { WorkOrder, OSStatus, STATUS_LABELS } from '../types';
 import { KanbanCard } from '../components/KanbanCard';
 import type { KanbanCardActions } from './KanbanCardMenu';
@@ -6,7 +6,7 @@ import { DroppableColumn } from './DroppableColumn';
 import { usePagination } from '../hooks/usePagination';
 import { InfiniteScroll } from './InfiniteScroll';
 import { Icon } from './ui/Icon';
-import { STATUS_ICON, statusClass } from '../services/kanbanCardView';
+import { STATUS_ICON, shouldIgnoreStep, statusClass } from '../services/kanbanCardView';
 import { toLocalDay } from '../services/receivables';
 
 interface KanbanBoardProps {
@@ -163,6 +163,15 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
     const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
     // Hoje, uma vez por render do quadro (string: os cartões memoizados só re-renderizam na virada do dia).
     const today = toLocalDay(new Date());
+
+    // Trava do clique duplo no botão de próximo passo (o arraste usa onStatusChange direto, sem trava).
+    const lastStepAt = useRef<number | null>(null);
+    const handleStep = useCallback((orderId: string, newStatus: OSStatus) => {
+      const now = Date.now();
+      if (shouldIgnoreStep(lastStepAt.current, now)) return;
+      lastStepAt.current = now;
+      onStatusChange(orderId, newStatus);
+    }, [onStatusChange]);
 
     // Opções fora do render (POINTER_OPTIONS): objeto novo a cada render recriava os sensores
     // e re-renderizava todos os cartões via contexto do dnd-kit.
@@ -326,7 +335,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
       formatMoney,
       targetMargin,
       showMargin,
-      onStatusChange,
+      onStatusChange: handleStep,
       today,
     };
 
@@ -443,7 +452,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
                   formatMoney={formatMoney}
                   status={activeWorkOrder.status}
                   actions={actions}
-                  onStatusChange={onStatusChange}
+                  onStatusChange={handleStep}
                   today={today}
                   showMargin={showMargin}
                   isDragging

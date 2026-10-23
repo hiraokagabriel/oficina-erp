@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { WorkOrder, OSStatus, STATUS_LABELS } from '../types';
@@ -51,6 +51,8 @@ export const KanbanCard = React.memo(({
     isDragging,
   } = useSortable({ id: os.id });
 
+  // O dnd-kit põe aria-pressed/aria-disabled no wrapper, mas role="group" não os aceita: descartados.
+  const { 'aria-pressed': _pressed, 'aria-disabled': _disabled, ...a11yAttributes } = attributes;
   const { onKeyDown: dndKeyDown, ...pointerListeners } = listeners ?? {};
 
   const style: React.CSSProperties = {
@@ -101,8 +103,19 @@ export const KanbanCard = React.memo(({
     setMenuAt({ x: e.clientX, y: e.clientY });
   };
 
+  // O clique que fecha o menu (listener de captura do ContextMenu) é o mesmo que chegaria aqui: sem esta marca, reabriria.
+  const closedAtRef = useRef(0);
+  const closeMenu = () => {
+    closedAtRef.current = Date.now();
+    setMenuAt(null);
+  };
+
   const openMore = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
+    if (menuAt || Date.now() - closedAtRef.current < 250) {
+      closeMenu();
+      return;
+    }
     const r = e.currentTarget.getBoundingClientRect();
     setMenuAt({ x: r.left, y: r.bottom + 4 });
   };
@@ -116,7 +129,7 @@ export const KanbanCard = React.memo(({
         ref={setNodeRef}
         style={style}
         className="kcard-wrap"
-        {...attributes}
+        {...a11yAttributes}
         {...pointerListeners}
         role="group"
         aria-label={`OS ${os.osNumber}, ${os.clientName}, ${STATUS_LABELS[status]}`}
@@ -174,7 +187,11 @@ export const KanbanCard = React.memo(({
                 type="button"
                 className="btn kcard-next"
                 onPointerDown={stopDrag}
-                onClick={(e) => { e.stopPropagation(); onStatusChange(os.id, step.to); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (e.detail > 1) return; // clique duplo: o 2º clique não avança
+                  onStatusChange(os.id, step.to);
+                }}
               >
                 {step.label}
                 <Icon name="proximo" size={16} />
@@ -209,7 +226,7 @@ export const KanbanCard = React.memo(({
           actions={actions}
           x={menuAt.x}
           y={menuAt.y}
-          onClose={() => setMenuAt(null)}
+          onClose={closeMenu}
         />
       )}
     </>

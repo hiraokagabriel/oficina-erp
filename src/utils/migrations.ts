@@ -125,6 +125,17 @@ const noonOfDay = (value: string | undefined): string | undefined => {
   return parseDateOnly(formatDateOnly(d)).toISOString();
 };
 
+/** Passo por OS da v3ToV4 (também usado ao salvar uma OS legada ainda não migrada). Devolve a própria OS se não há o que converter. */
+export const migrateLegacyAdvance = (os: WorkOrder, ledgerById: Map<string, LedgerEntry>): WorkOrder => {
+  if (os.advances) return os;
+  const amount = os.advanceAmount;
+  if (!os.advanceEntryId || typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) return os;
+  const linked = ledgerById.get(os.advanceEntryId);
+  const date = noonOfDay(linked?.effectiveDate) ?? noonOfDay(os.createdAt) ?? os.createdAt;
+  const { advanceAmount: _a, advanceEntryId: _e, ...rest } = os;
+  return { ...rest, advances: [{ id: `${os.id}:a0`, amount, entryId: os.advanceEntryId, date }] };
+};
+
 /**
  * v3 -> v4 (PURA, registrada em STEPS).
  * (a) `auditLog` que não é lista vira [] (lista existente é mantida).
@@ -137,15 +148,7 @@ const noonOfDay = (value: string | undefined): string | undefined => {
  */
 export const v3ToV4 = (db: DatabaseSchema): DatabaseSchema => {
   const ledgerById = new Map(db.ledger.map(e => [e.id, e]));
-  const workOrders: WorkOrder[] = db.workOrders.map(os => {
-    if (os.advances) return os;
-    const amount = os.advanceAmount;
-    if (!os.advanceEntryId || typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) return os;
-    const linked = ledgerById.get(os.advanceEntryId);
-    const date = noonOfDay(linked?.effectiveDate) ?? noonOfDay(os.createdAt) ?? os.createdAt;
-    const { advanceAmount: _a, advanceEntryId: _e, ...rest } = os;
-    return { ...rest, advances: [{ id: `${os.id}:a0`, amount, entryId: os.advanceEntryId, date }] };
-  });
+  const workOrders: WorkOrder[] = db.workOrders.map(os => migrateLegacyAdvance(os, ledgerById));
   const changedOS = workOrders.some((o, i) => o !== db.workOrders[i]);
   const hasLog = Array.isArray(db.auditLog);
   if (!changedOS && hasLog) return db;

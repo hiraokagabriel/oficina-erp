@@ -134,13 +134,13 @@ describe('updateWorkOrderData', () => {
     expect(o).toMatchObject({ id: 'os1', status: 'FINALIZADO', financialId: 'fin1', osNumber: 2, vehicle: 'Uno', clientName: 'Beltrano', mileage: 99, total: 5000, totalCost: 500, profit: 4500 });
     expect(o.createdAt).toBe(original.createdAt);
     expect(o.publicNotes).toBe('nota');
-    expect(o.advanceAmount).toBe(100);
+    expect(o.advanceAmount).toBe(100); // legado herdado; os adiantamentos v4 são tratados por prepareOSSave
   });
-  it('dateString muda createdAt (meio-dia UTC); notas e adiantamento podem ser trocados', () => {
-    const o = updateWorkOrderData(original, 1, 'Gol', 'Fulano', '1', '10', [], [], '2026-02-20', 'outra', 0);
+  it('dateString muda createdAt (meio-dia UTC) e as notas podem ser trocadas; não mexe em advances', () => {
+    const o = updateWorkOrderData({ ...original, advances: [{ id: 'a', date: '2026-01-10T12:00:00.000Z', amount: 5, entryId: 'e' }] }, 1, 'Gol', 'Fulano', '1', '10', [], [], '2026-02-20', 'outra');
     expect(o.createdAt).toBe('2026-02-20T12:00:00.000Z');
     expect(o.publicNotes).toBe('outra');
-    expect(o.advanceAmount).toBe(0);
+    expect(o.advances).toHaveLength(1);
   });
   it('não herda profitMargin gravado (obsoleto)', () => {
     const o = updateWorkOrderData({ ...original, profitMargin: 42 }, 1, 'Gol', 'Fulano', '1', '10', [], []);

@@ -87,6 +87,8 @@ interface DatabaseContextData {
   hasConflict: boolean;
   dbPath: string;
   setDbPath: React.Dispatch<React.SetStateAction<string>>;
+  /** Nome deste PC (mesmo valor gravado em `meta.savedBy`); 'desconhecido' até o banco carregar. Função estável. */
+  getMachineName: () => string;
 }
 
 const DatabaseContext = createContext<DatabaseContextData>({} as DatabaseContextData);
@@ -788,6 +790,8 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     </div>
   );
 
+  const getMachineName = useCallback(() => machineRef.current, []);
+
   // Memorizado: toasts e demais estados do provider não re-renderizam todos os consumidores.
   const contextValue = useMemo<DatabaseContextData>(() => ({
     ledger, setLedger,
@@ -801,7 +805,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     settings, setSettings,
     isLoading, isSaving, readOnly,
     loadStatus, saveError, lastSavedAt, hasPendingChanges, hasConflict: conflict !== null,
-    dbPath, setDbPath,
+    dbPath, setDbPath, getMachineName,
   }), [
     ledger, workOrders, clients, catalogParts, catalogServices, catalogTechnicians,
     appointments, auditLog, settings, setSettings, isLoading, isSaving, readOnly, loadStatus, saveError, lastSavedAt, hasPendingChanges, conflict, dbPath,

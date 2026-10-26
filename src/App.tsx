@@ -39,10 +39,12 @@ const ChoiceModal = lazy(() => import('./modals/ChoiceModal').then(m => ({ defau
 import { SoundFX } from './utils/audio';
 import {
   applyInstallmentToOS, buildInstallmentEntries, finalizeOSSingle, markOSFinalized,
-  getRemainingAmount, isAdvanceSyncLocked, reopenOS, restoreFinancial, statusChangeEffects, syncAdvanceEntry,
+  getRemainingAmount, reopenOS, restoreFinancial, statusChangeEffects,
   togglePayment,
 } from './services/osFinanceService';
 import { Money, updateWorkOrderData, generateId } from './utils/helpers';
+import { prepareOSSave, ADVANCES_EXCEED_MESSAGE, advanceLockedMessage } from './services/osSave';
+import { findAdvanceOwner, removeAllAdvances, sumAdvances } from './services/advances';
 import { buildFinalizeMessage, buildInstallmentMessage } from './services/finalizeText';
 import { linkClient, linkCatalogItems, linkTechnician, preferredClientId } from './utils/links';
 import { toISOFromDateInput } from './utils/dates';
@@ -82,6 +84,7 @@ function AppContent() {
     readOnly,
     dbPath,
     setDbPath,
+    getMachineName,
   } = useDatabase();
 
   const finance = useFinance();
@@ -227,10 +230,13 @@ function AppContent() {
     const osParts = linkedParts.items;
     const osServices = linkedServices.items;
 
-    setClients(linkedClient.clients);
-    setCatalogParts(linkedParts.catalog);
-    setCatalogServices(linkedServices.catalog);
-    if (technicianName) setCatalogTechnicians(linkedTech.technicians);
+    const machine = getMachineName();
+    const applyLinks = () => {
+      setClients(linkedClient.clients);
+      setCatalogParts(linkedParts.catalog);
+      setCatalogServices(linkedServices.catalog);
+      if (technicianName) setCatalogTechnicians(linkedTech.technicians);
+    };
 
     if (editingOS) {
       const updatedBase = updateWorkOrderData(
@@ -244,29 +250,24 @@ function AppContent() {
         osServices,
         data.createdAt,
         data.publicNotes,
-        data.advanceAmount,
       );
 
       // clientId/vehicleId/technicianId/expectedDate sempre regravados (expectedDate vazio limpa a previsão): updateWorkOrderData preserva os campos de `original`.
-      let updated: WorkOrder = { ...updatedBase, technician: technicianName || undefined, clientId, vehicleId, technicianId, expectedDate: data.expectedDate };
-      // Adiantamento no caixa (D3: OS finalizada/com financeiro não sincroniza). O campo vazio do modal zera o adiantamento.
-      if (!isAdvanceSyncLocked(editingOS)) {
-        const advance = syncAdvanceEntry({
-          os: { ...editingOS, osNumber: data.osNumber, clientName: data.clientName },
-          advanceAmount: data.advanceAmount,
-          ledger,
-        });
-        setLedger(advance.ledger);
-        updated = { ...updated, advanceAmount: data.advanceAmount, advanceEntryId: advance.advanceEntryId };
+      const base: WorkOrder = { ...updatedBase, technician: technicianName || undefined, clientId, vehicleId, technicianId, expectedDate: data.expectedDate };
+      // Adiantamentos, lançamentos e auditoria numa só conta pura; com erro nada é gravado (nem vínculos de cliente/catálogo).
+      const saved = prepareOSSave({ base, previous: editingOS, drafts: data.advances, ledger, machine });
+      if (!saved.ok) {
+        addToast(saved.error, 'error');
+        return;
       }
-      setWorkOrders(prev => prev.map(o => o.id === editingOS.id ? updated : o));
-
-      if (updated.financialId) {
-        setLedger(prev => prev.map(e => e.id === updated.financialId ? { ...e, effectiveDate: updated.createdAt, amount: updated.total, description: `Receita OS #${data.osNumber} - ${data.clientName}` } : e));
-      }
+      applyLinks();
+      setLedger(saved.ledger);
+      if (saved.events.length) setAuditLog(prev => [...prev, ...saved.events]);
+      setWorkOrders(prev => prev.map(o => o.id === editingOS.id ? saved.os : o));
       addToast('OS atualizada!', 'success');
+      if (saved.exceedsTotal) addToast(ADVANCES_EXCEED_MESSAGE, 'info');
     } else {
-      let newOS: WorkOrder = {
+      const newOS: WorkOrder = {
         id: generateId(),
         osNumber: data.osNumber,
         vehicle: data.vehicle,
@@ -284,20 +285,23 @@ function AppContent() {
         createdAt: data.createdAt ? toISOFromDateInput(data.createdAt) : new Date().toISOString(),
         publicNotes: data.publicNotes || '',
         technician: technicianName || undefined,
-        advanceAmount: typeof data.advanceAmount === 'number' ? data.advanceAmount : undefined,
       };
-      const advance = syncAdvanceEntry({ os: newOS, advanceAmount: newOS.advanceAmount, ledger });
-      if (advance.advanceEntryId) {
-        setLedger(advance.ledger);
-        newOS = { ...newOS, advanceEntryId: advance.advanceEntryId };
+      const saved = prepareOSSave({ base: newOS, drafts: data.advances, ledger, machine });
+      if (!saved.ok) {
+        addToast(saved.error, 'error');
+        return;
       }
-      setWorkOrders(prev => [...prev, newOS]);
+      applyLinks();
+      setLedger(saved.ledger);
+      if (saved.events.length) setAuditLog(prev => [...prev, ...saved.events]);
+      setWorkOrders(prev => [...prev, saved.os]);
       if (osFromAppointment) {
         const originId = osFromAppointment.appointment.id;
-        setAppointments(prev => prev.map(a => a.id === originId ? linkAppointmentToOS(a, newOS) : a));
+        setAppointments(prev => prev.map(a => a.id === originId ? linkAppointmentToOS(a, saved.os) : a));
         setOsFromAppointment(null);
       }
       addToast('Nova OS criada!', 'success');
+      if (saved.exceedsTotal) addToast(ADVANCES_EXCEED_MESSAGE, 'info');
     }
     setIsModalOpen(false);
   };
@@ -359,7 +363,16 @@ function AppContent() {
     setIsEntryModalOpen(false);
   };
 
+  // Lançamento de adiantamento é travado fora da OS (edição só pela janela da OS).
+  const refuseIfAdvance = (entryId: string): boolean => {
+    const owner = findAdvanceOwner(workOrders, entryId);
+    if (!owner) return false;
+    addToast(advanceLockedMessage(owner.osNumber), 'error');
+    return true;
+  };
+
   const handleEditEntry = (id: string) => {
+    if (refuseIfAdvance(id)) return;
     const linkedOS = workOrders.find(o => o.financialId === id);
     if (linkedOS) {
       if (confirm(`Este lançamento pertence à OS #${linkedOS.osNumber}.
@@ -377,6 +390,7 @@ Abrir OS?`)) {
   };
 
   const handleTogglePayment = (entryId: string) => {
+    if (refuseIfAdvance(entryId)) return;
     const result = togglePayment(ledger, workOrders, entryId, new Date().toISOString());
     if (!result) return;
 
@@ -396,7 +410,10 @@ Abrir OS?`)) {
     SoundFX.pop();
   };
 
-  const handleRequestDeleteEntry = (entry: LedgerEntry) => setDeleteModalInfo({ isOpen: true, entry });
+  const handleRequestDeleteEntry = (entry: LedgerEntry) => {
+    if (refuseIfAdvance(entry.id)) return;
+    setDeleteModalInfo({ isOpen: true, entry });
+  };
 
   const confirmDeleteSingle = () => {
     if (deleteModalInfo.entry) finance.deleteEntry(deleteModalInfo.entry.id);
@@ -493,7 +510,9 @@ Abrir OS?`)) {
   const handlePrintOS = (os: WorkOrder) => {
     addToast(`Imprimindo OS #${os.osNumber}...`, 'info');
     markPrintedOnce();
-    printOS(os, settings);
+    // printOS (outra rodada) ainda lê advanceAmount: repassa a soma dos adiantamentos v4 até a impressão ser atualizada.
+    const advanced = sumAdvances(os);
+    printOS(advanced > 0 ? { ...os, advanceAmount: advanced } : os, settings);
   };
 
   // Ações do Kanban estáveis: o quadro não re-renderiza a cada toast/filtro/salvamento.
@@ -611,7 +630,9 @@ Abrir OS?`)) {
       const os = pendingAction.data;
       setWorkOrders(p => p.filter(i => i.id !== os.id));
       if (os.financialId) setLedger(p => p.filter(e => e.id !== os.financialId));
-      if (os.advanceEntryId) setLedger(p => p.filter(e => e.id !== os.advanceEntryId));
+      const removed = removeAllAdvances({ os, ledger, machine: getMachineName() });
+      if (removed.ledger !== ledger) setLedger(p => p.filter(e => removed.ledger.some(r => r.id === e.id)));
+      if (removed.events.length) setAuditLog(p => [...p, ...removed.events]);
       addToast('OS excluída.', 'info');
     }
 
@@ -751,6 +772,7 @@ Abrir OS?`)) {
                 }}
                 onEditEntry={handleEditEntry}
                 onDeleteEntry={handleRequestDeleteEntry}
+                onOpenOS={os => { setEditingOS(os); setIsModalOpen(true); }}
                 onTogglePayment={handleTogglePayment}
                 selectedMonth={finance.selectedMonth}
                 onMonthChange={finance.setSelectedMonth}

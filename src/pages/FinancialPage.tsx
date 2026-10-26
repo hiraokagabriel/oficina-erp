@@ -31,6 +31,8 @@ interface FinancialPageProps {
   onOpenEntry: () => void;
   onEditEntry: (id: string) => void;
   onDeleteEntry: (entry: LedgerEntry) => void;
+  /** Abre a janela da OS (usado pelo "Editar na OS" dos adiantamentos). */
+  onOpenOS: (os: WorkOrder) => void;
   onTogglePayment: (id: string) => void; // 🆕 NOVA PROP
   selectedMonth: string;
   onMonthChange: (val: string) => void;
@@ -47,13 +49,22 @@ interface FinancialPageProps {
 
 export const FinancialPage: React.FC<FinancialPageProps> = ({ 
   isLoading, kpiData, chartDataFluxo, chartDataPie, ledger, allLedger, Money, 
-  onOpenExport, onOpenEntry, onEditEntry, onDeleteEntry, onTogglePayment,
+  onOpenExport, onOpenEntry, onEditEntry, onDeleteEntry, onOpenOS, onTogglePayment,
   selectedMonth, onMonthChange, viewMode, setViewMode,
   filterType, setFilterType,
   workOrders, settings, catalogParts, catalogServices
 }) => {
 
   const [currentPage, setCurrentPage] = useState(1);
+  // Lançamento de adiantamento -> OS dona (fica travado aqui; edição só pela OS).
+  const advanceOwners = useMemo(() => {
+    const map = new Map<string, WorkOrder>();
+    for (const os of workOrders) {
+      for (const a of os.advances ?? []) map.set(a.entryId, os);
+      if (os.advanceEntryId) map.set(os.advanceEntryId, os);
+    }
+    return map;
+  }, [workOrders]);
   // Rascunho do ano (modo Anual): só vale ao sair do campo ou no Enter.
   const [yearDraft, setYearDraft] = useState(selectedMonth.slice(0, 4));
   const [yearError, setYearError] = useState(false);
@@ -336,9 +347,13 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                             displayDate = new Date(e.effectiveDate).toLocaleDateString('pt-BR');
                         }
 
+                        const advanceOS = advanceOwners.get(e.id);
                         return (
                             <tr key={e.id}>
-                                <td>{e.description}</td>
+                                <td>
+                                    {e.description}
+                                    {advanceOS && <span className="fin-badge fin-badge--paid">Adiantamento da OS #{advanceOS.osNumber}</span>}
+                                </td>
                                 <td className={e.type === 'DEBIT' ? 'fin-amount fin-amount--debit' : 'fin-amount fin-amount--credit'}>
                                     {e.type === 'DEBIT' ? '- ' : '+ '}{Money.format(e.amount)}
                                 </td>
@@ -353,6 +368,9 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                                 </td>
                                 <td>
                                     <div className="fin-row-actions">
+                                    {advanceOS ? (
+                                        <button className="btn-sm" onClick={() => onOpenOS(advanceOS)} aria-label={`Editar na OS #${advanceOS.osNumber}`}><Icon name="editar" size={16} />Editar na OS #{advanceOS.osNumber}</button>
+                                    ) : (<>
                                     {e.type === 'CREDIT' && (
                                         <button
                                             className={isPaymentDate ? 'btn-sm fin-pay fin-pay--paid' : 'btn-sm fin-pay'}
@@ -365,6 +383,7 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                                     )}
                                     <button className="btn-sm" onClick={() => onEditEntry(e.id)} aria-label={`Editar: ${e.description}`}><Icon name="editar" size={16} />Editar</button>
                                     <button className="btn-sm fin-del" onClick={() => onDeleteEntry(e)} aria-label={`Excluir: ${e.description}`}><Icon name="excluir" size={16} />Excluir</button>
+                                    </>)}
                                     </div>
                                 </td>
                             </tr>

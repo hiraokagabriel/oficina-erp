@@ -160,8 +160,7 @@ export const updateWorkOrderData = (
   parts: CatalogItem[],
   services: CatalogItem[],
   dateString?: string,
-  publicNotes?: string,
-  advanceAmount?: number
+  publicNotes?: string
 ): WorkOrder => {
   const subParts = parts.reduce((a, b) => a + b.price, 0);
   const subServices = services.reduce((a, b) => a + b.price, 0);
@@ -194,7 +193,6 @@ export const updateWorkOrderData = (
     profit: financials.profit,
     createdAt: finalDate,
     publicNotes: publicNotes !== undefined ? publicNotes : original.publicNotes,
-    advanceAmount: advanceAmount !== undefined ? advanceAmount : original.advanceAmount,
   };
 };
 

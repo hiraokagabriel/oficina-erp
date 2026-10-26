@@ -15,6 +15,9 @@ import { normalizeItemCost, partialMarginNote } from '../services/marginView';
 import { firstErrorField, OSFieldErrors, OSFieldId, validateOSFields } from '../services/osModalView';
 import { MoneyField } from '../components/MoneyField';
 import { Icon } from '../components/ui/Icon';
+import { AdvancesList } from '../components/AdvancesList';
+import { AdvanceRow, advanceRowsToPayload, buildAdvanceRows, firstInvalidAdvanceRow } from '../services/advancesDraft';
+import { isAdvanceSyncLocked } from '../services/osFinanceService';
 
 /** Sugestão discreta do histórico de vendas; só sugere, o botão grava apenas o preço da linha. */
 const HistoryHint: React.FC<{
@@ -93,7 +96,10 @@ export const OSModal: React.FC<OSModalProps> = ({
   const [vehicle, setVehicle] = useState("");
   const [plate, setPlate] = useState("");
   const [mileage, setMileage] = useState("");
-  const [advanceCents, setAdvanceCents] = useState<number | undefined>(undefined); // adiantamento em centavos (vazio = sem)
+  const [advanceRows, setAdvanceRows] = useState<AdvanceRow[]>([]); // rascunho dos adiantamentos (nada vai ao caixa até salvar a OS)
+  const [advanceEditing, setAdvanceEditing] = useState(false);
+  const [advanceAttention, setAdvanceAttention] = useState(0);
+  const advancesLocked = !!editingOS && isAdvanceSyncLocked(editingOS);
 
   const [parts, setParts] = useState<OrderItem[]>([]);
   const [services, setServices] = useState<OrderItem[]>([]);
@@ -236,7 +242,7 @@ export const OSModal: React.FC<OSModalProps> = ({
       setPublicNotes(editingOS.publicNotes || "");
 
       // 🆕 Pré-preencher adiantamento (se existir na OS) em reais
-      setAdvanceCents(typeof editingOS.advanceAmount === 'number' && editingOS.advanceAmount > 0 ? editingOS.advanceAmount : undefined);
+      setAdvanceRows(buildAdvanceRows(editingOS, getLocalDateString()));
 
       const sep = editingOS.vehicle.lastIndexOf(" - ");
       if (sep > 0) {
@@ -265,7 +271,7 @@ export const OSModal: React.FC<OSModalProps> = ({
       setMileage("");
       setParts([]);
       setServices([]);
-      setAdvanceCents(undefined);
+      setAdvanceRows([]);
     }
     // Rascunho (Agenda -> Criar OS): só valores iniciais ao CRIAR. clientId só vale se o cliente ainda existe.
     if (!editingOS && draft) {
@@ -431,7 +437,15 @@ export const OSModal: React.FC<OSModalProps> = ({
     const numOS = parseInt(osNumber, 10);
     const fullVehicle = plate ? `${vehicle} - ${plate.toUpperCase()}` : vehicle;
 
-    const advanceAmount = advanceCents !== undefined && advanceCents > 0 ? advanceCents : undefined;
+    if (!advancesLocked) {
+      if (advanceEditing) { setAdvanceAttention(n => n + 1); return; }
+      const bad = firstInvalidAdvanceRow(advanceRows, getLocalDateString());
+      if (bad) {
+        setAdvanceAttention(n => n + 1);
+        document.querySelector<HTMLElement>(`[data-adv-edit="${CSS.escape(bad.key)}"]`)?.focus();
+        return;
+      }
+    }
 
     onSave({
       osNumber: numOS,
@@ -451,7 +465,7 @@ export const OSModal: React.FC<OSModalProps> = ({
       services: services.filter(s => s.description.trim() !== "").map(normalizeItemCost),
       publicNotes,
       technician: technician.trim() || undefined,
-      advanceAmount,
+      advances: advancesLocked ? undefined : advanceRowsToPayload(advanceRows),
     });
   };
 
@@ -744,13 +758,9 @@ export const OSModal: React.FC<OSModalProps> = ({
         {/* 3. VALORES */}
         <section className="osm-section" aria-labelledby="osm-h-valores">
           <h3 id="osm-h-valores" className="osm-h"><Icon name="cifrao" size={18} /> Valores</h3>
-          <div className="form-group osm-advance">
-            <label className="form-label" htmlFor="os-advance">Valor adiantado <span className="osm-opt">(opcional)</span></label>
-            <MoneyField id="os-advance" kind="optional" className="form-input" value={advanceCents}
-              onChange={c => { guard.markDirty(); setAdvanceCents(c); }} onInvalidChange={trackMoney} showError={moneyShown}
-              placeholder="Ex: 200,00" aria-describedby="os-advance-hint" />
-            <small id="os-advance-hint" className="field-hint">Use só se o cliente já deixou algum valor. Deixe vazio se não houver.</small>
-          </div>
+          <AdvancesList rows={advanceRows} onChange={setAdvanceRows} total={totalRevenue} today={getLocalDateString()}
+            formatMoney={formatMoney} locked={advancesLocked} onDirty={guard.markDirty}
+            onEditingChange={setAdvanceEditing} attention={advanceAttention} />
 
           {showCostColumn && (
             <div className="osm-profit">

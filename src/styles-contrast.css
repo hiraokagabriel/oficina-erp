@@ -24,7 +24,6 @@ input.form-input:not(:focus), select.form-input:not(:focus), textarea.form-input
 .toggle-group .btn-sm[style*="opacity: 0.5"] { opacity: 1 !important; }
 .process-group-header > div[style*="opacity"] { opacity: 1 !important; }
 [data-theme="pastel"] .tl-month,
-[data-theme="pastel"] .parts-os-badge,
 [data-theme="pastel"] .items-header { color: #6D28D9; }
 [data-theme="pastel"] a:not([class]) { color: #6D28D9; }
 
@@ -41,15 +40,6 @@ button[style*="background: var(--primary)"] { color: #0b0b0d !important; }
 
 /* ---- Selo de contagem (Ver Arquivadas): texto branco sobre vermelho mais fechado ---- */
 .btn-secondary > span[style*="var(--danger)"] { background: #a8453a !important; }
-
-/* ---- Peças ---- */
-.parts-filter-btn.active,
-[data-theme="pastel"] .parts-filter-btn.active { background: linear-gradient(135deg, #4f46e5 0%, #6d28d9 100%); color: #fff; border-color: #4f46e5; }
-.parts-qty-badge { background: linear-gradient(135deg, #4f46e5 0%, #6d28d9 100%); }
-.parts-select-all-btn { background: #2563eb; }
-.parts-status-badge.aprovado { color: #8bd68f; }
-[data-theme="pastel"] .parts-status-badge.aprovado { color: #1f6b3a; }
-[data-theme="pastel"] .parts-status-badge.orcamento { color: #7a5200; }
 
 /* ---- Botões e cartões com gradiente fixo no JSX: texto branco >= 4,5:1 (mesmo matiz, tons mais fechados) ---- */
 /* Atenção: o navegador normaliza hex inline para rgb(), então os seletores usam a forma rgb. */

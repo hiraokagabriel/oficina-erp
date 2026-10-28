@@ -1,6 +1,7 @@
 import { WorkOrder, WorkshopSettings, STATUS_LABELS, PartCategory, PART_CATEGORY_META } from '../types';
 import { formatExpectedDate } from '../services/schedule';
 import { WARRANTY_TERM_TEXT } from './warranty';
+import { escapeHtml } from './html';
 
 // Variante de impressão: CLIENT = via do cliente (assina o mecânico), SHOP = via da oficina (assina o cliente)
 export type PrintVariant = 'CLIENT' | 'SHOP';
@@ -22,12 +23,8 @@ function sanitizeForFilename(text: string): string {
     .substring(0, 50);
 }
 
-export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: PrintVariant) {
-  if (!data) {
-    console.error('Dados da OS não fornecidos para impressão');
-    return;
-  }
-
+/** Monta o HTML e o título do documento da OS (sem imprimir): separado para poder ser testado. */
+export function buildPrintOSHtml(data: WorkOrder, settings: WorkshopSettings, variant?: PrintVariant): { printContent: string; documentTitle: string } {
   const formatDate = (dateString: string) => {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleDateString('pt-BR');
@@ -71,14 +68,14 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
     const mechBlock = `
       <div class="signature-block">
         <div class="sign-space"></div>
-        <span class="sign-name">${data.technician || settings.name || 'Oficina'}</span>
+        <span class="sign-name">${escapeHtml(data.technician || settings.name || 'Oficina')}</span>
         <span class="sign-label">Responsável Técnico</span>
       </div>`;
 
     const clientBlock = `
       <div class="signature-block">
         <div class="sign-space"></div>
-        <span class="sign-name">${data.clientName}</span>
+        <span class="sign-name">${escapeHtml(data.clientName)}</span>
         <span class="sign-label">Cliente</span>
       </div>`;
 
@@ -110,7 +107,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
     if (!hasCategories) {
       const rows = data.parts.map(item => `
         <tr>
-          <td>${item.description}</td>
+          <td>${escapeHtml(item.description)}</td>
           <td class="text-right">${formatMoney(item.price)}</td>
         </tr>
       `).join('');
@@ -135,7 +132,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
 
         const itemRows = items.map(item => `
           <tr>
-            <td style="border-left:3px solid ${meta.color};padding-left:10px">${item.description}</td>
+            <td style="border-left:3px solid ${meta.color};padding-left:10px">${escapeHtml(item.description)}</td>
             <td class="text-right">${formatMoney(item.price)}</td>
           </tr>
         `).join('');
@@ -176,7 +173,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
     <div class="terms-page">
       <div style="text-align:center;margin-bottom:10px">
         <div class="invoice-logo-circle" style="width:40px;height:40px;font-size:1.1rem;margin:0 auto 8px auto">AM</div>
-        <h1 style="font-size:1rem;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin:0">${settings.name || 'OFICINA MECÂNICA'}</h1>
+        <h1 style="font-size:1rem;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin:0">${escapeHtml(settings.name || 'OFICINA MECÂNICA')}</h1>
         <p style="font-size:0.65rem;color:#888;letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-top:2px">TERMOS E CONDIÇÕES DE SERVIÇO</p>
       </div>
 
@@ -236,7 +233,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
       </div>
 
       <hr class="divider terms-divider" style="margin-top:10px" />
-      <p style="font-size:7.5pt;color:#888;text-align:center">${settings.name || ''} &nbsp;|&nbsp; ${settings.address || ''} &nbsp;|&nbsp; ${settings.cnpj || ''}</p>
+      <p style="font-size:7.5pt;color:#888;text-align:center">${escapeHtml(settings.name || '')} &nbsp;|&nbsp; ${escapeHtml(settings.address || '')} &nbsp;|&nbsp; ${escapeHtml(settings.cnpj || '')}</p>
     </div>
 
     <div class="labor-page">
@@ -296,7 +293,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
       </div>
 
       <hr class="divider terms-divider" style="margin-top:12px;margin-bottom:12px" />
-      <p style="font-size:8pt;color:#888;text-align:center;margin-top:4px">${settings.name || ''} &nbsp;|&nbsp; ${settings.address || ''} &nbsp;|&nbsp; ${settings.cnpj || ''}</p>
+      <p style="font-size:8pt;color:#888;text-align:center;margin-top:4px">${escapeHtml(settings.name || '')} &nbsp;|&nbsp; ${escapeHtml(settings.address || '')} &nbsp;|&nbsp; ${escapeHtml(settings.cnpj || '')}</p>
     </div>
   `;
 
@@ -618,10 +615,10 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
           <header class="invoice-header">
             <div class="invoice-col supplier-col">
               <h4 class="label-sm">PRESTADOR DE SERVIÇO</h4>
-              <h2 class="company-name">${settings.name || 'NOME DA OFICINA'}</h2>
-              <p>${settings.address || 'Endereço não informado'}</p>
-              <p>${settings.cnpj || 'CNPJ não informado'}</p>
-              ${data.technician ? `<p>Téc. Resp: ${data.technician}</p>` : ''}
+              <h2 class="company-name">${escapeHtml(settings.name || 'NOME DA OFICINA')}</h2>
+              <p>${escapeHtml(settings.address || 'Endereço não informado')}</p>
+              <p>${escapeHtml(settings.cnpj || 'CNPJ não informado')}</p>
+              ${data.technician ? `<p>Téc. Resp: ${escapeHtml(data.technician)}</p>` : ''}
             </div>
             <div class="invoice-logo-area">
               <h1 class="invoice-main-title">ORDEM DE SERVIÇO</h1>
@@ -630,11 +627,11 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
             </div>
             <div class="invoice-col client-col">
               <h4 class="label-sm">CLIENTE</h4>
-              <h2 class="client-name">${data.clientName}</h2>
-              <p>${data.clientPhone}</p>
+              <h2 class="client-name">${escapeHtml(data.clientName)}</h2>
+              <p>${escapeHtml(data.clientPhone)}</p>
               <div style="margin-top:8px">
-                <p><strong>Veículo:</strong> ${data.vehicle}</p>
-                <p><strong>KM:</strong> ${data.mileage}</p>
+                <p><strong>Veículo:</strong> ${escapeHtml(data.vehicle)}</p>
+                <p><strong>KM:</strong> ${escapeHtml(String(data.mileage))}</p>
               </div>
             </div>
           </header>
@@ -682,7 +679,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
                   ? '<tr><td colspan="2" style="font-style:italic;color:#999;padding:15px 0">Nenhum serviço registrado.</td></tr>'
                   : data.services.map(item => `
                     <tr>
-                      <td>${item.description}</td>
+                      <td>${escapeHtml(item.description)}</td>
                       <td class="text-right">${formatMoney(item.price)}</td>
                     </tr>
                   `).join('')
@@ -716,7 +713,7 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
       <div class="summary-page">
         <div class="summary-header">
           <h1 class="summary-title">Resumo da Ordem de Serviço</h1>
-          <p class="summary-subtitle">OS #${data.osNumber} &nbsp;•&nbsp; ${data.clientName}</p>
+          <p class="summary-subtitle">OS #${data.osNumber} &nbsp;•&nbsp; ${escapeHtml(data.clientName)}</p>
         </div>
         <hr class="divider" />
         <div class="summary-grid">
@@ -756,17 +753,27 @@ export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: P
           <div class="summary-notes">
             <h3 class="summary-notes-title">Observações da OS / Garantia</h3>
             <div class="summary-notes-body">
-              ${data.publicNotes}
+              ${escapeHtml(data.publicNotes)}
             </div>
           </div>
         ` : ''}
         <hr class="divider terms-divider" style="margin-top:20px" />
-        <p style="font-size:7.5pt;color:#888;text-align:center">${settings.name || ''} &nbsp;|&nbsp; ${settings.address || ''} &nbsp;|&nbsp; ${settings.cnpj || ''}</p>
+        <p style="font-size:7.5pt;color:#888;text-align:center">${escapeHtml(settings.name || '')} &nbsp;|&nbsp; ${escapeHtml(settings.address || '')} &nbsp;|&nbsp; ${escapeHtml(settings.cnpj || '')}</p>
       </div>
 
     </body>
     </html>
   `;
+
+  return { printContent, documentTitle };
+}
+
+export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: PrintVariant) {
+  if (!data) {
+    console.error('Dados da OS não fornecidos para impressão');
+    return;
+  }
+  const { printContent, documentTitle } = buildPrintOSHtml(data, settings, variant);
 
   const originalTitle = document.title;
   document.title = documentTitle;

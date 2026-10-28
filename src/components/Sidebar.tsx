@@ -19,7 +19,7 @@ const NAV_ITEMS: { id: TabId; label: string; icon: IconName }[] = [
   { id: 'PROCESSOS',  label: 'Processos',      icon: 'processos' },
   { id: 'CLIENTES',   label: 'Clientes',       icon: 'clientes' },
   { id: 'FINANCEIRO', label: 'Financeiro',     icon: 'financeiro' },
-  { id: 'PECAS',      label: 'Peças',          icon: 'pecas' },
+  { id: 'PECAS',      label: 'Peças a comprar', icon: 'pecas' },
   { id: 'CONFIG',     label: 'Configurações',  icon: 'config' },
 ];
 

@@ -359,3 +359,33 @@
     color: #333;
   }
 }
+
+/* ====================================================
+   Rodada 12: cada item é uma linha com botão que mostra luz + palavra do estado.
+   Só tokens; vem depois das regras antigas para sobrescrevê-las (a impressão acima não muda).
+   ==================================================== */
+.checklist-legend .legend-item { color: var(--_t); }
+.checklist-legend .legend-item strong { font-weight: var(--fw-bold); }
+.legend-hint { opacity: 1; color: var(--text-2); font-size: var(--fs-xs); }
+.checklist-item { cursor: default; flex-wrap: wrap; padding: 2px 6px; min-height: var(--control-h-min); user-select: auto; }
+.checklist-item:hover { background: transparent; }
+.checklist-item.status-ok { background: var(--status-finalizado-bg); }
+.checklist-item.status-attention { background: var(--status-em-servico-bg); }
+.checklist-item.status-urgent { background: var(--status-atrasado-bg); }
+.checklist-item.status-ok:hover, .checklist-item.status-attention:hover, .checklist-item.status-urgent:hover { filter: none; }
+.checklist-item .item-label { flex: 1 1 140px; font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.item-state {
+  flex: none; display: inline-flex; align-items: center; gap: var(--sp-2); min-height: var(--control-h-min);
+  padding: 0 var(--sp-3); border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+  background: var(--surface-1); cursor: pointer; font-family: inherit; white-space: nowrap;
+}
+.item-state:hover { background: var(--surface-3); }
+.item-state:focus-visible, .checklist-item .item-delete:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.checklist-item .item-delete { opacity: 1; min-width: var(--control-h-min); min-height: var(--control-h-min); font-size: inherit; padding: 0; }
+.checklist-empty-cat { opacity: 1; color: var(--text-2); }
+.checklist-category-header .btn-icon { min-width: var(--control-h-min); min-height: var(--control-h-min); }
+.add-item-row .form-input { height: var(--control-h-min); }
+.add-item-row .btn-sm, .add-item-btn { min-height: var(--control-h-min); }
+.add-item-btn { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); color: var(--text-2); }
+@media (prefers-reduced-motion: reduce) { .checklist-item, .item-state { transition: none; } }
+.checklist-header .btn-icon { min-width: var(--control-h-min); min-height: var(--control-h-min); }

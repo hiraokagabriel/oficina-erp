@@ -13,50 +13,24 @@ input.form-input:not(:focus), select.form-input:not(:focus), textarea.form-input
 [data-theme="pastel"] .tl-price,
 [data-theme="pastel"] .total-display,
 [data-theme="pastel"] .total-display span { color: var(--text-success); }
-[data-theme="pastel"] .stat-card .stat-value[style*="var(--danger)"] { color: var(--text-danger) !important; }
 /* Cor semântica inline (var(--success) etc.) como texto no pastel */
 [data-theme="pastel"] [style^="color: var(--success)"], [data-theme="pastel"] [style*="; color: var(--success)"] { color: var(--text-success) !important; }
 [data-theme="pastel"] [style^="color: var(--danger)"], [data-theme="pastel"] [style*="; color: var(--danger)"] { color: var(--text-danger) !important; }
 [data-theme="pastel"] [style^="color: var(--warning)"], [data-theme="pastel"] [style*="; color: var(--warning)"] { color: var(--text-warning) !important; }
 [data-theme="pastel"] [style^="color: var(--info)"], [data-theme="pastel"] [style*="; color: var(--info)"] { color: var(--text-info) !important; }
 [data-theme="pastel"] [style^="color: var(--primary)"], [data-theme="pastel"] [style*="; color: var(--primary)"] { color: #6D28D9 !important; }
-[data-theme="pastel"] .toggle-group .btn-sm[style*="var(--danger)"] { border-color: var(--text-danger) !important; }
-.toggle-group .btn-sm[style*="opacity: 0.5"] { opacity: 1 !important; }
-.process-group-header > div[style*="opacity"] { opacity: 1 !important; }
 [data-theme="pastel"] .tl-month,
 [data-theme="pastel"] .items-header { color: #6D28D9; }
 [data-theme="pastel"] a:not([class]) { color: #6D28D9; }
 
 /* ---- Opacidades que derrubavam o contraste ---- */
-.form-label > span[style*="opacity"] { opacity: 1 !important; }
 .sortable-th span { opacity: 0.7 !important; }
 span[style*="font-size: 0.55rem"][style*="opacity: 0.5"] { opacity: 1 !important; }
 .stat-trend { opacity: 1; }
 .appt-reason, .appt-item--cancelado .appt-info, .appt-item--faltou .appt-info, .appt-item--cancelado .appt-time, .appt-item--faltou .appt-time { opacity: 1 !important; }
 [data-theme="pastel"] .category-group-header { color: var(--text-main); filter: none; }
-[data-theme="pastel"] button.btn[style*="rgba(255, 255, 255, 0.25)"] { background: rgba(255, 255, 255, 0.12) !important; }
 button[style*="background: var(--primary)"] { color: #0b0b0d !important; }
 [data-theme="pastel"] button[style*="background: var(--primary)"] { background: #6D28D9 !important; color: #fff !important; }
 
 /* ---- Selo de contagem (Ver Arquivadas): texto branco sobre vermelho mais fechado ---- */
 .btn-secondary > span[style*="var(--danger)"] { background: #a8453a !important; }
-
-/* ---- Botões e cartões com gradiente fixo no JSX: texto branco >= 4,5:1 (mesmo matiz, tons mais fechados) ---- */
-/* Atenção: o navegador normaliza hex inline para rgb(), então os seletores usam a forma rgb. */
-button[style*="rgb(37, 211, 102)"] { background: linear-gradient(135deg, #0f7a3a 0%, #0b6b5f 100%) !important; }
-div[style*="rgb(102, 126, 234) 0%"] { background: linear-gradient(135deg, #4f46e5 0%, #6d28d9 100%) !important; }
-div[style*="rgb(240, 147, 251) 0%"] { background: linear-gradient(135deg, #a21caf 0%, #be123c 100%) !important; }
-div[style*="rgb(79, 172, 254) 0%"] { background: linear-gradient(135deg, #0369a1 0%, #0e7490 100%) !important; }
-div[style*="rgb(250, 112, 154) 0%"] { background: linear-gradient(135deg, #be185d 0%, #b45309 100%) !important; }
-div[style*="rgb(102, 126, 234) 0%"] [style*="opacity"], div[style*="rgb(240, 147, 251) 0%"] [style*="opacity"], div[style*="rgb(79, 172, 254) 0%"] [style*="opacity"], div[style*="rgb(250, 112, 154) 0%"] [style*="opacity"] { opacity: 1 !important; }
-.crm-details p[style*="opacity: 0.7"] { opacity: 1 !important; }
-
-/* ---- Cabeçalhos em gradiente primário (Processos, CRM): texto escuro sobre o dourado, branco sobre roxo fechado ---- */
-div[style*="linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)"] { color: #0b0b0d !important; }
-[data-theme="pastel"] div[style*="linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)"] {
-  background: linear-gradient(135deg, #5B21B6 0%, #6D28D9 100%) !important;
-  color: #fff !important;
-}
-/* Textos translúcidos dentro do cabeçalho (opacity inline) viram opacos para manter o contraste */
-div[style*="linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)"] [style*="opacity"] { opacity: 1 !important; }
-[data-theme="pastel"] .item-row button[type="button"][style*="height: 100%"] { color: var(--text-main) !important; }

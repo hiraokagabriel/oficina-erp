@@ -4,8 +4,6 @@
 .receivable-status.open { color: var(--text-main); }
 .receivable-pay:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .receivables-scroll { overflow-x: auto; }
-.client-debt { margin-top: 4px; font-size: 0.8rem; color: var(--text-muted); }
-.client-debt .late { color: var(--danger); font-weight: 700; margin-left: 6px; }
 .debtor-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
   padding: 12px 16px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; width: 100%;
   color: var(--text-main); font: inherit; text-align: left; }
@@ -14,8 +12,7 @@ button.debtor-row:hover { background: var(--bg-hover); }
 button.debtor-row:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
 /* Tema pastel: o --danger do tema (#d08c7f) tem contraste ~2,7:1 sobre branco; para TEXTO de atraso use um tom mais escuro (>= 4,5:1). */
-[data-theme="pastel"] .receivable-status.late,
-[data-theme="pastel"] .client-debt .late { color: #a8453a; }
+[data-theme="pastel"] .receivable-status.late { color: #a8453a; }
 
 /* CRM com o dashboard visível: o .crm-layout (height:100%, overflow:hidden) encolhia a 0 numa coluna flex e a lista de clientes sumia.
    Com o dashboard aberto, dê altura própria à lista e deixe a página rolar. */
@@ -51,10 +48,10 @@ button.debtor-row:focus-visible { outline: 2px solid var(--primary); outline-off
 .crm-layout > .client-list { flex-shrink: 0; }
 @media (max-width: 960px) {
   .crm-layout { flex-direction: column; overflow-y: auto; }
-  .crm-layout > .client-list { width: 100%; max-height: 220px; }
+  .crm-layout > .client-list { width: 100%; max-height: 460px; }
   .crm-layout > .crm-details { flex: 0 0 auto; max-height: none; overflow-y: visible; padding: 20px; }
   /* cabeçalho do cliente (nome + WhatsApp/Editar, estilos inline): os botões quebram linha em vez de cortar */
-  .crm-details [style*="space-between"] { flex-wrap: wrap; gap: 12px; }
+
 }
 
 /* Tema pastel: o --success (#81b29a) dá ~2,4:1 como texto; use um verde mais escuro só nos KPIs de valor positivo (>= 4,5:1). */

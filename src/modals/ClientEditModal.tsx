@@ -1,12 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId, useRef } from 'react';
 import { Client, WorkOrder } from '../types';
 import { VehicleCombobox, useShopVehicles } from '../components/VehicleCombobox';
 import { generateId } from '../utils/helpers';
 import { useDirtyGuard } from '../hooks/useDirtyGuard';
+import { ConfirmationModal } from './ConfirmationModal';
+import { Icon } from '../components/ui/Icon';
+import { noVehicleMessage } from '../services/clientListView';
 
 interface ClientEditModalProps {
   isOpen: boolean;
   client: Client;
+  /** Cliente ainda não cadastrado: o título vira "Novo cliente". */
+  isNew?: boolean;
   onClose: () => void;
   onSave: (client: Client) => void;
   /** Histórico de OS para sugerir veículos já atendidos na oficina. */
@@ -16,10 +21,13 @@ interface ClientEditModalProps {
 export const ClientEditModal: React.FC<ClientEditModalProps> = ({
   isOpen,
   client,
+  isNew = false,
   onClose,
   onSave,
   workOrders
 }) => {
+  const uid = useId();
+  const nameRef = useRef<HTMLInputElement>(null);
   const shopVehicles = useShopVehicles([], workOrders);
   const [formData, setFormData] = useState({
     name: client.name,
@@ -27,6 +35,8 @@ export const ClientEditModal: React.FC<ClientEditModalProps> = ({
     notes: client.notes || '',
     vehicles: client.vehicles.map(v => ({ ...v })) // Clone dos veículos
   });
+  const [nameError, setNameError] = useState(false);
+  const [askNoVehicle, setAskNoVehicle] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -36,10 +46,24 @@ export const ClientEditModal: React.FC<ClientEditModalProps> = ({
         notes: client.notes || '',
         vehicles: client.vehicles.map(v => ({ ...v }))
       });
+      setNameError(false);
+      setAskNoVehicle(false);
     }
   }, [isOpen, client]);
 
   const guard = useDirtyGuard({ active: isOpen, onClose, resetKey: client.id });
+
+  // Esc com a pergunta aberta fecha só a pergunta (o guard ignora evento já tratado).
+  useEffect(() => {
+    if (!askNoVehicle) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      setAskNoVehicle(false);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [askNoVehicle]);
 
   const handleAddVehicle = () => {
     guard.markDirty();
@@ -61,16 +85,28 @@ export const ClientEditModal: React.FC<ClientEditModalProps> = ({
     guard.markDirty();
     setFormData(prev => ({
       ...prev,
-      vehicles: prev.vehicles.map((v, i) => 
+      vehicles: prev.vehicles.map((v, i) =>
         i === index ? { ...v, [field]: value } : v
       )
     }));
   };
 
+  const finishSave = (vehicles: Client['vehicles']) => {
+    const updatedClient: Client = {
+      ...client,
+      name: formData.name.trim(),
+      phone: formData.phone.trim() || '',
+      notes: formData.notes.trim() || undefined,
+      vehicles
+    };
+    onSave(updatedClient);
+  };
+
   const handleSave = () => {
     // Validação básica
     if (!formData.name.trim()) {
-      alert('Nome do cliente é obrigatório!');
+      setNameError(true);
+      nameRef.current?.focus();
       return;
     }
 
@@ -78,53 +114,60 @@ export const ClientEditModal: React.FC<ClientEditModalProps> = ({
     const validVehicles = formData.vehicles.filter(v => v.model.trim() !== '');
 
     if (validVehicles.length === 0) {
-      if (!confirm('Nenhum veículo cadastrado. Continuar?')) return;
+      setAskNoVehicle(true);
+      return;
     }
 
-    const updatedClient: Client = {
-      ...client,
-      name: formData.name.trim(),
-      phone: formData.phone.trim() || '',
-      notes: formData.notes.trim() || undefined,
-      vehicles: validVehicles
-    };
-
-    onSave(updatedClient);
+    finishSave(validVehicles);
   };
 
   if (!isOpen) return null;
 
+  const title = isNew ? 'Novo cliente' : 'Editar cliente';
+
   return (
     <>
     <div className="modal-overlay" ref={guard.overlayRef} onClick={guard.requestClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
-        <div className="modal-header">
-          <h2>✏️ Editar Cliente</h2>
-          <button className="btn-icon" onClick={guard.requestClose} aria-label="Fechar">✕</button>
+      <div
+        className="modal-content cm-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={`${uid}-title`}
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: '600px' }}
+      >
+        <div className="cm-header">
+          <h2 id={`${uid}-title`}>{title}</h2>
+          <button type="button" className="cm-close" onClick={guard.requestClose} aria-label="Fechar">
+            <Icon name="fechar" size={20} />
+          </button>
         </div>
 
-        <div className="modal-body" style={{ padding: '24px' }}>
+        <div className="cm-body">
           {/* Nome */}
-          <div style={{ marginBottom: '20px' }}>
-            <label className="form-label" style={{ fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>
-              👤 Nome do Cliente *
-            </label>
+          <div className="cm-field">
+            <label className="cm-label" htmlFor={`${uid}-name`}>Nome do cliente *</label>
             <input
+              id={`${uid}-name`}
+              ref={nameRef}
               type="text"
               className="form-input"
               value={formData.name}
-              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+              onChange={(e) => { setNameError(false); setFormData(prev => ({ ...prev, name: e.target.value })); }}
               placeholder="Ex: João Silva"
+              aria-required="true"
+              aria-invalid={nameError ? true : undefined}
+              aria-describedby={nameError ? `${uid}-name-error` : undefined}
               style={{ width: '100%' }}
             />
+            {nameError && <p id={`${uid}-name-error`} className="field-error" role="alert">Escreva o nome do cliente para salvar.</p>}
           </div>
 
           {/* Telefone */}
-          <div style={{ marginBottom: '20px' }}>
-            <label className="form-label" style={{ fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>
-              📞 Telefone / WhatsApp
-            </label>
+          <div className="cm-field">
+            <label className="cm-label" htmlFor={`${uid}-phone`}>Telefone / WhatsApp</label>
             <input
+              id={`${uid}-phone`}
               type="tel"
               className="form-input"
               value={formData.phone}
@@ -135,63 +178,53 @@ export const ClientEditModal: React.FC<ClientEditModalProps> = ({
           </div>
 
           {/* Veículos */}
-          <div style={{ marginBottom: '20px' }}>
-            <label className="form-label" style={{ fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>
-              🚗 Veículos
-            </label>
-            
+          <fieldset className="cm-field cm-vehicles">
+            <legend className="cm-label">Veículos</legend>
+
             {formData.vehicles.map((vehicle, index) => (
-              <div key={index} style={{ 
-                display: 'grid', 
-                gridTemplateColumns: '2fr 1fr auto', 
-                gap: '8px', 
-                marginBottom: '12px',
-                padding: '12px',
-                background: 'var(--bg-panel)',
-                borderRadius: '8px',
-                border: '1px solid var(--border)'
-              }}>
+              <div key={index} className="cm-vehicle-row">
                 <VehicleCombobox
                   id={`client-vehicle-${index}`}
                   value={vehicle.model}
                   onChange={(v) => handleVehicleChange(index, 'model', v)}
                   shopVehicles={shopVehicles}
                   placeholder="Modelo (ex: Honda Civic 2.0 16v 2015)"
+                  ariaLabel={`Modelo do veículo ${index + 1}`}
                   style={{ margin: 0 }}
                 />
                 <input
+                  id={`${uid}-plate-${index}`}
                   type="text"
-                  className="form-input"
+                  className="form-input plate"
                   value={vehicle.plate}
                   onChange={(e) => handleVehicleChange(index, 'plate', e.target.value)}
                   placeholder="Placa"
+                  aria-label={`Placa do veículo ${index + 1}`}
                   style={{ margin: 0, textTransform: 'uppercase' }}
                 />
                 <button
-                  className="btn btn-danger"
+                  type="button"
+                  className="btn btn-danger cm-remove"
                   onClick={() => handleRemoveVehicle(index)}
-                  style={{ padding: '8px 12px' }}
+                  aria-label={`Remover veículo ${index + 1}`}
                 >
-                  🗑️
+                  <Icon name="excluir" size={18} />
+                  Remover
                 </button>
               </div>
             ))}
-            
-            <button 
-              className="btn btn-secondary" 
-              onClick={handleAddVehicle}
-              style={{ width: '100%', marginTop: '8px' }}
-            >
-              + Adicionar Veículo
+
+            <button type="button" className="btn btn-secondary" onClick={handleAddVehicle} style={{ width: '100%' }}>
+              <Icon name="adicionar" />
+              Adicionar veículo
             </button>
-          </div>
+          </fieldset>
 
           {/* Notas */}
-          <div style={{ marginBottom: '20px' }}>
-            <label className="form-label" style={{ fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>
-              📝 Notas / Observações
-            </label>
+          <div className="cm-field">
+            <label className="cm-label" htmlFor={`${uid}-notes`}>Notas / observações</label>
             <textarea
+              id={`${uid}-notes`}
               className="form-input"
               value={formData.notes}
               onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
@@ -202,17 +235,27 @@ export const ClientEditModal: React.FC<ClientEditModalProps> = ({
           </div>
         </div>
 
-        <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={guard.requestClose}>
+        <div className="cm-footer">
+          <button type="button" className="btn btn-secondary" onClick={guard.requestClose}>
             Cancelar
           </button>
-          <button className="btn btn-primary" onClick={handleSave}>
-            ✅ Salvar Alterações
+          <button type="button" className="btn" onClick={handleSave}>
+            <Icon name="salvar" />
+            {isNew ? 'Cadastrar cliente' : 'Salvar alterações'}
           </button>
         </div>
       </div>
     </div>
     {guard.dialog}
+    <ConfirmationModal
+      isOpen={askNoVehicle}
+      onClose={() => setAskNoVehicle(false)}
+      onConfirm={() => finishSave([])}
+      title="Salvar sem veículo?"
+      message={noVehicleMessage(formData.name.trim())}
+      confirmText="Salvar sem veículo"
+      cancelText="Voltar"
+    />
     </>
   );
 };

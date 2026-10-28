@@ -253,7 +253,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
              </div>
 
              <div className="form-group">
-                <label className="form-label" htmlFor="catalog-item-cost">Custo (R$) <span style={{ opacity: 0.6, fontSize: '0.8rem' }}>(Opcional)</span></label>
+                <label className="form-label" htmlFor="catalog-item-cost">Custo (R$) <span className="osm-opt" style={{ fontSize: '0.8rem' }}>(Opcional)</span></label>
                 <MoneyField
                     id="catalog-item-cost"
                     className="form-input"

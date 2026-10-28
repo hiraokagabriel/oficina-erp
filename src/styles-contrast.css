@@ -34,3 +34,6 @@ button[style*="background: var(--primary)"] { color: #0b0b0d !important; }
 
 /* ---- Selo de contagem (Ver Arquivadas): texto branco sobre vermelho mais fechado ---- */
 .btn-secondary > span[style*="var(--danger)"] { background: #a8453a !important; }
+
+/* Gatilho da categoria de peça: texto principal no pastel (cor vem de style inline; antes por seletor [style*=]). */
+[data-theme="pastel"] .pcs-trigger { color: var(--text-main) !important; }

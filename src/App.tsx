@@ -480,7 +480,6 @@ Abrir OS?`)) {
   const handleOpenOSFromCRM = (os: WorkOrder) => {
     setEditingOS(os);
     setIsModalOpen(true);
-    setActiveTab('OFICINA');
   };
 
   const handlePrintOS = (os: WorkOrder) => {

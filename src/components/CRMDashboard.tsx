@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Client, WorkOrder, CRMStats } from '../types';
 import { Money } from '../utils/helpers';
 import { ClientReceivable, getClientSpending } from '../services/receivables';
-import { Icon } from './ui/Icon';
+import { Icon, IconName } from './ui/Icon';
 
 interface CRMDashboardProps {
   clients: Client[];
@@ -76,181 +76,73 @@ export const CRMDashboard: React.FC<CRMDashboardProps> = ({
     };
   }, [clients, workOrders]);
 
+  const kpis: { key: string; icon: IconName; tone: string; value: string; label: string }[] = [
+    { key: 'clients', icon: 'clientes', tone: 'accent', value: String(stats.totalClients), label: 'Total de clientes' },
+    { key: 'vip', icon: 'bandeira', tone: 'info', value: String(stats.vipClients.length), label: 'Clientes VIP' },
+    { key: 'revenue', icon: 'cifrao', tone: 'success', value: Money.format(stats.monthlyRevenue), label: 'Receita do mês' },
+    { key: 'ticket', icon: 'receber', tone: 'warning', value: Money.format(stats.averageTicket), label: 'Ticket médio' },
+  ];
+
   return (
-    <div style={{ padding: '24px' }}>
-      <div style={{ marginBottom: '32px' }}>
-        <h1 style={{ fontSize: '2rem', marginBottom: '8px', color: 'var(--text)' }}>
-          📊 Dashboard CRM
-        </h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: '1rem' }}>
-          Visão estratégica dos seus clientes e negócios
-        </p>
+    <div className="crm-dash">
+      <div className="crm-dash-intro">
+        <h2>Painel de clientes</h2>
+        <p>Visão geral dos seus clientes e do movimento da oficina.</p>
       </div>
 
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-        gap: '20px',
-        marginBottom: '32px'
-      }}>
-        <div style={{
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          color: 'white',
-          padding: '24px',
-          borderRadius: '16px',
-          boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
-        }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>👥</div>
-          <div style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '4px' }}>
-            {stats.totalClients}
+      <div className="crm-kpis">
+        {kpis.map(k => (
+          <div key={k.key} className={`crm-kpi crm-kpi--${k.tone}`}>
+            <span className="crm-kpi-icon"><Icon name={k.icon} size={22} /></span>
+            <div>
+              <div className="crm-kpi-value">{k.value}</div>
+              <div className="crm-kpi-label">{k.label}</div>
+            </div>
           </div>
-          <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>Total de Clientes</div>
-        </div>
-
-        <div style={{
-          background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-          color: 'white',
-          padding: '24px',
-          borderRadius: '16px',
-          boxShadow: '0 4px 12px rgba(245, 87, 108, 0.3)'
-        }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>🌟</div>
-          <div style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '4px' }}>
-            {stats.vipClients.length}
-          </div>
-          <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>Clientes VIP</div>
-        </div>
-
-        <div style={{
-          background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-          color: 'white',
-          padding: '24px',
-          borderRadius: '16px',
-          boxShadow: '0 4px 12px rgba(79, 172, 254, 0.3)'
-        }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>💰</div>
-          <div style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '4px' }}>
-            {Money.format(stats.monthlyRevenue)}
-          </div>
-          <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>Receita do Mês</div>
-        </div>
-
-        <div style={{
-          background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-          color: 'white',
-          padding: '24px',
-          borderRadius: '16px',
-          boxShadow: '0 4px 12px rgba(250, 112, 154, 0.3)'
-        }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>🎫</div>
-          <div style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '4px' }}>
-            {Money.format(stats.averageTicket)}
-          </div>
-          <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>Ticket Médio</div>
-        </div>
+        ))}
       </div>
 
-      <div style={{
-        background: 'var(--bg-panel)',
-        border: '1px solid var(--border)',
-        borderRadius: '16px',
-        padding: '24px',
-        marginBottom: '32px'
-      }}>
-        <h2 style={{ fontSize: '1.5rem', marginBottom: '20px', color: 'var(--text)' }}>
-          🏆 Top 5 Clientes
-        </h2>
+      <section className="crm-dash-card" aria-labelledby="crm-top5-title">
+        <h2 id="crm-top5-title">Top 5 clientes</h2>
         {stats.topClients.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-            📄 Nenhum cliente com serviços finalizados ainda
-          </div>
+          <div className="crm-dash-empty">Nenhum cliente com serviços finalizados ainda.</div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {stats.topClients.map((item) => (
-              <div
-                key={item.client.id}
-                onClick={() => onClientSelect?.(item.client)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '16px',
-                  background: 'var(--bg-secondary)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '12px',
-                  cursor: onClientSelect ? 'pointer' : 'default',
-                  transition: 'all 0.2s ease',
-                }}
-                onMouseEnter={(e) => {
-                  if (onClientSelect) {
-                    e.currentTarget.style.background = 'var(--bg-hover)';
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(130, 87, 230, 0.2)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'var(--bg-secondary)';
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <div style={{
-                    width: '48px',
-                    height: '48px',
-                    borderRadius: '50%',
-                    background:
-                      item.rank === 1 ? '#FFD700' :
-                      item.rank === 2 ? '#C0C0C0' :
-                      item.rank === 3 ? '#CD7F32' :
-                      'var(--primary)',
-                    color: 'white',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1.5rem',
-                    fontWeight: 'bold'
-                  }}>
-                    {item.rank === 1 ? '🥇' : item.rank === 2 ? '🥈' : item.rank === 3 ? '🥉' : item.rank}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 'bold', fontSize: '1.1rem', color: 'var(--text-main)' }}>
+          <ul className="crm-top-list">
+            {stats.topClients.map((item) => {
+              const body = (
+                <>
+                  <span className={`crm-rank${item.rank <= 3 ? ' crm-rank--top' : ''}`} aria-label={`Posição ${item.rank}`}>{item.rank}</span>
+                  <span className="crm-top-id">
+                    <span className="crm-top-name">
                       {item.client.name}
-                      {item.client.vipStatus && (
-                        <span style={{ marginLeft: '8px', fontSize: '1rem' }}>🌟</span>
-                      )}
-                    </div>
-                    <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                      {item.serviceCount} serviços realizados
-                    </div>
-                  </div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: 'var(--success)' }}>
-                    {Money.format(item.totalSpent)}
-                  </div>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                    Média: {Money.format(Math.round(item.totalSpent / Math.max(item.serviceCount, 1)))}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+                      {item.client.vipStatus && <span className="chip chip--accent crm-vip">VIP</span>}
+                    </span>
+                    <span className="crm-top-sub">{item.serviceCount} {item.serviceCount === 1 ? 'serviço realizado' : 'serviços realizados'}</span>
+                  </span>
+                  <span className="crm-top-money">
+                    <span className="crm-top-total">{Money.format(item.totalSpent)}</span>
+                    <span className="crm-top-sub">Média: {Money.format(Math.round(item.totalSpent / Math.max(item.serviceCount, 1)))}</span>
+                  </span>
+                </>
+              );
+              return (
+                <li key={item.client.id}>
+                  {onClientSelect ? (
+                    <button type="button" className="crm-top-row" onClick={() => onClientSelect(item.client)}>{body}</button>
+                  ) : (
+                    <div className="crm-top-row">{body}</div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         )}
-      </div>
+      </section>
 
       {topDebtors.length > 0 && (
-        <div style={{
-          background: 'var(--bg-panel)',
-          border: '1px solid var(--border)',
-          borderRadius: '16px',
-          padding: '24px',
-          marginBottom: '32px'
-        }}>
-          <h2 style={{ fontSize: '1.5rem', marginBottom: '20px', color: 'var(--text)' }}>
-            Maiores devedores
-          </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <section className="crm-dash-card" aria-labelledby="crm-debt-title">
+          <h2 id="crm-debt-title">Maiores devedores</h2>
+          <div className="crm-debtors">
             {topDebtors.map(d => {
               const client = d.clientId ? clients.find(c => c.id === d.clientId) : undefined;
               const content = (
@@ -259,7 +151,8 @@ export const CRMDashboard: React.FC<CRMDashboardProps> = ({
                   <span style={{ textAlign: 'right' }}>
                     <span style={{ fontWeight: 'bold' }}>Em aberto {Money.format(d.emAberto)}</span>
                     {d.atrasado > 0 && (
-                      <span style={{ display: 'block', color: 'var(--danger)', fontWeight: 700, fontSize: '0.9rem' }}>
+                      <span className="crm-debtor-late">
+                        <Icon name="alerta" size={16} />
                         Atrasado {Money.format(d.atrasado)}
                       </span>
                     )}
@@ -273,14 +166,14 @@ export const CRMDashboard: React.FC<CRMDashboardProps> = ({
               );
             })}
           </div>
-        </div>
+        </section>
       )}
 
       {stats.pendingServices > 0 && (
         <div className="attention-note" role="status">
           <Icon name="alerta" size={28} className="attention-note-icon" />
           <div>
-            <div className="attention-note-title">Serviços Pendentes</div>
+            <div className="attention-note-title">Serviços pendentes</div>
             <div className="attention-note-text">
               Você tem {stats.pendingServices} serviço(s) em andamento que precisam de atenção
             </div>

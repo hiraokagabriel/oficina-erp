@@ -6,6 +6,9 @@ import { setShowMarginOnBoard } from '../utils/showMarginSetting';
 import { HomeTab, readHomeTab, writeHomeTab } from '../utils/todayPrefs';
 import { Icon } from '../components/ui/Icon';
 import { DEFAULT_LOGO_TEXT, normalizeLogoText } from '../utils/logo';
+import { defaultPdfFolder, isPdfAvailable, openFolder } from '../utils/documentOutput';
+import { getPdfFolder, setPdfFolder } from '../utils/pdfFolder';
+import { useToast } from '../context/ToastContext';
 import '../styles-config.css';
 
 interface ConfigPageProps {
@@ -133,7 +136,33 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
     setDbPathDraft(e.target.value);
   };
 
-  const missingGoogle = !settings.googleApiKey || !settings.googleDriveToken;
+  // Pasta dos PDFs: vale por computador (localStorage). Grava ao sair do campo ou com Enter.
+  const { addToast } = useToast();
+  const pdfAvailable = isPdfAvailable();
+  const [pdfFolderDraft, setPdfFolderDraft] = React.useState(() => getPdfFolder());
+  const [pdfFolderDefault, setPdfFolderDefault] = React.useState('');
+  React.useEffect(() => {
+    let alive = true;
+    void defaultPdfFolder().then(f => { if (alive) setPdfFolderDefault(f); });
+    return () => { alive = false; };
+  }, []);
+
+  const commitPdfFolder = () => {
+    const next = pdfFolderDraft.trim();
+    if (next === getPdfFolder()) return;
+    if (!setPdfFolder(next)) addToast('Não foi possível guardar a pasta neste computador.', 'error');
+  };
+  const resetPdfFolder = () => {
+    setPdfFolderDraft('');
+    if (!setPdfFolder('')) addToast('Não foi possível guardar a pasta neste computador.', 'error');
+  };
+  const openPdfFolder = async () => {
+    // Vazio = pasta padrão: o Rust a cria se ainda não existir.
+    const res = await openFolder(getPdfFolder() || pdfFolderDefault);
+    if (!res.ok) addToast(res.message, 'error');
+  };
+
+  const missingGoogle =!settings.googleApiKey || !settings.googleDriveToken;
 
   return (
     <div className="config-container cfg-page">
@@ -263,6 +292,38 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
             </p>
             {targetError && <span className="margin-config-error" role="alert">{targetError}</span>}
           </div>
+        </div>
+      </section>
+
+      {/* DOCUMENTOS EM PDF */}
+      <section className="card cfg-card" aria-labelledby="cfg-pdf">
+        <h3 id="cfg-pdf" className="cfg-title"><Icon name="salvar" size={20} /> Documentos em PDF</h3>
+        <div className="form-group">
+          <label className="form-label" htmlFor="cfg-pdf-folder">Pasta onde salvar os PDFs</label>
+          <input
+            id="cfg-pdf-folder"
+            className="form-input"
+            value={pdfFolderDraft}
+            onChange={(e) => setPdfFolderDraft(e.target.value)}
+            onBlur={commitPdfFolder}
+            onKeyDown={(e) => { if (e.key === 'Enter') commitPdfFolder(); }}
+            placeholder={pdfFolderDefault ? `Ex: ${pdfFolderDefault}` : 'Vazio usa a pasta Documentos do computador'}
+            autoComplete="off"
+            aria-describedby="cfg-pdf-help"
+          />
+          <p id="cfg-pdf-help" className="cfg-help">
+            Vazio usa a pasta padrão{pdfFolderDefault ? ` (${pdfFolderDefault})` : ''}. A mudança vale ao sair do campo ou apertar Enter. Cada computador guarda a sua pasta.
+          </p>
+        </div>
+        <div className="cfg-pdf-row">
+          <button type="button" className="btn-secondary" onClick={resetPdfFolder} disabled={pdfFolderDraft.trim() === '' && getPdfFolder() === ''}>
+            Usar a pasta padrão
+          </button>
+          {pdfAvailable && (
+            <button type="button" className="btn-secondary" onClick={() => void openPdfFolder()}>
+              <Icon name="arquivo" size={18} /> Abrir pasta
+            </button>
+          )}
         </div>
       </section>
 

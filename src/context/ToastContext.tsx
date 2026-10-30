@@ -1,9 +1,9 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { ToastContainer, ToastMessage, ToastType } from '../components/ui/ToastContainer';
+import { ToastAction, ToastContainer, ToastMessage, ToastType } from '../components/ui/ToastContainer';
 import { dropToast, pushToast } from '../utils/toastQueue';
 
 interface ToastApi {
-  addToast: (message: string, type?: ToastType) => void;
+  addToast: (message: string, type?: ToastType, action?: ToastAction) => void;
   removeToast: (id: string) => void;
 }
 
@@ -17,8 +17,8 @@ const ToastContext = createContext<ToastApi>(noop);
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  const addToast = useCallback((message: string, type: ToastType = 'info') => {
-    setToasts((prev) => pushToast(prev, message, type, crypto.randomUUID()));
+  const addToast = useCallback((message: string, type: ToastType = 'info', action?: ToastAction) => {
+    setToasts((prev) => pushToast(prev, message, type, crypto.randomUUID(), action));
   }, []);
   const removeToast = useCallback((id: string) => setToasts((prev) => dropToast(prev, id)), []);
 

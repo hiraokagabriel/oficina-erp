@@ -3,6 +3,7 @@ import { formatExpectedDate } from '../services/schedule';
 import { WARRANTY_TERM_TEXT } from './warranty';
 import { escapeHtml } from './html';
 import { normalizeLogoText } from './logo';
+import { sanitizeFilePart } from './fileName';
 
 // Variante de impressão: CLIENT = via do cliente (assina o mecânico), SHOP = via da oficina (assina o cliente)
 export type PrintVariant = 'CLIENT' | 'SHOP';
@@ -12,17 +13,6 @@ const CATEGORY_ORDER: PartCategory[] = [
   'MOTOR', 'FREIO', 'SUSPENSAO', 'ELETRICA',
   'TRANSMISSAO', 'AR_CONDICIONADO', 'CARROCERIA', 'OUTROS'
 ];
-
-// 🆕 Função auxiliar para sanitizar strings para nomes de arquivo
-function sanitizeForFilename(text: string): string {
-  return text
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9]/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '')
-    .substring(0, 50);
-}
 
 /** Monta o HTML e o título do documento da OS (sem imprimir): separado para poder ser testado. */
 export function buildPrintOSHtml(data: WorkOrder, settings: WorkshopSettings, variant?: PrintVariant): { printContent: string; documentTitle: string } {
@@ -40,16 +30,16 @@ export function buildPrintOSHtml(data: WorkOrder, settings: WorkshopSettings, va
   const subtotalServices = data.services.reduce((acc, item) => acc + item.price, 0);
 
   const osNumber = data.osNumber || 'SN';
-  const clientName = sanitizeForFilename(data.clientName || 'Cliente');
-  const vehicleModel = sanitizeForFilename(
-    data.vehicle ? data.vehicle.split(' ').slice(0, 2).join(' ') : 'Veiculo'
+  const clientName = sanitizeFilePart(data.clientName || 'Cliente', 50);
+  const vehicleModel = sanitizeFilePart(
+    data.vehicle ? data.vehicle.split(' ').slice(0, 2).join(' ') : 'Veiculo', 50
   );
 
   let licensePlate = 'SemPlaca';
   if (data.vehicle) {
     const plateMatch = data.vehicle.match(/[A-Z]{3}[-]?[0-9][A-Z0-9][0-9]{2}/i);
     if (plateMatch) {
-      licensePlate = sanitizeForFilename(plateMatch[0]);
+      licensePlate = sanitizeFilePart(plateMatch[0], 50);
     }
   }
 
@@ -772,49 +762,4 @@ export function buildPrintOSHtml(data: WorkOrder, settings: WorkshopSettings, va
   `;
 
   return { printContent, documentTitle };
-}
-
-export function printOS(data: WorkOrder, settings: WorkshopSettings, variant?: PrintVariant) {
-  if (!data) {
-    console.error('Dados da OS não fornecidos para impressão');
-    return;
-  }
-  const { printContent, documentTitle } = buildPrintOSHtml(data, settings, variant);
-
-  const originalTitle = document.title;
-  document.title = documentTitle;
-
-  const iframe = document.createElement('iframe');
-  iframe.style.position = 'absolute';
-  iframe.style.width = '0';
-  iframe.style.height = '0';
-  iframe.style.border = 'none';
-  iframe.style.visibility = 'hidden';
-  document.body.appendChild(iframe);
-
-  const doc = iframe.contentWindow?.document;
-  if (doc) {
-    doc.open();
-    doc.write(printContent);
-    doc.close();
-
-    iframe.contentWindow?.focus();
-    setTimeout(() => {
-      try {
-        iframe.contentWindow?.print();
-        console.log(`🖨️ Imprimindo: ${documentTitle}`);
-      } catch (err) {
-        console.error('Erro ao imprimir:', err);
-        alert('Erro ao abrir janela de impressão.');
-      }
-      setTimeout(() => {
-        document.body.removeChild(iframe);
-        document.title = originalTitle;
-      }, 500);
-    }, 250);
-  } else {
-    console.error('Não foi possível acessar o documento do iframe');
-    document.body.removeChild(iframe);
-    document.title = originalTitle;
-  }
 }

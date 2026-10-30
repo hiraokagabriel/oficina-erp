@@ -17,13 +17,10 @@ export interface KanbanCardActions {
   onRegress: (id: string) => void;
   onEdit: (os: WorkOrder) => void;
   onChecklist: (os: WorkOrder) => void;
-  onPrint: (os: WorkOrder) => void;
-  /** Via do cliente (assina a oficina) e via da oficina (assina o cliente). */
-  onPrintClient: (os: WorkOrder) => void;
-  onPrintShop: (os: WorkOrder) => void;
-  /** Resumo do serviço: Modo cliente (tela) e impressão A4. `origin` = botão que abriu o menu, para devolver o foco ao fechar. */
+  /** Janela Documentos (imprimir ou salvar PDF). `origin` = botão que abriu o menu, para devolver o foco ao fechar. */
+  onDocuments: (os: WorkOrder, origin?: HTMLElement | null) => void;
+  /** Resumo do serviço no Modo cliente (tela). */
   onShowClient?: (os: WorkOrder, origin?: HTMLElement | null) => void;
-  onPrintSummary?: (os: WorkOrder, origin?: HTMLElement | null) => void;
   onDelete: (os: WorkOrder) => void;
   onAdvance: (id: string) => void;
   onArchive?: (os: WorkOrder) => void;
@@ -82,23 +79,13 @@ export const KanbanCardMenu = ({ os, status, actions, x, y, onClose }: KanbanCar
       { icon: ic('editar'), label: 'Editar OS', onClick: () => actions.onEdit(os), variant: 'primary' },
       { icon: ic('prancheta'), label: 'Vistoria (Checklist de Inspeção)', onClick: () => actions.onChecklist(os) },
       { divider: true },
-      {
-        icon: ic('imprimir'),
-        label: 'Imprimir OS',
-        children: [
-          { label: 'Via geral (as duas assinaturas)', onClick: () => actions.onPrint(os) },
-          { label: 'Via do cliente (assinatura da oficina)', onClick: () => actions.onPrintClient(os) },
-          { label: 'Via da oficina (assinatura do cliente)', onClick: () => actions.onPrintShop(os) },
-        ],
-      },
+      { icon: ic('imprimir'), label: 'Documentos...', onClick: (origin) => actions.onDocuments(os, origin) },
     ];
 
-    if (actions.onShowClient || actions.onPrintSummary) {
+    const show = actions.onShowClient;
+    if (show) {
       list.push({ divider: true });
-      const show = actions.onShowClient;
-      const print = actions.onPrintSummary;
-      if (show) list.push({ icon: ic('clientes'), label: 'Mostrar ao cliente', onClick: (origin) => show(os, origin) });
-      if (print) list.push({ icon: ic('imprimir'), label: 'Imprimir resumo', onClick: (origin) => print(os, origin) });
+      list.push({ icon: ic('clientes'), label: 'Mostrar ao cliente', onClick: (origin) => show(os, origin) });
     }
 
     if (os.clientPhone) {

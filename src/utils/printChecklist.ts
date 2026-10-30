@@ -7,7 +7,12 @@ import {
   INSPECTION_STATUS_META,
 } from '../types';
 import { escapeHtml } from './html';
-import { splitVehicle } from './links';
+import { vehicleParts } from './links';
+import { sanitizeFilePart } from './fileName';
+import { printHtml } from './documentOutput';
+
+// Reexporta para não quebrar imports existentes (a função mora em links.ts).
+export { vehicleParts };
 
 // Impressão do checklist de vistoria: formulário preto e branco para marcar à mão (impressora ou PDF).
 // Sem cor, fundo, sombra ou canto arredondado: o estado é dado pela coluna marcada com X, nunca por cor.
@@ -56,27 +61,6 @@ export function selectChecklistForPrint(cl: ChecklistSchema, mode: ChecklistPrin
 }
 
 const PLATE_RE = /[A-Z]{3}-?[0-9][A-Z0-9][0-9]{2}/i;
-
-/** "modelo - PLACA" (como gravado na OS) vira { model, plate }. Sem " - ", procura uma placa no texto. */
-export function vehicleParts(vehicle: string): { model: string; plate: string } {
-  const split = splitVehicle(vehicle);
-  if (split.plate.trim()) return { model: split.model.trim(), plate: split.plate.trim() };
-  const text = split.model;
-  const m = text.match(PLATE_RE);
-  if (!m || m.index === undefined) return { model: text.trim(), plate: '' };
-  const model = (text.slice(0, m.index) + text.slice(m.index + m[0].length)).replace(/[\s\-–]+$/, '').replace(/\s{2,}/g, ' ').trim();
-  return { model, plate: m[0] };
-}
-
-function sanitizeForFilename(text: string): string {
-  return text
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-zA-Z0-9]/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '')
-    .substring(0, 50);
-}
 
 /** Placa para o rodapé (vai para dentro do <style>): só letras, números e hífen. */
 function footerPlate(plate: string): string {
@@ -131,7 +115,7 @@ export function buildPrintChecklistHtml(
   const isSummary = mode === 'summary';
   const { categories, total, inspected, counts } = selectChecklistForPrint(checklist, mode);
 
-  const docTitle = `Checklist_OS${os.osNumber}_${sanitizeForFilename(os.vehicle)}${isSummary ? '_Resumido' : ''}`;
+  const docTitle = `Checklist_OS${os.osNumber}_${sanitizeFilePart(os.vehicle, 50)}${isSummary ? '_Resumido' : ''}`;
 
   const dateText = (checklist.inspectedAt ? new Date(checklist.inspectedAt) : (opts.now ?? new Date())).toLocaleDateString('pt-BR');
   const { model, plate } = vehicleParts(os.vehicle);
@@ -378,38 +362,5 @@ export function printChecklist(
   }
   const { printContent, docTitle } = buildPrintChecklistHtml(os, checklist, settings, opts);
 
-  const originalTitle = document.title;
-  document.title = docTitle;
-
-  const iframe = document.createElement('iframe');
-  iframe.style.position = 'absolute';
-  iframe.style.width    = '0';
-  iframe.style.height   = '0';
-  iframe.style.border   = 'none';
-  iframe.style.visibility = 'hidden';
-  document.body.appendChild(iframe);
-
-  const doc = iframe.contentWindow?.document;
-  if (doc) {
-    doc.open();
-    doc.write(printContent);
-    doc.close();
-    iframe.contentWindow?.focus();
-    setTimeout(() => {
-      try {
-        iframe.contentWindow?.print();
-      } catch (err) {
-        console.error('Erro ao imprimir checklist:', err);
-        alert('Erro ao abrir janela de impressão.');
-      }
-      setTimeout(() => {
-        document.body.removeChild(iframe);
-        document.title = originalTitle;
-      }, 500);
-    }, 250);
-  } else {
-    console.error('Não foi possível acessar o documento do iframe');
-    document.body.removeChild(iframe);
-    document.title = originalTitle;
-  }
+  printHtml(printContent, docTitle);
 }

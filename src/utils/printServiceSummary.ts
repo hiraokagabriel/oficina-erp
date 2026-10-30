@@ -1,14 +1,11 @@
-import { WorkOrder, WorkshopSettings } from '../types';
-import { buildServiceSummary, ServiceSummary, ServiceSummaryItem, ServiceSummaryOptions } from '../services/serviceSummary';
+import { ServiceSummary, ServiceSummaryItem } from '../services/serviceSummary';
 import { inspectionItemText, remainingLabel } from '../services/serviceSummaryView';
 import { escapeHtml } from './html';
 import { Money } from './helpers';
+import { sanitizeFilePart } from './fileName';
 
 // Impressão A4/PDF do "Resumo do serviço" para o cliente. Mesmo mecanismo de printOS (iframe + print).
 // Todo texto digitado passa por escapeHtml. Fontes >= 9pt; cinzas com contraste >= 4,5:1 no branco.
-
-const sanitizeForFilename = (text: string): string =>
-  text.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '').substring(0, 50);
 
 const itemRows = (items: ServiceSummaryItem[]): string =>
   items.map(i => `
@@ -23,7 +20,7 @@ const section = (title: string, items: ServiceSummaryItem[]): string =>
     <table><tbody>${itemRows(items)}</tbody></table>`;
 
 export function buildPrintServiceSummaryHtml(s: ServiceSummary): { printContent: string; documentTitle: string } {
-  const documentTitle = `Resumo_OS_${s.osNumber || 'SN'}_${sanitizeForFilename(s.clientName || 'Cliente')}`;
+  const documentTitle = `Resumo_OS_${s.osNumber || 'SN'}_${sanitizeFilePart(s.clientName || 'Cliente', 50)}`;
 
   const groups = s.inspection.groups.map(g => `
     <div class="insp-group">
@@ -102,43 +99,4 @@ export function buildPrintServiceSummaryHtml(s: ServiceSummary): { printContent:
 </html>`;
 
   return { printContent, documentTitle };
-}
-
-export function printServiceSummary(os: WorkOrder, settings: WorkshopSettings, options: ServiceSummaryOptions = {}): void {
-  const { printContent, documentTitle } = buildPrintServiceSummaryHtml(buildServiceSummary(os, settings, options));
-
-  const originalTitle = document.title;
-  document.title = documentTitle;
-
-  const iframe = document.createElement('iframe');
-  iframe.style.position = 'absolute';
-  iframe.style.width = '0';
-  iframe.style.height = '0';
-  iframe.style.border = 'none';
-  iframe.style.visibility = 'hidden';
-  document.body.appendChild(iframe);
-
-  const doc = iframe.contentWindow?.document;
-  if (!doc) {
-    document.body.removeChild(iframe);
-    document.title = originalTitle;
-    return;
-  }
-  doc.open();
-  doc.write(printContent);
-  doc.close();
-
-  iframe.contentWindow?.focus();
-  setTimeout(() => {
-    try {
-      iframe.contentWindow?.print();
-    } catch (err) {
-      console.error('Erro ao imprimir:', err);
-      alert('Erro ao abrir janela de impressão.');
-    }
-    setTimeout(() => {
-      document.body.removeChild(iframe);
-      document.title = originalTitle;
-    }, 500);
-  }, 250);
 }

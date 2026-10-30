@@ -1,12 +1,20 @@
 import React, { useEffect, useRef } from 'react';
 import { Icon, IconName } from './Icon';
+import { toastDurationMs, TOAST_DURATION_MS } from '../../utils/toastQueue';
 
 export type ToastType = 'success' | 'error' | 'info';
+
+/** Botão opcional do aviso (ex.: "Abrir pasta"). Clicar executa e fecha o aviso. */
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
 
 export interface ToastMessage {
   id: string;
   type: ToastType;
   message: string;
+  action?: ToastAction;
 }
 
 interface ToastContainerProps {
@@ -15,7 +23,7 @@ interface ToastContainerProps {
 }
 
 /** Sucesso e informação somem sozinhos; erro fica até o usuário fechar. */
-export const TOAST_AUTO_DISMISS_MS = 4000;
+export const TOAST_AUTO_DISMISS_MS = TOAST_DURATION_MS;
 
 const ICONS: Record<ToastType, IconName> = { success: 'check', error: 'alerta', info: 'info' };
 
@@ -47,12 +55,13 @@ const ToastItem: React.FC<{ toast: ToastMessage; onRemove: (id: string) => void 
   const onRemoveRef = useRef(onRemove);
   onRemoveRef.current = onRemove;
   const isError = toast.type === 'error';
+  const duration = toastDurationMs(toast);
 
   useEffect(() => {
-    if (isError) return;
-    const timer = setTimeout(() => onRemoveRef.current(toast.id), TOAST_AUTO_DISMISS_MS);
+    if (duration === null) return;
+    const timer = setTimeout(() => onRemoveRef.current(toast.id), duration);
     return () => clearTimeout(timer);
-  }, [toast.id, isError]);
+  }, [toast.id, duration]);
 
   return (
     <div
@@ -61,6 +70,19 @@ const ToastItem: React.FC<{ toast: ToastMessage; onRemove: (id: string) => void 
     >
       <Icon name={ICONS[toast.type]} className="toast-item-icon" />
       <span className="toast-item-text">{toast.message}</span>
+      {toast.action && (
+        <button
+          type="button"
+          className="btn-sm toast-item-action"
+          onClick={(e) => {
+            e.stopPropagation();
+            toast.action?.onClick();
+            onRemove(toast.id);
+          }}
+        >
+          {toast.action.label}
+        </button>
+      )}
       {isError && (
         <button type="button" className="btn-sm toast-item-close" onClick={() => onRemove(toast.id)}>
           <Icon name="fechar" size={16} />

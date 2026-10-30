@@ -26,6 +26,19 @@ export const splitVehicle = (str: string | undefined | null): { model: string; p
   return { model: v, plate: '' };
 };
 
+const PLATE_RE = /[A-Z]{3}-?[0-9][A-Z0-9][0-9]{2}/i;
+
+/** "modelo - PLACA" (como gravado na OS) vira { model, plate }. Sem " - ", procura uma placa no texto. */
+export function vehicleParts(vehicle: string): { model: string; plate: string } {
+  const split = splitVehicle(vehicle);
+  if (split.plate.trim()) return { model: split.model.trim(), plate: split.plate.trim() };
+  const text = split.model;
+  const m = text.match(PLATE_RE);
+  if (!m || m.index === undefined) return { model: text.trim(), plate: '' };
+  const model = (text.slice(0, m.index) + text.slice(m.index + m[0].length)).replace(/[\s\-–]+$/, '').replace(/\s{2,}/g, ' ').trim();
+  return { model, plate: m[0] };
+}
+
 type OsClientRef = Pick<WorkOrder, 'clientName'> & Partial<Pick<WorkOrder, 'clientId' | 'clientPhone' | 'vehicle'>>;
 
 /**

@@ -11,12 +11,13 @@ import { updateClientCascading, updateCatalogItemCascading, updateTechnicianCasc
 import { uploadToDrive } from './services/googleDrive';
 import { Sidebar } from './components/Sidebar';
 import { Confetti } from './components/ui/Confetti';
-import type { ToastType } from './components/ui/ToastContainer';
+import type { ToastAction, ToastType } from './components/ui/ToastContainer';
 import { ToastProvider, useToast } from './context/ToastContext';
 import { Theme, applyTheme, readStoredTheme, writeStoredTheme } from './utils/theme';
 import { LoadingSkeleton } from './components/ui/LoadingSkeleton';
-import { printOS, PrintVariant } from './utils/printOS';
-import { printServiceSummary } from './utils/printServiceSummary';
+import { DocKind, DocOptions, buildDocument } from './services/documents';
+import { SavedPdf, fileNameFromPath, isOsDocument, printingMessage } from './services/documentsView';
+import { outputDocument, revealPdf } from './utils/documentOutput';
 import { choiceToOptions, DEFAULT_SUMMARY_CHOICE, needsSummaryChoice, SummaryChoice } from './services/serviceSummaryView';
 import type { ServiceSummaryOptions } from './services/serviceSummary';
 import { markPrintedOnce, readHomeTab } from './utils/todayPrefs';
@@ -39,6 +40,7 @@ const ConfirmationModal = lazy(() => import('./modals/ConfirmationModal').then(m
 const InstallmentModal = lazy(() => import('./modals/InstallmentModal').then(m => ({ default: m.InstallmentModal })));
 const ChoiceModal = lazy(() => import('./modals/ChoiceModal').then(m => ({ default: m.ChoiceModal })));
 const ClientSummaryModal = lazy(() => import('./modals/ClientSummaryModal').then(m => ({ default: m.ClientSummaryModal })));
+const DocumentsModal = lazy(() => import('./modals/DocumentsModal').then(m => ({ default: m.DocumentsModal })));
 const SummaryChoiceModal = lazy(() => import('./modals/SummaryChoiceModal').then(m => ({ default: m.SummaryChoiceModal })));
 
 import { SoundFX } from './utils/audio';
@@ -52,7 +54,7 @@ import { trashDeletedOSPhotos, trashRemovedPhotos } from './services/photoCleanu
 import { resolveSavedPhotos } from './services/photoDraft';
 import { clearPhotoUrlCache } from './services/photoStore';
 import { prepareOSSave, ADVANCES_EXCEED_MESSAGE, advanceLockedMessage } from './services/osSave';
-import { findAdvanceOwner, removeAllAdvances, sumAdvances } from './services/advances';
+import { findAdvanceOwner, removeAllAdvances } from './services/advances';
 import { buildFinalizeMessage, buildInstallmentMessage } from './services/finalizeText';
 import { linkClient, linkCatalogItems, linkTechnician, preferredClientId } from './utils/links';
 import { toISOFromDateInput } from './utils/dates';
@@ -114,7 +116,9 @@ function AppContent() {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isChecklistOpen, setIsChecklistOpen] = useState(false);
   // Resumo do serviço: escolha pendente (só se a OS tem recomendações) e Modo cliente aberto.
-  const [summaryChoice, setSummaryChoice] = useState<{ os: WorkOrder; mode: 'show' | 'print' } | null>(null);
+  const [summaryChoice, setSummaryChoice] = useState<{ os: WorkOrder } | null>(null);
+  // Janela "Documentos": osId vazio = começa pelo seletor de OS.
+  const [documentsOpen, setDocumentsOpen] = useState<{ osId: string | null } | null>(null);
   const [clientView, setClientView] = useState<{ os: WorkOrder; options: ServiceSummaryOptions } | null>(null);
   const [isDatabaseModalOpen, setIsDatabaseModalOpen] = useState(false);
   const [isInstallmentModalOpen, setIsInstallmentModalOpen] = useState(false);
@@ -153,8 +157,8 @@ function AppContent() {
     } catch {}
   }, [isSidebarCollapsed]);
 
-  const addToast = (message: string, type: ToastType = 'info') => {
-    pushToast(message, type);
+  const addToast = (message: string, type: ToastType = 'info', action?: ToastAction) => {
+    pushToast(message, type, action);
     if (type === 'success') SoundFX.success();
     if (type === 'error') SoundFX.error();
   };
@@ -526,14 +530,32 @@ Abrir OS?`)) {
     setIsModalOpen(true);
   };
 
-  // `variant` ausente = via geral (as duas assinaturas).
-  const handlePrintOS = (os: WorkOrder, variant?: PrintVariant) => {
-    const viaText = variant === 'CLIENT' ? 'via do cliente - ' : variant === 'SHOP' ? 'via da oficina - ' : '';
-    addToast(`Imprimindo ${viaText}OS #${os.osNumber}...`, 'info');
-    markPrintedOnce();
-    // printOS (outra rodada) ainda lê advanceAmount: repassa a soma dos adiantamentos v4 até a impressão ser atualizada.
-    const advanced = sumAdvances(os);
-    printOS(advanced > 0 ? { ...os, advanceAmount: advanced } : os, settings, variant);
+  // Caminho único dos documentos (OS, vias, resumo, checklist): imprime ou salva o PDF e avisa.
+  const openSavedPdf = (path: string) => {
+    void revealPdf(path).then(r => { if (!r.ok) addToast(r.message, 'error'); });
+  };
+
+  const generateDocument = async (os: WorkOrder, kind: DocKind, mode: 'print' | 'pdf', opts: DocOptions = {}): Promise<SavedPdf | null> => {
+    const doc = buildDocument(kind, os, settings, opts);
+    if (mode === 'print') {
+      addToast(printingMessage(kind, os.osNumber), 'info');
+      if (isOsDocument(kind)) markPrintedOnce();
+      await outputDocument(doc, 'print');
+      return null;
+    }
+    const res = await outputDocument(doc, 'pdf');
+    if (!res.ok) {
+      addToast(res.message, 'error');
+      return null;
+    }
+    const path = res.path;
+    const fileName = path ? fileNameFromPath(path) : `${doc.fileStem}.pdf`;
+    addToast(
+      `PDF salvo: ${fileName}`,
+      'success',
+      path ? { label: 'Abrir pasta', onClick: () => openSavedPdf(path) } : undefined
+    );
+    return path ? { path, fileName } : null;
   };
 
   // Elemento que abriu a escolha/Modo cliente (botão "Mais"): o menu já fechou quando a janela monta,
@@ -545,30 +567,24 @@ Abrir OS?`)) {
     if (el) setTimeout(() => { if (el.isConnected) el.focus(); }, 0);
   };
 
-  const runSummary = (os: WorkOrder, mode: 'show' | 'print', choice: SummaryChoice) => {
-    const options = choiceToOptions(choice);
-    if (mode === 'show') {
-      setClientView({ os, options });
-      return;
-    }
-    addToast(`Imprimindo resumo da OS #${os.osNumber}...`, 'info');
-    printServiceSummary(os, settings, options);
-    restoreSummaryFocus();
+  // Modo cliente (tela). A impressão e o PDF do resumo vivem na janela Documentos.
+  const runSummary = (os: WorkOrder, choice: SummaryChoice) => {
+    setClientView({ os, options: choiceToOptions(choice) });
   };
 
-  // Sem recomendações a incluir, pula a pergunta e gera direto.
-  const requestSummary = (os: WorkOrder, mode: 'show' | 'print', origin?: HTMLElement | null) => {
+  // Sem recomendações a incluir, pula a pergunta e mostra direto.
+  const requestSummary = (os: WorkOrder, origin?: HTMLElement | null) => {
     summaryOriginRef.current = origin ?? null;
-    if (needsSummaryChoice(os)) setSummaryChoice({ os, mode });
-    else runSummary(os, mode, DEFAULT_SUMMARY_CHOICE);
+    if (needsSummaryChoice(os)) setSummaryChoice({ os });
+    else runSummary(os, DEFAULT_SUMMARY_CHOICE);
   };
 
   // Ações do Kanban estáveis: o quadro não re-renderiza a cada toast/filtro/salvamento.
   // Os callbacks leem sempre a versão mais recente dos handlers/estado via ref.
-  const kanbanRef = useRef({ workOrders, handleUpdateStatus, handlePrintOS, requestSummary });
+  const kanbanRef = useRef({ workOrders, handleUpdateStatus, requestSummary });
   // Atualizado após o commit do render (um render descartado não deixa handlers de estado não confirmado).
   useLayoutEffect(() => {
-    kanbanRef.current = { workOrders, handleUpdateStatus, handlePrintOS, requestSummary };
+    kanbanRef.current = { workOrders, handleUpdateStatus, requestSummary };
   });
 
   const kanbanStatusChange = useCallback(
@@ -611,11 +627,11 @@ Abrir OS?`)) {
       setChecklistOS(os);
       setIsChecklistOpen(true);
     },
-    onPrint: (os: WorkOrder) => kanbanRef.current.handlePrintOS(os),
-    onPrintClient: (os: WorkOrder) => kanbanRef.current.handlePrintOS(os, 'CLIENT'),
-    onPrintShop: (os: WorkOrder) => kanbanRef.current.handlePrintOS(os, 'SHOP'),
-    onShowClient: (os: WorkOrder, origin?: HTMLElement | null) => kanbanRef.current.requestSummary(os, 'show', origin),
-    onPrintSummary: (os: WorkOrder, origin?: HTMLElement | null) => kanbanRef.current.requestSummary(os, 'print', origin),
+    onDocuments: (os: WorkOrder, origin?: HTMLElement | null) => {
+      summaryOriginRef.current = origin ?? null;
+      setDocumentsOpen({ osId: os.id });
+    },
+    onShowClient: (os: WorkOrder, origin?: HTMLElement | null) => kanbanRef.current.requestSummary(os, origin),
     onDelete: (os: WorkOrder) => setPendingAction({ type: 'DELETE_OS', data: os }),
     onArchive: (os: WorkOrder) => setPendingAction({ type: 'ARCHIVE_OS', data: os }),
     onRestore: (os: WorkOrder) => kanbanRef.current.handleUpdateStatus(os.id, 'ORCAMENTO'),
@@ -842,6 +858,7 @@ Abrir OS?`)) {
                   setIsModalOpen(true);
                 }}
                 onStatusChange={kanbanStatusChange}
+                onDocuments={(origin) => { summaryOriginRef.current = origin ?? null; setDocumentsOpen({ osId: null }); }}
                 kanbanActions={kanbanActions}
               />
             )}
@@ -1018,13 +1035,24 @@ Abrir OS?`)) {
         {summaryChoice && (
           <SummaryChoiceModal
             isOpen
-            mode={summaryChoice.mode}
+            mode="show"
             onClose={() => { setSummaryChoice(null); restoreSummaryFocus(); }}
             onConfirm={(choice) => {
-              const { os, mode } = summaryChoice;
+              const { os } = summaryChoice;
               setSummaryChoice(null);
-              runSummary(os, mode, choice);
+              runSummary(os, choice);
             }}
+          />
+        )}
+
+        {documentsOpen && (
+          <DocumentsModal
+            isOpen
+            osId={documentsOpen.osId}
+            workOrders={workOrders}
+            onClose={() => { setDocumentsOpen(null); restoreSummaryFocus(); }}
+            onGenerate={generateDocument}
+            onOpenSaved={openSavedPdf}
           />
         )}
 

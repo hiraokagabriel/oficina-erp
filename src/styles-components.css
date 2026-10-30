@@ -212,7 +212,8 @@ body:has(.modal-overlay) .toast-region { bottom: auto; top: var(--sp-4); }
 .toast-item--info .toast-item-icon { color: var(--text-info); }
 .toast-item--error .toast-item-icon { color: var(--text-danger); }
 .toast-item-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.toast-item-close { flex: none; }
+.toast-item-close, .toast-item-action { flex: none; min-height: 40px; }
+.toast-item-action { font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { .toast-item { animation: none; } }
 @media print { .toast-region { display: none !important; } }
 

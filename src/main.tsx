@@ -57,6 +57,9 @@ import "./styles-client-summary.css";
 // FOTOS DA OS (seção da janela, visualizador, galeria do cliente, câmera no cartão)
 import "./styles-photos.css";
 
+// DOCUMENTOS (janela de impressão e PDF)
+import "./styles-documents.css";
+
 // CONTRASTE WCAG AA (carregar por último)
 import "./styles-contrast.css";
 

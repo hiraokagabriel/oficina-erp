@@ -14,6 +14,8 @@ interface WorkshopPageProps {
   /** Selo de margem nos cartões (opção da Configuração). */
   showMargin?: boolean;
   onNewOS: () => void;
+  /** Abre a janela Documentos pelo seletor de OS. */
+  onDocuments: (origin?: HTMLElement | null) => void;
   onStatusChange: (osId: string, newStatus: OSStatus) => void;
   kanbanActions: KanbanCardActions;
 }
@@ -25,6 +27,7 @@ export const WorkshopPage: React.FC<WorkshopPageProps> = ({
   targetMargin,
   showMargin,
   onNewOS,
+  onDocuments,
   onStatusChange,
   kanbanActions
 }) => {
@@ -62,6 +65,11 @@ export const WorkshopPage: React.FC<WorkshopPageProps> = ({
             {archivedCount > 0 && !showArchived && (
               <span className="count-pill" title={`${archivedCount} OS arquivadas`}>{archivedCount}</span>
             )}
+          </button>
+
+          <button type="button" className="btn-secondary" onClick={(e) => onDocuments(e.currentTarget)}>
+            <Icon name="imprimir" size={18} />
+            Documentos
           </button>
 
           <button type="button" className="btn" onClick={onNewOS}>

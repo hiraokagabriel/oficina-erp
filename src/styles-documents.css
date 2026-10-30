@@ -1,0 +1,38 @@
+/* JANELA "DOCUMENTOS" (DocumentsModal): escolher a OS, o documento e imprimir ou salvar em PDF. Só tokens. */
+/* Sobra 96px livre em cima e embaixo: o aviso (toast, no topo à direita com janela aberta) não cobre Fechar nem as ações. */
+.docm-modal { position: relative; width: 92%; max-width: 560px; max-height: calc(100vh - 192px); overflow-y: auto; }
+.docm-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); margin-bottom: var(--sp-4); }
+.docm-title { display: flex; align-items: center; gap: var(--sp-2); margin: 0; font-size: var(--fs-xl); color: var(--text); }
+.docm-close, .docm-change { min-height: var(--control-h); }
+
+.docm-picker { display: grid; gap: var(--sp-3); }
+.docm-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); max-height: 50vh; overflow-y: auto; }
+.docm-os {
+  width: 100%; min-height: var(--control-h); padding: var(--sp-3) var(--sp-4);
+  text-align: left; font: inherit; font-size: var(--fs-md); color: var(--text);
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius-md, 8px); cursor: pointer;
+}
+.docm-os:hover { border-color: var(--accent); }
+.docm-os:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.docm-empty { margin: var(--sp-4) 0; color: var(--text-muted); text-align: center; }
+
+.docm-os-line { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); flex-wrap: wrap; margin-bottom: var(--sp-4); }
+.docm-os-name { font-size: var(--fs-md); font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+
+.docm-options { border: none; margin: 0 0 var(--sp-4); padding: 0; display: grid; gap: var(--sp-1); }
+.docm-options legend { padding: 0; margin-bottom: var(--sp-2); }
+.docm-row { padding: var(--sp-1) 0; }
+.docm-hint { color: var(--text-muted); }
+.docm-sub { display: grid; gap: var(--sp-1); margin: 0 0 var(--sp-2) var(--sp-6); padding-left: var(--sp-3); border-left: 3px solid var(--border); }
+.docm-disabled { opacity: 0.7; cursor: not-allowed; }
+
+.docm-actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); }
+.docm-actions .choice-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.docm-saved { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); flex-wrap: wrap; margin-top: var(--sp-4); padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-left: 4px solid var(--success); border-radius: var(--radius-lg); background: var(--surface-1); color: var(--text); }
+.docm-saved-text { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+.docm-saved .btn-secondary { min-height: var(--control-h); }
+.docm-note { margin: var(--sp-3) 0 0; text-align: center; }
+@media (max-width: 480px) { .docm-actions { grid-template-columns: 1fr; } }
+
+/* CONFIG: pasta dos PDFs */
+.cfg-pdf-row { display: flex; gap: var(--sp-3); flex-wrap: wrap; }

@@ -5,11 +5,14 @@ description = "ERP de Oficina"
 authors = ["you"]
 edition = "2021"
 
+# tauri/tauri-build fixados: o Cargo.lock e ignorado pelo git, entao sem isto cada PC resolveria
+# um tauri diferente, e webview2-com/windows (abaixo) precisam bater com o wry do tauri.
+# Ao atualizar o tauri, revise as duas versoes de [target.cfg(windows)] e rode `cargo tree`.
 [build-dependencies]
-tauri-build = { version = "2.0.0", features = [] }
+tauri-build = { version = "=2.5.3", features = [] }
 
 [dependencies]
-tauri = { version = "2.0.0", features = [] }
+tauri = { version = "=2.9.5", features = [] }
 tauri-plugin-shell = "2.0.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -17,3 +20,11 @@ serde_json = "1"
 [lib]
 name = "oficina_erp_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+# Geracao de PDF direto (WebView2 PrintToPdf) em src/lib.rs. Estas versoes DEVEM ser
+# exatamente as que o wry/tauri usam (conferido com `cargo tree -i webview2-com` e
+# `cargo tree -i windows`: tauri 2.9.5 -> webview2-com 0.38.0, windows 0.61.3).
+# Ao atualizar o tauri, rode os dois comandos de novo e ajuste aqui.
+[target.'cfg(windows)'.dependencies]
+webview2-com = "=0.38.0"
+windows = "=0.61.3"

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pushToast, dropToast } from './toastQueue';
+import { pushToast, dropToast, toastDurationMs } from './toastQueue';
 
 describe('fila de avisos', () => {
   it('erro igual ainda visível não empilha', () => {
@@ -24,5 +24,24 @@ describe('fila de avisos', () => {
     q = pushToast(q, 'ok', 'error', '3');
     expect(q.map((t) => t.id)).toEqual(['1', '2', '3']);
     expect(dropToast(q, '1').map((t) => t.id)).toEqual(['2', '3']);
+  });
+
+  describe('ação opcional', () => {
+    const action = { label: 'Abrir pasta', onClick: () => {} };
+    it('preserva a ação e não cria a chave sem ela', () => {
+      const q = pushToast(pushToast([], 'PDF salvo: OS_12.pdf', 'success', '1', action), 'ok', 'info', '2');
+      expect(q[0].action).toBe(action);
+      expect('action' in q[1]).toBe(false);
+    });
+    it('duração: 4 s sem ação, 8 s com ação, erro fica até fechar', () => {
+      expect(toastDurationMs({ type: 'success' })).toBe(4000);
+      expect(toastDurationMs({ type: 'info', action })).toBe(8000);
+      expect(toastDurationMs({ type: 'error' })).toBeNull();
+      expect(toastDurationMs({ type: 'error', action })).toBeNull();
+    });
+    it('erro igual com ação continua sem empilhar', () => {
+      const a = pushToast([], 'falhou', 'error', '1', action);
+      expect(pushToast(a, 'falhou', 'error', '2', action)).toBe(a);
+    });
   });
 });

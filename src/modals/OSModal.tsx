@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { WorkOrder, Client, OrderItem, CatalogItem, Technician, PartCategory, PART_CATEGORY_META, OSModalPayload } from '../types';
-import { getLocalDateString } from '../utils/helpers';
+import { WorkOrder, Client, OrderItem, CatalogItem, Technician, PartCategory, PART_CATEGORY_META, OSModalPayload, OSPhoto } from '../types';
+import { generateId, getLocalDateString } from '../utils/helpers';
 import { normalizeName, resolveCatalogItemId, resolveClientId, resolveTechnicianId, splitVehicle } from '../utils/links';
 import type { OSDraftFromAppointment } from '../services/schedule';
 import { appendNote } from '../services/agenda';
@@ -18,6 +18,10 @@ import { Icon } from '../components/ui/Icon';
 import { AdvancesList } from '../components/AdvancesList';
 import { AdvanceRow, advanceRowsToPayload, buildAdvanceRows, firstInvalidAdvanceRow } from '../services/advancesDraft';
 import { isAdvanceSyncLocked } from '../services/osFinanceService';
+import { OSPhotos } from '../components/OSPhotos';
+import { useDatabase } from '../context/DatabaseContext';
+import { trashPhoto } from '../services/photoStore';
+import { photosChanged, trimCaptions } from '../services/photosView';
 
 /** Sugestão discreta do histórico de vendas; só sugere, o botão grava apenas o preço da linha. */
 const HistoryHint: React.FC<{
@@ -100,6 +104,17 @@ export const OSModal: React.FC<OSModalProps> = ({
   const [advanceEditing, setAdvanceEditing] = useState(false);
   const [advanceAttention, setAdvanceAttention] = useState(0);
   const advancesLocked = !!editingOS && isAdvanceSyncLocked(editingOS);
+
+  // Fotos (schema v5): o arquivo vai para o disco ao escolher; os metadados ficam neste rascunho até Salvar.
+  const { dbPath, readOnly } = useDatabase();
+  const [photos, setPhotos] = useState<OSPhoto[]>([]);
+  const [photosBusy, setPhotosBusy] = useState(0); // fotos ainda sendo enviadas: Salvar espera
+  // Lido só ao abrir: outro PC pode criar OS na recarga automática e não deve zerar o formulário.
+  const nextOSNumberRef = useRef(nextOSNumber);
+  nextOSNumberRef.current = nextOSNumber;
+  const sessionPhotos = useRef(new Set<string>()); // ids gravados em disco nesta abertura da janela
+  const newOsId = useRef(generateId()); // id da OS nova: as fotos já ficam na pasta dela
+  const osId = editingOS?.id ?? newOsId.current;
 
   const [parts, setParts] = useState<OrderItem[]>([]);
   const [services, setServices] = useState<OrderItem[]>([]);
@@ -221,6 +236,7 @@ export const OSModal: React.FC<OSModalProps> = ({
   // Inicialização
   useEffect(() => {
     if (!isOpen) return;
+    sessionPhotos.current.clear();
     setErrors({});
     setMoneyShown(false);
     setShowProfit(false);
@@ -255,8 +271,9 @@ export const OSModal: React.FC<OSModalProps> = ({
       setMileage(editingOS.mileage.toString());
       setParts((editingOS.parts || []) as OrderItem[]);
       setServices((editingOS.services || []) as OrderItem[]);
+      setPhotos(editingOS.photos ?? []);
     } else {
-      setOsNumber(nextOSNumber.toString());
+      setOsNumber(nextOSNumberRef.current.toString());
       setDate(getLocalDateString());
       setPaymentDate("");
       setExpectedDate("");
@@ -272,6 +289,7 @@ export const OSModal: React.FC<OSModalProps> = ({
       setParts([]);
       setServices([]);
       setAdvanceRows([]);
+      setPhotos([]);
     }
     // Rascunho (Agenda -> Criar OS): só valores iniciais ao CRIAR. clientId só vale se o cliente ainda existe.
     if (!editingOS && draft) {
@@ -292,7 +310,7 @@ export const OSModal: React.FC<OSModalProps> = ({
       autoDraftNotes.current = "";
     }
     setTimeout(() => clientInputRef.current?.focus(), 100);
-  }, [isOpen, editingOS, nextOSNumber, draft]);
+  }, [isOpen, editingOS, draft]);
 
   // Motivo vindo da Agenda: com o cliente conhecido, notas atuais dele + linha de baixo + motivo; cliente não cadastrado:
   // só o motivo; homônimo sem escolha: espera a escolha. Trocar a escolha refaz o texto para o NOVO cliente, mas só
@@ -424,6 +442,7 @@ export const OSModal: React.FC<OSModalProps> = ({
   };
 
   const handleConfirm = () => {
+    if (photosBusy > 0) return; // botão e atalho esperam o envio das fotos
     const found = validateOSFields({ clientName, vehicle, needsClientChoice, osNumber });
     const first = firstErrorField(found);
     if (first) {
@@ -466,6 +485,8 @@ export const OSModal: React.FC<OSModalProps> = ({
       publicNotes,
       technician: technician.trim() || undefined,
       advances: advancesLocked ? undefined : advanceRowsToPayload(advanceRows),
+      id: osId,
+      photos: trimCaptions(photos),
     });
   };
 
@@ -488,9 +509,18 @@ export const OSModal: React.FC<OSModalProps> = ({
 
   // Esc, Cancelar: pergunta antes de descartar o que foi digitado. Salvar fecha direto (handleConfirm -> onSave).
   // resetKey estável (string): recarregar o formulário com a janela aberta (outra OS, outro rascunho) zera a flag.
+  // Descartar: as fotos gravadas em disco nesta sessão vão para a lixeira (as já salvas na OS ficam como estavam).
+  const discardAndClose = () => {
+    for (const id of sessionPhotos.current) {
+      trashPhoto(dbPath, osId, id).catch(err => console.warn('Não foi possível mover a foto para a lixeira:', err));
+    }
+    sessionPhotos.current.clear();
+    onClose();
+  };
   const guard = useDirtyGuard({
     active: isOpen,
-    onClose,
+    onClose: discardAndClose,
+    isDirty: () => photosChanged(editingOS?.photos, photos),
     resetKey: editingOS ? `os:${editingOS.id}` : draft ? `draft:${draft.clientName}|${draft.vehicle}|${draft.notes}` : 'nova',
   });
 
@@ -827,7 +857,13 @@ export const OSModal: React.FC<OSModalProps> = ({
           </div>
         </section>
 
-        {/* 5. OBSERVAÇÕES */}
+        {/* 5. FOTOS */}
+        <section className="osm-section" aria-labelledby="osm-h-fotos">
+          <h3 id="osm-h-fotos" className="osm-h"><Icon name="camera" size={18} /> Fotos do carro</h3>
+          <OSPhotos dbPath={dbPath} osId={osId} osNumber={parseInt(osNumber, 10) || 0} photos={photos} setPhotos={setPhotos} sessionRef={sessionPhotos} readOnly={readOnly} onBusyChange={setPhotosBusy} />
+        </section>
+
+        {/* 6. OBSERVAÇÕES */}
         <section className="osm-section" aria-labelledby="osm-h-obs">
           <h3 id="osm-h-obs" className="osm-h"><Icon name="prancheta" size={18} /> Observações</h3>
           <div className="form-group">
@@ -841,9 +877,10 @@ export const OSModal: React.FC<OSModalProps> = ({
           </div>
         </section>
 
+        {photosBusy > 0 && <p className="ph-status" role="status">Aguarde o envio das fotos para salvar.</p>}
         <div className="modal-actions">
           <button type="button" className="btn-secondary" onClick={guard.requestClose}>Cancelar</button>
-          <button type="button" className="btn" onClick={handleConfirm} disabled={isSaving || needsClientChoice} aria-busy={isSaving} title="Atalho: Ctrl + Shift + Enter">
+          <button type="button" className="btn" onClick={handleConfirm} disabled={isSaving || needsClientChoice || photosBusy > 0} aria-busy={isSaving} title="Atalho: Ctrl + Shift + Enter">
             {isSaving ? 'Salvando...' : 'Salvar (Ctrl+Shift+Enter)'}
           </button>
         </div>

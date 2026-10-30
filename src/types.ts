@@ -50,6 +50,16 @@ export interface WorkOrder {
   advances?: OSAdvance[];
   /** Previsão de entrega prometida (schema v3; ISO do meio-dia local; só a data conta). Opcional. */
   expectedDate?: string;
+  /** Fotos da OS (schema v5): só metadados; os JPEG ficam em `<pasta do banco>\fotos\<osId>\`. Ausente = sem fotos. */
+  photos?: OSPhoto[];
+}
+
+/** Metadados de uma foto da OS (schema v5). Arquivos: `<photoId>.jpg` e miniatura `<photoId>.t.jpg`. */
+export interface OSPhoto {
+  id: string;
+  /** ISO do momento em que a foto foi anexada. */
+  createdAt: string;
+  caption?: string;
 }
 
 /** Adiantamento de uma OS (schema v4). */
@@ -220,6 +230,8 @@ export interface WorkshopSettings {
   targetMargin?: number;
   /** Mostra o selo de margem nos cartões do quadro. Ausente = desligado (o cliente no balcão pode ver a tela). */
   showMarginOnBoard?: boolean;
+  /** Letras do logo impresso (1 a 3 caracteres). Ausente = 'AM'. */
+  logoText?: string;
   /** Segredos: ficam só no localStorage deste PC (ver utils/secrets.ts); nunca vão para o database.json. */
   googleDriveToken?: string;
   googleApiKey?: string;
@@ -251,6 +263,10 @@ export interface OSModalPayload {
   advanceAmount?: number;
   /** Adiantamentos com data (schema v4). Lista completa: o que sumir da lista é removido. */
   advances?: OSAdvanceDraft[];
+  /** Id da OS nova, gerado ao abrir a janela (as fotos já estão na pasta dessa OS). Ao editar, é o id da própria OS. */
+  id?: string;
+  /** Fotos da OS (metadados, schema v5): lista completa; o que sumir da lista vai para a lixeira. */
+  photos?: OSPhoto[];
 }
 
 /** Ponto do gráfico de fluxo de caixa (useFinance.chartFluxo). */

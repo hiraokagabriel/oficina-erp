@@ -537,6 +537,187 @@ fn export_report(target_folder: String, filename: String, content: String) -> Io
     }
 }
 
+// ----- fotos da OS: fotos/<os_id>/<photo_id>.jpg (+ .t.jpg), lixeira em fotos/_lixeira/<os_id>/ -----
+
+const MAX_PHOTO_BYTES: usize = 3 * 1024 * 1024;
+const MAX_THUMB_BYTES: usize = 200 * 1024;
+const PHOTOS_DIR: &str = "fotos";
+const TRASH_DIR: &str = "_lixeira";
+
+/// Id seguro para nome de pasta/arquivo: ^[A-Za-z0-9-]{1,64}$ (sem `..`, `/`, `\`, `:`).
+fn valid_photo_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 64 && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+}
+
+fn is_jpeg(bytes: &[u8]) -> bool {
+    bytes.len() >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF
+}
+
+/// Pasta `fotos` ao lado do banco.
+fn photos_root(db_path: &str) -> Result<PathBuf, String> {
+    let parent = Path::new(db_path)
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .ok_or_else(|| "caminho do banco inválido".to_string())?;
+    Ok(parent.join(PHOTOS_DIR))
+}
+
+fn photo_file_name(photo_id: &str, thumb: bool) -> String {
+    if thumb { format!("{}.t.jpg", photo_id) } else { format!("{}.jpg", photo_id) }
+}
+
+/// Grava `bytes` em dir/name via .tmp + rename, sem sobrescrever arquivo existente.
+fn write_new_file(dir: &Path, name: &str, bytes: &[u8]) -> Result<PathBuf, String> {
+    let target = dir.join(name);
+    if target.exists() {
+        return Err(format!("arquivo já existe: {}", name));
+    }
+    let tmp = dir.join(format!("{}.tmp", name));
+    let _ = fs::remove_file(&tmp); // sobra de queda anterior
+    {
+        let mut f = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp)
+            .map_err(|e| format!("criar arquivo: {}", e))?;
+        let r = f.write_all(bytes).and_then(|_| f.sync_all());
+        if let Err(e) = r {
+            drop(f);
+            let _ = fs::remove_file(&tmp);
+            return Err(format!("escrever: {}", e));
+        }
+    }
+    if let Err(e) = fs::rename(&tmp, &target) {
+        let _ = fs::remove_file(&tmp);
+        return Err(format!("renomear: {}", e));
+    }
+    Ok(target)
+}
+
+fn save_photo_impl(db_path: &str, os_id: &str, photo_id: &str, full: &[u8], thumb: &[u8]) -> Result<PathBuf, String> {
+    if !valid_photo_id(os_id) {
+        return Err("id da OS inválido".into());
+    }
+    if !valid_photo_id(photo_id) {
+        return Err("id da foto inválido".into());
+    }
+    if full.len() > MAX_PHOTO_BYTES {
+        return Err("foto maior que 3 MB".into());
+    }
+    if thumb.len() > MAX_THUMB_BYTES {
+        return Err("miniatura maior que 200 KB".into());
+    }
+    if !is_jpeg(full) || !is_jpeg(thumb) {
+        return Err("arquivo não é JPEG".into());
+    }
+    let dir = photos_root(db_path)?.join(os_id);
+    fs::create_dir_all(&dir).map_err(|e| format!("criar pasta: {}", e))?;
+    let full_path = write_new_file(&dir, &photo_file_name(photo_id, false), full)?;
+    if let Err(e) = write_new_file(&dir, &photo_file_name(photo_id, true), thumb) {
+        let _ = fs::remove_file(&full_path); // não deixa foto sem miniatura
+        return Err(e);
+    }
+    Ok(full_path)
+}
+
+/// Salva foto e miniatura da OS. Nunca sobrescreve arquivo existente.
+#[command]
+fn save_photo(db_path: String, os_id: String, photo_id: String, full: Vec<u8>, thumb: Vec<u8>) -> IoResult {
+    match save_photo_impl(&db_path, &os_id, &photo_id, &full, &thumb) {
+        Ok(p) => IoResult { success: true, message: p.display().to_string() },
+        Err(e) => IoResult { success: false, message: format!("Erro ao salvar a foto: {}", e) },
+    }
+}
+
+fn read_photo_impl(db_path: &str, os_id: &str, photo_id: &str, thumb: bool) -> Result<Vec<u8>, String> {
+    if !valid_photo_id(os_id) || !valid_photo_id(photo_id) {
+        return Err("id inválido".into());
+    }
+    let root = photos_root(db_path)?;
+    let name = photo_file_name(photo_id, thumb);
+    for dir in [root.join(os_id), root.join(TRASH_DIR).join(os_id)] {
+        match fs::read(dir.join(&name)) {
+            Ok(b) => return Ok(b),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => return Err(format!("ler foto: {}", e)),
+        }
+    }
+    Err("not_found".into())
+}
+
+/// Bytes crus da foto (ou miniatura); cai na lixeira se não estiver na pasta normal.
+/// Erro exatamente "not_found" quando não existe em nenhuma.
+#[command]
+fn read_photo(db_path: String, os_id: String, photo_id: String, thumb: bool) -> Result<tauri::ipc::Response, String> {
+    read_photo_impl(&db_path, &os_id, &photo_id, thumb).map(tauri::ipc::Response::new)
+}
+
+/// Move `src` para dir/<name>, com sufixo `-n` antes da extensão se o destino já existir.
+fn move_no_overwrite(src: &Path, dir: &Path, name: &str) -> Result<(), String> {
+    let (stem, ext) = match name.find('.') {
+        Some(i) => (&name[..i], &name[i..]),
+        None => (name, ""),
+    };
+    for n in 0..1000 {
+        let candidate = if n == 0 { name.to_string() } else { format!("{}-{}{}", stem, n, ext) };
+        let target = dir.join(candidate);
+        if target.exists() {
+            continue;
+        }
+        return fs::rename(src, &target).map_err(|e| format!("mover: {}", e));
+    }
+    Err("nomes de arquivo esgotados".into())
+}
+
+fn trash_photos_impl(db_path: &str, os_id: &str, photo_id: Option<&str>) -> Result<usize, String> {
+    if !valid_photo_id(os_id) {
+        return Err("id da OS inválido".into());
+    }
+    if let Some(p) = photo_id {
+        if !valid_photo_id(p) {
+            return Err("id da foto inválido".into());
+        }
+    }
+    let root = photos_root(db_path)?;
+    let src_dir = root.join(os_id);
+    if !src_dir.is_dir() {
+        return Ok(0);
+    }
+    let names: Vec<String> = match photo_id {
+        Some(p) => vec![photo_file_name(p, false), photo_file_name(p, true)],
+        None => fs::read_dir(&src_dir)
+            .map_err(|e| format!("listar pasta: {}", e))?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().is_file())
+            .filter_map(|e| e.file_name().to_str().map(String::from))
+            .collect(),
+    };
+    let trash = root.join(TRASH_DIR).join(os_id);
+    let mut moved = 0;
+    for name in names {
+        let src = src_dir.join(&name);
+        if !src.is_file() {
+            continue;
+        }
+        fs::create_dir_all(&trash).map_err(|e| format!("criar lixeira: {}", e))?;
+        move_no_overwrite(&src, &trash, &name)?;
+        moved += 1;
+    }
+    if photo_id.is_none() {
+        let _ = fs::remove_dir(&src_dir); // só remove se vazia
+    }
+    Ok(moved)
+}
+
+/// Move uma foto (e miniatura) ou a pasta toda da OS para fotos/_lixeira/<os_id>/. Nunca apaga.
+#[command]
+fn trash_photos(db_path: String, os_id: String, photo_id: Option<String>) -> IoResult {
+    match trash_photos_impl(&db_path, &os_id, photo_id.as_deref()) {
+        Ok(n) => IoResult { success: true, message: format!("{} arquivo(s) movido(s) para a lixeira", n) },
+        Err(e) => IoResult { success: false, message: format!("Erro ao mover para a lixeira: {}", e) },
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -547,7 +728,10 @@ pub fn run() {
             save_recovery_copy,
             read_db_meta,
             load_database,
-            export_report
+            export_report,
+            save_photo,
+            read_photo,
+            trash_photos
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -956,6 +1140,103 @@ mod tests {
         assert_eq!(a.file_name().unwrap().to_str().unwrap(), "database-conflito-20261015-120000.json");
         assert_eq!(fs::read_to_string(&a).unwrap(), "um");
         assert_eq!(fs::read_to_string(&b).unwrap(), "dois");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    // ----- fotos da OS -----
+
+    fn jpeg(n: usize) -> Vec<u8> {
+        let mut v = vec![0xFF, 0xD8, 0xFF];
+        v.resize(n.max(3), 7);
+        v
+    }
+
+    fn db_in(d: &Path) -> String {
+        d.join("database.json").to_string_lossy().into_owned()
+    }
+
+    #[test]
+    fn foto_id_rejeita_path_traversal() {
+        for bad in ["", "..", "a/b", "a\\b", "c:", "a.b", "../x", "a b", &"x".repeat(65)] {
+            assert!(!valid_photo_id(bad), "{:?}", bad);
+        }
+        assert!(valid_photo_id("abc-123-DEF"));
+        assert!(valid_photo_id(&"x".repeat(64)));
+        let d = temp_dir("foto-id");
+        let db = db_in(&d);
+        assert!(save_photo_impl(&db, "..", "p1", &jpeg(10), &jpeg(10)).is_err());
+        assert!(save_photo_impl(&db, "os1", "..\\x", &jpeg(10), &jpeg(10)).is_err());
+        assert!(read_photo_impl(&db, "os1", "a/b", false).is_err());
+        assert!(trash_photos_impl(&db, "a/b", None).is_err());
+        assert!(!d.join("fotos").exists());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn foto_limites_e_jpeg() {
+        let d = temp_dir("foto-lim");
+        let db = db_in(&d);
+        assert!(save_photo_impl(&db, "os1", "p1", &jpeg(MAX_PHOTO_BYTES + 1), &jpeg(10)).is_err());
+        assert!(save_photo_impl(&db, "os1", "p1", &jpeg(10), &jpeg(MAX_THUMB_BYTES + 1)).is_err());
+        assert!(save_photo_impl(&db, "os1", "p1", b"PNG....", &jpeg(10)).is_err());
+        assert!(save_photo_impl(&db, "os1", "p1", &jpeg(10), &[0xFF, 0xD8]).is_err());
+        assert!(!d.join("fotos").exists());
+        // nos limites exatos passa
+        save_photo_impl(&db, "os1", "p1", &jpeg(MAX_PHOTO_BYTES), &jpeg(MAX_THUMB_BYTES)).unwrap();
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn foto_nunca_sobrescreve() {
+        let d = temp_dir("foto-over");
+        let db = db_in(&d);
+        let a = save_photo_impl(&db, "os1", "p1", &jpeg(10), &jpeg(5)).unwrap();
+        assert_eq!(a, d.join("fotos").join("os1").join("p1.jpg"));
+        assert!(d.join("fotos").join("os1").join("p1.t.jpg").is_file());
+        let mut outra = jpeg(20);
+        outra[3] = 9;
+        assert!(save_photo_impl(&db, "os1", "p1", &outra, &jpeg(5)).is_err());
+        assert_eq!(fs::read(&a).unwrap(), jpeg(10));
+        // sem sobra de .tmp
+        assert!(!d.join("fotos").join("os1").join("p1.jpg.tmp").exists());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn foto_leitura_cai_na_lixeira() {
+        let d = temp_dir("foto-lix");
+        let db = db_in(&d);
+        assert_eq!(read_photo_impl(&db, "os1", "p1", false), Err("not_found".to_string()));
+        save_photo_impl(&db, "os1", "p1", &jpeg(10), &jpeg(5)).unwrap();
+        assert_eq!(read_photo_impl(&db, "os1", "p1", false).unwrap(), jpeg(10));
+        assert_eq!(read_photo_impl(&db, "os1", "p1", true).unwrap(), jpeg(5));
+        assert_eq!(trash_photos_impl(&db, "os1", Some("p1")).unwrap(), 2);
+        assert!(!d.join("fotos").join("os1").join("p1.jpg").exists());
+        assert!(d.join("fotos").join("_lixeira").join("os1").join("p1.jpg").is_file());
+        assert_eq!(read_photo_impl(&db, "os1", "p1", false).unwrap(), jpeg(10));
+        assert_eq!(read_photo_impl(&db, "os1", "p1", true).unwrap(), jpeg(5));
+        assert_eq!(read_photo_impl(&db, "os1", "zz", false), Err("not_found".to_string()));
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn lixeira_sufixo_n_e_pasta_inteira() {
+        let d = temp_dir("foto-suf");
+        let db = db_in(&d);
+        let trash = d.join("fotos").join("_lixeira").join("os1");
+        save_photo_impl(&db, "os1", "p1", &jpeg(10), &jpeg(5)).unwrap();
+        trash_photos_impl(&db, "os1", Some("p1")).unwrap();
+        // mesma foto de novo (id reaproveitado) e mais uma
+        save_photo_impl(&db, "os1", "p1", &jpeg(11), &jpeg(6)).unwrap();
+        save_photo_impl(&db, "os1", "p2", &jpeg(12), &jpeg(7)).unwrap();
+        assert_eq!(trash_photos_impl(&db, "os1", None).unwrap(), 4);
+        assert_eq!(fs::read(trash.join("p1.jpg")).unwrap(), jpeg(10)); // original intacto
+        assert_eq!(fs::read(trash.join("p1-1.jpg")).unwrap(), jpeg(11));
+        assert_eq!(fs::read(trash.join("p1-1.t.jpg")).unwrap(), jpeg(6));
+        assert!(trash.join("p2.jpg").is_file());
+        assert!(!d.join("fotos").join("os1").exists()); // pasta vazia removida
+        // OS sem fotos: nada a mover, sem erro
+        assert_eq!(trash_photos_impl(&db, "os9", None).unwrap(), 0);
         let _ = fs::remove_dir_all(&d);
     }
 }

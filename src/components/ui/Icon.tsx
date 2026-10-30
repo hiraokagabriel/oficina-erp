@@ -15,7 +15,7 @@ export const ICON_NAMES = [
   // ações
   'adicionar', 'editar', 'excluir', 'salvar', 'imprimir', 'buscar', 'fechar', 'voltar', 'proximo',
   'pagar', 'receber', 'alerta', 'info', 'check', 'relogio', 'calendario', 'telefone', 'whatsapp',
-  'filtro', 'arquivo', 'chave', 'cifrao', 'bandeira', 'prancheta', 'caixa',
+  'filtro', 'arquivo', 'chave', 'cifrao', 'bandeira', 'prancheta', 'caixa', 'camera',
   // pictogramas de serviço
   'motor', 'freio', 'suspensao', 'eletrica', 'pneu', 'oleo',
 ] as const;
@@ -58,6 +58,7 @@ export const ICON_SPRITE: Record<IconName, string> = {
   bandeira: '<path d="M5 21V3"/><path d="M5 4h14v10H5M10 4v10M15 4v10M5 9h14"/><rect x="5" y="4" width="5" height="5" fill="currentColor" stroke="none"/><rect x="10" y="9" width="5" height="5" fill="currentColor" stroke="none"/><rect x="15" y="4" width="4" height="5" fill="currentColor" stroke="none"/>',
   prancheta: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/>',
   caixa: '<path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
+  camera: '<path d="M4 8h3l1.500-2.500h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.500"/>',
   // --- pictogramas de serviço ---
   motor: '<path d="M5 9h2l1-2h6l1 2h3v8H7l-2-2z"/><path d="M10 7V5h4v2M3 11v3M21 11v3"/>',
   freio: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 6.500h.01M12 17.500h.01M6.500 12h.01M17.500 12h.01"/>',

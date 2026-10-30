@@ -7,6 +7,8 @@ import { PAGE_STEP, nextBatchSize, nextVisible, pageCounterLabel, pageSlice } fr
 import { CRMDashboard } from '../components/CRMDashboard';
 import { Icon } from '../components/ui/Icon';
 import { ClientEditModal } from '../modals/ClientEditModal';
+import { ClientPhotos } from '../components/ClientPhotos';
+import { useDatabase } from '../context/DatabaseContext';
 
 // Declaração global do Tauri
 declare global {
@@ -75,6 +77,7 @@ export const CRMPage: React.FC<CRMPageProps> = ({
   onOpenOS
 }) => {
   const searchId = useId();
+  const { dbPath } = useDatabase();
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [showDashboard, setShowDashboard] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -444,6 +447,15 @@ export const CRMPage: React.FC<CRMPageProps> = ({
                           </div>
                         </div>
                       )}
+
+                      {/* FOTOS DO CLIENTE */}
+                      <div className="crm-photos">
+                        <h3 className="crm-history-title">
+                          <Icon name="camera" size={20} />
+                          Fotos
+                        </h3>
+                        <ClientPhotos dbPath={dbPath} clientId={selectedClient.id} clientName={selectedClient.name} workOrders={workOrders} />
+                      </div>
 
                       {/* HISTÓRICO DO CLIENTE */}
                       <div className="crm-history">

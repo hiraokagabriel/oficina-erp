@@ -4,6 +4,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { WorkOrder, OSStatus, STATUS_LABELS } from '../types';
 import { KanbanCardMenu, KanbanCardActions } from './KanbanCardMenu';
 import { Icon } from './ui/Icon';
+import { photoCount } from '../services/photos';
 import { DEFAULT_TARGET_MARGIN } from '../services/margin';
 import { getMarginBadge } from '../services/marginView';
 import { deliveryProgress, formatKm, nextStep, splitVehicle, statusClass } from '../services/kanbanCardView';
@@ -75,6 +76,8 @@ export const KanbanCard = React.memo(({
   const { model, plate } = splitVehicle(os.vehicle);
   const km = formatKm(os.mileage);
   const technician = (os.technician || '').trim();
+  const photoN = photoCount(os);
+  const photoLabel = `${photoN} ${photoN === 1 ? 'foto' : 'fotos'}`;
 
   const handleClick = (e: React.MouseEvent) => {
     if (e.ctrlKey && status !== 'FINALIZADO' && actions.onQuickFinish) {
@@ -173,6 +176,13 @@ export const KanbanCard = React.memo(({
                 {marginBadge.label}
               </span>
             )}
+            {photoN > 0 && (
+              <span className="kcard-photos" title={photoLabel}>
+                <Icon name="camera" size={14} />
+                <span aria-hidden="true">{photoN}</span>
+                <span className="sr-only">{photoLabel}</span>
+              </span>
+            )}
             {technician && (
               <span className="kcard-tech" title={`Técnico: ${technician}`}>
                 <Icon name="chave" size={14} />
@@ -202,7 +212,7 @@ export const KanbanCard = React.memo(({
               className="btn-secondary kcard-more"
               aria-haspopup="menu"
               aria-expanded={menuAt !== null}
-              title="Editar, vistoria, imprimir, WhatsApp, voltar, arquivar e excluir"
+              title="Editar, vistoria, imprimir, mostrar resumo ao cliente, WhatsApp, voltar, arquivar e excluir"
               onPointerDown={stopDrag}
               onClick={openMore}
             >

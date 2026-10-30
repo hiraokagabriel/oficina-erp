@@ -7,7 +7,7 @@ import { formatDateOnly, parseDateFlexible, parseDateOnly } from './dates';
 import { matchClientId, normalizeName, resolveCatalogItemId, resolveTechnicianId, resolveVehicleId } from './links';
 
 // Versão do formato do banco. Subir aqui e acrescentar um passo em STEPS.
-export const CURRENT_SCHEMA_VERSION = 4;
+export const CURRENT_SCHEMA_VERSION = 5;
 
 export interface MigrationResult {
   db: DatabaseSchema;
@@ -182,8 +182,14 @@ export const countUnresolvedLinks = (db: DatabaseSchema): UnresolvedLinks => {
   return r;
 };
 
+/**
+ * v4 -> v5 (PURA, registrada em STEPS). Só leva a versão adiante: `WorkOrder.photos` é opcional
+ * (ausente = sem fotos), então nenhum dado muda. Devolve a própria entrada.
+ */
+export const v4ToV5 = (db: DatabaseSchema): DatabaseSchema => db;
+
 // STEPS[n] leva da versão n para n+1.
-const STEPS: Array<(db: DatabaseSchema) => DatabaseSchema> = [v0ToV1, v1ToV2, v2ToV3, v3ToV4];
+const STEPS: Array<(db: DatabaseSchema) => DatabaseSchema> = [v0ToV1, v1ToV2, v2ToV3, v3ToV4, v4ToV5];
 
 /**
  * Migra o banco até CURRENT_SCHEMA_VERSION. Pura (não altera a entrada) e idempotente.

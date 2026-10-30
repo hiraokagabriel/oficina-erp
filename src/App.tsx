@@ -15,7 +15,10 @@ import type { ToastType } from './components/ui/ToastContainer';
 import { ToastProvider, useToast } from './context/ToastContext';
 import { Theme, applyTheme, readStoredTheme, writeStoredTheme } from './utils/theme';
 import { LoadingSkeleton } from './components/ui/LoadingSkeleton';
-import { printOS } from './utils/printOS';
+import { printOS, PrintVariant } from './utils/printOS';
+import { printServiceSummary } from './utils/printServiceSummary';
+import { choiceToOptions, DEFAULT_SUMMARY_CHOICE, needsSummaryChoice, SummaryChoice } from './services/serviceSummaryView';
+import type { ServiceSummaryOptions } from './services/serviceSummary';
 import { markPrintedOnce, readHomeTab } from './utils/todayPrefs';
 
 const FinancialPage = lazy(() => import('./pages/FinancialPage').then(m => ({ default: m.FinancialPage })));
@@ -35,6 +38,8 @@ const DeleteConfirmationModal = lazy(() => import('./modals/DeleteConfirmationMo
 const ConfirmationModal = lazy(() => import('./modals/ConfirmationModal').then(m => ({ default: m.ConfirmationModal })));
 const InstallmentModal = lazy(() => import('./modals/InstallmentModal').then(m => ({ default: m.InstallmentModal })));
 const ChoiceModal = lazy(() => import('./modals/ChoiceModal').then(m => ({ default: m.ChoiceModal })));
+const ClientSummaryModal = lazy(() => import('./modals/ClientSummaryModal').then(m => ({ default: m.ClientSummaryModal })));
+const SummaryChoiceModal = lazy(() => import('./modals/SummaryChoiceModal').then(m => ({ default: m.SummaryChoiceModal })));
 
 import { SoundFX } from './utils/audio';
 import {
@@ -43,6 +48,9 @@ import {
   togglePayment,
 } from './services/osFinanceService';
 import { Money, updateWorkOrderData, generateId } from './utils/helpers';
+import { trashDeletedOSPhotos, trashRemovedPhotos } from './services/photoCleanup';
+import { resolveSavedPhotos } from './services/photoDraft';
+import { clearPhotoUrlCache } from './services/photoStore';
 import { prepareOSSave, ADVANCES_EXCEED_MESSAGE, advanceLockedMessage } from './services/osSave';
 import { findAdvanceOwner, removeAllAdvances, sumAdvances } from './services/advances';
 import { buildFinalizeMessage, buildInstallmentMessage } from './services/finalizeText';
@@ -89,6 +97,9 @@ function AppContent() {
 
   const finance = useFinance();
 
+  // Trocou de banco: as object URLs das fotos do banco anterior não valem mais.
+  useEffect(() => () => clearPhotoUrlCache(), [dbPath]);
+
   // Tema por computador: começa do que está gravado (o index.html já aplicou o atributo antes do primeiro desenho).
   const [currentTheme, setCurrentThemeState] = useState<Theme>(() => readStoredTheme());
   const setCurrentTheme = useCallback((t: Theme) => { setCurrentThemeState(t); writeStoredTheme(t); }, []);
@@ -102,6 +113,9 @@ function AppContent() {
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isChecklistOpen, setIsChecklistOpen] = useState(false);
+  // Resumo do serviço: escolha pendente (só se a OS tem recomendações) e Modo cliente aberto.
+  const [summaryChoice, setSummaryChoice] = useState<{ os: WorkOrder; mode: 'show' | 'print' } | null>(null);
+  const [clientView, setClientView] = useState<{ os: WorkOrder; options: ServiceSummaryOptions } | null>(null);
   const [isDatabaseModalOpen, setIsDatabaseModalOpen] = useState(false);
   const [isInstallmentModalOpen, setIsInstallmentModalOpen] = useState(false);
   const [installmentOS, setInstallmentOS] = useState<WorkOrder | null>(null);
@@ -253,7 +267,10 @@ function AppContent() {
       );
 
       // clientId/vehicleId/technicianId/expectedDate sempre regravados (expectedDate vazio limpa a previsão): updateWorkOrderData preserva os campos de `original`.
-      const base: WorkOrder = { ...updatedBase, technician: technicianName || undefined, clientId, vehicleId, technicianId, expectedDate: data.expectedDate };
+      // Fotos: a lista do rascunho do modal é a verdade (sem fotos, o campo some). Sem `data.photos` mantém as da OS.
+      const { photos: keptPhotos, ...baseSemFotos } = updatedBase;
+      const newPhotos = resolveSavedPhotos(keptPhotos, data.photos);
+      const base: WorkOrder = { ...baseSemFotos, ...(newPhotos ? { photos: newPhotos } : {}), technician: technicianName || undefined, clientId, vehicleId, technicianId, expectedDate: data.expectedDate };
       // Adiantamentos, lançamentos e auditoria numa só conta pura; com erro nada é gravado (nem vínculos de cliente/catálogo).
       const saved = prepareOSSave({ base, previous: editingOS, drafts: data.advances, ledger, machine });
       if (!saved.ok) {
@@ -264,11 +281,13 @@ function AppContent() {
       setLedger(saved.ledger);
       if (saved.events.length) setAuditLog(prev => [...prev, ...saved.events]);
       setWorkOrders(prev => prev.map(o => o.id === editingOS.id ? saved.os : o));
+      if (!readOnly) void trashRemovedPhotos(dbPath, editingOS.id, editingOS.photos, newPhotos);
       addToast('OS atualizada!', 'success');
       if (saved.exceedsTotal) addToast(ADVANCES_EXCEED_MESSAGE, 'info');
     } else {
+      const newOSPhotos = resolveSavedPhotos(undefined, data.photos);
       const newOS: WorkOrder = {
-        id: generateId(),
+        id: data.id ?? generateId(),
         osNumber: data.osNumber,
         vehicle: data.vehicle,
         clientId,
@@ -285,6 +304,7 @@ function AppContent() {
         createdAt: data.createdAt ? toISOFromDateInput(data.createdAt) : new Date().toISOString(),
         publicNotes: data.publicNotes || '',
         technician: technicianName || undefined,
+        ...(newOSPhotos ? { photos: newOSPhotos } : {}),
       };
       const saved = prepareOSSave({ base: newOS, drafts: data.advances, ledger, machine });
       if (!saved.ok) {
@@ -506,20 +526,49 @@ Abrir OS?`)) {
     setIsModalOpen(true);
   };
 
-  const handlePrintOS = (os: WorkOrder) => {
-    addToast(`Imprimindo OS #${os.osNumber}...`, 'info');
+  // `variant` ausente = via geral (as duas assinaturas).
+  const handlePrintOS = (os: WorkOrder, variant?: PrintVariant) => {
+    const viaText = variant === 'CLIENT' ? 'via do cliente - ' : variant === 'SHOP' ? 'via da oficina - ' : '';
+    addToast(`Imprimindo ${viaText}OS #${os.osNumber}...`, 'info');
     markPrintedOnce();
     // printOS (outra rodada) ainda lê advanceAmount: repassa a soma dos adiantamentos v4 até a impressão ser atualizada.
     const advanced = sumAdvances(os);
-    printOS(advanced > 0 ? { ...os, advanceAmount: advanced } : os, settings);
+    printOS(advanced > 0 ? { ...os, advanceAmount: advanced } : os, settings, variant);
+  };
+
+  // Elemento que abriu a escolha/Modo cliente (botão "Mais"): o menu já fechou quando a janela monta,
+  // então o useFocusTrap sozinho não saberia para onde devolver o foco.
+  const summaryOriginRef = useRef<HTMLElement | null>(null);
+  const restoreSummaryFocus = () => {
+    const el = summaryOriginRef.current;
+    summaryOriginRef.current = null;
+    if (el) setTimeout(() => { if (el.isConnected) el.focus(); }, 0);
+  };
+
+  const runSummary = (os: WorkOrder, mode: 'show' | 'print', choice: SummaryChoice) => {
+    const options = choiceToOptions(choice);
+    if (mode === 'show') {
+      setClientView({ os, options });
+      return;
+    }
+    addToast(`Imprimindo resumo da OS #${os.osNumber}...`, 'info');
+    printServiceSummary(os, settings, options);
+    restoreSummaryFocus();
+  };
+
+  // Sem recomendações a incluir, pula a pergunta e gera direto.
+  const requestSummary = (os: WorkOrder, mode: 'show' | 'print', origin?: HTMLElement | null) => {
+    summaryOriginRef.current = origin ?? null;
+    if (needsSummaryChoice(os)) setSummaryChoice({ os, mode });
+    else runSummary(os, mode, DEFAULT_SUMMARY_CHOICE);
   };
 
   // Ações do Kanban estáveis: o quadro não re-renderiza a cada toast/filtro/salvamento.
   // Os callbacks leem sempre a versão mais recente dos handlers/estado via ref.
-  const kanbanRef = useRef({ workOrders, handleUpdateStatus, handlePrintOS });
+  const kanbanRef = useRef({ workOrders, handleUpdateStatus, handlePrintOS, requestSummary });
   // Atualizado após o commit do render (um render descartado não deixa handlers de estado não confirmado).
   useLayoutEffect(() => {
-    kanbanRef.current = { workOrders, handleUpdateStatus, handlePrintOS };
+    kanbanRef.current = { workOrders, handleUpdateStatus, handlePrintOS, requestSummary };
   });
 
   const kanbanStatusChange = useCallback(
@@ -563,21 +612,15 @@ Abrir OS?`)) {
       setIsChecklistOpen(true);
     },
     onPrint: (os: WorkOrder) => kanbanRef.current.handlePrintOS(os),
+    onPrintClient: (os: WorkOrder) => kanbanRef.current.handlePrintOS(os, 'CLIENT'),
+    onPrintShop: (os: WorkOrder) => kanbanRef.current.handlePrintOS(os, 'SHOP'),
+    onShowClient: (os: WorkOrder, origin?: HTMLElement | null) => kanbanRef.current.requestSummary(os, 'show', origin),
+    onPrintSummary: (os: WorkOrder, origin?: HTMLElement | null) => kanbanRef.current.requestSummary(os, 'print', origin),
     onDelete: (os: WorkOrder) => setPendingAction({ type: 'DELETE_OS', data: os }),
     onArchive: (os: WorkOrder) => setPendingAction({ type: 'ARCHIVE_OS', data: os }),
     onRestore: (os: WorkOrder) => kanbanRef.current.handleUpdateStatus(os.id, 'ORCAMENTO'),
     onQuickFinish: (id: string) => kanbanRef.current.handleUpdateStatus(id, 'FINALIZADO'),
   }), []);
-
-  /*const handlePrintOSClient = (os: WorkOrder) => {
-    addToast(`Imprimindo via do cliente - OS #${os.osNumber}...`, 'info');
-    printOS(os, settings, 'CLIENT');
-  };*/
-
-  /*const handlePrintOSShop = (os: WorkOrder) => {
-    addToast(`Imprimindo via da oficina - OS #${os.osNumber}...`, 'info');
-    printOS(os, settings, 'SHOP');
-  };*/
 
   // Importa um backup: valida, migra (com backup do arquivo original) e só então troca os dados.
   const importBackup = async (content: string) => {
@@ -632,6 +675,7 @@ Abrir OS?`)) {
       const removed = removeAllAdvances({ os, ledger, machine: getMachineName() });
       if (removed.ledger !== ledger) setLedger(p => p.filter(e => removed.ledger.some(r => r.id === e.id)));
       if (removed.events.length) setAuditLog(p => [...p, ...removed.events]);
+      if (!readOnly) void trashDeletedOSPhotos(dbPath, os);
       addToast('OS excluída.', 'info');
     }
 
@@ -968,6 +1012,29 @@ Abrir OS?`)) {
             }}
             os={checklistOS}
             settings={settings}
+          />
+        )}
+
+        {summaryChoice && (
+          <SummaryChoiceModal
+            isOpen
+            mode={summaryChoice.mode}
+            onClose={() => { setSummaryChoice(null); restoreSummaryFocus(); }}
+            onConfirm={(choice) => {
+              const { os, mode } = summaryChoice;
+              setSummaryChoice(null);
+              runSummary(os, mode, choice);
+            }}
+          />
+        )}
+
+        {clientView && (
+          <ClientSummaryModal
+            isOpen
+            os={clientView.os}
+            settings={settings}
+            options={clientView.options}
+            onClose={() => { setClientView(null); restoreSummaryFocus(); }}
           />
         )}
 

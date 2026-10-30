@@ -16,18 +16,12 @@
         "width": 1024,
         "height": 768,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "dragDropEnabled": false
       }
     ],
     "security": {
-      "csp": null,
-      "dangerousDisableAssetCspModification": true,
-      "assetProtocol": {
-        "enable": true,
-        "scope": {
-          "allow": ["**"]
-        }
-      }
+      "csp": null
     },
     "withGlobalTauri": false
   },

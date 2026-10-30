@@ -1,0 +1,65 @@
+/* FOTOS DA OS: seção da janela da OS, miniaturas, visualizador e galeria do cliente. Só tokens (escuro e pastel). */
+
+/* ---------- Seção na janela da OS ---------- */
+.ph-box { border: 2px dashed var(--border-strong); border-radius: var(--radius-lg); padding: var(--sp-4); background: transparent; transition: border-color var(--dur-fast), background var(--dur-fast); }
+.ph-box--drag { border-color: var(--accent); background: var(--accent-soft); }
+.ph-bar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-3) var(--sp-4); }
+.ph-add { min-height: var(--control-h); padding: 0 var(--sp-6); font-size: var(--fs-md); display: inline-flex; align-items: center; gap: var(--sp-2); }
+.ph-count { font-size: var(--fs-md); font-weight: var(--fw-semibold); color: var(--text); font-variant-numeric: tabular-nums; }
+.ph-hint { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); color: var(--text-2); }
+.ph-status { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--text); }
+.ph-empty { margin: var(--sp-3) 0 0; color: var(--text-2); font-size: var(--fs-base); }
+.ph-errors { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-3); margin-top: var(--sp-3); padding: var(--sp-3); border: 1px solid var(--danger); border-radius: var(--radius-md); background: var(--surface-1); color: var(--text-danger); font-size: var(--fs-sm); font-weight: var(--fw-semibold); }
+.ph-errors ul { margin: 0; padding-left: var(--sp-4); }
+
+/* ---------- Grade e miniatura ---------- */
+.ph-grid { list-style: none; margin: var(--sp-4) 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--sp-3); }
+.ph-client .ph-grid { margin-top: var(--sp-2); }
+.ph-cell { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
+.ph-thumb { position: relative; aspect-ratio: 4 / 3; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-2); overflow: hidden; }
+.ph-thumb-btn { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.ph-thumb-btn img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.ph-thumb-btn:hover img { opacity: 0.9; }
+.ph-thumb-btn:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: -3px; }
+.ph-thumb-msg { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--sp-2); padding: var(--sp-2); text-align: center; font-size: var(--fs-xs); color: var(--text-2); }
+.ph-caption { height: var(--control-h-min); font-size: var(--fs-sm); }
+.ph-remove { align-self: flex-start; display: inline-flex; align-items: center; gap: var(--sp-1); min-height: var(--control-h-min); }
+.ph-cell-caption { font-size: var(--fs-sm); color: var(--text); overflow-wrap: anywhere; }
+.ph-cell-origin { font-size: var(--fs-xs); color: var(--text-2); }
+
+/* ---------- Câmera no cartão do Kanban ---------- */
+.kcard-photos { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--text-2); font-variant-numeric: tabular-nums; }
+
+/* ---------- Galeria do cliente ---------- */
+.crm-photos { margin-bottom: var(--sp-6); }
+.ph-client-filter { display: flex; flex-direction: column; gap: var(--sp-1); max-width: 360px; margin-bottom: var(--sp-3); }
+.ph-client-group { margin-bottom: var(--sp-4); }
+.ph-client-car { margin: 0; font-size: var(--fs-md); font-weight: var(--fw-bold); color: var(--text); }
+.ph-client-more { margin-top: var(--sp-3); }
+.ph-client-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--sp-2); padding: var(--sp-6); border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); color: var(--text-2); }
+.ph-client-empty p { margin: 0; max-width: 46ch; font-size: var(--fs-sm); }
+.ph-client-empty-title { font-size: var(--fs-md) !important; font-weight: var(--fw-semibold); color: var(--text); }
+
+/* ---------- Visualizador (foto grande) ---------- */
+.ph-viewer-overlay { z-index: 1300; }
+.ph-viewer { display: flex; flex-direction: column; gap: var(--sp-3); width: min(1100px, 96vw); max-height: 96vh; padding: var(--sp-4); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface-1); color: var(--text); box-sizing: border-box; }
+.ph-viewer-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
+.ph-viewer-title { margin: 0; font-size: var(--fs-lg); }
+.ph-viewer-close { display: inline-flex; align-items: center; gap: var(--sp-2); min-height: var(--control-h); }
+.ph-viewer-stage { display: flex; align-items: center; gap: var(--sp-3); min-height: 0; }
+.ph-viewer-nav { flex: none; width: var(--control-h); min-width: var(--control-h); height: var(--control-h); padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.ph-viewer-img { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; min-height: 240px; background: var(--surface-2); border-radius: var(--radius-md); overflow: hidden; }
+.ph-viewer-img img { display: block; max-width: 100%; max-height: calc(96vh - 220px); object-fit: contain; }
+.ph-viewer-msg { margin: 0; padding: var(--sp-6); text-align: center; color: var(--text-2); font-size: var(--fs-md); }
+.ph-viewer-msg p { margin: 0 0 var(--sp-3); }
+.ph-viewer-foot p { margin: 0; }
+.ph-viewer-caption { font-size: var(--fs-md); font-weight: var(--fw-semibold); }
+.ph-viewer-origin { font-size: var(--fs-sm); color: var(--text-2); }
+.ph-viewer-hint { font-size: var(--fs-xs); color: var(--text-2); }
+
+@media (max-width: 800px) {
+  .ph-viewer { padding: var(--sp-3); }
+  .ph-viewer-stage { gap: var(--sp-2); }
+  .ph-viewer-nav { width: var(--control-h-min); min-width: var(--control-h-min); height: var(--control-h-min); }
+  .ph-add { width: 100%; justify-content: center; }
+}

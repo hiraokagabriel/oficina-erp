@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import { installFileDropGuard } from "./utils/fileDropGuard";
 // A IMPORTAÇÃO ABAIXO CARREGA O TEMA
 import "./styles.css";
 // DRAG AND DROP OVERHAUL CSS
@@ -50,11 +51,20 @@ import "./styles-today.css";
 // JANELA DA OS (seções)
 import "./styles-osmodal.css";
 
+// MODO CLIENTE (resumo do serviço em tela cheia)
+import "./styles-client-summary.css";
+
+// FOTOS DA OS (seção da janela, visualizador, galeria do cliente, câmera no cartão)
+import "./styles-photos.css";
+
 // CONTRASTE WCAG AA (carregar por último)
 import "./styles-contrast.css";
 
 // PERFORMANCE: keyframes antes embutidos em <style> nos componentes
 import "./styles-perf.css";
+
+// Arquivo solto fora da área de fotos não pode fazer o WebView navegar até ele.
+installFileDropGuard();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

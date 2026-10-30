@@ -18,6 +18,8 @@ export interface OutputDoc {
   html: string;
   title: string;
   fileStem: string;
+  /** Subpasta dentro da pasta de PDFs; ausente = direto na pasta. */
+  subfolder?: string;
 }
 
 export interface PdfResult {
@@ -87,12 +89,12 @@ const replyText = (r: IoReply, fallback: string): string =>
  * O Rust responde { success, message }; em sucesso `message` é o caminho do arquivo.
  * Qualquer outra resposta é erro.
  */
-export async function savePdf(html: string, fileStem: string, deps: OutputDeps = {}): Promise<PdfResult> {
+export async function savePdf(html: string, fileStem: string, deps: OutputDeps = {}, subfolder?: string): Promise<PdfResult> {
   const available = deps.available ?? isPdfAvailable;
   if (!available()) return { ok: false, message: PDF_ONLY_INSTALLED };
   const invoke = deps.invoke ?? defaultInvoke;
   try {
-    const r = asReply(await invoke<unknown>('save_pdf', { html, folder: getPdfFolder(), fileStem }));
+    const r = asReply(await invoke<unknown>('save_pdf', { html, folder: getPdfFolder(), fileStem, ...(subfolder ? { subfolder } : {}) }));
     if (r.success !== true) return { ok: false, message: replyText(r, 'Não foi possível salvar o PDF') };
     return { ok: true, path: typeof r.message === 'string' ? r.message : undefined, message: 'PDF salvo' };
   } catch (e) {
@@ -158,5 +160,5 @@ export async function outputDocument(doc: OutputDoc, mode: 'print' | 'pdf', deps
     printHtml(doc.html, doc.title);
     return { ok: true, message: 'Impressão aberta' };
   }
-  return savePdf(doc.html, doc.fileStem, deps);
+  return savePdf(doc.html, doc.fileStem, deps, doc.subfolder);
 }

@@ -27,6 +27,21 @@ describe('savePdf', () => {
     expect(r).toEqual({ ok: true, path: 'D:\\PDFs\\OS_1.pdf', message: 'PDF salvo' });
     expect(f.calls[0]).toEqual({ cmd: 'save_pdf', args: { html: '<p>a</p>', folder: 'D:\\PDFs', fileStem: 'OS_1' } });
   });
+  it('com subfolder: envia o campo subfolder; sem: não envia a chave', async () => {
+    vi.stubGlobal('localStorage', { getItem: () => 'D:\\PDFs', setItem: () => {}, removeItem: () => {} });
+    const f = fakeInvoke(() => ({ success: true, message: 'D:\\PDFs\\12 João Gol\\OS_12.pdf' }));
+    const r = await savePdf('<p/>', 'OS_12', { invoke: f.invoke, available: yes }, '12 João Gol');
+    expect(r.path).toBe('D:\\PDFs\\12 João Gol\\OS_12.pdf');
+    expect(f.calls[0].args).toEqual({ html: '<p/>', folder: 'D:\\PDFs', fileStem: 'OS_12', subfolder: '12 João Gol' });
+    await savePdf('<p/>', 'OS_12', { invoke: f.invoke, available: yes });
+    expect(f.calls[1].args).not.toHaveProperty('subfolder');
+  });
+  it('outputDocument pdf repassa a subpasta do documento', async () => {
+    vi.stubGlobal('localStorage', { getItem: () => '', setItem: () => {}, removeItem: () => {} });
+    const f = fakeInvoke(() => ({ success: true, message: 'x.pdf' }));
+    await outputDocument({ html: '<p/>', title: 't', fileStem: 'OS_1', subfolder: '1 Ana Gol' }, 'pdf', { invoke: f.invoke, available: yes });
+    expect(f.calls[0].args).toMatchObject({ fileStem: 'OS_1', subfolder: '1 Ana Gol' });
+  });
   it('texto puro, null ou success diferente de true são erro', async () => {
     for (const res of ['D:\a.pdf', null, undefined, { ok: true, path: 'x' }, { success: 'true', message: 'x' }, { success: false }]) {
       const f = fakeInvoke(() => res);

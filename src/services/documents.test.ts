@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildDocument, docFileStem, DocKind } from './documents';
+import { buildDocument, docFileStem, osFolderName, DocKind } from './documents';
 import { buildPrintOSHtml } from '../utils/printOS';
 import type { WorkOrder, WorkshopSettings } from '../types';
 
@@ -37,6 +37,48 @@ describe('docFileStem', () => {
     const s = docFileStem('OS_OFICINA', mk({ clientName: 'x'.repeat(200), vehicle: 'y'.repeat(200) + ' - ABC1D23' }));
     expect(s.length).toBeLessThanOrEqual(120);
     expect(s).toMatch(/^[A-Za-z0-9_-]+$/);
+  });
+});
+
+describe('osFolderName', () => {
+  it('número, cliente e modelo com espaços e acentos, sem a placa', () => {
+    expect(osFolderName(mk({ osNumber: 12, clientName: 'João Silva', vehicle: 'Gol - ABC1D23' }))).toBe('12 João Silva Gol');
+    expect(osFolderName(mk())).toBe('77 João da Silva Fiat Uno');
+  });
+  it('veículo com placa no texto, sem separador', () => {
+    expect(osFolderName(mk({ vehicle: 'Fiat Uno ABC1D23' }))).toBe('77 João da Silva Fiat Uno');
+  });
+  it('veículo só com a placa ou vazio: omite o carro', () => {
+    expect(osFolderName(mk({ vehicle: 'ABC1D23' }))).toBe('77 João da Silva');
+    expect(osFolderName(mk({ vehicle: '' }))).toBe('77 João da Silva');
+  });
+  it('remove só o que o Windows proíbe e colapsa espaços', () => {
+    expect(osFolderName(mk({ clientName: 'A<b>:"c/d\\e|f?g*h', vehicle: 'Gol' }))).toBe('77 Abcdefgh Gol');
+    expect(osFolderName(mk({ clientName: '  Maria   \t Souza  ', vehicle: 'Gol' }))).toBe('77 Maria Souza Gol');
+    expect(osFolderName(mk({ clientName: 'Ana\u0001 Lima', vehicle: 'Gol' }))).toBe('77 Ana Lima Gol');
+  });
+  it('tira pontos e espaços das pontas e junta pontos repetidos', () => {
+    expect(osFolderName(mk({ clientName: 'Ltda..', vehicle: '..Gol. ' }))).toBe('77 Ltda Gol');
+    expect(osFolderName(mk({ clientName: 'A..B', vehicle: 'Gol' }))).toBe('77 A.B Gol');
+  });
+  it('corta em 80 caracteres sem deixar espaço ou ponto no fim', () => {
+    const n = osFolderName(mk({ clientName: 'x'.repeat(200), vehicle: 'y' }));
+    expect(n.length).toBeLessThanOrEqual(80);
+    expect(n.startsWith('77 xxx')).toBe(true);
+    const corte = osFolderName(mk({ osNumber: 1, clientName: 'a'.repeat(77) + ' b', vehicle: 'c' }));
+    expect(corte.endsWith(' ')).toBe(false);
+    expect(corte.length).toBeLessThanOrEqual(80);
+  });
+  it('nome reservado ou vazio cai em "OS {número}"', () => {
+    expect(osFolderName({ osNumber: '' as unknown as number, clientName: 'CON', vehicle: '' })).toBe('OS SN');
+    expect(osFolderName({ osNumber: '' as unknown as number, clientName: 'com1', vehicle: '' })).toBe('OS SN');
+    expect(osFolderName({ osNumber: '' as unknown as number, clientName: '', vehicle: '' })).toBe('OS SN');
+    expect(osFolderName({ osNumber: '' as unknown as number, clientName: '<>:', vehicle: '' })).toBe('OS SN');
+  });
+  it('buildDocument traz a mesma subpasta em todos os documentos da OS', () => {
+    const os = mk({ osNumber: 12, clientName: 'João Silva', vehicle: 'Gol - ABC1D23' });
+    const kinds: DocKind[] = ['OS', 'OS_CLIENTE', 'OS_OFICINA', 'RESUMO', 'CHECKLIST', 'CHECKLIST_RESUMIDO'];
+    for (const k of kinds) expect(buildDocument(k, os, settings).subfolder).toBe('12 João Silva Gol');
   });
 });
 

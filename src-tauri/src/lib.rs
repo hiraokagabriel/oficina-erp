@@ -756,6 +756,51 @@ fn valid_pdf_stem(s: &str) -> bool {
     true
 }
 
+/// Nome reservado do Windows (CON, PRN, AUX, NUL, COM1-9, LPT1-9), também com extensão ("CON.txt").
+fn is_reserved_win_name(s: &str) -> bool {
+    let base = s.split('.').next().unwrap_or("").trim_end().to_ascii_uppercase();
+    if matches!(base.as_str(), "CON" | "PRN" | "AUX" | "NUL") {
+        return true;
+    }
+    for prefix in ["COM", "LPT"] {
+        if let Some(n) = base.strip_prefix(prefix) {
+            if n.len() == 1 && matches!(n.as_bytes()[0], b'1'..=b'9') {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Nome de subpasta (um único nível): 1 a 100 caracteres; aceita espaços e acentos. Recusa, não corrige.
+/// Recusa `< > : " / \ | ? *`, controle, `..`, só pontos/espaços, final em ponto/espaço e nomes reservados.
+fn valid_subfolder(s: &str) -> bool {
+    let n = s.chars().count();
+    if n == 0 || n > 100 {
+        return false;
+    }
+    if s.chars().any(|c| c.is_control() || matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*')) {
+        return false;
+    }
+    if s.contains("..") || s.chars().all(|c| c == '.' || c == ' ') {
+        return false;
+    }
+    if s.ends_with('.') || s.ends_with(' ') {
+        return false;
+    }
+    !is_reserved_win_name(s)
+}
+
+/// Pasta final do PDF: `resolve_pdf_dir(folder)` e, se houver, a subpasta (já validada). Não cria nada.
+fn pdf_dest_dir(folder: &str, default: &Path, subfolder: Option<&str>) -> Result<PathBuf, String> {
+    let base = resolve_pdf_dir(folder, default)?;
+    match subfolder {
+        None => Ok(base),
+        Some(sub) if valid_subfolder(sub) => Ok(base.join(sub)),
+        Some(_) => Err("Nome de subpasta inválido.".into()),
+    }
+}
+
 /// Pasta de destino: vazio usa o padrão; exige caminho absoluto (recusa `C:pasta`),
 /// recusa `..`, aceita UNC; erro se existe e não é pasta. Não cria a pasta.
 fn resolve_pdf_dir(folder: &str, default: &Path) -> Result<PathBuf, String> {
@@ -898,11 +943,11 @@ fn reveal_impl(_path: &str) -> IoResult {
 }
 
 #[command]
-async fn save_pdf(app: AppHandle, html: String, folder: String, file_stem: String) -> IoResult {
+async fn save_pdf(app: AppHandle, html: String, folder: String, file_stem: String, subfolder: Option<String>) -> IoResult {
     if !valid_pdf_stem(&file_stem) {
         return pdf_fail("Nome de arquivo inválido.");
     }
-    let dir = match resolve_pdf_dir(&folder, &default_pdf_dir(&app)) {
+    let dir = match pdf_dest_dir(&folder, &default_pdf_dir(&app), subfolder.as_deref()) {
         Ok(d) => d,
         Err(e) => return pdf_fail(e),
     };
@@ -1227,6 +1272,57 @@ mod pdf_tests {
         for ok in ["COM0", "COM10", "LPT", "CONSOLE", "COM1a", "NULL"] {
             assert!(valid_pdf_stem(ok), "{ok}");
         }
+    }
+
+    #[test]
+    fn subfolder_valida_aceita_espacos_e_acentos() {
+        for ok in ["12 João Silva Gol", "OS 7", "Conceição Ávila Fiat Uno", "CONSOLE", "COM0", "COM10", "a.b", &"a".repeat(100)] {
+            assert!(valid_subfolder(ok), "{ok}");
+        }
+    }
+
+    #[test]
+    fn subfolder_recusa_traversal_e_caracteres() {
+        for bad in [
+            "", " ", ".", "..", "...", "a/b", "a\\b", "../x", "..\\x", "a..b", "C:x", "a:b", "a<b", "a>b", "a\"b", "a|b",
+            "a?b", "a*b", "a\0b", "a\nb", "a\tb", "abc.", "abc ", "a. ",
+        ] {
+            assert!(!valid_subfolder(bad), "{bad:?}");
+        }
+        assert!(!valid_subfolder(&"a".repeat(101)));
+    }
+
+    #[test]
+    fn subfolder_recusa_reservados() {
+        for bad in ["CON", "con", "Prn", "AUX", "nul", "COM1", "com9", "LPT1", "lpt9", "CON.txt", "nul.pdf", "COM3.x", "CON .x"] {
+            assert!(!valid_subfolder(bad), "{bad}");
+        }
+    }
+
+    #[test]
+    fn destino_sem_subpasta_e_com_subpasta() {
+        let d = tmp("dest");
+        assert_eq!(pdf_dest_dir("", &d, None).unwrap(), d);
+        assert_eq!(pdf_dest_dir("", &d, Some("12 João Silva Gol")).unwrap(), d.join("12 João Silva Gol"));
+        let outro = d.join("outra");
+        assert_eq!(pdf_dest_dir(&outro.display().to_string(), &d, Some("OS 3")).unwrap(), outro.join("OS 3"));
+        assert!(pdf_dest_dir("", &d, Some("..")).is_err());
+        assert!(pdf_dest_dir("", &d, Some("a/b")).is_err());
+        assert!(pdf_dest_dir("", &d, Some("")).is_err());
+        assert!(pdf_dest_dir("pasta/relativa", &d, Some("ok")).is_err());
+    }
+
+    #[test]
+    fn copia_na_subpasta_cria_e_numera() {
+        let d = tmp("sub");
+        let src = d.join("origem.pdf");
+        fs::write(&src, b"%PDF").unwrap();
+        let dir = pdf_dest_dir("", &d.join("pdfs"), Some("12 João Silva Gol")).unwrap();
+        let a = copy_unique(&src, &dir, "OS_12_Joao", "pdf").unwrap();
+        let b = copy_unique(&src, &dir, "OS_12_Joao", "pdf").unwrap();
+        assert_eq!(a, dir.join("OS_12_Joao.pdf"));
+        assert_eq!(b, dir.join("OS_12_Joao-1.pdf"));
+        assert!(a.parent().unwrap().ends_with("12 João Silva Gol"));
     }
 
     #[test]

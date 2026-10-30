@@ -21,6 +21,8 @@ export interface BuiltDocument {
   title: string;
   /** Nome do arquivo PDF, sem extensão. */
   fileStem: string;
+  /** Subpasta da OS dentro da pasta de PDFs (ver osFolderName). */
+  subfolder: string;
 }
 
 const MAX_STEM = 120;
@@ -48,9 +50,40 @@ export function docFileStem(kind: DocKind, os: StemOs): string {
   return safe.length > MAX_STEM ? safe.slice(0, MAX_STEM).replace(/_+$/, '') : safe;
 }
 
+const MAX_FOLDER = 80;
+// Proibidos no Windows: < > : " / \ | ? * e caracteres de controle.
+const FOLDER_FORBIDDEN = /[<>:"/\\|?*\u0000-\u001F\u007F]/g;
+const FOLDER_RESERVED = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i;
+
+/** Limpa um trecho de nome de pasta: tira o proibido, junta espaços e pontos repetidos, apara as pontas. */
+function cleanFolderText(text: string): string {
+  return (text ?? '')
+    .replace(FOLDER_FORBIDDEN, '')
+    .replace(/\.{2,}/g, '.')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s.]+|[\s.]+$/g, '');
+}
+
+/**
+ * Subpasta da OS: "[número] [cliente] [carro]" (ex.: "12 João Silva Gol"). Mantém espaços e acentos.
+ * Todos os documentos da mesma OS caem nela. Nunca vazia nem nome reservado do Windows.
+ */
+export function osFolderName(os: StemOs): string {
+  const n = cleanFolderText(String(os.osNumber ?? ''));
+  const vehicle = os.vehicle || '';
+  const parts = vehicleParts(vehicle);
+  const car = parts.model || (parts.plate ? vehicle.replace(parts.plate, '') : vehicle);
+  const raw = [n, os.clientName || '', car].map(cleanFolderText).filter(Boolean).join(' ');
+  const name = cleanFolderText(raw.slice(0, MAX_FOLDER));
+  const base = name.split('.')[0].trim();
+  if (!name || FOLDER_RESERVED.test(base)) return `OS ${n || 'SN'}`;
+  return name;
+}
+
 /** Monta o HTML, o título e o nome do arquivo de qualquer documento da OS. */
 export function buildDocument(kind: DocKind, os: WorkOrder, settings: WorkshopSettings, opts: DocOptions = {}): BuiltDocument {
   const fileStem = docFileStem(kind, os);
+  const subfolder = osFolderName(os);
 
   switch (kind) {
     case 'OS':
@@ -61,12 +94,12 @@ export function buildDocument(kind: DocKind, os: WorkOrder, settings: WorkshopSe
       const data = advanced > 0 ? { ...os, advanceAmount: advanced } : os;
       const variant = kind === 'OS_CLIENTE' ? 'CLIENT' : kind === 'OS_OFICINA' ? 'SHOP' : undefined;
       const { printContent, documentTitle } = buildPrintOSHtml(data, settings, variant);
-      return { html: printContent, title: documentTitle, fileStem };
+      return { html: printContent, title: documentTitle, fileStem, subfolder };
     }
     case 'RESUMO': {
       const options = choiceToOptions(opts.summaryChoice ?? { includeInspection: false, includeGeneralNote: false });
       const { printContent, documentTitle } = buildPrintServiceSummaryHtml(buildServiceSummary(os, settings, options));
-      return { html: printContent, title: documentTitle, fileStem };
+      return { html: printContent, title: documentTitle, fileStem, subfolder };
     }
     case 'CHECKLIST':
     case 'CHECKLIST_RESUMIDO': {
@@ -74,7 +107,7 @@ export function buildDocument(kind: DocKind, os: WorkOrder, settings: WorkshopSe
       const { printContent, docTitle } = buildPrintChecklistHtml(os, checklist, settings, {
         mode: kind === 'CHECKLIST_RESUMIDO' ? 'summary' : 'full',
       });
-      return { html: printContent, title: docTitle, fileStem };
+      return { html: printContent, title: docTitle, fileStem, subfolder };
     }
   }
 }

@@ -5,6 +5,7 @@ import { parseTargetMarginDraft } from '../services/margin';
 import { setShowMarginOnBoard } from '../utils/showMarginSetting';
 import { HomeTab, readHomeTab, writeHomeTab } from '../utils/todayPrefs';
 import { Icon } from '../components/ui/Icon';
+import { DEFAULT_LOGO_TEXT, normalizeLogoText } from '../utils/logo';
 import '../styles-config.css';
 
 interface ConfigPageProps {
@@ -76,7 +77,26 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
     if (settings.targetMargin !== parsed.value) setSettings({ ...settings, targetMargin: parsed.value });
   };
 
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  // Letras do logo: grava já normalizadas (maiúsculas, 1 a 3 caracteres); vazio remove a chave (volta ao padrão).
+  const handleLogoChange = (raw: string) => {
+    const cleaned = normalizeLogoText(raw);
+    if (raw.trim() === '' || cleaned === DEFAULT_LOGO_TEXT && !/[\p{L}\p{N}]/u.test(raw)) {
+      if (settings.logoText !== undefined) {
+        const { logoText: _removed, ...rest } = settings;
+        setSettings(rest);
+      }
+      return;
+    }
+    if (settings.logoText !== cleaned) setSettings({ ...settings, logoText: cleaned });
+  };
+  const resetLogo = () => {
+    if (settings.logoText === undefined) return;
+    const { logoText: _removed, ...rest } = settings;
+    setSettings(rest);
+  };
+  const logoPreview = normalizeLogoText(settings.logoText);
+
+  const fileInputRef =React.useRef<HTMLInputElement>(null);
   const [chosenFileName, setChosenFileName] = React.useState('');
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -151,6 +171,39 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
         <div className="form-group">
           <label className="form-label" htmlFor="cfg-address">Endereço</label>
           <input id="cfg-address" className="form-input" value={settings.address} onChange={(e) => handleChange('address', e.target.value)} />
+        </div>
+
+        <div className="form-group cfg-logo">
+          <label className="form-label" htmlFor="cfg-logo-text">Letras do logo</label>
+          <div className="cfg-logo-row">
+            <input
+              id="cfg-logo-text"
+              className="form-input cfg-logo-input"
+              value={settings.logoText ?? ''}
+              maxLength={3}
+              placeholder={DEFAULT_LOGO_TEXT}
+              autoComplete="off"
+              aria-describedby="cfg-logo-help cfg-logo-preview-text"
+              onChange={(e) => handleLogoChange(e.target.value)}
+            />
+            <button type="button" className="btn" onClick={resetLogo} disabled={settings.logoText === undefined}>
+              Voltar ao padrão ({DEFAULT_LOGO_TEXT})
+            </button>
+          </div>
+          <p id="cfg-logo-help" className="cfg-help">Aparece no círculo do cabeçalho das impressões. Ex.: AM</p>
+          <div className="cfg-logo-preview" aria-hidden="true">
+            <div className="cfg-logo-paper">
+              <div className="cfg-logo-circle">{logoPreview}</div>
+              <div className="cfg-logo-paper-name">{settings.name || 'NOME DA OFICINA'}</div>
+            </div>
+            <div className="cfg-logo-paper cfg-logo-paper-sm">
+              <div className="cfg-logo-circle cfg-logo-circle-sm">{logoPreview}</div>
+              <div className="cfg-logo-paper-name">{settings.name || 'OFICINA MECÂNICA'}</div>
+            </div>
+          </div>
+          <span id="cfg-logo-preview-text" className="sr-only">
+            Prévia: círculo com as letras {logoPreview} ao lado do nome da oficina.
+          </span>
         </div>
       </section>
 

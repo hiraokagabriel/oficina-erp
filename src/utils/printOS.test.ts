@@ -42,6 +42,62 @@ describe('buildPrintOSHtml: dados normais', () => {
   });
 });
 
+// Primeiro bloco de assinaturas do documento (o da página da OS).
+const signatureArea = (html: string): string => {
+  const start = html.indexOf('<div class="signature-area">');
+  const end = html.indexOf('<div class="footer-text-block">', start);
+  return html.slice(start, end);
+};
+const blocks = (area: string): number => (area.match(/class="signature-block"/g) ?? []).length;
+
+describe('buildPrintOSHtml: vias e assinaturas', () => {
+  it('via geral: duas assinaturas (oficina com técnico e cliente)', () => {
+    const area = signatureArea(buildPrintOSHtml(baseOS(), settings).printContent);
+    expect(blocks(area)).toBe(2);
+    expect(area).toContain('<span class="sign-name">Carlos</span>');
+    expect(area).toContain('<span class="sign-label">Cliente</span>');
+  });
+
+  it('via do cliente: só a assinatura da oficina, com o técnico', () => {
+    const area = signatureArea(buildPrintOSHtml(baseOS(), settings, 'CLIENT').printContent);
+    expect(blocks(area)).toBe(1);
+    expect(area).toContain('<span class="sign-name">Carlos</span>');
+    expect(area).not.toContain('>Cliente<');
+  });
+
+  it('via do cliente sem técnico: usa o nome da oficina', () => {
+    const os = baseOS();
+    os.technician = '';
+    const area = signatureArea(buildPrintOSHtml(os, settings, 'CLIENT').printContent);
+    expect(blocks(area)).toBe(1);
+    expect(area).toContain('<span class="sign-name">Oficina Teste</span>');
+  });
+
+  it('via da oficina: só o cliente assina e o técnico aparece como responsável', () => {
+    const area = signatureArea(buildPrintOSHtml(baseOS(), settings, 'SHOP').printContent);
+    expect(blocks(area)).toBe(1);
+    expect(area).toContain('<span class="sign-name">João da Silva</span>');
+    expect(area).toContain('Responsável Técnico: Carlos');
+  });
+
+  it('via da oficina sem técnico: nada de técnico nem nome da oficina na assinatura', () => {
+    const os = baseOS();
+    os.technician = '';
+    const area = signatureArea(buildPrintOSHtml(os, settings, 'SHOP').printContent);
+    expect(blocks(area)).toBe(1);
+    expect(area).not.toContain('Responsável Técnico');
+    expect(area).not.toContain('Oficina Teste');
+  });
+
+  it('nome do técnico é escapado na via da oficina', () => {
+    const os = baseOS();
+    os.technician = '<b>x</b>';
+    const area = signatureArea(buildPrintOSHtml(os, settings, 'SHOP').printContent);
+    expect(area).not.toContain('<b>x</b>');
+    expect(area).toContain('Responsável Técnico: &lt;b&gt;x&lt;/b&gt;');
+  });
+});
+
 describe('buildPrintOSHtml: texto do usuário é escapado', () => {
   it('<script> vira texto em todos os campos livres', () => {
     const bad = '<script>alert(1)</script>';
@@ -56,5 +112,25 @@ describe('buildPrintOSHtml: texto do usuário é escapado', () => {
     const html = buildPrintOSHtml(os, { ...settings, name: bad, address: bad, cnpj: bad }).printContent;
     expect(html).not.toContain('<script>alert(1)</script>');
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+  });
+});
+
+describe('buildPrintOSHtml: letras do logo', () => {
+  const logos = (html: string): string[] =>
+    [...html.matchAll(/class="invoice-logo-circle"[^>]*>([^<]*(?:<[^/][^<]*)*?)<\/div>/g)].map(m => m[1]);
+  it('ausente continua AM', () => {
+    const l = logos(buildPrintOSHtml(baseOS(), settings).printContent);
+    expect(l.length).toBeGreaterThan(0);
+    expect(l.every(t => t === 'AM')).toBe(true);
+  });
+  it('usa as letras configuradas', () => {
+    const html = buildPrintOSHtml(baseOS(), { ...settings, logoText: 'of' }).printContent;
+    expect(logos(html).every(t => t === 'OF')).toBe(true);
+    expect(html).not.toContain('>AM</div>');
+  });
+  it('texto com tag é normalizado e nunca vira HTML', () => {
+    const html = buildPrintOSHtml(baseOS(), { ...settings, logoText: '<b>' }).printContent;
+    expect(html).not.toContain('<b></div>');
+    expect(logos(html).every(t => t === 'B')).toBe(true);
   });
 });

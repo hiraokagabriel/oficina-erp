@@ -2,35 +2,122 @@ import {
   WorkOrder,
   WorkshopSettings,
   ChecklistSchema,
+  InspectionCategory,
   InspectionStatus,
   INSPECTION_STATUS_META,
 } from '../types';
 import { escapeHtml } from './html';
+import { splitVehicle } from './links';
 
-// Cor sólida por status para impressão (sem rgba)
-const STATUS_PRINT_COLOR: Record<InspectionStatus, string> = {
-  pending:   '#BDBDBD',
-  ok:        '#43A047',
-  attention: '#FB8C00',
-  urgent:    '#E53935',
-};
+// Impressão do checklist de vistoria: formulário preto e branco para marcar à mão (impressora ou PDF).
+// Sem cor, fundo, sombra ou canto arredondado: o estado é dado pela coluna marcada com X, nunca por cor.
 
-// Cor de fundo suave por status
-const STATUS_BG_COLOR: Record<InspectionStatus, string> = {
-  pending:   'transparent',
-  ok:        '#E8F5E9',
-  attention: '#FFF3E0',
-  urgent:    '#FFEBEE',
-};
+export type ChecklistPrintMode = 'full' | 'summary';
+
+export interface ChecklistPrintOptions {
+  /** 'full' (padrão): todos os itens com caixas para marcar. 'summary': só os itens já marcados. */
+  mode?: ChecklistPrintMode;
+  /** Data usada quando a vistoria não tem `inspectedAt` (injetável nos testes). */
+  now?: Date;
+}
+
+export interface ChecklistPrintSelection {
+  categories: InspectionCategory[];
+  /** Total de itens do checklist inteiro (independe do modo). */
+  total: number;
+  /** Itens com estado diferente de 'pending' (independe do modo). */
+  inspected: number;
+  counts: Record<InspectionStatus, number>;
+}
+
+/** Colunas de marcação, na ordem impressa. */
+const STATUS_COLUMNS = ['ok', 'attention', 'urgent'] as const;
+
+/** Escolhe o que imprimir: completo ou só os itens já marcados. Nunca devolve categoria sem itens. */
+export function selectChecklistForPrint(cl: ChecklistSchema, mode: ChecklistPrintMode): ChecklistPrintSelection {
+  const counts: Record<InspectionStatus, number> = { pending: 0, ok: 0, attention: 0, urgent: 0 };
+  let total = 0;
+  for (const cat of cl.categories) {
+    for (const item of cat.items) {
+      counts[item.status] += 1;
+      total += 1;
+    }
+  }
+  const inspected = total - counts.pending;
+
+  const categories = cl.categories
+    .map(cat => ({
+      ...cat,
+      items: mode === 'summary' ? cat.items.filter(i => i.status !== 'pending') : cat.items,
+    }))
+    .filter(cat => cat.items.length > 0);
+
+  return { categories, total, inspected, counts };
+}
+
+const PLATE_RE = /[A-Z]{3}-?[0-9][A-Z0-9][0-9]{2}/i;
+
+/** "modelo - PLACA" (como gravado na OS) vira { model, plate }. Sem " - ", procura uma placa no texto. */
+export function vehicleParts(vehicle: string): { model: string; plate: string } {
+  const split = splitVehicle(vehicle);
+  if (split.plate.trim()) return { model: split.model.trim(), plate: split.plate.trim() };
+  const text = split.model;
+  const m = text.match(PLATE_RE);
+  if (!m || m.index === undefined) return { model: text.trim(), plate: '' };
+  const model = (text.slice(0, m.index) + text.slice(m.index + m[0].length)).replace(/[\s\-–]+$/, '').replace(/\s{2,}/g, ' ').trim();
+  return { model, plate: m[0] };
+}
 
 function sanitizeForFilename(text: string): string {
   return text
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-zA-Z0-9]/g, '_')
     .replace(/_+/g, '_')
     .replace(/^_|_$/g, '')
     .substring(0, 50);
+}
+
+/** Placa para o rodapé (vai para dentro do <style>): só letras, números e hífen. */
+function footerPlate(plate: string): string {
+  const valid = plate.match(PLATE_RE);
+  if (valid) return valid[0].toUpperCase();
+  return plate.replace(/[^A-Z0-9-]/gi, '').slice(0, 8);
+}
+
+/** 85100 vira "85.100". Sem Intl: o resultado não depende do ICU do ambiente. */
+function formatKm(n: number): string {
+  return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+const BOX_EMPTY = '<rect x="0.5" y="0.5" width="11" height="11" fill="none" stroke="#000000" stroke-width="1"/>';
+const BOX_X = '<path d="M3 3l6 6M9 3l-6 6" fill="none" stroke="#000000" stroke-width="1.6"/>';
+const svgBox = (marked: boolean) =>
+  `<svg class="box" viewBox="0 0 12 12" aria-hidden="true">${BOX_EMPTY}${marked ? BOX_X : ''}</svg>`;
+
+const STATUS_CLASS: Record<(typeof STATUS_COLUMNS)[number], string> = {
+  ok: 'st-ok',
+  attention: 'st-attention',
+  urgent: 'st-urgent',
+};
+
+function itemRowHtml(item: InspectionCategory['items'][number]): string {
+  const note = (item.note ?? '').trim();
+  const cells = STATUS_COLUMNS.map(s => {
+    const marked = item.status === s;
+    return `<td class="st ${STATUS_CLASS[s]}${marked ? ' is-marked' : ''}">${svgBox(marked)}</td>`;
+  }).join('');
+  const noteHtml = note ? `<div class="item-note">Observação: ${escapeHtml(note)}</div>` : '';
+  return `<tr><td class="lbl${item.status === 'urgent' ? ' is-urgent' : ''}">${escapeHtml(item.label)}${noteHtml}</td>${cells}</tr>`;
+}
+
+function categoryHtml(cat: InspectionCategory): string {
+  const heads = STATUS_COLUMNS.map(s => `<th class="colh">${escapeHtml(INSPECTION_STATUS_META[s].label)}</th>`).join('');
+  return `<table class="cat${cat.items.length <= 12 ? ' cat-small' : ''}">
+    <colgroup><col><col class="c-st"><col class="c-st"><col class="c-st"></colgroup>
+    <thead><tr><th class="cat-name">${escapeHtml(cat.label.toUpperCase())}</th>${heads}</tr></thead>
+    <tbody>${cat.items.map(itemRowHtml).join('')}</tbody>
+  </table>`;
 }
 
 /** Monta o HTML e o título do checklist (sem imprimir): separado para poder ser testado. */
@@ -38,57 +125,63 @@ export function buildPrintChecklistHtml(
   os: WorkOrder,
   checklist: ChecklistSchema,
   settings: WorkshopSettings,
+  opts: ChecklistPrintOptions = {},
 ): { printContent: string; docTitle: string } {
-  const formatDate = (iso?: string) =>
-    iso ? new Date(iso).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR');
+  const mode: ChecklistPrintMode = opts.mode ?? 'full';
+  const isSummary = mode === 'summary';
+  const { categories, total, inspected, counts } = selectChecklistForPrint(checklist, mode);
 
-  // Resumo de status para o cabeçalho
-  const allItems = checklist.categories.flatMap(c => c.items);
-  const counts = allItems.reduce(
-    (acc, item) => { acc[item.status] = (acc[item.status] || 0) + 1; return acc; },
-    {} as Record<InspectionStatus, number>
-  );
+  const docTitle = `Checklist_OS${os.osNumber}_${sanitizeForFilename(os.vehicle)}${isSummary ? '_Resumido' : ''}`;
 
-  const totalItems   = allItems.length;
-  const inspectedQty = totalItems - (counts.pending || 0);
+  const dateText = (checklist.inspectedAt ? new Date(checklist.inspectedAt) : (opts.now ?? new Date())).toLocaleDateString('pt-BR');
+  const { model, plate } = vehicleParts(os.vehicle);
 
-  // Título do documento (nome do arquivo ao salvar PDF)
-  const docTitle = `Checklist_OS${os.osNumber}_${sanitizeForFilename(os.vehicle)}`;
+  const kmValue = checklist.mileageIn ?? os.mileage;
+  const kmHtml = typeof kmValue === 'number' && kmValue > 0
+    ? `<span class="mono">${formatKm(kmValue)} km</span>`
+    : '<span class="mono">________ km</span>';
 
-  // ---- Legenda de status ----
-  const legendHtml = (Object.entries(INSPECTION_STATUS_META) as [InspectionStatus, { label: string; emoji: string }][]).map(
-    ([key, meta]) => `
-      <span class="legend-item">
-        <span class="legend-dot" style="background:${STATUS_PRINT_COLOR[key]}"></span>
-        ${meta.label}
-        ${counts[key] ? `<strong>(${counts[key]})</strong>` : ''}
-      </span>
-    `
-  ).join('');
+  const field = (label: string, value: string, cls = '', span = 12) =>
+    `<td colspan="${span}" class="fld ${cls}"><div class="fld-l">${label}</div><div class="fld-v">${value}</div></td>`;
 
-  // ---- Grid de categorias ----
-  const categoriesHtml = checklist.categories.map(cat => {
-    const itemsHtml = cat.items.map(item => `
-      <tr style="background:${STATUS_BG_COLOR[item.status]}">
-        <td class="item-dot-cell">
-          <span class="item-dot" style="background:${STATUS_PRINT_COLOR[item.status]}"></span>
-        </td>
-        <td class="item-label-cell">${escapeHtml(item.label)}</td>
-      </tr>
-    `).join('');
+  const osNumberText = escapeHtml(String(os.osNumber));
+  const techName = os.technician || settings.name || '';
 
-    return `
-      <div class="category-card">
-        <div class="category-title">${escapeHtml(cat.label.toUpperCase())}</div>
-        <table class="items-table">
-          <tbody>
-            ${itemsHtml}
-            ${cat.items.length === 0 ? '<tr><td colspan="2" class="empty-cat">Nenhum item</td></tr>' : ''}
-          </tbody>
-        </table>
-      </div>
-    `;
-  }).join('');
+  // ---- Linha de resumo ----
+  const labelOf = (s: InspectionStatus) => escapeHtml(INSPECTION_STATUS_META[s].label);
+  const countParts = STATUS_COLUMNS.map(s => {
+    const text = `${labelOf(s)}: ${counts[s]}`;
+    return s === 'urgent' && counts.urgent > 0 ? `<strong>${text}</strong>` : text;
+  });
+  const summaryLine = `Inspecionados: ${inspected} de ${total} &middot; ${countParts.join(' &middot; ')}`;
+  const hintLine = !isSummary
+    ? 'Marque com X a coluna do estado. Três caixas vazias = item não inspecionado.'
+    : inspected > 0
+      ? (inspected === 1
+        ? `Mostrando só o item inspecionado, de ${total}.`
+        : `Mostrando só os ${inspected} itens inspecionados de ${total}.`)
+      : '';
+
+  // ---- Itens ----
+  const itemsHtml = categories.length > 0
+    ? `<div class="items">${categories.map(categoryHtml).join('')}</div>`
+    : '<p class="empty">Nenhum item foi inspecionado ainda.</p>';
+
+  // ---- Observações gerais ----
+  const notes = checklist.notes ?? '';
+  const hasNotes = notes.trim() !== '';
+  const notesHtml = (!isSummary || hasNotes)
+    ? `<section class="notes">
+        <div class="sec-title">Observações gerais</div>
+        ${hasNotes ? `<div class="notes-text">${escapeHtml(notes)}</div>` : ''}
+        ${!isSummary ? '<div class="rule"></div><div class="rule"></div><div class="rule"></div>' : ''}
+      </section>`
+    : '';
+
+  // ---- Rodapé de página (margin boxes): só número da OS e placa filtrada entram no CSS ----
+  const footOs = String(Number(os.osNumber) || 'SN');
+  const footPlate = footerPlate(plate);
+  const footLeft = `Checklist de vistoria \\00B7 OS ${footOs}${footPlate ? ` \\00B7 ${footPlate}` : ''}`;
 
   const printContent = `
     <!DOCTYPE html>
@@ -101,308 +194,169 @@ export function buildPrintChecklistHtml(
 
         @page {
           size: A4;
-          margin: 12mm 14mm;
+          margin: 12mm 12mm 16mm 12mm;
+          @bottom-left {
+            content: "${footLeft}";
+            font-family: 'Inter', Arial, sans-serif;
+            font-size: 8pt;
+            color: #444444;
+          }
+          @bottom-right {
+            content: "Página " counter(page) " de " counter(pages);
+            font-family: 'Inter', Arial, sans-serif;
+            font-size: 8pt;
+            color: #444444;
+          }
         }
 
         body {
           font-family: 'Inter', Arial, sans-serif;
-          background: #fff;
-          color: #111;
-          font-size: 10px;
-          line-height: 1.4;
+          background: #ffffff;
+          color: #111111;
+          font-size: 9pt;
+          line-height: 1.3;
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
         }
-
-        /* ---- Cabeçalho ---- */
-        .doc-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 10px;
-          padding-bottom: 10px;
-          border-bottom: 2px solid #111;
-        }
-        .header-shop {
-          flex: 1;
-        }
-        .shop-name {
-          font-size: 1.3rem;
-          font-weight: 900;
-          text-transform: uppercase;
-          letter-spacing: 0.04em;
-          color: #000;
-          margin-bottom: 2px;
-        }
-        .shop-sub {
-          font-size: 0.75rem;
-          color: #555;
-        }
-        .header-center {
-          flex: 1;
-          text-align: center;
-        }
-        .doc-title {
-          font-size: 1rem;
-          font-weight: 900;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          color: #8B5CF6;
-          margin-bottom: 2px;
-        }
-        .doc-os {
-          font-size: 0.75rem;
-          color: #555;
-        }
-        .header-vehicle {
-          flex: 1;
-          text-align: right;
-        }
-        .vehicle-name {
-          font-size: 1rem;
-          font-weight: 800;
-          color: #000;
-          margin-bottom: 2px;
-        }
-        .header-vehicle p {
-          font-size: 0.78rem;
-          color: #444;
-          margin: 1px 0;
+        .mono {
+          font-family: "Cascadia Mono", Consolas, monospace;
+          font-variant-numeric: tabular-nums;
         }
 
-        /* ---- Resumo de inspecção ---- */
-        .inspection-summary {
+        /* ---- Barra de título ---- */
+        .title-bar {
           display: flex;
           justify-content: space-between;
-          align-items: center;
-          background: #F5F5F5;
-          border-radius: 5px;
-          padding: 5px 10px;
-          margin-bottom: 8px;
-          font-size: 0.78rem;
+          align-items: flex-end;
+          gap: 8mm;
+          padding-bottom: 2mm;
+          border-bottom: 1.5pt solid #000000;
+          margin-bottom: 3mm;
         }
-        .summary-progress {
+        .shop-name { font-size: 13pt; font-weight: 700; color: #000000; }
+        .shop-sub { font-size: 8.5pt; color: #444444; }
+        .title-right { text-align: right; }
+        .doc-title { font-size: 11pt; font-weight: 700; text-transform: uppercase; color: #000000; }
+        .doc-os { font-size: 14pt; font-weight: 700; color: #000000; }
+        .doc-mode { font-size: 9pt; color: #333333; }
+
+        /* ---- Grade de campos ---- */
+        table.fields { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 3mm; }
+        td.fld { border: 0.5pt solid #000000; padding: 1mm 2mm; height: 12mm; vertical-align: top; }
+        .fld-l { font-size: 8pt; text-transform: uppercase; color: #444444; }
+        .fld-v { font-size: 10pt; color: #111111; overflow-wrap: anywhere; }
+
+        /* ---- Resumo ---- */
+        .summary-line { font-size: 9pt; color: #111111; }
+        .hint-line { font-size: 9pt; color: #333333; margin-bottom: 3mm; }
+        .summary-line { margin-bottom: 0.5mm; }
+        .empty { font-size: 9pt; color: #333333; margin: 4mm 0; }
+
+        /* ---- Itens em duas colunas ---- */
+        .items { columns: 2; column-gap: 8mm; margin-bottom: 4mm; }
+        table.cat { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 3mm; }
+        table.cat col.c-st { width: 13mm; }
+        table.cat-small { break-inside: avoid; page-break-inside: avoid; }
+        thead { display: table-header-group; }
+        thead tr { break-after: avoid; page-break-after: avoid; }
+        tr { break-inside: avoid; page-break-inside: avoid; }
+        th.cat-name {
+          border-top: 1pt solid #000000;
+          border-bottom: 0.5pt solid #000000;
+          padding: 1mm 1mm 0.5mm 0;
+          font-size: 9pt;
           font-weight: 700;
-          color: #8B5CF6;
+          text-align: left;
+          vertical-align: bottom;
+          color: #000000;
         }
-        .legend-bar {
-          display: flex;
-          gap: 12px;
-          align-items: center;
-        }
-        .legend-item {
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          color: #333;
-          font-size: 0.75rem;
-        }
-        .legend-dot {
-          width: 9px;
-          height: 9px;
-          border-radius: 50%;
-          display: inline-block;
-          flex-shrink: 0;
-        }
-
-        /* ---- Grid de categorias ---- */
-        .categories-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 7px;
-          margin-bottom: 10px;
-        }
-
-        .category-card {
-          border: 1px solid #ddd;
-          border-radius: 5px;
-          overflow: hidden;
-          break-inside: avoid;
-          page-break-inside: avoid;
-        }
-
-        .category-title {
-          background: #F0EBFF;
-          color: #5B21B6;
-          font-size: 0.65rem;
-          font-weight: 800;
-          letter-spacing: 0.08em;
-          padding: 4px 8px;
-          border-bottom: 1px solid #DDD6FE;
-        }
-
-        /* ---- Tabela de itens ---- */
-        .items-table {
-          width: 100%;
-          border-collapse: collapse;
-        }
-
-        .items-table tr {
-          border-bottom: 1px solid #F0F0F0;
-        }
-
-        .items-table tr:last-child {
-          border-bottom: none;
-        }
-
-        .item-dot-cell {
-          width: 20px;
-          padding: 3px 5px;
-          vertical-align: middle;
-        }
-
-        .item-dot {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          display: inline-block;
-        }
-
-        .item-label-cell {
-          padding: 3px 6px 3px 0;
-          font-size: 0.82rem;
-          color: #222;
-        }
-
-        .empty-cat {
-          padding: 4px 8px;
-          font-style: italic;
-          color: #999;
-          font-size: 0.75rem;
-        }
-
-        /* ---- Observações ---- */
-        .obs-section {
-          border: 1px solid #ddd;
-          border-radius: 5px;
-          padding: 7px 10px;
-          margin-bottom: 12px;
-          break-inside: avoid;
-          page-break-inside: avoid;
-        }
-        .obs-title {
-          font-size: 0.65rem;
-          font-weight: 800;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          color: #8B5CF6;
-          margin-bottom: 4px;
-        }
-        .obs-text {
-          font-size: 0.85rem;
-          color: #333;
-          white-space: pre-wrap;
-          min-height: 20px;
-        }
-
-        /* ---- Rodapé / assinatura ---- */
-        .doc-footer {
-          border-top: 1px dashed #aaa;
-          padding-top: 10px;
-          break-inside: avoid;
-          page-break-inside: avoid;
-        }
-        .signature-area {
-          display: flex;
-          justify-content: space-between;
-          gap: 20px;
-          margin-bottom: 8px;
-        }
-        .signature-block {
-          flex: 1;
+        th.colh {
+          border-top: 1pt solid #000000;
+          border-bottom: 0.5pt solid #000000;
+          padding: 1mm 0.3mm 0.5mm 0.3mm;
+          font-size: 8pt;
+          font-weight: 700;
+          line-height: 1.15;
           text-align: center;
+          vertical-align: bottom;
+          color: #000000;
         }
-        .sign-line {
-          border-bottom: 1px solid #000;
-          height: 14mm;
-          margin-bottom: 4px;
-        }
-        .sign-name  { font-size: 0.78rem; font-weight: 700; }
-        .sign-label { font-size: 0.6rem; color: #666; text-transform: uppercase; letter-spacing: 0.05em; }
-        .footer-center {
-          text-align: center;
-          border-top: 1px dashed #ddd;
-          padding-top: 6px;
-          margin-top: 8px;
-        }
-        .footer-declaration { font-size: 0.65rem; color: #444; margin-bottom: 3px; }
-        .footer-thankyou {
-          font-size: 0.68rem;
-          font-weight: 900;
-          letter-spacing: 0.12em;
+        td.lbl { padding: 0.8mm 1mm 0.8mm 0; border-bottom: 0.5pt solid #8c8c8c; font-size: 9pt; vertical-align: middle; overflow-wrap: anywhere; }
+        td.lbl.is-urgent { font-weight: 700; }
+        .item-note { font-size: 8.5pt; color: #333333; white-space: pre-wrap; margin-top: 0.3mm; font-weight: 400; }
+        td.st { border-bottom: 0.5pt solid #8c8c8c; text-align: center; vertical-align: middle; padding: 0.8mm 0; }
+        svg.box { width: 3.6mm; height: 3.6mm; display: inline-block; vertical-align: middle; }
+
+        /* ---- Bloco de notas ---- */
+        .notes { break-inside: avoid; page-break-inside: avoid; margin-bottom: 4mm; }
+        .sec-title {
+          border-top: 1pt solid #000000;
+          padding-top: 1mm;
+          margin-bottom: 1.5mm;
+          font-size: 9pt;
+          font-weight: 700;
           text-transform: uppercase;
-          color: #8B5CF6;
+          color: #000000;
         }
+        .notes-text { font-size: 9pt; color: #111111; white-space: pre-wrap; overflow-wrap: anywhere; }
+        .rule { height: 7mm; border-bottom: 0.5pt solid #8c8c8c; }
+
+        /* ---- Assinaturas ---- */
+        .sign-block { break-inside: avoid; page-break-inside: avoid; break-before: avoid-page; page-break-before: avoid; margin-top: 4mm; }
+        .signatures { display: flex; gap: 10mm; }
+        .signature { flex: 1; }
+        .sign-line { height: 15mm; border-bottom: 0.75pt solid #000000; }
+        .sign-name { font-size: 10pt; color: #111111; margin-top: 1mm; overflow-wrap: anywhere; }
+        .sign-label { font-size: 8pt; text-transform: uppercase; color: #444444; }
+        .place-date { font-size: 9pt; margin-top: 4mm; color: #111111; }
+        .declaration { font-size: 9pt; margin-top: 4mm; color: #111111; }
+        .thanks { font-size: 9pt; font-weight: 700; margin-top: 1mm; color: #000000; }
       </style>
     </head>
     <body>
 
-      <!-- CABEÇALHO -->
-      <div class="doc-header">
-        <div class="header-shop">
+      <div class="title-bar">
+        <div>
           <div class="shop-name">${escapeHtml(settings.name || 'OFICINA')}</div>
-          <div class="shop-sub">${escapeHtml(settings.address || '')}</div>
-          <div class="shop-sub">${settings.cnpj ? `CNPJ: ${escapeHtml(settings.cnpj)}` : ''}</div>
+          ${settings.address ? `<div class="shop-sub">${escapeHtml(settings.address)}</div>` : ''}
+          ${settings.cnpj ? `<div class="shop-sub">CNPJ: ${escapeHtml(settings.cnpj)}</div>` : ''}
         </div>
-
-        <div class="header-center">
-          <div class="doc-title">Checklist de Inspeção Veicular</div>
-          <div class="doc-os">OS #${os.osNumber} &mdash; ${formatDate(checklist.inspectedAt)}</div>
-          ${os.technician ? `<div class="doc-os">Téc: ${escapeHtml(os.technician)}</div>` : ''}
-        </div>
-
-        <div class="header-vehicle">
-          <div class="vehicle-name">${escapeHtml(os.vehicle)}</div>
-          <p><strong>Cliente:</strong> ${escapeHtml(os.clientName)}</p>
-          <p><strong>Telefone:</strong> ${escapeHtml(os.clientPhone || '-')}</p>
-          <p><strong>KM entrada:</strong> ${escapeHtml(String(checklist.mileageIn ?? os.mileage ?? '-'))}</p>
+        <div class="title-right">
+          <div class="doc-title">Checklist de vistoria do veículo</div>
+          <div class="doc-os mono">OS Nº ${osNumberText}</div>
+          ${isSummary ? '<div class="doc-mode">Resumido: só itens inspecionados</div>' : ''}
         </div>
       </div>
 
-      <!-- RESUMO DE INSPECÇÃO -->
-      <div class="inspection-summary">
-        <span class="summary-progress">
-          Itens inspecionados: ${inspectedQty} / ${totalItems}
-        </span>
-        <div class="legend-bar">${legendHtml}</div>
-      </div>
+      <table class="fields">
+        <tr>${field('Cliente', escapeHtml(os.clientName || ''), '', 8)}${field('Telefone', escapeHtml(os.clientPhone || ''), '', 4)}</tr>
+        <tr>${field('Veículo (modelo)', escapeHtml(model), '', 6)}${field('Placa', `<span class="mono">${escapeHtml(plate)}</span>`, '', 3)}${field('KM de entrada', kmHtml, '', 3)}</tr>
+        <tr>${field('Responsável técnico', escapeHtml(os.technician || ''), '', 8)}${field('Data da vistoria', escapeHtml(dateText), '', 4)}</tr>
+      </table>
 
-      <!-- GRID DE CATEGORIAS -->
-      <div class="categories-grid">
-        ${categoriesHtml}
-      </div>
+      <p class="summary-line">${summaryLine}</p>
+      ${hintLine ? `<p class="hint-line">${hintLine}</p>` : ''}
 
-      <!-- OBSERVAÇÕES -->
-      <div class="obs-section">
-        <div class="obs-title">Observações</div>
-        <div class="obs-text">${escapeHtml(checklist.notes || 'Nenhuma observação.')}</div>
-      </div>
+      ${itemsHtml}
 
-      <!-- RODAPÉ -->
-      <div class="doc-footer">
-        <div class="signature-area">
-          <div class="signature-block">
+      ${notesHtml}
+
+      <div class="sign-block">
+        <div class="signatures">
+          <div class="signature">
             <div class="sign-line"></div>
-            <span class="sign-name">${escapeHtml(os.technician || settings.name || 'Responsável')}</span>
-            <span class="sign-label">Técnico Responsável</span>
+            ${techName ? `<div class="sign-name">${escapeHtml(techName)}</div>` : ''}
+            <div class="sign-label">Responsável técnico</div>
           </div>
-          <div class="signature-block">
+          <div class="signature">
             <div class="sign-line"></div>
-            <span class="sign-name">${escapeHtml(os.clientName)}</span>
-            <span class="sign-label">Cliente</span>
-          </div>
-          <div class="signature-block">
-            <div class="sign-line"></div>
-            <span class="sign-name">_____ / _____ / _________</span>
-            <span class="sign-label">Data</span>
+            ${os.clientName ? `<div class="sign-name">${escapeHtml(os.clientName)}</div>` : ''}
+            <div class="sign-label">Cliente</div>
           </div>
         </div>
-        <div class="footer-center">
-          <p class="footer-declaration">
-            Declaro que o veículo foi recebido e inspecionado conforme os itens acima.
-          </p>
-          <p class="footer-thankyou">Obrigado pela preferência!</p>
-        </div>
+        <p class="place-date">Local e data: ____________________, ___/___/______</p>
+        <p class="declaration">Declaro que o veículo foi recebido e inspecionado conforme os itens acima.</p>
+        <p class="thanks">Obrigado pela preferência!</p>
       </div>
 
     </body>
@@ -416,12 +370,13 @@ export function printChecklist(
   os: WorkOrder,
   checklist: ChecklistSchema,
   settings: WorkshopSettings,
+  opts: ChecklistPrintOptions = {},
 ) {
   if (!os || !checklist) {
     console.error('Dados insuficientes para imprimir o checklist');
     return;
   }
-  const { printContent, docTitle } = buildPrintChecklistHtml(os, checklist, settings);
+  const { printContent, docTitle } = buildPrintChecklistHtml(os, checklist, settings, opts);
 
   const originalTitle = document.title;
   document.title = docTitle;

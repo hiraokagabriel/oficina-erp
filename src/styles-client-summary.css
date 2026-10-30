@@ -1,0 +1,47 @@
+/* MODO CLIENTE (ClientSummaryModal): tela cheia, usa só tokens (escuro e pastel). */
+.csm-overlay, .csm-overlay *, .csm-overlay *::before, .csm-overlay *::after { box-sizing: border-box; }
+.csm-overlay { position: fixed; inset: 0; z-index: 1200; background: var(--bg-app); display: flex; }
+.csm-dialog { display: flex; flex-direction: column; width: 100%; height: 100%; color: var(--text); font-family: var(--font-ui); }
+.csm-header { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-4); padding: var(--sp-4) var(--sp-6); border-bottom: 1px solid var(--border); background: var(--surface-1); }
+.csm-title { margin: 0; font-size: var(--fs-xl); }
+.csm-meta { color: var(--text-2); font-size: var(--fs-sm); }
+/* Corpo ocupa a largura toda (barra de rolagem na borda da janela); o miolo de 900px vem do padding lateral. */
+.csm-dialog { --csm-pad: max(var(--sp-6), calc((100% - 852px) / 2)); --csm-gutter: 0px; }
+.csm-body { flex: 1; overflow-y: auto; padding: var(--sp-6) var(--csm-pad); width: 100%; }
+.csm-who { display: grid; gap: var(--sp-2); font-size: var(--fs-md); margin-bottom: var(--sp-6); }
+.csm-label { color: var(--text-2); font-size: var(--fs-sm); margin-right: var(--sp-2); }
+.csm-section { margin-bottom: var(--sp-6); }
+.csm-h2 { display: flex; justify-content: space-between; font-size: var(--fs-lg); margin: 0 0 var(--sp-2); }
+.csm-sub { color: var(--text-2); font-weight: var(--fw-regular); }
+.csm-list, .csm-recs { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
+.csm-item { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.csm-item-btn { display: flex; align-items: center; gap: var(--sp-3); width: 100%; min-height: var(--control-h); padding: var(--sp-3) var(--sp-4); background: transparent; color: var(--text); border: 0; font: inherit; font-size: var(--fs-md); text-align: left; cursor: pointer; border-radius: var(--radius-md); }
+.csm-item-btn:hover { background: var(--surface-3); }
+.csm-item-btn:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.csm-item-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.csm-item-price { font-weight: var(--fw-semibold); white-space: nowrap; }
+.csm-chevron { color: var(--text-2); font-size: var(--fs-xs); }
+.csm-detail { padding: 0 var(--sp-4) var(--sp-3); color: var(--text-2); font-size: var(--fs-base); }
+.csm-recs li { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--sp-3) var(--sp-4); }
+.csm-insp-group { margin-bottom: var(--sp-4); }
+.csm-h3 { font-size: var(--fs-md); margin: 0 0 var(--sp-2); }
+.csm-rec-note { color: var(--text-2); font-size: var(--fs-sm); }
+.csm-notes { white-space: pre-wrap; margin: 0; }
+.csm-warranty { color: var(--text-2); font-size: var(--fs-sm); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--sp-3); }
+.csm-totals { border-top: 1px solid var(--border); background: var(--surface-1); padding: var(--sp-4) calc(var(--csm-pad) + var(--csm-gutter)) var(--sp-4) var(--csm-pad); display: grid; gap: var(--sp-1); width: 100%; }
+/* O padding do rodapé espelha o do corpo mais a largura da barra de rolagem (--csm-gutter, medida no modal). */
+.csm-total-row { display: flex; justify-content: space-between; font-size: var(--fs-lg); }
+.csm-total-strong { font-size: var(--fs-2xl); font-weight: var(--fw-bold); color: var(--accent-text); }
+@media (max-width: 800px) {
+  .csm-dialog { --csm-pad: var(--sp-4); }
+  .csm-header { padding-left: var(--sp-4); padding-right: var(--sp-4); }
+  .csm-title { font-size: var(--fs-lg); }
+  .csm-total-strong { font-size: var(--fs-xl); }
+}
+
+/* Janela de escolha antes de mostrar/imprimir o resumo (SummaryChoiceModal). */
+.csm-choice { display: grid; gap: var(--sp-3); margin: var(--sp-4) 0; }
+.csm-choice-row { display: flex; align-items: center; gap: var(--sp-3); min-height: var(--control-h); font-size: var(--fs-md); color: var(--text); cursor: pointer; }
+.csm-choice-row input { width: 22px; height: 22px; flex: none; }
+.csm-choice-row input:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.csm-choice-sub { margin-left: var(--sp-6); }

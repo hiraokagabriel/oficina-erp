@@ -9,7 +9,8 @@ import {
   createEmptyChecklist,
   migrateChecklist,
 } from '../types';
-import { printChecklist } from '../utils/printChecklist';
+import { printChecklist, selectChecklistForPrint, ChecklistPrintMode } from '../utils/printChecklist';
+import { ChecklistPrintChoiceModal } from './ChecklistPrintChoiceModal';
 import { useDirtyGuard } from '../hooks/useDirtyGuard';
 import { Icon } from '../components/ui/Icon';
 
@@ -35,6 +36,7 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
   const [newItemLabel, setNewItemLabel] = useState('');
   const [addingCategory, setAddingCategory] = useState(false);
   const [newCategoryLabel, setNewCategoryLabel] = useState('');
+  const [printChoiceOpen, setPrintChoiceOpen] = useState(false);
   const newItemInputRef = useRef<HTMLInputElement>(null);
   const newCatInputRef  = useRef<HTMLInputElement>(null);
   // Vistoria como foi carregada: clicar em estado de item não dispara evento de campo, então compara o objeto.
@@ -49,6 +51,7 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
       setAddingCategory(false);
       setNewItemLabel('');
       setNewCategoryLabel('');
+      setPrintChoiceOpen(false);
     }
   }, [isOpen, os]);
 
@@ -130,11 +133,18 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
 
   const handlePrint = () => {
     if (settings) {
-      printChecklist(os, checklist, settings);
+      setPrintChoiceOpen(true);
     } else {
       window.print();
     }
   };
+
+  const confirmPrint = (mode: ChecklistPrintMode) => {
+    if (settings) printChecklist(os, checklist, settings, { mode });
+    setPrintChoiceOpen(false);
+  };
+
+  const printSelection = selectChecklistForPrint(checklist, 'full');
 
   // Conta itens por status para o resumo do topo
   const counts = checklist.categories
@@ -310,6 +320,13 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
       </div>
     </div>
     {guard.dialog}
+    <ChecklistPrintChoiceModal
+      isOpen={printChoiceOpen}
+      total={printSelection.total}
+      inspected={printSelection.inspected}
+      onClose={() => setPrintChoiceOpen(false)}
+      onConfirm={confirmPrint}
+    />
     </>
   );
 };

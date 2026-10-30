@@ -1,7 +1,7 @@
-import { OrderItem, OSStatus, WorkOrder, WorkshopSettings, migrateChecklist } from '../types';
+import { INSPECTION_STATUS_META, InspectionStatus, OrderItem, OSStatus, WorkOrder, WorkshopSettings, migrateChecklist } from '../types';
 import { formatDateOnly, parseDateFlexible } from '../utils/dates';
 import { WARRANTY_DAYS, WARRANTY_SUMMARY_TEXT } from '../utils/warranty';
-import { getRemainingAmount } from './osFinanceService';
+import { sumAdvances } from './osFinanceService';
 import { formatExpectedDate } from './schedule';
 
 // "Resumo do serviço" para o cliente. Função pura: monta um objeto NOVO campo a campo
@@ -9,10 +9,10 @@ import { formatExpectedDate } from './schedule';
 // caixa nunca chegam à tela nem à impressão. Valores em centavos.
 
 export interface ServiceSummaryOptions {
-  /** Inclui os itens do checklist em "atenção"/"urgente" (padrão false). */
-  includeRecommendations?: boolean;
-  /** Inclui a nota de cada recomendação (padrão false; só vale com includeRecommendations). */
-  includeInspectionNotes?: boolean;
+  /** Inclui os itens MARCADOS da vistoria (ok, atenção, urgente), com a nota de cada item (padrão false). */
+  includeInspection?: boolean;
+  /** Inclui a nota geral da vistoria (padrão false; só vale com includeInspection). */
+  includeGeneralNote?: boolean;
 }
 
 export interface ServiceSummaryItem {
@@ -23,11 +23,27 @@ export interface ServiceSummaryItem {
   warranty: boolean;
 }
 
-export interface ServiceSummaryRecommendation {
+export type SummaryInspectionStatus = Exclude<InspectionStatus, 'pending'>;
+
+export interface ServiceSummaryInspectionItem {
   label: string;
-  urgent: boolean;
-  /** Só com includeInspectionNotes e nota preenchida. */
+  category: string;
+  /** Só quando a nota do item está preenchida. */
   note?: string;
+}
+
+export interface ServiceSummaryInspectionGroup {
+  status: SummaryInspectionStatus;
+  /** Palavra do estado (INSPECTION_STATUS_META), nunca só cor. */
+  label: string;
+  items: ServiceSummaryInspectionItem[];
+}
+
+export interface ServiceSummaryInspection {
+  /** Do mais grave ao menos grave (urgente, trocar, ok); grupo vazio não aparece. */
+  groups: ServiceSummaryInspectionGroup[];
+  /** Nota geral da vistoria; '' se não escolhida ou vazia. */
+  generalNote: string;
 }
 
 export interface ServiceSummary {
@@ -51,12 +67,12 @@ export interface ServiceSummary {
     total: number;
     /** Adiantamento já recebido (0 se não houver). */
     advance: number;
-    /** Restante a pagar (getRemainingAmount). */
+    /** Restante a pagar: max(total - adiantamento, 0), igual à OS impressa. */
     remaining: number;
     hasAdvance: boolean;
   };
   warranty: { days: number; text: string; hasWarrantyItems: boolean };
-  recommendations: ServiceSummaryRecommendation[];
+  inspection: ServiceSummaryInspection;
   /** dd/mm/aaaa do dia em que o resumo foi gerado. */
   generatedAt: string;
 }
@@ -85,6 +101,18 @@ const toSummaryItem = (item: OrderItem): ServiceSummaryItem => ({
   warranty: item.price > 0,
 });
 
+const INSPECTION_ORDER: SummaryInspectionStatus[] = ['urgent', 'attention', 'ok'];
+
+/**
+ * Adiantamento recebido, igual ao que a OS impressa mostra (handlePrintOS): soma dos `advances` (v4),
+ * senão o `advanceAmount` legado mesmo sem advanceEntryId. Não limita ao total.
+ */
+const receivedAdvance = (os: WorkOrder): number => {
+  const sum = sumAdvances(os);
+  if (sum > 0) return sum;
+  return typeof os.advanceAmount === 'number' && os.advanceAmount > 0 ? os.advanceAmount : 0;
+};
+
 export const buildServiceSummary = (
   os: WorkOrder,
   settings: WorkshopSettings,
@@ -94,20 +122,26 @@ export const buildServiceSummary = (
   const services = (os.services ?? []).map(toSummaryItem);
   const parts = (os.parts ?? []).map(toSummaryItem);
 
-  const remaining = getRemainingAmount(os);
-  const advance = Math.max(os.total - remaining, 0);
+  const advance = receivedAdvance(os);
+  const remaining = advance > 0 ? Math.max(os.total - advance, 0) : os.total;
 
-  const recommendations: ServiceSummaryRecommendation[] = [];
-  if (options.includeRecommendations) {
-    for (const cat of migrateChecklist(os.checklist).categories) {
-      for (const item of cat.items) {
-        if (item.status !== 'attention' && item.status !== 'urgent') continue;
-        const rec: ServiceSummaryRecommendation = { label: item.label, urgent: item.status === 'urgent' };
-        const note = item.note?.trim();
-        if (options.includeInspectionNotes && note) rec.note = note;
-        recommendations.push(rec);
+  const inspection: ServiceSummaryInspection = { groups: [], generalNote: '' };
+  if (options.includeInspection) {
+    const checklist = migrateChecklist(os.checklist);
+    for (const status of INSPECTION_ORDER) {
+      const items: ServiceSummaryInspectionItem[] = [];
+      for (const cat of checklist.categories) {
+        for (const item of cat.items) {
+          if (item.status !== status) continue;
+          const entry: ServiceSummaryInspectionItem = { label: item.label, category: cat.label };
+          const note = item.note?.trim();
+          if (note) entry.note = note;
+          items.push(entry);
+        }
       }
+      if (items.length > 0) inspection.groups.push({ status, label: INSPECTION_STATUS_META[status].label, items });
     }
+    if (options.includeGeneralNote) inspection.generalNote = (checklist.notes ?? '').trim();
   }
 
   return {
@@ -128,7 +162,7 @@ export const buildServiceSummary = (
       text: WARRANTY_SUMMARY_TEXT,
       hasWarrantyItems: services.some(i => i.warranty) || parts.some(i => i.warranty),
     },
-    recommendations,
+    inspection,
     generatedAt: toBR(now.toISOString()),
   };
 };

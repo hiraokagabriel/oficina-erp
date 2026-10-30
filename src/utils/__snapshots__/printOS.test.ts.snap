@@ -1189,6 +1189,7 @@ exports[`buildPrintOSHtml: dados normais > HTML sem categorias e sem observaçõ
         <div class="sign-space"></div>
         <span class="sign-name">João da Silva</span>
         <span class="sign-label">Cliente</span>
+        <span class="sign-label" style="text-transform:none;letter-spacing:0;margin-top:6px">Responsável Técnico: Carlos</span>
       </div>
             </div>
             <div class="footer-text-block">
@@ -1233,6 +1234,7 @@ exports[`buildPrintOSHtml: dados normais > HTML sem categorias e sem observaçõ
         <div class="sign-space"></div>
         <span class="sign-name">João da Silva</span>
         <span class="sign-label">Cliente</span>
+        <span class="sign-label" style="text-transform:none;letter-spacing:0;margin-top:6px">Responsável Técnico: Carlos</span>
       </div>
           </div>
           <div class="footer-text-block">

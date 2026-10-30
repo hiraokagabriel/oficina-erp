@@ -3,6 +3,7 @@ import { WorkOrder, OSStatus } from '../types';
 import { KanbanBoard } from '../components/KanbanBoard';
 import { summarizeDeliveries } from '../services/schedule';
 import { Icon } from '../components/ui/Icon';
+import type { KanbanCardActions } from '../components/KanbanCardMenu';
 
 interface WorkshopPageProps {
   workOrders: WorkOrder[];
@@ -14,17 +15,7 @@ interface WorkshopPageProps {
   showMargin?: boolean;
   onNewOS: () => void;
   onStatusChange: (osId: string, newStatus: OSStatus) => void;
-  kanbanActions: {
-    onRegress: (id: string) => void;
-    onEdit: (os: WorkOrder) => void;
-    onChecklist: (os: WorkOrder) => void;
-    onPrint: (os: WorkOrder) => void;
-    onDelete: (os: WorkOrder) => void;
-    onAdvance: (id: string) => void;
-    onArchive?: (os: WorkOrder) => void;
-    onRestore?: (os: WorkOrder) => void;
-    onQuickFinish?: (id: string) => void;
-  };
+  kanbanActions: KanbanCardActions;
 }
 
 export const WorkshopPage: React.FC<WorkshopPageProps> = ({

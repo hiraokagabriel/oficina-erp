@@ -26,7 +26,7 @@ const settings: WorkshopSettings = {
 
 const checklist = (): ChecklistSchema => ({
   mileageIn: 1000,
-  notes: 'SEGREDO-NOTA-INTERNA',
+  notes: 'Nota geral da vistoria',
   categories: [
     {
       id: 'c1',
@@ -84,8 +84,7 @@ const NOW = new Date(2026, 5, 1, 10, 0);
 describe('buildServiceSummary - vazamento', () => {
   it('JSON do resumo não contém nenhum dado interno', () => {
     const json = JSON.stringify(buildServiceSummary(withTextSecrets(), settings, {
-      includeRecommendations: true,
-      includeInspectionNotes: true,
+      includeInspection: true,
     }, NOW));
     for (const s of SECRETS) expect(json).not.toContain(s);
     for (const k of ['cost', 'totalCost', 'profit', 'profitMargin', 'clientPhone', 'technician', 'advanceEntryId', 'financialId', 'clientId', 'exportPath', 'googleApiKey']) {
@@ -100,8 +99,8 @@ describe('buildServiceSummary - vazamento', () => {
     const s = buildServiceSummary(os, settings, {}, NOW) as unknown as Record<string, unknown>;
     expect(s).not.toBe(os);
     expect(Object.keys(s).sort()).toEqual([
-      'clientName', 'expectedDate', 'generatedAt', 'items', 'mileage', 'osDate', 'osNumber',
-      'publicNotes', 'recommendations', 'status', 'statusText', 'totals', 'vehicle', 'warranty', 'workshop',
+      'clientName', 'expectedDate', 'generatedAt', 'inspection', 'items', 'mileage', 'osDate', 'osNumber',
+      'publicNotes', 'status', 'statusText', 'totals', 'vehicle', 'warranty', 'workshop',
     ]);
   });
 });
@@ -149,16 +148,36 @@ describe('buildServiceSummary - conteúdo', () => {
     expect(s.totals).toEqual({ total: 35000, advance: 0, remaining: 35000, hasAdvance: false });
   });
 
-  it('adiantamento legado sem advanceEntryId não aparece (igual a getRemainingAmount)', () => {
+  it('legado com advanceAmount mas sem advanceEntryId: mostra o adiantamento, como a OS impressa', () => {
     const s = buildServiceSummary(makeOS({ advanceEntryId: undefined }), settings, {}, NOW);
-    expect(s.totals.remaining).toBe(35000);
-    expect(s.totals.hasAdvance).toBe(false);
+    expect(s.totals).toEqual({ total: 35000, advance: 10000, remaining: 25000, hasAdvance: true });
   });
 
-  it('adiantamento maior que o total: restante 0', () => {
+  it('legado com advanceEntryId: mesmo resultado', () => {
+    const s = buildServiceSummary(makeOS(), settings, {}, NOW);
+    expect(s.totals).toEqual({ total: 35000, advance: 10000, remaining: 25000, hasAdvance: true });
+  });
+
+  it('legado com adiantamento maior que o total: restante 0, adiantamento real', () => {
     const s = buildServiceSummary(makeOS({ advanceAmount: 50000 }), settings, {}, NOW);
-    expect(s.totals.remaining).toBe(0);
-    expect(s.totals.advance).toBe(35000);
+    expect(s.totals).toEqual({ total: 35000, advance: 50000, remaining: 0, hasAdvance: true });
+  });
+
+  const adv = (amount: number, i: number) => ({ id: `a${i}`, date: new Date(2026, 2, 11, 12).toISOString(), amount, entryId: `e${i}` });
+
+  it('v4 com um adiantamento', () => {
+    const s = buildServiceSummary(makeOS({ advanceAmount: undefined, advanceEntryId: undefined, advances: [adv(8000, 1)] }), settings, {}, NOW);
+    expect(s.totals).toEqual({ total: 35000, advance: 8000, remaining: 27000, hasAdvance: true });
+  });
+
+  it('v4 com várias linhas: soma', () => {
+    const s = buildServiceSummary(makeOS({ advanceAmount: undefined, advanceEntryId: undefined, advances: [adv(5000, 1), adv(7000, 2)] }), settings, {}, NOW);
+    expect(s.totals).toEqual({ total: 35000, advance: 12000, remaining: 23000, hasAdvance: true });
+  });
+
+  it('v4 com soma maior que o total: mostra a soma real e restante 0', () => {
+    const s = buildServiceSummary(makeOS({ advanceAmount: undefined, advanceEntryId: undefined, advances: [adv(30000, 1), adv(10000, 2)] }), settings, {}, NOW);
+    expect(s.totals).toEqual({ total: 35000, advance: 40000, remaining: 0, hasAdvance: true });
   });
 });
 
@@ -173,34 +192,32 @@ describe('buildServiceSummary - previsão (qualquer fuso)', () => {
   });
 });
 
-describe('buildServiceSummary - recomendações', () => {
-  it('padrão: nenhuma', () => {
-    expect(buildServiceSummary(makeOS(), settings, {}, NOW).recommendations).toEqual([]);
+describe('buildServiceSummary - itens da vistoria', () => {
+  const none = { groups: [], generalNote: '' };
+
+  it('padrão: nada', () => {
+    expect(buildServiceSummary(makeOS(), settings, {}, NOW).inspection).toEqual(none);
   });
-  it('includeRecommendations: só attention/urgent, sem notas', () => {
-    const s = buildServiceSummary(makeOS(), settings, { includeRecommendations: true }, NOW);
-    expect(s.recommendations).toEqual([
-      { label: 'Pastilha dianteira', urgent: true },
-      { label: 'Disco dianteiro', urgent: false },
+  it('includeInspection: todos os marcados, urgente primeiro, nunca pending, com nota do item', () => {
+    const s = buildServiceSummary(makeOS(), settings, { includeInspection: true }, NOW);
+    expect(s.inspection.groups).toEqual([
+      { status: 'urgent', label: 'Urgente!', items: [{ label: 'Pastilha dianteira', category: 'Freios', note: 'Lona no fim' }] },
+      { status: 'attention', label: 'Necessita trocar', items: [{ label: 'Disco dianteiro', category: 'Freios' }] },
+      { status: 'ok', label: 'OK / Feito', items: [{ label: 'Fluido de freio', category: 'Freios', note: 'ok' }] },
     ]);
+    expect(JSON.stringify(s.inspection)).not.toContain('Mangueiras');
+    expect(s.inspection.generalNote).toBe('');
   });
-  it('includeInspectionNotes só com nota preenchida', () => {
-    const s = buildServiceSummary(makeOS(), settings, { includeRecommendations: true, includeInspectionNotes: true }, NOW);
-    expect(s.recommendations).toEqual([
-      { label: 'Pastilha dianteira', urgent: true, note: 'Lona no fim' },
-      { label: 'Disco dianteiro', urgent: false },
-    ]);
+  it('nota geral só com includeInspection + includeGeneralNote', () => {
+    expect(buildServiceSummary(makeOS(), settings, { includeInspection: true, includeGeneralNote: true }, NOW).inspection.generalNote).toBe('Nota geral da vistoria');
+    expect(buildServiceSummary(makeOS(), settings, { includeGeneralNote: true }, NOW).inspection).toEqual(none);
   });
-  it('notas sem includeRecommendations: nada', () => {
-    const s = buildServiceSummary(makeOS(), settings, { includeInspectionNotes: true }, NOW);
-    expect(s.recommendations).toEqual([]);
-  });
-  it('checklist ausente ou legado sem categories: sem recomendações e sem erro', () => {
-    const a = buildServiceSummary(makeOS({ checklist: undefined }), settings, { includeRecommendations: true }, NOW);
-    expect(a.recommendations).toEqual([]);
+  it('checklist ausente ou legado sem categories: vazio e sem erro', () => {
+    const a = buildServiceSummary(makeOS({ checklist: undefined }), settings, { includeInspection: true }, NOW);
+    expect(a.inspection).toEqual(none);
     const legado = { notes: 'x' } as unknown as ChecklistSchema;
-    const b = buildServiceSummary(makeOS({ checklist: legado }), settings, { includeRecommendations: true }, NOW);
-    expect(b.recommendations).toEqual([]);
+    const b = buildServiceSummary(makeOS({ checklist: legado }), settings, { includeInspection: true, includeGeneralNote: true }, NOW);
+    expect(b.inspection).toEqual({ groups: [], generalNote: 'x' });
   });
 });
 

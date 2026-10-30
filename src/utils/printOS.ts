@@ -2,6 +2,7 @@ import { WorkOrder, WorkshopSettings, STATUS_LABELS, PartCategory, PART_CATEGORY
 import { formatExpectedDate } from '../services/schedule';
 import { WARRANTY_TERM_TEXT } from './warranty';
 import { escapeHtml } from './html';
+import { normalizeLogoText } from './logo';
 
 // Variante de impressão: CLIENT = via do cliente (assina o mecânico), SHOP = via da oficina (assina o cliente)
 export type PrintVariant = 'CLIENT' | 'SHOP';
@@ -72,11 +73,16 @@ export function buildPrintOSHtml(data: WorkOrder, settings: WorkshopSettings, va
         <span class="sign-label">Responsável Técnico</span>
       </div>`;
 
+    // Via da oficina: só o cliente assina; o técnico responsável aparece em texto discreto (sem fallback para o nome da oficina).
+    // Estilo inline para não alterar o <style> (e o snapshot) das outras vias.
+    const techNote = variant === 'SHOP' && data.technician
+      ? `\n        <span class="sign-label" style="text-transform:none;letter-spacing:0;margin-top:6px">Responsável Técnico: ${escapeHtml(data.technician)}</span>`
+      : '';
     const clientBlock = `
       <div class="signature-block">
         <div class="sign-space"></div>
         <span class="sign-name">${escapeHtml(data.clientName)}</span>
-        <span class="sign-label">Cliente</span>
+        <span class="sign-label">Cliente</span>${techNote}
       </div>`;
 
     if (variant === 'CLIENT') return mechBlock;
@@ -172,7 +178,7 @@ export function buildPrintOSHtml(data: WorkOrder, settings: WorkshopSettings, va
   const termsPageHtml = `
     <div class="terms-page">
       <div style="text-align:center;margin-bottom:10px">
-        <div class="invoice-logo-circle" style="width:40px;height:40px;font-size:1.1rem;margin:0 auto 8px auto">AM</div>
+        <div class="invoice-logo-circle" style="width:40px;height:40px;font-size:1.1rem;margin:0 auto 8px auto">${escapeHtml(normalizeLogoText(settings.logoText))}</div>
         <h1 style="font-size:1rem;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin:0">${escapeHtml(settings.name || 'OFICINA MECÂNICA')}</h1>
         <p style="font-size:0.65rem;color:#888;letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-top:2px">TERMOS E CONDIÇÕES DE SERVIÇO</p>
       </div>
@@ -623,7 +629,7 @@ export function buildPrintOSHtml(data: WorkOrder, settings: WorkshopSettings, va
             <div class="invoice-logo-area">
               <h1 class="invoice-main-title">ORDEM DE SERVIÇO</h1>
               ${viaLabel ? `<p class="via-label">${viaLabel}</p>` : ''}
-              <div class="invoice-logo-circle">AM</div>
+              <div class="invoice-logo-circle">${escapeHtml(normalizeLogoText(settings.logoText))}</div>
             </div>
             <div class="invoice-col client-col">
               <h4 class="label-sm">CLIENTE</h4>

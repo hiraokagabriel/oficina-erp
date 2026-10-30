@@ -39,9 +39,12 @@ Construído sobre a robustez do **Rust (Tauri)** e a flexibilidade do **React**,
 ### 🎨 Personalização & UI
 
   * **Temas Visuais:**
-      * 🌑 **Dark Aero:** Tema escuro, moderno, com alto contraste e cores neon.
-      * 🌅 **Pastel Ultraviolet Dawn:** Tema claro, sofisticado, com gradientes suaves de lavanda e pêssego.
-  * **Impressão de Invoice:** Geração de Nota de Serviço (A4) formatada profissionalmente, com separação clara entre Peças e Mão de Obra.
+      * 🌑 **Escuro:** visual "Painel de instrumentos", com alto contraste.
+      * 🌅 **Pastel (claro):** tema claro suave, com contraste mínimo WCAG AA.
+  * **Impressão de OS (A4/PDF):** via geral, via do cliente (assinatura da oficina, com o técnico responsável ou o nome da oficina) e via da oficina (assinatura do cliente). Logo configurável (letras e prévia) em Configurações.
+  * **Checklist de vistoria impresso:** completo (com caixas para marcar à mão) ou resumido (só itens marcados), em preto e branco, com paginação.
+  * **Resumo do serviço para o cliente:** Modo cliente em tela cheia e impressão A4, com os itens marcados da vistoria, total, adiantamento e restante.
+  * **Fotos dos carros:** até 20 fotos por OS, com legenda e visualizador, e galeria de todas as fotos do mesmo cliente e carro em Clientes. Ficam em arquivos na pasta `fotos` ao lado do banco (não entram nos backups em JSON).
   * **Feedback Visual:** Sistema de notificações "Toast" para sucessos e erros.
 
 ### ☁️ Dados & Segurança
@@ -145,7 +148,7 @@ Ao abrir o programa pela primeira vez, vá até a aba **Config (⚙️)**:
 
 ### 4\. Impressão
 
-Na aba Oficina, no cartão da OS, clique no ícone de **Impressora (🖨️)**. Uma janela de visualização limpa será aberta para impressão em A4.
+Na aba Oficina, no cartão da OS, abra o menu **Mais** (ou clique com o botão direito) e escolha **Imprimir OS**: via geral, via do cliente ou via da oficina. **Mostrar ao cliente** abre o resumo em tela cheia e **Imprimir resumo** gera a versão A4. A vistoria tem o seu próprio botão Imprimir (completo ou resumido).
 
 -----
 

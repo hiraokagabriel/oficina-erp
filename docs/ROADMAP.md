@@ -130,7 +130,7 @@ Implementado e publicado (commits `4c9651a`, `5e9419c`, `9c345b1`, `c724c29`, `0
 - [x] Remover o código morto listado na seção 2 (feito: `src/domain/*`, `src/types/index.ts`, Rust solto em `src/`, `PrintableInvoice`, `InputModal`, `EditEntryModal`, `sound.ts`, fallback `window.electron`). Segue o código comentado do `App.tsx` e as props `onPrintClient`/`onPrintShop`, fora deste item.
 - [x] Migrações fora do `App.tsx` (`src/utils/migrations.ts`) e regra de finalização, parcelamento, pagamento e reabertura de OS extraída, sem mudar comportamento, para `src/services/osFinanceService.ts`. Segue no `App.tsx`: roteamento, ~20 estados de modal e os demais handlers.
 - [x] Eliminar os `any` do código de produção e unificar os tipos em `src/types.ts` (restam 8 `any` em `migrations.test.ts`).
-- [x] Trocar vínculo por nome por ids (cliente, veículo, item de catálogo, técnico). Plano 4.6 completo, **ativo desde o schema v2** (hoje `CURRENT_SCHEMA_VERSION = 3`, `STEPS = [v0ToV1, v1ToV2, v2ToV3]`):
+- [x] Trocar vínculo por nome por ids (cliente, veículo, item de catálogo, técnico). Plano 4.6 completo, **ativo desde o schema v2** (hoje `CURRENT_SCHEMA_VERSION = 5`, `STEPS = [v0ToV1, v1ToV2, v2ToV3, v3ToV4, v4ToV5]`):
   - OS novas e editadas gravam `clientId`, `vehicleId`, `technicianId` e `catalogItemId`; veículos novos ganham id; nome repetido de cliente abre o seletor "Qual cliente?" no cadastro da OS.
   - O cascade (renomear cliente, item ou técnico) casa por id e mantém os textos atualizados, com reserva pelo nome só quando ele é único.
   - Dívida e CRM agrupam por cliente resolvido por id (reserva `nome:<normalizado>`).
@@ -175,6 +175,19 @@ Implementada e testada (575 testes e verificação no navegador com banco sinté
 - [x] Relatório de margem: aba **Margem** no Financeiro (`MarginReport`), por serviço, peça e categoria, com OS abaixo da meta e itens sem custo. Escopo: OS Finalizadas e Aguardando pagamento, por data de criação, no mesmo mês/ano do filtro do Financeiro.
 
 Corrigido: a 1366 px as tabelas da aba Margem cabem sem rolagem horizontal ("Preço mediano praticado" e a dica "Sugestão" ficam numa segunda linha sob o nome do item; a 800 px o layout em blocos continua).
+
+### Fase 4: adiantamentos, fotos e impressão (2026-10)
+
+Implementada e verificada no navegador com banco sintético (Tauri real, impressão física e vários PCs ainda por testar). **Muda o formato do banco: schema v4 (adiantamentos com data e `auditLog`) e v5 (fotos por OS e `logoText`).** Detalhes técnicos no `CLAUDE.md`.
+
+- [x] Adiantamentos em lista com data e trilha de auditoria; lançamento travado no Financeiro.
+- [x] Fotos dos carros por OS (arquivos ao lado do banco, até 20 por OS) e galeria por cliente e carro em Clientes, com aviso de OS ligada só pelo nome.
+- [x] Resumo do serviço para o cliente (Modo cliente e A4) com os itens marcados da vistoria.
+- [x] Impressão: três vias da OS (geral, cliente, oficina), checklist novo (completo ou resumido) e logo configurável.
+- [ ] Backup das fotos (hoje só a pasta sincronizada e a lixeira `fotos\_lixeira`, que nunca é esvaziada).
+- [ ] Teste no Tauri real: fotos, arrastar e soltar, impressão A4 das três vias, do resumo e do checklist.
+- [ ] Atualizar todos os PCs no mesmo dia (v4 e v5 juntas; reversão pelo backup `pre-v<origem>`).
+- [ ] A OS impressa usa 4 páginas A4 mesmo curta (página de resumo com quebra obrigatória): rever.
 
 ### Autopreenchimento de veículos
 Implementado (sem mudança de formato do banco). Base brasileira gerada da API pública da FIPE (`npm run vehicles:build`, cache em `scripts/.cache/`, que retoma de onde parou) e embutida em `src/data/veiculos-br.json`, carregada sob demanda. Campo `VehicleCombobox` no modal da OS, cadastro de cliente, gerenciador de cadastros e agendamento: sugestões em grupos (veículos do cliente, já cadastrados na oficina, base brasileira), busca em qualquer ordem ("civic 2.0 2015"), tolerância a 1 erro de digitação, seletor de ano em segundo passo quando o ano não foi digitado, texto livre sempre permitido. Formato: "Marca Modelo Cilindrada Válvulas Ano".

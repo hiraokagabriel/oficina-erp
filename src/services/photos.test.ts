@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  MAX_PHOTOS_PER_OS, acceptImageFile, addPhotos, fitWithin, groupPhotosByVehicle, isValidPhotoId,
+  MAX_PHOTOS_PER_OS, acceptImageFile, addPhotos, fitWithin, groupPhotosByVehicle, isValidPhotoId, nameOnlyMatches,
   photoCount, photosOfClientVehicle, removePhoto, updateCaption,
 } from './photos';
 import type { OSPhoto, WorkOrder } from '../types';
@@ -189,5 +189,29 @@ describe('groupPhotosByVehicle', () => {
   });
   it('sem fotos: lista vazia', () => {
     expect(groupPhotosByVehicle([os({ clientId: 'C1' })], { clientId: 'C1' })).toEqual([]);
+  });
+});
+
+describe('nameOnlyMatches', () => {
+  const maria1 = { id: 'C1', name: 'Maria' };
+  const maria2 = { id: 'C2', name: ' maria ' };
+  const legada = (n: number, over: Partial<WorkOrder> = {}) =>
+    os({ id: `L${n}`, osNumber: n, clientName: 'Maria', photos: [ph(`p${n}`)], ...over });
+
+  it('OS sem clientId com homônimo existente gera aviso, em ordem de número', () => {
+    const r = nameOnlyMatches([legada(7), legada(3)], [maria1, maria2], maria1);
+    expect(r.map(o => o.osNumber)).toEqual([3, 7]);
+  });
+  it('OS com clientId não gera (homônimos com ids diferentes)', () => {
+    expect(nameOnlyMatches([legada(1, { clientId: 'C1' }), legada(2, { clientId: 'C2' })], [maria1, maria2], maria1)).toEqual([]);
+  });
+  it('sem homônimo não gera', () => {
+    expect(nameOnlyMatches([legada(1)], [maria1, { id: 'C3', name: 'José' }], maria1)).toEqual([]);
+  });
+  it('um só cliente com o nome não gera', () => {
+    expect(nameOnlyMatches([legada(1)], [maria1], maria1)).toEqual([]);
+  });
+  it('ignora OS sem foto e de outro nome', () => {
+    expect(nameOnlyMatches([legada(1, { photos: undefined }), legada(2, { clientName: 'José' })], [maria1, maria2], maria1)).toEqual([]);
   });
 });

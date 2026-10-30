@@ -105,3 +105,14 @@ export const limitGroups = (groups: readonly VehiclePhotoGroup[], cap: number): 
 export const SEM_CARRO_LABEL = 'Sem veículo informado';
 /** Nome do carro no filtro e nos títulos. */
 export const groupLabel = (g: Pick<VehiclePhotoGroup, 'label'>): string => g.label.trim() || SEM_CARRO_LABEL;
+
+/** Até `max` números de OS (#n) para o aviso de "ligada pelo nome", e quantas ficaram de fora. */
+export const nameOnlyOsList = (osNumbers: number[], max = 5): { shown: number[]; extra: number } => ({
+  shown: osNumbers.slice(0, max),
+  extra: Math.max(0, osNumbers.length - max),
+});
+
+export const NAME_ONLY_WARNING =
+  'Algumas fotos vêm de OS antigas ligadas a este cliente só pelo nome. Há outro cliente com o mesmo nome. Para separar, abra a OS e escolha o cliente certo.';
+export const NAME_ONLY_BADGE = 'ligada pelo nome';
+export const NAME_ONLY_BADGE_TITLE = 'Esta OS está ligada a este cliente só pelo nome. Abra a OS e escolha o cliente certo.';

@@ -1,4 +1,4 @@
-import type { OSPhoto, WorkOrder } from '../types';
+import type { Client, OSPhoto, WorkOrder } from '../types';
 import { normalizeName, normalizePlate, splitVehicle } from '../utils/links';
 
 // Regras PURAS das fotos da OS (schema v5). Sem I/O: arquivos JPEG ficam em `<pasta do banco>\fotos\<osId>\<photoId>.jpg`
@@ -187,4 +187,23 @@ export const groupPhotosByVehicle = (workOrders: WorkOrder[], ref: Pick<PhotoRef
     else grupos.set(key, { key, label: item.os.vehicle ?? '', photos: [item] });
   }
   return [...grupos.values()];
+};
+
+/**
+ * OS com foto que aparecem na galeria do cliente só porque o NOME bate: a OS não tem `clientId` e existe
+ * mais de um cliente com esse nome normalizado (homônimo). Serve ao aviso "complete o cadastro".
+ * Não muda quem aparece na galeria (isso é `sameClient`). Da menor para a maior OS.
+ */
+export const nameOnlyMatches = (
+  workOrders: WorkOrder[],
+  clients: Pick<Client, 'id' | 'name'>[],
+  client: Pick<Client, 'id' | 'name'>
+): WorkOrder[] => {
+  const nome = normalizeName(client.name);
+  if (nome === '') return [];
+  const homonimos = clients.filter(c => normalizeName(c.name) === nome).length;
+  if (homonimos < 2) return [];
+  return workOrders
+    .filter(os => !os.clientId && !!os.photos?.length && normalizeName(os.clientName) === nome)
+    .sort((a, b) => a.osNumber - b.osNumber);
 };

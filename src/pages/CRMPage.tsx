@@ -454,7 +454,7 @@ export const CRMPage: React.FC<CRMPageProps> = ({
                           <Icon name="camera" size={20} />
                           Fotos
                         </h3>
-                        <ClientPhotos dbPath={dbPath} clientId={selectedClient.id} clientName={selectedClient.name} workOrders={workOrders} />
+                        <ClientPhotos dbPath={dbPath} clientId={selectedClient.id} clientName={selectedClient.name} workOrders={workOrders} clients={clients} onOpenOS={onOpenOS} />
                       </div>
 
                       {/* HISTÓRICO DO CLIENTE */}

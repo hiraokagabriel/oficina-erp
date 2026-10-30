@@ -40,6 +40,14 @@
 .ph-client-empty p { margin: 0; max-width: 46ch; font-size: var(--fs-sm); }
 .ph-client-empty-title { font-size: var(--fs-md) !important; font-weight: var(--fw-semibold); color: var(--text); }
 
+/* Aviso permanente: OS antiga ligada só pelo nome (homônimo). Discreto, sem bloquear. */
+.ph-name-note { display: flex; align-items: flex-start; gap: var(--sp-2); margin-bottom: var(--sp-3); padding: var(--sp-3); border: 1px solid var(--border-strong); border-left-width: 4px; border-radius: var(--radius-md); background: var(--surface-2); color: var(--text); font-size: var(--fs-sm); }
+.ph-name-note > svg { flex: none; margin-top: 2px; color: var(--text-2); }
+.ph-name-note p { margin: 0; }
+.ph-name-note-list { margin-top: var(--sp-1) !important; color: var(--text-2); }
+.ph-name-note-link { display: inline; min-height: 0; padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-weight: var(--fw-semibold); text-decoration: underline; cursor: pointer; }
+.ph-name-badge { display: inline-block; margin-top: var(--sp-1); padding: 0 var(--sp-2); border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-2); color: var(--text-2); font-size: var(--fs-xs); }
+
 /* ---------- Visualizador (foto grande) ---------- */
 .ph-viewer-overlay { z-index: 1300; }
 .ph-viewer { display: flex; flex-direction: column; gap: var(--sp-3); width: min(1100px, 96vw); max-height: 96vh; padding: var(--sp-4); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface-1); color: var(--text); box-sizing: border-box; }

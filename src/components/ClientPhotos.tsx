@@ -2,28 +2,41 @@ import React, { useId, useMemo, useState } from 'react';
 import { Icon } from './ui/Icon';
 import { PhotoThumb } from './PhotoThumb';
 import { PhotoViewerModal, ViewerPhoto } from '../modals/PhotoViewerModal';
-import { groupPhotosByVehicle } from '../services/photos';
-import { groupLabel, limitGroups, photoAlt, photoOriginLabel } from '../services/photosView';
+import { groupPhotosByVehicle, nameOnlyMatches } from '../services/photos';
+import {
+  NAME_ONLY_BADGE, NAME_ONLY_BADGE_TITLE, NAME_ONLY_WARNING, groupLabel, limitGroups, nameOnlyOsList, photoAlt, photoOriginLabel,
+} from '../services/photosView';
 import { PAGE_STEP } from '../services/pagination';
-import type { WorkOrder } from '../types';
+import type { Client, WorkOrder } from '../types';
 
 interface ClientPhotosProps {
   dbPath: string;
   clientId: string;
   clientName: string;
   workOrders: WorkOrder[];
+  /** Todos os clientes: serve para achar homônimos. */
+  clients?: Client[];
+  /** Abre a OS (mesmo handler do histórico do CRM). */
+  onOpenOS?: (os: WorkOrder) => void;
 }
 
 const ALL = '';
 
 /** Fotos de todas as OS do cliente, por carro, da mais recente para a mais antiga. Clique abre a foto grande. */
-export const ClientPhotos: React.FC<ClientPhotosProps> = ({ dbPath, clientId, clientName, workOrders }) => {
+export const ClientPhotos: React.FC<ClientPhotosProps> = ({ dbPath, clientId, clientName, workOrders, clients, onOpenOS }) => {
   const filterId = useId();
   const [vehicleKey, setVehicleKey] = useState(ALL);
   const [cap, setCap] = useState(PAGE_STEP);
   const [viewIndex, setViewIndex] = useState<number | null>(null);
 
   const groups = useMemo(() => groupPhotosByVehicle(workOrders, { clientId, clientName }), [workOrders, clientId, clientName]);
+  // OS legadas que só casaram pelo nome com homônimo existente: aviso permanente (não bloqueia nada).
+  const byNameOnly = useMemo(
+    () => (clients ? nameOnlyMatches(workOrders, clients, { id: clientId, name: clientName }) : []),
+    [workOrders, clients, clientId, clientName]
+  );
+  const nameOnlyIds = useMemo(() => new Set(byNameOnly.map(o => o.id)), [byNameOnly]);
+  const nameOnlyList = nameOnlyOsList(byNameOnly.map(o => o.osNumber));
   const total = groups.reduce((n, g) => n + g.photos.length, 0);
 
   // Filtro que sumiu (cliente trocado ou fotos removidas) volta para "todos".
@@ -56,6 +69,27 @@ export const ClientPhotos: React.FC<ClientPhotosProps> = ({ dbPath, clientId, cl
   let offset = 0;
   return (
     <div className="ph-client">
+      {byNameOnly.length > 0 && (
+        <div className="ph-name-note" role="note">
+          <Icon name="info" size={16} />
+          <div>
+            <p>{NAME_ONLY_WARNING}</p>
+            <p className="ph-name-note-list">
+              OS:{' '}
+              {byNameOnly.slice(0, nameOnlyList.shown.length).map((o, i) => (
+                <React.Fragment key={o.id}>
+                  {i > 0 && ', '}
+                  {onOpenOS
+                    ? <button type="button" className="ph-name-note-link" onClick={() => onOpenOS(o)}>#{o.osNumber}</button>
+                    : <span>#{o.osNumber}</span>}
+                </React.Fragment>
+              ))}
+              {nameOnlyList.extra > 0 && ` e mais ${nameOnlyList.extra}`}
+            </p>
+          </div>
+        </div>
+      )}
+
       {groups.length > 1 && (
         <div className="ph-client-filter">
           <label className="form-label" htmlFor={filterId}>Mostrar fotos de</label>
@@ -86,6 +120,9 @@ export const ClientPhotos: React.FC<ClientPhotosProps> = ({ dbPath, clientId, cl
                     />
                     {photo.caption?.trim() && <div className="ph-cell-caption">{photo.caption.trim()}</div>}
                     <div className="ph-cell-origin">{photoOriginLabel(os.osNumber, photo.createdAt)}</div>
+                    {nameOnlyIds.has(os.id) && (
+                      <span className="ph-name-badge" title={NAME_ONLY_BADGE_TITLE} aria-label={`${NAME_ONLY_BADGE}: ${NAME_ONLY_BADGE_TITLE}`}>{NAME_ONLY_BADGE}</span>
+                    )}
                   </li>
                 );
               })}

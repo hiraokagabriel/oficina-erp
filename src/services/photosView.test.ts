@@ -3,7 +3,7 @@ import type { OSPhoto, WorkOrder } from '../types';
 import type { VehiclePhotoGroup } from './photos';
 import {
   appendPhotoMetas, groupLabel, limitGroups, limitMessage, photoAlt, photoCountLabel, photoDateLabel, photoOriginLabel,
-  photosChanged, photosToTrashOnSave, removeFromList, setCaptionInList, slotsLeft, trimCaptions,
+  nameOnlyOsList, photosChanged, photosToTrashOnSave, removeFromList, setCaptionInList, slotsLeft, trimCaptions,
 } from './photosView';
 
 const ph = (id: string, caption?: string): OSPhoto => ({ id, createdAt: '2026-05-03T15:00:00.000Z', ...(caption ? { caption } : {}) });
@@ -76,5 +76,13 @@ describe('galeria', () => {
   it('groupLabel cai no texto padrão', () => {
     expect(groupLabel({ label: '' })).toBe('Sem veículo informado');
     expect(groupLabel({ label: 'Gol - ABC1D23' })).toBe('Gol - ABC1D23');
+  });
+});
+
+describe('nameOnlyOsList', () => {
+  it('até 5 e o resto em extra', () => {
+    expect(nameOnlyOsList([1, 2, 3])).toEqual({ shown: [1, 2, 3], extra: 0 });
+    expect(nameOnlyOsList([1, 2, 3, 4, 5, 6, 7])).toEqual({ shown: [1, 2, 3, 4, 5], extra: 2 });
+    expect(nameOnlyOsList([])).toEqual({ shown: [], extra: 0 });
   });
 });

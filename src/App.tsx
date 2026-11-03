@@ -903,6 +903,7 @@ Abrir OS?`)) {
             {activeTab === 'PECAS' && (
               <PartsPage
                 workOrders={workOrders}
+                settings={settings}
                 isLoading={isLoading}
               />
             )}

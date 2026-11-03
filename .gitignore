@@ -52,3 +52,6 @@ C:\OficinaData
 
 # Cache do gerador do catálogo de veículos
 scripts/.cache/
+
+# Saída do graphify (grafo de conhecimento local)
+graphify-out/

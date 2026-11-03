@@ -60,15 +60,13 @@ export const PartCategorySelect: React.FC<PartCategorySelectProps> = ({
           height: '100%',
           padding: '7px 10px',
           borderRadius: 'var(--radius-lg)',
-          border: `1px solid ${
-            selected ? `${selected.color}55` : 'var(--border-color)'
-          }`,
+          border: '1px solid var(--border-control)',
           borderLeft: `3px solid ${
-            selected ? selected.color : 'var(--border-color)'
+            selected ? selected.color : 'var(--border-control)'
           }`,
           background: selected ? `${selected.color}12` : 'var(--bg-elevated)',
-          color: selected ? selected.color : 'var(--text-muted)',
-          fontSize: '0.76rem',
+          color: 'var(--text)',
+          fontSize: 'var(--fs-sm)',
           fontWeight: selected ? 600 : 400,
           cursor: 'pointer',
           display: 'flex',
@@ -77,7 +75,7 @@ export const PartCategorySelect: React.FC<PartCategorySelectProps> = ({
           transition: 'all var(--transition-fast)',
           boxShadow: 'var(--shadow-sm)',
           whiteSpace: 'nowrap',
-          outline: 'none',
+          minHeight: 'var(--control-h-min)',
         }}
       >
         {selected && (
@@ -103,8 +101,8 @@ export const PartCategorySelect: React.FC<PartCategorySelectProps> = ({
         </span>
         <span
           style={{
-            fontSize: '0.55rem',
-            opacity: 0.5,
+            fontSize: 'var(--fs-xs)',
+            opacity: 0.8,
             flexShrink: 0,
             display: 'inline-block',
             transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
@@ -213,8 +211,10 @@ const DropdownOption: React.FC<DropdownOptionProps> = ({
       onMouseLeave={() => setHovered(false)}
       style={{
         padding: '7px 12px',
+        minHeight: 'var(--control-h-min)',
+        boxSizing: 'border-box',
         cursor: 'pointer',
-        fontSize: '0.78rem',
+        fontSize: 'var(--fs-xs)',
         display: 'flex',
         alignItems: 'center',
         gap: 8,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { decideClose, decideEscape } from './dirtyGuard';
+import { decideClose, decideEscape, isNoDirtyTarget } from './dirtyGuard';
 
 describe('decideClose', () => {
   it('suja pede confirmação, limpa fecha', () => {
@@ -20,5 +20,18 @@ describe('decideEscape', () => {
   });
   it('Esc durante composição de texto é ignorado', () => {
     expect(decideEscape({ ...base, isComposing: true })).toBe('ignore');
+  });
+});
+
+describe('isNoDirtyTarget', () => {
+  const comMarca = { closest: (sel: string) => (sel === '[data-no-dirty]' ? {} : null) };
+  const semMarca = { closest: () => null };
+  it('ignora controle marcado com data-no-dirty (ou dentro de um)', () => {
+    expect(isNoDirtyTarget(comMarca)).toBe(true);
+  });
+  it('campo comum e alvos sem closest contam como alteração', () => {
+    expect(isNoDirtyTarget(semMarca)).toBe(false);
+    expect(isNoDirtyTarget(null)).toBe(false);
+    expect(isNoDirtyTarget({})).toBe(false);
   });
 });

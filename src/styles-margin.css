@@ -53,17 +53,17 @@
 .margin-ind__goal { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--text-main); opacity: 0.7; }
 
 .margin-btn {
-  background: var(--primary);
-  /* Tema escuro: --primary é dourado (#caa400); texto branco dava 2,4:1. Texto escuro dá >= 7:1. */
-  color: #111;
-  border: none;
+  /* Contorno (não compete com "Salvar OS"): borda --accent, texto --accent-text (contraste conferido nos dois temas). */
+  background: transparent;
+  color: var(--accent-text);
+  border: 1px solid var(--accent);
   border-radius: 4px;
   padding: 2px 8px;
   font-size: 0.7rem;
   font-weight: 700;
   cursor: pointer;
 }
-[data-theme="pastel"] .margin-btn { background: #5b21b6; color: #fff; }
+.margin-btn:hover { background: var(--accent-soft); }
 .margin-btn:focus-visible, .margin-hist button:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
@@ -114,7 +114,14 @@
 }
 .margin-min-box--abaixo { border-color: var(--margin-bad); }
 .margin-min-box__alert { font-size: 0.8rem; font-weight: 700; margin-top: 8px; color: var(--margin-bad); }
-.margin-cost-field { background: rgba(255, 152, 0, 0.1); }
+.margin-cost-field { border-style: dashed; border-color: var(--border-strong); }
+
+/* Janela da OS: pisos de fonte de 13 px e nada translúcido (legibilidade) */
+.osm .margin-ind { font-size: var(--fs-xs); }
+.osm .margin-ind__muted, .osm .margin-hist, .osm .margin-partial-note, .osm .margin-btn, .osm .margin-hist button { font-size: var(--fs-xs); }
+.osm .margin-ind__goal { opacity: 1; }
+.osm .margin-hist { color: var(--text-2); }
+.osm .margin-ind__muted { color: var(--text-2); }
 
 /* Config */
 .margin-config-error { color: var(--danger, #e53935); font-size: 0.8rem; margin-top: 5px; display: block; }

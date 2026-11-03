@@ -100,3 +100,10 @@
   --text-secondary:     var(--text-muted, #6b7280);
   --color-primary-400:  var(--primary, #6C8EEF);
 }
+
+/* Foco visível do seletor de categoria (igual aos outros campos) */
+.pcs-trigger:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+
+/* Janela da OS: grupo de categoria legível (>= 13 px, sem translucidez); a cor fica no ponto e na borda */
+.osm .category-group-header { font-size: var(--fs-xs); color: var(--text-2); opacity: 1; }
+.osm .category-group-header::before { width: 8px; height: 8px; opacity: 1; }

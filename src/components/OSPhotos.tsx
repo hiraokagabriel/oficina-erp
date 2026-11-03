@@ -167,7 +167,7 @@ export const OSPhotos: React.FC<OSPhotosProps> = ({ dbPath, osId, osNumber, phot
       <div className="ph-bar">
         <button
           type="button"
-          className="btn ph-add"
+          className="btn-accent-outline ph-add"
           onClick={() => inputRef.current?.click()}
           disabled={!available || full}
           aria-describedby={hintId}
@@ -210,7 +210,7 @@ export const OSPhotos: React.FC<OSPhotosProps> = ({ dbPath, osId, osNumber, phot
                   className="form-input ph-caption"
                   value={p.caption ?? ''}
                   maxLength={120}
-                  placeholder="Legenda (opcional)"
+                  placeholder="Legenda"
                   onChange={e => {
                     const v = e.target.value;
                     setPhotos(prev => setCaptionInList(prev, p.id, v));

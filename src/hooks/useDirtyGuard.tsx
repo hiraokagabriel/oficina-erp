@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ConfirmationModal } from '../modals/ConfirmationModal';
-import { decideClose, decideEscape } from '../utils/dirtyGuard';
+import { decideClose, decideEscape, isNoDirtyTarget } from '../utils/dirtyGuard';
 
 interface DirtyGuardOptions {
   /** A janela está aberta (o guard só escuta enquanto estiver). */
@@ -54,6 +54,7 @@ export const useDirtyGuard = ({ active, onClose, resetKey, trackInputs = true, i
     const onField = (e: Event) => {
       if (!latest.current.trackInputs) return;
       const root = overlayRef.current;
+      if (isNoDirtyTarget(e.target)) return;
       if (root && e.target instanceof Node && root.contains(e.target)) dirtyRef.current = true;
     };
     const onKey = (e: KeyboardEvent) => {

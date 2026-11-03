@@ -49,6 +49,19 @@
 .btn-success { background: var(--success-fill); color: var(--on-success); border-color: var(--success-fill); box-shadow: var(--btn-highlight), var(--elev-1); }
 .btn-success:hover:not(:disabled) { background: color-mix(in srgb, var(--success-fill) 88%, #000); border-color: color-mix(in srgb, var(--success-fill) 88%, #000); color: var(--on-success); }
 
+/* Ação de adicionar: contorno no acento, sem fundo cheio (a ação principal fica só com .btn) */
+.btn-accent-outline {
+  box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2);
+  min-height: var(--control-h-min); padding: 0 var(--sp-4);
+  border: 1px solid var(--accent); border-radius: var(--radius-md); background: transparent; color: var(--accent-text);
+  font-family: inherit; font-size: var(--fs-sm); font-weight: var(--fw-semibold); line-height: 1.2;
+  cursor: pointer; white-space: nowrap;
+  transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.btn-accent-outline:hover:not(:disabled) { background: var(--accent-soft); }
+.btn-accent-outline:disabled { opacity: 0.55; cursor: not-allowed; }
+
 /* Botão compacto: alvo mínimo de 40 px */
 .btn-sm {
   box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-1);
@@ -195,8 +208,9 @@ button.chip:hover, a.chip:hover { background: var(--surface-3); color: var(--tex
   width: min(380px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: var(--sp-2);
   pointer-events: none;
 }
-/* Com uma janela aberta, o aviso sobe para o topo à direita: não cobre o rodapé (Salvar/Cancelar) da janela. */
-body:has(.modal-overlay) .toast-region { bottom: auto; top: var(--sp-4); }
+/* Com uma janela aberta, o aviso fica embaixo à direita, acima do rodapé da janela (~88 px):
+   não cobre o cabeçalho (Data/Fechar) nem Salvar/Cancelar/Total. */
+body:has(.modal-overlay) .toast-region { bottom: calc(var(--sp-4) + 88px); top: auto; }
 .toast-stack { display: flex; flex-direction: column; gap: var(--sp-2); }
 .toast-item {
   pointer-events: auto; box-sizing: border-box; display: flex; align-items: center; gap: var(--sp-3);

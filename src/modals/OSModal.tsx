@@ -16,10 +16,11 @@ import { firstErrorField, OSFieldErrors, OSFieldId, validateOSFields } from '../
 import { MoneyField } from '../components/MoneyField';
 import { Icon } from '../components/ui/Icon';
 import { AdvancesList } from '../components/AdvancesList';
-import { AdvanceRow, advanceRowsToPayload, buildAdvanceRows, firstInvalidAdvanceRow } from '../services/advancesDraft';
+import { AdvanceRow, advanceRowsToPayload, buildAdvanceRows, firstInvalidAdvanceRow, advanceTotals } from '../services/advancesDraft';
 import { isAdvanceSyncLocked } from '../services/osFinanceService';
 import { OSPhotos } from '../components/OSPhotos';
 import { useDatabase } from '../context/DatabaseContext';
+import { getShowCosts, setShowCosts, getShowCostColumn, setShowCostColumn as saveShowCostColumn } from '../utils/uiPrefs';
 import { trashPhoto } from '../services/photoStore';
 import { photosChanged, trimCaptions } from '../services/photosView';
 
@@ -118,8 +119,8 @@ export const OSModal: React.FC<OSModalProps> = ({
 
   const [parts, setParts] = useState<OrderItem[]>([]);
   const [services, setServices] = useState<OrderItem[]>([]);
-  const [showCostColumn, setShowCostColumn] = useState(true);
-  const [showProfit, setShowProfit] = useState(false); // análise de lucro recolhida por padrão
+  const [showCostColumn, setShowCostColumn] = useState(getShowCostColumn); // lembra a última escolha deste PC (padrão ligada)
+  const [showProfit, setShowProfit] = useState(getShowCosts); // análise de lucro: lembra a última escolha deste PC (padrão recolhida)
   const [errors, setErrors] = useState<OSFieldErrors>({});
   const clearError = (f: OSFieldId) => setErrors(prev => (prev[f] ? { ...prev, [f]: undefined } : prev));
 
@@ -239,7 +240,8 @@ export const OSModal: React.FC<OSModalProps> = ({
     sessionPhotos.current.clear();
     setErrors({});
     setMoneyShown(false);
-    setShowProfit(false);
+    setShowProfit(getShowCosts());
+    setShowCostColumn(getShowCostColumn());
 
     if (editingOS) {
       setOsNumber(editingOS.osNumber.toString());
@@ -527,22 +529,34 @@ export const OSModal: React.FC<OSModalProps> = ({
   if (!isOpen) return null;
 
   const costToggle = (
-    <label className="osm-check">
-      <input type="checkbox" checked={showCostColumn} onChange={e => setShowCostColumn(e.target.checked)} />
-      Mostrar custos
+    <label className="osm-switch" title="Mostrar custos">
+      <input type="checkbox" role="switch" data-no-dirty className="osm-switch-input" checked={showCostColumn} onChange={e => { setShowCostColumn(e.target.checked); saveShowCostColumn(e.target.checked); }} />
+      <span className="osm-switch-track" aria-hidden="true"><span className="osm-switch-thumb" /></span>
+      <span>{showCostColumn ? 'Custos: aparecendo' : 'Custos: escondidos'}</span>
     </label>
   );
 
   const removeBtn = (onClick: () => void, desc: string) => (
     <button type="button" className="osm-remove" onClick={onClick} aria-label={`Remover item ${desc}`.trim()} title="Remover item">
-      <Icon name="excluir" size={18} />
+      <Icon name="excluir" size={18} /> <span className="osm-remove-txt">Remover</span>
     </button>
   );
+
+  // Legenda visível sobre o campo de dinheiro (o aria-label do campo continua o nome acessível).
+  const numf = (cap: string, field: React.ReactNode) => (
+    <div className="osm-numf"><span className="osm-numf-cap" aria-hidden="true">{cap}</span>{field}</div>
+  );
+  const itemsCount = (n: number) => `${n} ${n === 1 ? 'item' : 'itens'}`;
+  const marginSummary = marginLvl === 'NA_META' && margin.marginPct !== null
+    ? `${marginLabel(marginLvl, margin.marginPct)} · na meta`
+    : marginLabel(marginLvl, margin.marginPct);
+
+  const advTotals = advanceTotals(advanceRows, totalRevenue);
 
   return (
     <>
     <div className="modal-overlay" ref={guard.overlayRef}>
-      <div className="modal-content osm" role="dialog" aria-modal="true" aria-labelledby="os-modal-title" style={{ maxWidth: '1100px', width: '95%' }}>
+      <div className="modal-content osm" role="dialog" aria-modal="true" aria-labelledby="os-modal-title">
         <header className="osm-head">
           <h2 id="os-modal-title" className="modal-title">{editingOS ? "Editar OS" : "Nova OS"}</h2>
           <div className="osm-meta">
@@ -557,15 +571,20 @@ export const OSModal: React.FC<OSModalProps> = ({
               <input id="os-date" className="form-input" type="date" value={date} onChange={e => setDate(e.target.value)} />
             </div>
           </div>
+          <button type="button" className="btn-ghost osm-close" onClick={guard.requestClose}>
+            <Icon name="fechar" size={18} /> Fechar
+          </button>
           {errors['os-number'] && <p id="os-number-error" className="field-error osm-head-error" role="alert">{errors['os-number']}</p>}
         </header>
+
+        <div className="osm-body">
 
         {/* 1. CLIENTE E VEÍCULO */}
         <section className="osm-section" aria-labelledby="osm-h-cliente">
           <h3 id="osm-h-cliente" className="osm-h"><Icon name="clientes" size={18} /> Cliente e veículo</h3>
           <div className="osm-grid">
             <div className="form-group osm-w2">
-              <label className="form-label" htmlFor="os-client">Cliente</label>
+              <label className="form-label" htmlFor="os-client">Cliente <span className="osm-opt">(obrigatório)</span></label>
               <input ref={clientInputRef} id="os-client" className="form-input" list="clients_list" value={clientName}
                 aria-invalid={errors['os-client'] ? true : undefined} aria-describedby={errors['os-client'] ? 'os-client-error' : undefined}
                 onChange={e => { setClientName(e.target.value); clearError('os-client'); clearError('os-client-choice'); }} autoFocus={!editingOS} />
@@ -573,14 +592,14 @@ export const OSModal: React.FC<OSModalProps> = ({
               {errors['os-client'] && <p id="os-client-error" className="field-error" role="alert">{errors['os-client']}</p>}
             </div>
             <div className="form-group">
-              <label className="form-label" htmlFor="os-contact">Contato / Telefone</label>
+              <label className="form-label" htmlFor="os-contact">Contato / Telefone <span className="osm-opt">(opcional)</span></label>
               <input id="os-contact" className="form-input" value={contact} onChange={e => setContact(e.target.value)} />
             </div>
           </div>
 
           {hasHomonyms && (
-            <fieldset className="osm-homonyms">
-              <legend className="form-label">Qual cliente?</legend>
+            <fieldset className="osm-note osm-note--warn osm-homonyms">
+              <legend className="form-label"><Icon name="alerta" size={16} /> Qual cliente?</legend>
               <div role="radiogroup" aria-label="Qual cliente?" aria-required="true" aria-describedby={needsClientChoice ? 'os-client-choice-error' : undefined} className="osm-radios">
                 {sameNameClients.map((c, idx) => (
                   <label key={c.id} className="osm-radio">
@@ -611,7 +630,7 @@ export const OSModal: React.FC<OSModalProps> = ({
 
           <div className="osm-grid">
             <div className="form-group osm-w2">
-              <label className="form-label" htmlFor="os-vehicle">Veículo</label>
+              <label className="form-label" htmlFor="os-vehicle">Veículo <span className="osm-opt">(obrigatório)</span></label>
               <VehicleCombobox id="os-vehicle" value={vehicle}
                 invalid={!!errors['os-vehicle']} describedBy={errors['os-vehicle'] ? 'os-vehicle-error' : undefined}
                 onChange={v => { if (v !== vehicle) guard.markDirty(); setVehicle(v); clearError('os-vehicle'); }}
@@ -619,43 +638,46 @@ export const OSModal: React.FC<OSModalProps> = ({
               {errors['os-vehicle'] && <p id="os-vehicle-error" className="field-error" role="alert">{errors['os-vehicle']}</p>}
             </div>
             <div className="form-group">
-              <label className="form-label" htmlFor="os-plate">Placa</label>
+              <label className="form-label" htmlFor="os-plate">Placa <span className="osm-opt">(opcional)</span></label>
               <input id="os-plate" className="form-input" value={plate} onChange={e => setPlate(e.target.value.toUpperCase())} maxLength={8} />
             </div>
             <div className="form-group">
-              <label className="form-label" htmlFor="os-km">Km</label>
+              <label className="form-label" htmlFor="os-km">Km <span className="osm-opt">(opcional)</span></label>
               <input id="os-km" className="form-input" type="number" value={mileage} onChange={e => setMileage(e.target.value)} />
             </div>
           </div>
         </section>
 
-        {/* 2. O QUE SERÁ FEITO */}
+        {/* 2. SERVIÇO */}
         <section className="osm-section" aria-labelledby="osm-h-itens">
           <div className="osm-h-row">
-            <h3 id="osm-h-itens" className="osm-h"><Icon name="oficina" size={18} /> O que será feito</h3>
+            <h3 id="osm-h-itens" className="osm-h"><Icon name="oficina" size={18} /> Serviço <span className="osm-h-count">{itemsCount(parts.length + services.length)} · {formatMoney(totalRevenue)}</span></h3>
             {costToggle}
           </div>
-          <div className="form-group osm-tech">
-            <label className="form-label" htmlFor="os-tech">Técnico responsável <span className="osm-opt">(opcional)</span></label>
-            <input id="os-tech" className="form-input" list="tech_list" value={technician} onChange={e => setTechnician(e.target.value)} />
-            <datalist id="tech_list">{suggestedTechnicians.map(t => <option key={t.id} value={t.name} />)}</datalist>
+          <div className="osm-grid osm-grid--tech">
+            <div className="form-group">
+              <label className="form-label" htmlFor="os-tech">Técnico responsável <span className="osm-opt">(opcional)</span></label>
+              <input id="os-tech" className="form-input" list="tech_list" value={technician} onChange={e => setTechnician(e.target.value)} />
+              <datalist id="tech_list">{suggestedTechnicians.map(t => <option key={t.id} value={t.name} />)}</datalist>
+            </div>
+            <div className="form-group">
+              <label className="form-label osm-nowrap" htmlFor="os-expected-date">Previsão de entrega <span className="osm-opt">(opcional)</span></label>
+              <input id="os-expected-date" className="form-input" type="date" value={expectedDate} onChange={e => setExpectedDate(e.target.value)} />
+            </div>
           </div>
-          {showCostColumn && (
-            <div className="margin-goal-note">Meta de margem: <strong>{targetMargin}%</strong> (altere em Config)</div>
-          )}
 
           <div className="osm-columns">
             {/* PEÇAS */}
             <div className="items-list-container osm-box osm-box--parts">
               <div className="items-header osm-box-head">
-                <span><Icon name="pecas" size={16} /> Peças</span>
-                <span>{formatMoney(partsTotal)}</span>
+                <span className="osm-box-title"><Icon name="pecas" size={18} /> Peças <span className="osm-h-count">{itemsCount(parts.length)}</span></span>
+                <span className="osm-box-sub">{formatMoney(partsTotal)}</span>
               </div>
 
               <div className="item-row osm-row osm-add">
-                <label className="sr-only" htmlFor="os-new-part">Nova peça</label>
+                <label className="osm-add-label" htmlFor="os-new-part">Adicionar peça</label>
                 <input id="os-new-part" ref={partInputRef} className="form-input osm-desc" list="cat-parts" value={tempPart.description}
-                  onChange={e => handleTempPartChange(e.target.value)} onKeyDown={handlePartKeyDown} placeholder="Nova peça (Enter)..." />
+                  onChange={e => handleTempPartChange(e.target.value)} onKeyDown={handlePartKeyDown} placeholder="Ex.: pastilha de freio" />
                 <datalist id="cat-parts">
                   {suggestedParts.map((cp, idx) => (
                     <option key={idx} value={cp.description}>{formatMoney(cp.price)}</option>
@@ -667,16 +689,18 @@ export const OSModal: React.FC<OSModalProps> = ({
                   onChange={cat => { if (cat !== tempPart.category) guard.markDirty(); setTempPart({ ...tempPart, category: cat }); }}
                   style={{ flex: '1 1 140px' }}
                 />
-                {showCostColumn && (
-                  <MoneyField id="os-new-part-cost" kind="cost" className="form-input osm-num" aria-label="Custo da nova peça" value={tempPart.cost}
+                {showCostColumn && numf('Custo (interno)',
+                  <MoneyField id="os-new-part-cost" kind="cost" className="form-input osm-num osm-num--cost" aria-label="Custo da nova peça" value={tempPart.cost}
                     onChange={c => setTempPart(prev => ({ ...prev, cost: c }))} onInvalidChange={trackMoney} showError={moneyShown}
                     onKeyDown={handlePartKeyDown} placeholder="Custo" />
                 )}
-                <MoneyField id="os-new-part-price" kind="price" className="form-input osm-num" aria-label="Preço da nova peça" value={tempPart.price}
-                  onChange={c => setTempPart(prev => ({ ...prev, price: c }))} onInvalidChange={trackMoney} showError={moneyShown}
-                  onKeyDown={handlePartKeyDown} placeholder="Preço" />
-                <button type="button" className="btn-secondary osm-add-btn" onClick={() => addPart(false)}>
-                  <Icon name="adicionar" size={16} /> Adicionar
+                {numf('Preço',
+                  <MoneyField id="os-new-part-price" kind="price" className="form-input osm-num" aria-label="Preço da nova peça" value={tempPart.price}
+                    onChange={c => setTempPart(prev => ({ ...prev, price: c }))} onInvalidChange={trackMoney} showError={moneyShown}
+                    onKeyDown={handlePartKeyDown} placeholder="Preço" />
+                )}
+                <button type="button" className="btn-accent-outline osm-add-btn" onClick={() => addPart(false)}>
+                  <Icon name="adicionar" size={16} /> Adicionar peça
                 </button>
               </div>
 
@@ -698,17 +722,19 @@ export const OSModal: React.FC<OSModalProps> = ({
                             style={{ flex: '1 1 140px' }}
                             placeholder="—"
                           />
-                          {showCostColumn && (
-                            <MoneyField id={`os-part-${p.id}-cost`} kind="cost" className="form-input margin-cost-field osm-num" value={p.cost}
+                          {showCostColumn && numf('Custo (interno)',
+                            <MoneyField id={`os-part-${p.id}-cost`} kind="cost" className="form-input margin-cost-field osm-num osm-num--cost" value={p.cost}
                               onInvalidChange={trackMoney} showError={moneyShown}
                               onChange={c => updateItem(parts, setParts, i, 'cost', c, catalogParts)}
                               placeholder="Custo" title="Custo interno de aquisição (vazio = sem custo, fora da margem)"
                               aria-label={`Custo de ${p.description || 'peça'}`} />
                           )}
-                          <MoneyField id={`os-part-${p.id}-price`} kind="price" className="form-input osm-num" value={p.price}
-                            onInvalidChange={trackMoney} showError={moneyShown}
-                            onChange={c => updateItem(parts, setParts, i, 'price', c ?? 0, catalogParts)}
-                            aria-label={`Preço de ${p.description || 'peça'}`} />
+                          {numf('Preço',
+                            <MoneyField id={`os-part-${p.id}-price`} kind="price" className="form-input osm-num" value={p.price}
+                              onInvalidChange={trackMoney} showError={moneyShown}
+                              onChange={c => updateItem(parts, setParts, i, 'price', c ?? 0, catalogParts)}
+                              aria-label={`Preço de ${p.description || 'peça'}`} />
+                          )}
                           {removeBtn(() => { guard.markDirty(); setParts(parts.filter((_, idx) => idx !== i)); }, p.description)}
                         </div>
                         <HistoryHint suggestion={partHistory[p.id]} currentPrice={p.price} formatMoney={formatMoney}
@@ -727,29 +753,31 @@ export const OSModal: React.FC<OSModalProps> = ({
             {/* SERVIÇOS */}
             <div className="items-list-container osm-box osm-box--services">
               <div className="items-header osm-box-head">
-                <span><Icon name="chave" size={16} /> Serviços</span>
-                <span>{formatMoney(servicesTotal)}</span>
+                <span className="osm-box-title"><Icon name="chave" size={18} /> Serviços <span className="osm-h-count">{itemsCount(services.length)}</span></span>
+                <span className="osm-box-sub">{formatMoney(servicesTotal)}</span>
               </div>
 
               <div className="item-row osm-row osm-add">
-                <label className="sr-only" htmlFor="os-new-service">Novo serviço</label>
+                <label className="osm-add-label" htmlFor="os-new-service">Adicionar serviço</label>
                 <input id="os-new-service" ref={serviceInputRef} className="form-input osm-desc" list="cat-serv" value={tempService.description}
-                  onChange={e => handleTempServiceChange(e.target.value)} onKeyDown={handleServiceKeyDown} placeholder="Novo serviço (Enter)..." />
+                  onChange={e => handleTempServiceChange(e.target.value)} onKeyDown={handleServiceKeyDown} placeholder="Ex.: troca de óleo" />
                 <datalist id="cat-serv">
                   {suggestedServices.map((cs, idx) => (
                     <option key={idx} value={cs.description}>{formatMoney(cs.price)}</option>
                   ))}
                 </datalist>
-                {showCostColumn && (
-                  <MoneyField id="os-new-service-cost" kind="cost" className="form-input osm-num" aria-label="Custo do novo serviço" value={tempService.cost}
+                {showCostColumn && numf('Custo (interno)',
+                  <MoneyField id="os-new-service-cost" kind="cost" className="form-input osm-num osm-num--cost" aria-label="Custo do novo serviço" value={tempService.cost}
                     onChange={c => setTempService(prev => ({ ...prev, cost: c }))} onInvalidChange={trackMoney} showError={moneyShown}
                     onKeyDown={handleServiceKeyDown} placeholder="Custo" />
                 )}
-                <MoneyField id="os-new-service-price" kind="price" className="form-input osm-num" aria-label="Preço do novo serviço" value={tempService.price}
-                  onChange={c => setTempService(prev => ({ ...prev, price: c }))} onInvalidChange={trackMoney} showError={moneyShown}
-                  onKeyDown={handleServiceKeyDown} placeholder="Preço" />
-                <button type="button" className="btn-secondary osm-add-btn" onClick={() => addService(false)}>
-                  <Icon name="adicionar" size={16} /> Adicionar
+                {numf('Preço',
+                  <MoneyField id="os-new-service-price" kind="price" className="form-input osm-num" aria-label="Preço do novo serviço" value={tempService.price}
+                    onChange={c => setTempService(prev => ({ ...prev, price: c }))} onInvalidChange={trackMoney} showError={moneyShown}
+                    onKeyDown={handleServiceKeyDown} placeholder="Preço" />
+                )}
+                <button type="button" className="btn-accent-outline osm-add-btn" onClick={() => addService(false)}>
+                  <Icon name="adicionar" size={16} /> Adicionar serviço
                 </button>
               </div>
 
@@ -759,17 +787,19 @@ export const OSModal: React.FC<OSModalProps> = ({
                     <div className="item-row osm-row">
                       <input className="form-input osm-desc" aria-label="Descrição do serviço" value={s.description}
                         onChange={e => updateItem(services, setServices, i, 'description', e.target.value, catalogServices)} />
-                      {showCostColumn && (
-                        <MoneyField id={`os-service-${s.id}-cost`} kind="cost" className="form-input margin-cost-field osm-num" value={s.cost}
+                      {showCostColumn && numf('Custo (interno)',
+                        <MoneyField id={`os-service-${s.id}-cost`} kind="cost" className="form-input margin-cost-field osm-num osm-num--cost" value={s.cost}
                           onInvalidChange={trackMoney} showError={moneyShown}
                           onChange={c => updateItem(services, setServices, i, 'cost', c, catalogServices)}
                           placeholder="Custo" title="Custo interno (vazio = sem custo, fora da margem)"
                           aria-label={`Custo de ${s.description || 'serviço'}`} />
                       )}
-                      <MoneyField id={`os-service-${s.id}-price`} kind="price" className="form-input osm-num" value={s.price}
-                        onInvalidChange={trackMoney} showError={moneyShown}
-                        onChange={c => updateItem(services, setServices, i, 'price', c ?? 0, catalogServices)}
-                        aria-label={`Preço de ${s.description || 'serviço'}`} />
+                      {numf('Preço',
+                        <MoneyField id={`os-service-${s.id}-price`} kind="price" className="form-input osm-num" value={s.price}
+                          onInvalidChange={trackMoney} showError={moneyShown}
+                          onChange={c => updateItem(services, setServices, i, 'price', c ?? 0, catalogServices)}
+                          aria-label={`Preço de ${s.description || 'serviço'}`} />
+                      )}
                       {removeBtn(() => { guard.markDirty(); setServices(services.filter((_, idx) => idx !== i)); }, s.description)}
                     </div>
                     <HistoryHint suggestion={serviceHistory[s.id]} currentPrice={s.price} formatMoney={formatMoney}
@@ -785,21 +815,35 @@ export const OSModal: React.FC<OSModalProps> = ({
           </div>
         </section>
 
-        {/* 3. VALORES */}
+        {/* 3. PAGAMENTO */}
         <section className="osm-section" aria-labelledby="osm-h-valores">
-          <h3 id="osm-h-valores" className="osm-h"><Icon name="cifrao" size={18} /> Valores</h3>
+          <h3 id="osm-h-valores" className="osm-h"><Icon name="cifrao" size={18} /> Pagamento</h3>
           <AdvancesList rows={advanceRows} onChange={setAdvanceRows} total={totalRevenue} today={getLocalDateString()}
             formatMoney={formatMoney} locked={advancesLocked} onDirty={guard.markDirty}
             onEditingChange={setAdvanceEditing} attention={advanceAttention} />
 
+          <div className="osm-grid osm-grid--pay">
+            <div className="form-group">
+              <label className="form-label osm-nowrap" htmlFor="os-payment-date">Data de pagamento <span className="osm-opt">(opcional)</span></label>
+              <input id="os-payment-date" className="form-input" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} />
+            </div>
+          </div>
+
+          {!showCostColumn && <p className="osm-hint">Lucro e margem escondidos</p>}
           {showCostColumn && (
             <div className="osm-profit">
               <button type="button" className="btn-secondary osm-profit-toggle" aria-expanded={showProfit} aria-controls="osm-profit-body"
-                onClick={() => setShowProfit(v => !v)}>
+                onClick={() => { const next = !showProfit; setShowProfit(next); setShowCosts(next); }}>
                 <Icon name="financeiro" size={16} /> {showProfit ? 'Esconder lucro e margem' : 'Ver lucro e margem'}
+                {!showProfit && (
+                  <span className="osm-profit-sum">
+                    <span className={`osm-dot osm-dot--${marginLvl.toLowerCase()}`} aria-hidden="true" /> {marginSummary}
+                  </span>
+                )}
               </button>
               <div id="osm-profit-body" className="osm-profit-body" hidden={!showProfit}>
                 {showProfit && (<>
+                  <p className="osm-profit-goal">Meta da oficina: {targetMargin}%, muda em Configurações</p>
                   <div className="osm-profit-grid">
                     <div><div className="osm-k">Receita total</div><div className="osm-v osm-v--ok">{formatMoney(totalRevenue)}</div></div>
                     <div><div className="osm-k">Custo (itens com custo)</div><div className="osm-v">{formatMoney(margin.cost)}</div></div>
@@ -825,8 +869,8 @@ export const OSModal: React.FC<OSModalProps> = ({
                         </div>
                       </div>
                       {marginLvl !== 'NA_META' && (
-                        <div className="margin-min-box__alert osm-alert" role="status">
-                          <Icon name="alerta" size={16} /> Esta OS está abaixo da meta de margem ({targetMargin}%). Considere ajustar os preços. Você ainda pode salvar.
+                        <div className="osm-note osm-note--warn" role="status">
+                          <Icon name="alerta" size={16} /> <span>Esta OS está abaixo da meta de margem ({targetMargin}%). Considere ajustar os preços. Você ainda pode salvar.</span>
                         </div>
                       )}
                     </div>
@@ -835,55 +879,49 @@ export const OSModal: React.FC<OSModalProps> = ({
               </div>
             </div>
           )}
-
-          <div className="total-display osm-total">
-            <span>Total geral</span>
-            <span>{formatMoney(totalRevenue)}</span>
-          </div>
         </section>
 
-        {/* 4. PRAZO E PAGAMENTO */}
-        <section className="osm-section" aria-labelledby="osm-h-prazo">
-          <h3 id="osm-h-prazo" className="osm-h"><Icon name="calendario" size={18} /> Prazo e pagamento</h3>
-          <div className="osm-grid">
-            <div className="form-group">
-              <label className="form-label osm-nowrap" htmlFor="os-expected-date">Previsão de entrega <span className="osm-opt">(opcional)</span></label>
-              <input id="os-expected-date" className="form-input" type="date" value={expectedDate} onChange={e => setExpectedDate(e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label className="form-label osm-nowrap" htmlFor="os-payment-date">Data de pagamento <span className="osm-opt">(opcional)</span></label>
-              <input id="os-payment-date" className="form-input" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} />
-            </div>
-          </div>
-        </section>
-
-        {/* 5. FOTOS */}
+        {/* 4. FOTOS */}
         <section className="osm-section" aria-labelledby="osm-h-fotos">
           <h3 id="osm-h-fotos" className="osm-h"><Icon name="camera" size={18} /> Fotos do carro</h3>
           <OSPhotos dbPath={dbPath} osId={osId} osNumber={parseInt(osNumber, 10) || 0} photos={photos} setPhotos={setPhotos} sessionRef={sessionPhotos} readOnly={readOnly} onBusyChange={setPhotosBusy} />
         </section>
 
-        {/* 6. OBSERVAÇÕES */}
+        {/* 5. OBSERVAÇÕES */}
         <section className="osm-section" aria-labelledby="osm-h-obs">
           <h3 id="osm-h-obs" className="osm-h"><Icon name="prancheta" size={18} /> Observações</h3>
           <div className="form-group">
-            <label className="form-label" htmlFor="os-notes">Obs. interna (visível só aqui)</label>
+            <label className="form-label" htmlFor="os-notes">Obs. interna (visível só aqui) <span className="osm-opt">(opcional)</span></label>
             <textarea id="os-notes" className="form-input form-textarea" value={notes} onChange={e => setNotes(e.target.value)} style={{ minHeight: 60 }} />
           </div>
           <div className="form-group">
-            <label className="form-label" htmlFor="os-public-notes">Observações da OS (visíveis na impressão)</label>
+            <label className="form-label" htmlFor="os-public-notes">Observações da OS (visíveis na impressão) <span className="osm-opt">(opcional)</span></label>
             <textarea id="os-public-notes" className="form-input form-textarea" value={publicNotes} onChange={e => setPublicNotes(e.target.value)}
               placeholder="Ex: Garantia de 3 meses, detalhes técnicos, peças trazidas pelo cliente..." style={{ minHeight: 60 }} />
           </div>
         </section>
 
-        {photosBusy > 0 && <p className="ph-status" role="status">Aguarde o envio das fotos para salvar.</p>}
-        <div className="modal-actions">
-          <button type="button" className="btn-secondary" onClick={guard.requestClose}>Cancelar</button>
-          <button type="button" className="btn" onClick={handleConfirm} disabled={isSaving || needsClientChoice || photosBusy > 0} aria-busy={isSaving} title="Atalho: Ctrl + Shift + Enter">
-            {isSaving ? 'Salvando...' : 'Salvar (Ctrl+Shift+Enter)'}
-          </button>
         </div>
+
+        <footer className="osm-foot">
+          <div className="osm-sum" aria-live="polite">
+            <div className="osm-sum-total"><span className="osm-sum-k">Total da OS</span> <strong>{formatMoney(totalRevenue)}</strong></div>
+            {advanceRows.length > 0 && (
+              <div className="osm-sum-adv">
+                <span className="osm-sum-paid">Adiantado {formatMoney(advTotals.sum)}</span>
+                <span className="osm-sum-due">Falta pagar {formatMoney(advTotals.remaining)}</span>
+              </div>
+            )}
+          </div>
+          <div className="osm-foot-actions">
+            {photosBusy > 0 && <p className="osm-foot-why" role="status">Aguarde o envio das fotos para salvar.</p>}
+            {needsClientChoice && <p className="osm-foot-why">Escolha o cliente em "Qual cliente?" para salvar.</p>}
+            <button type="button" className="btn-secondary" onClick={guard.requestClose}>Cancelar</button>
+            <button type="button" className="btn osm-save" onClick={handleConfirm} disabled={isSaving || needsClientChoice || photosBusy > 0} aria-busy={isSaving} title="Atalho: Ctrl + Shift + Enter">
+              <Icon name="salvar" size={18} /> {isSaving ? 'Salvando...' : 'Salvar OS'}
+            </button>
+          </div>
+        </footer>
       </div>
     </div>
     {guard.dialog}

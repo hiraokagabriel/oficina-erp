@@ -122,10 +122,10 @@ export const AdvancesList: React.FC<AdvancesListProps> = ({
         {amountErr && <p id="os-adv-amount-error" className="field-error" role="alert">{amountErr}</p>}
       </div>
       <div className="osm-adv-actions">
-        <button type="button" className="btn btn-sm osm-adv-save" onClick={saveEditor}><Icon name="check" size={16} /> Salvar</button>
+        <button type="button" className="btn-accent-outline osm-adv-save" onClick={saveEditor}><Icon name="check" size={16} /> Confirmar</button>
         <button type="button" className="btn-secondary btn-sm" onClick={cancelEditor}>Cancelar</button>
       </div>
-      {reminder && <p className="field-error osm-adv-reminder" role="alert">Salve ou cancele este adiantamento antes de salvar a OS.</p>}
+      {reminder && <p className="field-error osm-adv-reminder" role="alert">Confirme ou cancele este adiantamento antes de salvar a OS.</p>}
     </li>
   );
 
@@ -158,7 +158,7 @@ export const AdvancesList: React.FC<AdvancesListProps> = ({
 
   return (
     <div className="osm-adv" role="group" aria-labelledby="os-adv-title">
-      <div id="os-adv-title" className="form-label">Adiantamentos <span className="osm-opt">(opcional)</span></div>
+      <div id="os-adv-title" className="osm-adv-title">Adiantamentos <span className="osm-opt">(opcional)</span></div>
       {locked && (
         <p className="osm-adv-locked field-hint" role="note"><Icon name="info" size={16} /> Esta OS já foi finalizada. Para mudar, reabra a OS.</p>
       )}
@@ -167,7 +167,7 @@ export const AdvancesList: React.FC<AdvancesListProps> = ({
       )}
       {items.length > 0 && <ul className="osm-adv-list">{items}</ul>}
       {!locked && !editor && (
-        <button type="button" ref={addRef} className="btn-secondary osm-adv-add" onClick={() => openEditor()}>
+        <button type="button" ref={addRef} className="btn-accent-outline osm-adv-add" onClick={() => openEditor()}>
           <Icon name="adicionar" size={16} /> Adicionar adiantamento
         </button>
       )}
@@ -178,8 +178,8 @@ export const AdvancesList: React.FC<AdvancesListProps> = ({
         </>)}
       </div>
       {totals.exceeds && (
-        <div className="osm-alert osm-adv-warn" role="status">
-          <Icon name="alerta" size={16} /> A soma dos adiantamentos é maior que o total da OS.
+        <div className="osm-note osm-note--warn" role="status">
+          <Icon name="alerta" size={16} /> <span>A soma dos adiantamentos é maior que o total da OS.</span>
         </div>
       )}
     </div>

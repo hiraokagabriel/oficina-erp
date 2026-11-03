@@ -92,6 +92,10 @@
   --bg-secondary: var(--surface-2);
   --bg-hover: var(--surface-3);
   --surface: var(--surface-1);
+  --bg-elevated: var(--surface-2);
+  --border-color: var(--border-strong);
+  --shadow-sm: none;
+  --transition-fast: var(--dur-fast);
   --primary: var(--accent);
   --primary-hover: var(--accent-hover);
   --text-main: var(--text);

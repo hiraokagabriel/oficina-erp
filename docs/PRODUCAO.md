@@ -2,6 +2,13 @@
 
 Atualizado em 2026-10-30. Branch `printing-overhaul`. Fonte: `git log`, `git status`, `docs/ROADMAP.md`, `CLAUDE.md` e relatos da sessão principal.
 
+**Mapa do código:** para achar onde cada iniciativa mora no código, use o grafo local (`graphify-out/GRAPH_REPORT.md`, `/graphify query "..."`; ver a seção "Mapa do código (grafo)" do `CLAUDE.md`). Correspondência entre iniciativa e comunidade do grafo:
+- A (repaginação): "Menu lateral e ícones" (`Sidebar`, `Icon`), "Menu de contexto do card", "Kanban (dnd-kit)", "App e modais".
+- B (resumo do cliente, impressão e PDF): "Config e saída de documentos" (`documentOutput`, `documents`), "Rust: PDF e WebView2", "Rust: comandos e pastas".
+- C (adiantamentos, schema v4): "Adiantamentos" (`advances.ts`), "DatabaseContext", "Cascata de renomeação".
+- V3 (fotos, schema v5): "Fotos: telas", "Fotos: lógica", "Fotos: miniatura e limpeza".
+- Prazo e agenda: "Prazo e agenda". Veículos: "Veículos e FIPE".
+
 ## Estado geral
 
 - Último push registrado: `b44d9aa`. Nenhum push desde então (P5 não feito). Todos os commits abaixo estão só locais. O último é `d699f1d`.

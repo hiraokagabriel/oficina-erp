@@ -40,6 +40,14 @@ Tauri 2 (Rust) + React 19 + TypeScript + Vite + Recharts + @dnd-kit. Interface e
 - Versão antiga do app descarta o `meta` ao salvar: atualizar todos os PCs no mesmo dia.
 - O README resume as funções; em caso de divergência com ele ou com o `docs/ROADMAP.md`, vale o `package.json` e o código.
 
+## Mapa do código (grafo)
+
+Se `graphify-out/graph.json` existir neste PC, comece por ele as perguntas "onde está X", "o que depende de Y" e "como A se liga a B": leia `graphify-out/GRAPH_REPORT.md` e use `/graphify query "..."`, `/graphify path "A" "B"` e `/graphify explain "X"`. Se não existir, a busca normal (Grep e Glob) serve. A pasta é gerada por PC e está no `.gitignore`: crie com `/graphify` e atualize com `/graphify . --update` depois de mudanças grandes. O grafo cobre só o código (198 arquivos, AST); os documentos (`docs/`, este arquivo, agentes) não estão nele. Confirme no código antes de agir.
+
+- **Núcleo (mais ligados):** `WorkOrder`, `AppContent()` (App.tsx), `Icon`, `formatDateOnly()`, `Client`, `OSModal()`, `normalizeName()`, `LedgerEntry`.
+- **Comunidades por assunto** (o relatório lista todas): Fotos (telas: `OSPhotos`, `PhotoViewerModal`, `ClientPhotos`; lógica: `photos.ts`; miniatura e limpeza: `PhotoThumb`, `photoCleanup`), Adiantamentos (`advances.ts`), Prazo e agenda (`schedule.ts`), Veículos e FIPE (`vehicleCatalog`, `VehicleCombobox`), Cascata de renomeação (`cascadeService`), Dinheiro e Financeiro (`MoneyField`, `financeView`), `useFinance` e finalizar OS, Config e saída de documentos (`ConfigPage`, `documentOutput`), Foco preso (`useFocusTrap`), Kanban (dnd-kit) e menu de contexto do card, Rust (PDF e WebView2, backups e conflito, comandos e pastas) e `DatabaseContext`.
+- Pontos de baixa coesão apontados pelo relatório: "Veículos e FIPE" e "Agendamento e contexto do banco".
+
 ## Regras do projeto
 
 - Dados de cliente e financeiros são reais. Nunca ler, copiar ou commitar `database.json` nem `*.csv` (o `.gitignore` já os exclui; o `.claude/settings.json` bloqueia a leitura).

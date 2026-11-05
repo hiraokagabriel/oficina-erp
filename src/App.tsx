@@ -55,6 +55,8 @@ import { resolveSavedPhotos } from './services/photoDraft';
 import { clearPhotoUrlCache } from './services/photoStore';
 import { prepareOSSave, ADVANCES_EXCEED_MESSAGE, advanceLockedMessage } from './services/osSave';
 import { findAdvanceOwner, removeAllAdvances } from './services/advances';
+import { editWarning, findReceiptOwner, parcelas, planDeleteOS, planReopenOS, receiptLockedMessage, removeOSReceipt, settleOpenReceipt } from './services/osFinanceGuards';
+import { mergeOSEdit, OS_DELETED_MESSAGE, CHANGED_ELSEWHERE_MESSAGE, ADVANCES_IGNORED_MESSAGE, PHOTOS_TRIMMED_MESSAGE, conflictsMessage } from './services/osEditMerge';
 import { buildFinalizeMessage, buildInstallmentMessage } from './services/finalizeText';
 import { linkClient, linkCatalogItems, linkTechnician, preferredClientId } from './utils/links';
 import { toISOFromDateInput } from './utils/dates';
@@ -66,7 +68,9 @@ import type { Appointment } from './types';
 import { LedgerEntry, WorkOrder, Client, CatalogItem, OSStatus, Technician, InstallmentConfig, OSModalPayload } from './types';
 
 type PendingAction =
-  | { type: 'DELETE_OS' | 'ARCHIVE_OS' | 'FINISH_OS_FINANCIAL' | 'RESTORE_FINANCIAL'; data: WorkOrder }
+  | { type: 'ARCHIVE_OS' | 'FINISH_OS_FINANCIAL'; data: WorkOrder }
+  | { type: 'DELETE_OS'; data: WorkOrder; message: string }
+  | { type: 'RESTORE_FINANCIAL'; data: WorkOrder; target: OSStatus; message: string }
   | { type: 'IMPORT_DATA'; content: string };
 
 function AppContent() {
@@ -204,17 +208,23 @@ function AppContent() {
     const os = workOrders.find(o => o.id === osId);
     if (!os || os.status === newStatus) return;
 
-    const effect = statusChangeEffects(os, newStatus, new Date().toISOString());
+    const effect = statusChangeEffects(os, newStatus, new Date().toISOString(), ledger);
+    if (effect.kind === 'blocked') {
+      addToast(effect.message, 'error');
+      return;
+    }
     if (effect.kind === 'ask-finish') {
       setPendingAction({ type: 'FINISH_OS_FINANCIAL', data: os });
       return;
     } else if (effect.kind === 'ask-restore') {
-      setPendingAction({ type: 'RESTORE_FINANCIAL', data: os });
+      setPendingAction({ type: 'RESTORE_FINANCIAL', data: os, target: effect.target, message: effect.message });
       return;
     }
 
     if (effect.kind === 'update') {
       setWorkOrders(prev => prev.map(o => o.id === osId ? { ...o, ...effect.updates } : o));
+      // OS à vista de volta a Finalizado com a receita aberta: o caixa acompanha (mesma data de recebimento).
+      if (effect.settleEntry) setLedger(prev => settleOpenReceipt(prev, effect.settleEntry!.entryId, effect.settleEntry!.paymentDate));
     }
 
     SoundFX.pop();
@@ -276,7 +286,16 @@ function AppContent() {
       const newPhotos = resolveSavedPhotos(keptPhotos, data.photos);
       const base: WorkOrder = { ...baseSemFotos, ...(newPhotos ? { photos: newPhotos } : {}), technician: technicianName || undefined, clientId, vehicleId, technicianId, expectedDate: data.expectedDate };
       // Adiantamentos, lançamentos e auditoria numa só conta pura; com erro nada é gravado (nem vínculos de cliente/catálogo).
-      const saved = prepareOSSave({ base, previous: editingOS, drafts: data.advances, ledger, machine });
+      // Mescla sobre a OS ATUAL do banco: só vale o que o usuário editou (outro PC pode ter mudado status, pagamento, checklist...).
+      const current = workOrders.find(o => o.id === editingOS.id);
+      const merged = mergeOSEdit({ opened: editingOS, edited: base, current, drafts: data.advances });
+      if (!merged.ok) {
+        addToast(OS_DELETED_MESSAGE, 'error');
+        return;
+      }
+      const warning = editWarning(current ?? editingOS, merged.base);
+      if (warning && !confirm(warning)) return;
+      const saved = prepareOSSave({ base: merged.base, previous: current, drafts: merged.drafts, ledger, machine });
       if (!saved.ok) {
         addToast(saved.error, 'error');
         return;
@@ -285,8 +304,12 @@ function AppContent() {
       setLedger(saved.ledger);
       if (saved.events.length) setAuditLog(prev => [...prev, ...saved.events]);
       setWorkOrders(prev => prev.map(o => o.id === editingOS.id ? saved.os : o));
-      if (!readOnly) void trashRemovedPhotos(dbPath, editingOS.id, editingOS.photos, newPhotos);
+      if (!readOnly) void trashRemovedPhotos(dbPath, editingOS.id, editingOS.photos, saved.os.photos);
       addToast('OS atualizada!', 'success');
+      if (merged.changedElsewhere) addToast(CHANGED_ELSEWHERE_MESSAGE, 'info');
+      if (merged.conflicts.length) addToast(conflictsMessage(merged.conflicts), 'info');
+      if (merged.advancesIgnored) addToast(ADVANCES_IGNORED_MESSAGE, 'info');
+      if (merged.photosTrimmed) addToast(PHOTOS_TRIMMED_MESSAGE, 'info');
       if (saved.exceedsTotal) addToast(ADVANCES_EXCEED_MESSAGE, 'info');
     } else {
       const newOSPhotos = resolveSavedPhotos(undefined, data.photos);
@@ -397,7 +420,8 @@ function AppContent() {
 
   const handleEditEntry = (id: string) => {
     if (refuseIfAdvance(id)) return;
-    const linkedOS = workOrders.find(o => o.financialId === id);
+    const ownEntry = ledger.find(e => e.id === id);
+    const linkedOS = ownEntry ? findReceiptOwner(workOrders, ownEntry) : undefined;
     if (linkedOS) {
       if (confirm(`Este lançamento pertence à OS #${linkedOS.osNumber}.
 Abrir OS?`)) {
@@ -436,6 +460,12 @@ Abrir OS?`)) {
 
   const handleRequestDeleteEntry = (entry: LedgerEntry) => {
     if (refuseIfAdvance(entry.id)) return;
+    // Receita ou parcela de OS: apagar aqui deixaria a OS com vínculo órfão. Só pela OS.
+    const receiptOwner = findReceiptOwner(workOrders, entry);
+    if (receiptOwner) {
+      addToast(receiptLockedMessage(receiptOwner.osNumber), 'error');
+      return;
+    }
     setDeleteModalInfo({ isOpen: true, entry });
   };
 
@@ -581,10 +611,17 @@ Abrir OS?`)) {
 
   // Ações do Kanban estáveis: o quadro não re-renderiza a cada toast/filtro/salvamento.
   // Os callbacks leem sempre a versão mais recente dos handlers/estado via ref.
-  const kanbanRef = useRef({ workOrders, handleUpdateStatus, requestSummary });
+  // Excluir OS: parcela já recebida bloqueia; senão a confirmação diz o que sai do caixa.
+  const requestDeleteOS = (os: WorkOrder) => {
+    const plan = planDeleteOS(os, ledger);
+    if (!plan.ok) { addToast(plan.message, 'error'); return; }
+    setPendingAction({ type: 'DELETE_OS', data: os, message: plan.message });
+  };
+
+  const kanbanRef = useRef({ workOrders, handleUpdateStatus, requestSummary, requestDeleteOS });
   // Atualizado após o commit do render (um render descartado não deixa handlers de estado não confirmado).
   useLayoutEffect(() => {
-    kanbanRef.current = { workOrders, handleUpdateStatus, requestSummary };
+    kanbanRef.current = { workOrders, handleUpdateStatus, requestSummary, requestDeleteOS };
   });
 
   const kanbanStatusChange = useCallback(
@@ -632,7 +669,7 @@ Abrir OS?`)) {
       setDocumentsOpen({ osId: os.id });
     },
     onShowClient: (os: WorkOrder, origin?: HTMLElement | null) => kanbanRef.current.requestSummary(os, origin),
-    onDelete: (os: WorkOrder) => setPendingAction({ type: 'DELETE_OS', data: os }),
+    onDelete: (os: WorkOrder) => kanbanRef.current.requestDeleteOS(os),
     onArchive: (os: WorkOrder) => setPendingAction({ type: 'ARCHIVE_OS', data: os }),
     onRestore: (os: WorkOrder) => kanbanRef.current.handleUpdateStatus(os.id, 'ORCAMENTO'),
     onQuickFinish: (id: string) => kanbanRef.current.handleUpdateStatus(id, 'FINALIZADO'),
@@ -686,10 +723,13 @@ Abrir OS?`)) {
 
     if (pendingAction.type === 'DELETE_OS') {
       const os = pendingAction.data;
+      // Refaz a trava com o caixa de agora (o diálogo pode ter ficado aberto enquanto uma parcela foi recebida).
+      const recheck = planDeleteOS(os, ledger);
+      if (!recheck.ok) { addToast(recheck.message, 'error'); setPendingAction(null); return; }
       setWorkOrders(p => p.filter(i => i.id !== os.id));
-      if (os.financialId) setLedger(p => p.filter(e => e.id !== os.financialId));
-      const removed = removeAllAdvances({ os, ledger, machine: getMachineName() });
-      if (removed.ledger !== ledger) setLedger(p => p.filter(e => removed.ledger.some(r => r.id === e.id)));
+      // Receita (à vista e TODAS as parcelas) e adiantamentos saem juntos do caixa.
+      const removed = removeAllAdvances({ os, ledger: removeOSReceipt(os, ledger), machine: getMachineName() });
+      if (removed.ledger !== ledger) setLedger(removed.ledger);
       if (removed.events.length) setAuditLog(p => [...p, ...removed.events]);
       if (!readOnly) void trashDeletedOSPhotos(dbPath, os);
       addToast('OS excluída.', 'info');
@@ -712,17 +752,20 @@ Abrir OS?`)) {
     if (pendingAction.type === 'RESTORE_FINANCIAL') {
       const os = pendingAction.data;
 
-      const restored = restoreFinancial(ledger, os);
+      const recheck = planReopenOS(os, ledger, pendingAction.target);
+      if (!recheck.ok) { addToast(recheck.message, 'error'); setPendingAction(null); return; }
+
+      const restored = restoreFinancial(ledger, os, pendingAction.target);
 
       if (restored.removedGroup) {
         setLedger(restored.ledger);
-        addToast(`${restored.removedCount} parcelas removidas.`, 'info');
+        addToast(`${parcelas(restored.removedCount)} ${restored.removedCount === 1 ? 'removida' : 'removidas'}.`, 'info');
       } else if (restored.removedCount > 0) {
         setLedger(restored.ledger);
         addToast('Lançamento removido.', 'info');
       }
 
-      setWorkOrders(prev => prev.map(o => o.id === os.id ? reopenOS(o) : o));
+      setWorkOrders(prev => prev.map(o => o.id === os.id ? reopenOS(o, pendingAction.target) : o));
 
       addToast('OS reaberta.', 'success');
     }
@@ -833,6 +876,7 @@ Abrir OS?`)) {
                 onDeleteEntry={handleRequestDeleteEntry}
                 onOpenOS={os => { setEditingOS(os); setIsModalOpen(true); }}
                 onTogglePayment={handleTogglePayment}
+                onReceiveOS={os => handleUpdateStatus(os.id, 'FINALIZADO')}
                 selectedMonth={finance.selectedMonth}
                 onMonthChange={finance.setSelectedMonth}
                 viewMode={finance.viewMode}
@@ -948,6 +992,7 @@ Abrir OS?`)) {
             formatMoney={Money.format}
             targetMargin={getTargetMargin(settings)}
             workOrders={workOrders}
+            ledger={ledger}
           />
         )}
 
@@ -1116,13 +1161,13 @@ Abrir OS?`)) {
             }
             message={
               pendingAction?.type === 'DELETE_OS'
-                ? 'Removerá a OS e lançamento financeiro.'
+                ? pendingAction.message
                 : pendingAction?.type === 'ARCHIVE_OS'
                 ? 'A OS sairá do quadro Kanban.'
                 : pendingAction?.type === 'FINISH_OS_FINANCIAL'
                 ? buildFinalizeMessage(pendingAction.data?.total || 0, pendingAction.data ? getRemainingAmount(pendingAction.data) : 0)
                 : pendingAction?.type === 'RESTORE_FINANCIAL'
-                ? 'Removerá o lançamento financeiro.'
+                ? pendingAction.message
                 : pendingAction?.type === 'IMPORT_DATA'
                 ? 'Substituir todos os dados?'
                 : 'Tem certeza?'

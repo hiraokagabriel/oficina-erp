@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { WorkOrder, Client, OrderItem, CatalogItem, Technician, PartCategory, PART_CATEGORY_META, OSModalPayload, OSPhoto } from '../types';
+import { WorkOrder, LedgerEntry, Client, OrderItem, CatalogItem, Technician, PartCategory, PART_CATEGORY_META, OSModalPayload, OSPhoto } from '../types';
 import { generateId, getLocalDateString } from '../utils/helpers';
+import { buildClientDebts, clientDebtLine, lastVisitLine } from '../services/osClientContext';
 import { normalizeName, resolveCatalogItemId, resolveClientId, resolveTechnicianId, splitVehicle } from '../utils/links';
 import type { OSDraftFromAppointment } from '../services/schedule';
 import { appendNote } from '../services/agenda';
@@ -67,6 +68,8 @@ interface OSModalProps {
   targetMargin: number;
   /** Todas as OS, para a sugestão de preço pelo histórico. */
   workOrders: WorkOrder[];
+  /** Lançamentos, para mostrar o que o cliente escolhido deve. */
+  ledger: LedgerEntry[];
 }
 
 // 🆕 Issue #41: Ordem de exibição das categorias
@@ -76,7 +79,7 @@ const CATEGORY_ORDER: PartCategory[] = [
 ];
 
 export const OSModal: React.FC<OSModalProps> = ({
-  isOpen, onClose, onSave, editingOS, clients, catalogParts, catalogServices, catalogTechnicians, nextOSNumber, isSaving, formatMoney, draft, targetMargin, workOrders
+  isOpen, onClose, onSave, editingOS, clients, catalogParts, catalogServices, catalogTechnicians, nextOSNumber, isSaving, formatMoney, draft, targetMargin, workOrders, ledger
 }) => {
   // --- REFS PARA ATALHOS ---
   const partInputRef = useRef<HTMLInputElement>(null);
@@ -89,7 +92,6 @@ export const OSModal: React.FC<OSModalProps> = ({
   // --- ESTADOS DE DADOS ---
   const [osNumber, setOsNumber] = useState("");
   const [date, setDate] = useState("");
-  const [paymentDate, setPaymentDate] = useState("");
   const [expectedDate, setExpectedDate] = useState(""); // previsão de entrega (AAAA-MM-DD do input; vazio = sem previsão)
   const [clientName, setClientName] = useState("");
   // Cliente escolhido quando há homônimos no cadastro (plano 4.6); vazio = sem escolha.
@@ -225,6 +227,20 @@ export const OSModal: React.FC<OSModalProps> = ({
   }, [sameNameClients, chosenClientId]);
   const needsClientChoice = hasHomonyms && !selectedClient;
 
+  // O que o sistema já sabe do cliente: dívida e última visita (do mesmo carro quando já digitado). Homônimo sem escolha: nada.
+  const clientDebts = useMemo(
+    () => (isOpen ? buildClientDebts(workOrders, ledger, clients, getLocalDateString()) : undefined),
+    [isOpen, workOrders, ledger, clients],
+  );
+  const clientInfo = useMemo(() => {
+    if (!isOpen || needsClientChoice || !clientName.trim()) return [];
+    const typedVehicle = plate ? `${vehicle} - ${plate}` : vehicle;
+    return [
+      clientDebtLine({ workOrders, ledger, clients, client: selectedClient, clientName, today: getLocalDateString(), debts: clientDebts }),
+      lastVisitLine({ workOrders, clients, client: selectedClient, clientName, vehicle: typedVehicle, excludeId: editingOS?.id }),
+    ].filter((l): l is string => !!l);
+  }, [isOpen, needsClientChoice, workOrders, ledger, clients, clientDebts, selectedClient, clientName, vehicle, plate, editingOS]);
+
   const suggestedVehicles = useMemo(() => selectedClient ? selectedClient.vehicles : [], [selectedClient]);
   const shopVehicles = useShopVehicles(clients, workOrders);
 
@@ -246,7 +262,6 @@ export const OSModal: React.FC<OSModalProps> = ({
     if (editingOS) {
       setOsNumber(editingOS.osNumber.toString());
       setDate(editingOS.createdAt ? editingOS.createdAt.split('T')[0] : getLocalDateString());
-      setPaymentDate(editingOS.paymentDate ? editingOS.paymentDate.split('T')[0] : "");
       setExpectedDate(editingOS.expectedDate ? formatDateOnly(parseDateFlexible(editingOS.expectedDate)) : "");
       setClientName(editingOS.clientName);
 
@@ -277,7 +292,6 @@ export const OSModal: React.FC<OSModalProps> = ({
     } else {
       setOsNumber(nextOSNumberRef.current.toString());
       setDate(getLocalDateString());
-      setPaymentDate("");
       setExpectedDate("");
       setClientName("");
       setChosenClientId("");
@@ -471,7 +485,6 @@ export const OSModal: React.FC<OSModalProps> = ({
     onSave({
       osNumber: numOS,
       createdAt: date,
-      paymentDate: paymentDate ? toISOFromDateInput(paymentDate) : undefined,
       expectedDate: expectedDate ? toISOFromDateInput(expectedDate) : undefined,
       clientId: selectedClient?.id,
       technicianId: resolveTechnicianId(technician, catalogTechnicians),
@@ -596,6 +609,12 @@ export const OSModal: React.FC<OSModalProps> = ({
               <input id="os-contact" className="form-input" value={contact} onChange={e => setContact(e.target.value)} />
             </div>
           </div>
+
+          {clientInfo.length > 0 && (
+            <p className="osm-client-info" aria-live="polite">
+              {clientInfo.map(l => <span key={l} className={l.startsWith('Deve') ? 'osm-client-info-debt' : undefined}>{l}</span>)}
+            </p>
+          )}
 
           {hasHomonyms && (
             <fieldset className="osm-note osm-note--warn osm-homonyms">
@@ -821,13 +840,6 @@ export const OSModal: React.FC<OSModalProps> = ({
           <AdvancesList rows={advanceRows} onChange={setAdvanceRows} total={totalRevenue} today={getLocalDateString()}
             formatMoney={formatMoney} locked={advancesLocked} onDirty={guard.markDirty}
             onEditingChange={setAdvanceEditing} attention={advanceAttention} />
-
-          <div className="osm-grid osm-grid--pay">
-            <div className="form-group">
-              <label className="form-label osm-nowrap" htmlFor="os-payment-date">Data de pagamento <span className="osm-opt">(opcional)</span></label>
-              <input id="os-payment-date" className="form-input" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} />
-            </div>
-          </div>
 
           {!showCostColumn && <p className="osm-hint">Lucro e margem escondidos</p>}
           {showCostColumn && (

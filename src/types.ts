@@ -241,8 +241,7 @@ export interface WorkshopSettings {
 export interface OSModalPayload {
   osNumber: number;
   createdAt: string;
-  paymentDate?: string;
-  /** Previsão de entrega (ISO do meio-dia local); ainda não preenchida pelo OSModal. */
+  /** Previsão de entrega (ISO do meio-dia local). */
   expectedDate?: string;
   /** Ainda não usados (passo posterior do plano 4.6). */
   clientId?: string;

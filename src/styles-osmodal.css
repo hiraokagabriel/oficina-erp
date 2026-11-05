@@ -53,7 +53,6 @@
 .osm-grid > .osm-w2 { grid-column: span 2; }
 .osm-grid .form-group { min-width: 0; }
 .osm-grid--tech { margin-bottom: var(--sp-3); }
-.osm-grid--pay { margin-top: var(--sp-3); max-width: 420px; }
 .osm .form-label { color: var(--text-2); }
 .osm-opt { font-weight: var(--fw-regular, 400); color: var(--text-2); }
 .osm-nowrap { white-space: nowrap; }
@@ -149,3 +148,7 @@
 .osm-min-row { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-3); flex-wrap: wrap; margin-bottom: var(--sp-2); }
 .osm-min-diff { text-align: right; }
 .osm .margin-btn, .osm .margin-hist button { min-height: var(--control-h-min); }
+
+/* Resumo do cliente escolhido (dívida e última visita) */
+.osm-client-info { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-4); margin: 0 0 var(--sp-3); font-size: var(--fs-sm); color: var(--text-2); }
+.osm-client-info-debt { color: var(--text); font-weight: var(--fw-semibold, 600); }

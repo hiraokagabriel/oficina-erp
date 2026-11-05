@@ -30,6 +30,8 @@ export type MergeOSEditResult =
       advancesIgnored: boolean;
       /** A soma das fotos dos dois PCs passou do limite por OS: as últimas ficaram de fora. */
       photosTrimmed: boolean;
+      /** Ids das fotos cortadas pelo limite: já podem ter arquivo no disco e precisam ir para a lixeira. */
+      trimmedPhotoIds: string[];
     };
 
 export const OS_DELETED_MESSAGE =
@@ -52,7 +54,15 @@ const localDay = (iso: string | undefined): string => (iso ? formatDateOnly(pars
 // Forma canônica do item: sem id (regerado a cada salvamento) nem catalogItemId (vínculo), custo 0 = não informado.
 const itemsKey = (items: OrderItem[]): string =>
   JSON.stringify(items.map(i => [i.description, i.price, i.cost && i.cost > 0 ? i.cost : null, i.category ?? null]));
-const photosEq = (a: OSPhoto, b: OSPhoto): boolean => JSON.stringify(a) === JSON.stringify(b);
+// JSON com as chaves em ordem fixa: a ordem de gravação das chaves não conta como diferença.
+const stable = (v: unknown): string => JSON.stringify(v, (_k, x: unknown) => {
+  if (x && typeof x === 'object' && !Array.isArray(x)) {
+    const o = x as Record<string, unknown>;
+    return Object.fromEntries(Object.keys(o).sort().map(k => [k, o[k]]));
+  }
+  return x;
+});
+const photosEq = (a: OSPhoto, b: OSPhoto): boolean => stable(a) === stable(b);
 
 interface ScalarRule { key: keyof WorkOrder; label?: string; same: (a: WorkOrder, b: WorkOrder) => boolean }
 const byValue = (key: keyof WorkOrder, label?: string): ScalarRule => ({
@@ -127,7 +137,7 @@ export const mergeOSEdit = ({ opened, edited, current, drafts, today = formatDat
     base.profit = fin.profit;
   }
 
-  let photosTrimmed = false;
+  let trimmedPhotoIds: string[] = [];
   // Fotos: remoções e acréscimos do usuário sobre a lista ATUAL (fotos que outro PC anexou ficam).
   const op = opened.photos ?? [];
   const ed = edited.photos ?? [];
@@ -145,7 +155,7 @@ export const mergeOSEdit = ({ opened, edited, current, drafts, today = formatDat
       out.push(mine && was && !photosEq(was, mine) ? mine : p);
     }
     for (const p of ed) if (!seen.has(p.id) && !opById.has(p.id)) out.push(p); // acrescentada pelo usuário
-    if (out.length > MAX_PHOTOS_PER_OS) { photosTrimmed = true; out.length = MAX_PHOTOS_PER_OS; } // soma das fotos dos dois PCs passou do limite
+    if (out.length > MAX_PHOTOS_PER_OS) { trimmedPhotoIds = out.slice(MAX_PHOTOS_PER_OS).map(p => p.id); out.length = MAX_PHOTOS_PER_OS; } // soma das fotos dos dois PCs passou do limite
     if (out.length > 0) base.photos = out;
     else delete base.photos;
   }
@@ -172,9 +182,9 @@ export const mergeOSEdit = ({ opened, edited, current, drafts, today = formatDat
           const match = (current.advances ?? []).find(a => a.amount === row.amount && localDay(a.date) === row.date)
             ?? (current.advances ?? []).find(a => a.amount === row.amount);
           if (match) {
-            openedList = [{ ...match, date: row.date, amount: row.amount }];
+            openedList = [{ ...match, amount: row.amount }]; // data do adiantamento do banco: o casamento por valor não prova a data
             const idx = drafts.findIndex(d => !d.id && sameDraft(d, row));
-            formDrafts = drafts.map((d, i) => (i === idx ? { id: match.id, date: d.date, amount: d.amount } : d));
+            formDrafts = drafts.map((d, i) => (i === idx ? { id: match.id, date: match.date, amount: d.amount } : d));
           } else {
             const idx = drafts.findIndex(d => !d.id && sameDraft(d, row));
             formDrafts = drafts.filter((_, i) => i !== idx); // outro PC tirou a legada e o usuário não mexeu nela
@@ -215,6 +225,6 @@ export const mergeOSEdit = ({ opened, edited, current, drafts, today = formatDat
     }
   }
 
-  const changedElsewhere = current !== opened && JSON.stringify(current) !== JSON.stringify(opened);
-  return { ok: true, base, drafts: mergedDrafts, conflicts, changedElsewhere, advancesIgnored, photosTrimmed };
+  const changedElsewhere = current !== opened && stable(current) !== stable(opened);
+  return { ok: true, base, drafts: mergedDrafts, conflicts, changedElsewhere, advancesIgnored, photosTrimmed: trimmedPhotoIds.length > 0, trimmedPhotoIds };
 };

@@ -173,6 +173,20 @@ describe('mergeOSEdit: fotos', () => {
     const r = ok(merge({ opened, current, edited: edit(opened, { photos: [...many(10, 'o'), ...many(5, 'n')] }) }));
     expect(r.base.photos).toHaveLength(20);
     expect(r.photosTrimmed).toBe(true);
+    expect(r.trimmedPhotoIds).toEqual(['n2', 'n3', 'n4']); // 10 + 8 do banco + 5 novas = 23: saem as 3 últimas
+  });
+  it('sem corte: lista de ids cortados vazia', () => {
+    const opened = os({ photos: [ph('a')] });
+    const r = ok(merge({ opened, edited: edit(opened, { photos: [ph('a'), ph('n')] }) }));
+    expect(r.trimmedPhotoIds).toEqual([]);
+    expect(r.photosTrimmed).toBe(false);
+  });
+  it('legenda com chaves em outra ordem não conta como foto editada', () => {
+    const opened = os({ photos: [{ id: 'a', createdAt: '2026-03-01T12:00:00.000Z', caption: 'x' }] });
+    const reordered = { caption: 'x', createdAt: '2026-03-01T12:00:00.000Z', id: 'a' };
+    const current = os({ photos: [{ id: 'a', createdAt: '2026-03-01T12:00:00.000Z', caption: 'y' }] });
+    const r = ok(merge({ opened, current, edited: edit(opened, { photos: [reordered] }) }));
+    expect(r.base.photos?.[0].caption).toBe('y');
   });
   it('removeu todas: o campo some', () => {
     const opened = os({ photos: [ph('a')] });
@@ -249,6 +263,53 @@ describe('mergeOSEdit: adiantamentos (abertura sem lista)', () => {
     const r = ok(merge({ opened, current, edited: edit(opened), drafts }));
     expect(r.drafts?.map(d => d.amount)).toEqual([1000, 500, 200]);
     expect(r.drafts?.[0].id).toBe('a1');
+  });
+});
+
+describe('mergeOSEdit: adiantamentos (casos extras)', () => {
+  it('outro PC removeu o adiantamento que o usuário editou: recriado com o valor dele e conflito', () => {
+    const opened = os({ advances: [adv('a1', 1000)] });
+    const current = os({ advances: [] });
+    const r = ok(merge({ opened, current, edited: edit(opened), drafts: [{ id: 'a1', date: '2026-03-01', amount: 900 }] }));
+    expect(r.drafts).toEqual([{ date: '2026-03-01', amount: 900 }]);
+    expect(r.conflicts).toEqual(['adiantamentos']);
+  });
+  it('legado casado só por valor (data diferente): sem falso conflito', () => {
+    const opened = os({ advanceAmount: 1000, advanceEntryId: 'e1' });
+    const current = os({ advances: [{ id: 'a1', amount: 1000, date: new Date(2026, 1, 20, 12).toISOString(), entryId: 'e1' }] });
+    const drafts = [{ date: '2026-01-10', amount: 1000 }, { date: '2026-03-02', amount: 200 }];
+    const r = ok(merge({ opened, current, edited: edit(opened), drafts }));
+    expect(r.conflicts).toEqual([]);
+    expect(r.drafts?.map(d => d.amount)).toEqual([1000, 200]);
+    expect(r.drafts?.[0].id).toBe('a1');
+  });
+  it('OS legada finalizada em outro PC: edição ignorada e avisada', () => {
+    const opened = os({ advanceAmount: 1000, advanceEntryId: 'e1' });
+    const current = os({ advanceAmount: 1000, advanceEntryId: 'e1', status: 'FINALIZADO', financialId: 'f1' });
+    const r = ok(merge({ opened, current, edited: edit(opened), drafts: [{ date: '2026-01-10', amount: 1000 }, { date: '2026-03-02', amount: 200 }] }));
+    expect(r.advancesIgnored).toBe(true);
+  });
+});
+
+describe('mergeOSEdit: vínculos (casos extras)', () => {
+  it('só o id muda, texto igual (homônimo escolhido): clientId vem da edição', () => {
+    const opened = os({ clientId: 'c1' });
+    const r = ok(merge({ opened, edited: edit(opened, { clientId: 'c2' }) }));
+    expect(r.base.clientId).toBe('c2');
+  });
+  it('outro PC renomeou o cliente e o usuário não mexeu: nome e clientId do banco', () => {
+    const opened = os({ clientId: 'c1' });
+    const current = os({ clientId: 'c9', clientName: 'Nome Novo' });
+    const r = ok(merge({ opened, current, edited: edit(opened, { mileage: 5 }) }));
+    expect(r.base).toMatchObject({ clientName: 'Nome Novo', clientId: 'c9', mileage: 5 });
+  });
+});
+
+describe('mergeOSEdit: changedElsewhere estável', () => {
+  it('mesmas chaves em outra ordem: não mudou', () => {
+    const opened = os({ clientPhone: '1', mileage: 100 });
+    const reordered = JSON.parse(JSON.stringify(Object.fromEntries(Object.entries(opened).reverse()))) as WorkOrder;
+    expect(ok(merge({ opened, current: reordered, edited: edit(opened) })).changedElsewhere).toBe(false);
   });
 });
 

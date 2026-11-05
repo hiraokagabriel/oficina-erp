@@ -25,6 +25,21 @@ export const trashRemovedPhotos = async (
   }
 };
 
+/** Fotos cortadas pelo limite na mescla: já têm arquivo no disco, vão para a lixeira pelos ids. */
+export const trashPhotoIds = async (
+  dbPath: string,
+  osId: string,
+  ids: readonly string[],
+  available: boolean = isPhotoStoreAvailable(),
+  invoke?: InvokeFn,
+  warn: Warn = defaultWarn
+): Promise<void> => {
+  if (!available) return;
+  for (const id of ids) {
+    try { await trashPhoto(dbPath, osId, id, invoke); } catch (e) { warn('Não foi possível mover a foto para a lixeira:', e); }
+  }
+};
+
 /** Excluiu a OS: manda todas as fotos dela para a lixeira. */
 export const trashDeletedOSPhotos = async (
   dbPath: string,

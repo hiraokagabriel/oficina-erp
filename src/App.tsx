@@ -50,7 +50,7 @@ import {
   togglePayment,
 } from './services/osFinanceService';
 import { Money, updateWorkOrderData, generateId } from './utils/helpers';
-import { trashDeletedOSPhotos, trashRemovedPhotos } from './services/photoCleanup';
+import { trashDeletedOSPhotos, trashPhotoIds, trashRemovedPhotos } from './services/photoCleanup';
 import { resolveSavedPhotos } from './services/photoDraft';
 import { clearPhotoUrlCache } from './services/photoStore';
 import { prepareOSSave, ADVANCES_EXCEED_MESSAGE, advanceLockedMessage } from './services/osSave';
@@ -259,11 +259,17 @@ function AppContent() {
     const osServices = linkedServices.items;
 
     const machine = getMachineName();
+    // Na edição, o merge pode manter cliente/veículo/itens/técnico do banco: `relink` ajusta o que `applyLinks` grava.
+    let finalClients = linkedClient.clients;
+    let finalParts = linkedParts.catalog;
+    let finalServices = linkedServices.catalog;
+    let finalTechs = linkedTech.technicians;
+    let finalTechName = technicianName;
     const applyLinks = () => {
-      setClients(linkedClient.clients);
-      setCatalogParts(linkedParts.catalog);
-      setCatalogServices(linkedServices.catalog);
-      if (technicianName) setCatalogTechnicians(linkedTech.technicians);
+      setClients(finalClients);
+      setCatalogParts(finalParts);
+      setCatalogServices(finalServices);
+      if (finalTechName) setCatalogTechnicians(finalTechs);
     };
 
     if (editingOS) {
@@ -293,6 +299,16 @@ function AppContent() {
         addToast(OS_DELETED_MESSAGE, 'error');
         return;
       }
+      // Links sobre o resultado mesclado: só cadastra o que de fato vai para a OS (o texto do formulário pode ter perdido para o banco).
+      const mb = merged.base;
+      if (mb.clientName !== data.clientName || mb.vehicle !== data.vehicle || mb.clientPhone !== data.clientPhone) {
+        const re = linkClient({ clients, clientName: mb.clientName, clientPhone: mb.clientPhone, clientNotes: data.clientNotes || '', vehicle: mb.vehicle, clientId: mb.clientId, newId: generateId });
+        finalClients = re.ambiguous ? clients : re.clients;
+      }
+      if (mb.parts !== base.parts) finalParts = catalogParts;
+      if (mb.services !== base.services) finalServices = catalogServices;
+      finalTechName = (mb.technician || '').trim();
+      if (finalTechName !== technicianName) finalTechs = linkTechnician(catalogTechnicians, finalTechName, generateId).technicians;
       const warning = editWarning(current ?? editingOS, merged.base);
       if (warning && !confirm(warning)) return;
       const saved = prepareOSSave({ base: merged.base, previous: current, drafts: merged.drafts, ledger, machine });
@@ -304,7 +320,10 @@ function AppContent() {
       setLedger(saved.ledger);
       if (saved.events.length) setAuditLog(prev => [...prev, ...saved.events]);
       setWorkOrders(prev => prev.map(o => o.id === editingOS.id ? saved.os : o));
-      if (!readOnly) void trashRemovedPhotos(dbPath, editingOS.id, editingOS.photos, saved.os.photos);
+      if (!readOnly) {
+        void trashRemovedPhotos(dbPath, editingOS.id, editingOS.photos, saved.os.photos);
+        if (merged.trimmedPhotoIds.length) void trashPhotoIds(dbPath, editingOS.id, merged.trimmedPhotoIds);
+      }
       addToast('OS atualizada!', 'success');
       if (merged.changedElsewhere) addToast(CHANGED_ELSEWHERE_MESSAGE, 'info');
       if (merged.conflicts.length) addToast(conflictsMessage(merged.conflicts), 'info');

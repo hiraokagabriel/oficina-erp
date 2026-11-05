@@ -34,6 +34,8 @@ interface FinancialPageProps {
   /** Abre a janela da OS (usado pelo "Editar na OS" dos adiantamentos). */
   onOpenOS: (os: WorkOrder) => void;
   onTogglePayment: (id: string) => void; // 🆕 NOVA PROP
+  /** Receber uma OS em Aguardando Pagamento que ainda não tem lançamento (abre o fluxo de finalizar). */
+  onReceiveOS: (os: WorkOrder) => void;
   selectedMonth: string;
   onMonthChange: (val: string) => void;
   viewMode: 'MONTH' | 'YEAR';
@@ -49,7 +51,7 @@ interface FinancialPageProps {
 
 export const FinancialPage: React.FC<FinancialPageProps> = ({ 
   isLoading, kpiData, chartDataFluxo, chartDataPie, ledger, allLedger, Money, 
-  onOpenExport, onOpenEntry, onEditEntry, onDeleteEntry, onOpenOS, onTogglePayment,
+  onOpenExport, onOpenEntry, onEditEntry, onDeleteEntry, onOpenOS, onTogglePayment, onReceiveOS,
   selectedMonth, onMonthChange, viewMode, setViewMode,
   filterType, setFilterType,
   workOrders, settings, catalogParts, catalogServices
@@ -108,7 +110,7 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
 
   // "A receber" é geral: não depende do mês/ano nem do filtro de tipo.
   const today = new Date();
-  const receivables = useMemo(() => summarizeReceivables(allLedger, new Date()), [allLedger]);
+  const receivables = useMemo(() => summarizeReceivables(allLedger, new Date(), workOrders), [allLedger, workOrders]);
 
   const totalPages = Math.ceil(ledger.length / ITEMS_PER_PAGE);
   const paginatedLedger = ledger.slice(
@@ -188,7 +190,7 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
               <div className="fin-receber-total">
                 <span className="fin-receber-label">Total a receber (inclui atrasado)</span>
                 <strong className="fin-receber-value">{Money.format(receivables.totalAReceber + receivables.totalAtrasado)}</strong>
-                <span className="fin-receber-sub">{receivables.countAReceber + receivables.countAtrasado} {receivables.countAReceber + receivables.countAtrasado === 1 ? 'lançamento' : 'lançamentos'} (total geral)</span>
+                <span className="fin-receber-sub">{receivables.countAReceber + receivables.countAtrasado} {receivables.countAReceber + receivables.countAtrasado === 1 ? 'item' : 'itens'} (total geral)</span>
               </div>
               <div className={receivables.countAtrasado > 0 ? 'fin-receber-total fin-receber-total--late' : 'fin-receber-total'}>
                 <span className="fin-receber-label">
@@ -203,7 +205,7 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
             <table className="data-table receivables-table">
               <thead><tr><th>Vencimento</th><th>Descrição</th><th>Valor</th><th>Situação</th><th>Ação</th></tr></thead>
               <tbody>
-                {receivables.items.length === 0 ? (
+                {receivables.items.length === 0 && receivables.pendingOS.length === 0 ? (
                   <tr><td colSpan={5} style={{textAlign:'center', padding:20, color:'var(--text-muted)'}}>Nada a receber</td></tr>
                 ) : receivables.items.map(e => {
                   const late = getReceivableStatus(e, today) === 'ATRASADO';
@@ -225,6 +227,23 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                     </tr>
                   );
                 })}
+                {receivables.pendingOS.map(({ os, amount }) => (
+                  <tr key={`os-${os.id}`}>
+                    <td>Sem data</td>
+                    <td className="receivable-desc" title={`OS #${os.osNumber} - ${os.clientName}`}>OS #{os.osNumber} - {os.clientName} (aguardando pagamento)</td>
+                    <td style={{fontWeight:'bold'}}>{Money.format(amount)}</td>
+                    <td><span className="receivable-status open">A receber</span></td>
+                    <td>
+                      <button
+                        className="btn btn-success receivable-pay"
+                        onClick={() => onReceiveOS(os)}
+                        aria-label={`Receber a OS #${os.osNumber}: ${os.clientName}`}
+                      >
+                        <Icon name="receber" size={18} />Receber
+                      </button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

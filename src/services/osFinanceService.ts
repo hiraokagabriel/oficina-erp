@@ -1,6 +1,8 @@
 import { InstallmentConfig, LedgerEntry, OSStatus, WorkOrder } from '../types';
 import { generateId } from '../utils/helpers';
 import { addMonths, formatDateOnly, parseDateFlexible, parseDateOnly } from '../utils/dates';
+import { getRemainingAmount, sumAdvances } from './osRemaining';
+import { BACKWARD_FROM_PAYMENT, getOSReceipt, planReceiveOS, planReopenOS } from './osFinanceGuards';
 
 // Regras financeiras da OS extraídas do App.tsx como funções puras (extração literal).
 // O App mantém setState, toasts, sons e modais; aqui só o cálculo.
@@ -59,45 +61,32 @@ export const buildInstallmentEntries = (
   return newEntries;
 };
 
-// Reabre a OS (EM_SERVICO) limpando os dados financeiros.
-export const reopenOS = (os: WorkOrder): WorkOrder => ({
+// Reabre a OS (padrão EM_SERVICO; ou o status para onde o usuário arrastou) limpando os dados financeiros.
+export const reopenOS = (os: WorkOrder, target: OSStatus = 'EM_SERVICO'): WorkOrder => ({
   ...os,
-  status: 'EM_SERVICO' as OSStatus,
+  status: target,
   financialId: undefined,
   paymentMethod: undefined,
   installmentConfig: undefined,
   paymentDate: undefined,
 });
 
-// Remove o grupo de parcelas (ou o lançamento único) da OS e a reabre.
+// Remove o grupo de parcelas (ou o lançamento único) da OS e a reabre (em `target`, padrão EM_SERVICO).
+// Quem decide se pode (parcela já recebida bloqueia) é planReopenOS; aqui só se aplica.
 export const restoreFinancial = (
   ledger: LedgerEntry[],
-  os: WorkOrder
+  os: WorkOrder,
+  target: OSStatus = 'EM_SERVICO'
 ): { ledger: LedgerEntry[]; os: WorkOrder; removedCount: number; removedGroup: boolean } => {
-  let newLedger = ledger;
-  let removedCount = 0;
-  let removedGroup = false;
-
-  const financialEntry = ledger.find(e => e.id === os.financialId);
-
-  if (financialEntry) {
-    const groupToDelete = financialEntry.groupId || financialEntry.installmentGroupId;
-
-    if (groupToDelete) {
-      removedCount = ledger.filter(e =>
-        e.groupId === groupToDelete || e.installmentGroupId === groupToDelete
-      ).length;
-      removedGroup = true;
-      newLedger = ledger.filter(e =>
-        e.groupId !== groupToDelete && e.installmentGroupId !== groupToDelete
-      );
-    } else {
-      removedCount = 1;
-      newLedger = ledger.filter(e => e.id !== os.financialId);
-    }
-  }
-
-  return { ledger: newLedger, os: reopenOS(os), removedCount, removedGroup };
+  const { entries, grouped } = getOSReceipt(os, ledger);
+  if (entries.length === 0) return { ledger, os: reopenOS(os, target), removedCount: 0, removedGroup: false };
+  const ids = new Set(entries.map(e => e.id));
+  return {
+    ledger: ledger.filter(e => !ids.has(e.id)),
+    os: reopenOS(os, target),
+    removedCount: entries.length,
+    removedGroup: grouped,
+  };
 };
 
 export interface TogglePaymentResult {
@@ -178,43 +167,80 @@ export const togglePayment = (
 export type StatusChangeEffect =
   | { kind: 'noop' }
   | { kind: 'ask-finish' }
-  | { kind: 'ask-restore' }
-  | { kind: 'update'; updates: Partial<WorkOrder> };
+  /** Pede confirmação para desfazer a receita/parcelas; `message` diz o que será apagado, `target` é o novo status. */
+  | { kind: 'ask-restore'; target: OSStatus; message: string }
+  /** Recusado (parcela aberta ao receber; parcela já recebida ao reabrir): mostrar `message` e não mudar nada. */
+  | { kind: 'blocked'; message: string }
+  /** `settleEntry`: receita à vista ligada ainda em aberto que deve ser marcada como recebida na mesma data (settleOpenReceipt). */
+  | { kind: 'update'; updates: Partial<WorkOrder>; settleEntry?: { entryId: string; paymentDate: string } };
 
 // Decide o que fazer ao mover a OS de status (handleUpdateStatus).
 export const statusChangeEffects = (
   os: WorkOrder,
   newStatus: OSStatus,
-  now: string = new Date().toISOString()
+  now: string = new Date().toISOString(),
+  ledger: LedgerEntry[] = []
 ): StatusChangeEffect => {
   if (os.status === newStatus) return { kind: 'noop' };
 
   const isBecomingFinalized = newStatus === 'FINALIZADO' && os.status !== 'FINALIZADO';
   const isLeavingFinalized = os.status === 'FINALIZADO' && newStatus !== 'FINALIZADO';
+  // Receita ligada: à vista (financialId) ou parcelada (installmentConfig, mesmo sem financialId).
+  const hasReceipt = !!os.financialId || !!os.installmentConfig;
+
+  // Restaurar do arquivo para qualquer status que não seja Finalizado reabre a OS: mesma trava e mesmo aviso.
+  if (os.status === 'ARQUIVADO' && newStatus !== 'FINALIZADO' && hasReceipt) {
+    const plan = planReopenOS(os, ledger, newStatus);
+    return plan.ok
+      ? { kind: 'ask-restore', target: newStatus, message: plan.message }
+      : { kind: 'blocked', message: plan.message };
+  }
 
   // D7: arquivar uma OS finalizada só muda o status (receitas, financialId e paymentDate ficam).
-  if (isLeavingFinalized && newStatus === 'ARQUIVADO' && os.financialId) {
+  if (isLeavingFinalized && newStatus === 'ARQUIVADO' && hasReceipt) {
     return { kind: 'update', updates: { status: newStatus } };
   }
 
-  if (isBecomingFinalized && !os.financialId) {
+  // "Receber" numa OS parcelada com parcelas abertas não finaliza nem marca parcelas.
+  if (isBecomingFinalized && hasReceipt) {
+    const receive = planReceiveOS(os, ledger);
+    if (!receive.ok) return { kind: 'blocked', message: receive.message };
+  }
+
+  // Voltar de Aguardando Pagamento para antes do serviço desfaz o parcelamento (sem parcela recebida).
+  const isGoingBackFromPayment = os.status === 'AGUARDANDO_PAGAMENTO' && BACKWARD_FROM_PAYMENT.includes(newStatus)
+    && (!!os.financialId || !!os.installmentConfig);
+
+  if (isBecomingFinalized && !hasReceipt) {
     return { kind: 'ask-finish' };
-  } else if (isLeavingFinalized && os.financialId) {
-    return { kind: 'ask-restore' };
+  } else if ((isLeavingFinalized && hasReceipt) || isGoingBackFromPayment) {
+    const plan = planReopenOS(os, ledger, newStatus);
+    return plan.ok
+      ? { kind: 'ask-restore', target: newStatus, message: plan.message }
+      : { kind: 'blocked', message: plan.message };
   }
 
   const updates: Partial<WorkOrder> = { status: newStatus };
+  let settleEntry: { entryId: string; paymentDate: string } | undefined;
 
   if (isBecomingFinalized) {
     // Desarquivar uma OS que já tem financialId e paymentDate não sobrescreve o paymentDate.
-    updates.paymentDate = os.financialId && os.paymentDate ? os.paymentDate : now;
+    updates.paymentDate = hasReceipt && os.paymentDate ? os.paymentDate : now;
+    // OS à vista que volta a Finalizado com a receita ainda em aberto: o lançamento é marcado como recebido na
+    // MESMA data do paymentDate da OS (senão a OS fica paga e o caixa continua em "A receber").
+    if (os.financialId && !os.installmentConfig && os.paymentMethod !== 'INSTALLMENT') {
+      const entry = ledger.find(e => e.id === os.financialId);
+      if (entry && entry.type === 'CREDIT' && !entry.paymentDate) {
+        settleEntry = { entryId: entry.id, paymentDate: updates.paymentDate };
+      }
+    }
   }
 
   if (isLeavingFinalized) {
     updates.paymentDate = undefined;
   }
 
-  return { kind: 'update', updates };
+  return settleEntry ? { kind: 'update', updates, settleEntry } : { kind: 'update', updates };
 };
 
 // Marca a OS como FINALIZADO ligada ao lançamento à vista.
@@ -249,17 +275,8 @@ export const finalizeOSSingle = (
   return { entry, os: markOSFinalized(os, entry.id, paymentDate) };
 };
 
-// Soma dos adiantamentos da OS (schema v4). OS legada sem `advances`: 0 (use getRemainingAmount para a regra antiga).
-export const sumAdvances = (os: Pick<WorkOrder, 'advances'>): number =>
-  (os.advances ?? []).reduce((acc, a) => acc + a.amount, 0);
-
-// Valor ainda a receber da OS. Com `advances` (v4): max(total - soma, 0).
-// OS legada sem `advances`: total - adiantamento só quando o adiantamento está no caixa (advanceEntryId);
-// advanceAmount sem advanceEntryId usa o total cheio (D3).
-export const getRemainingAmount = (os: WorkOrder): number => {
-  if (os.advances) return Math.max(os.total - sumAdvances(os), 0);
-  return os.advanceEntryId ? Math.max(os.total - (os.advanceAmount || 0), 0) : os.total;
-};
+// sumAdvances e getRemainingAmount vivem em osRemaining.ts (módulo-folha, sem ciclo com osFinanceGuards); reexportados aqui.
+export { sumAdvances, getRemainingAmount };
 
 // Receita à vista de OS finalizada editada: o lançamento (financialId) passa a valer o RESTANTE
 // (total - adiantamentos), não o total (defeito: o adiantamento já está no caixa). Competência = createdAt da OS.

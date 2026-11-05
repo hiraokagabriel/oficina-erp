@@ -252,7 +252,8 @@ describe('statusChangeEffects', () => {
     expect(statusChangeEffects(os(), 'FINALIZADO', NOW)).toEqual({ kind: 'ask-finish' });
   });
   it('sair de FINALIZADO com financialId: pergunta se reabre', () => {
-    expect(statusChangeEffects(os({ status: 'FINALIZADO', financialId: 'f1' }), 'EM_SERVICO', NOW)).toEqual({ kind: 'ask-restore' });
+    expect(statusChangeEffects(os({ status: 'FINALIZADO', financialId: 'f1' }), 'EM_SERVICO', NOW))
+      .toMatchObject({ kind: 'ask-restore', target: 'EM_SERVICO' });
   });
   it('virar FINALIZADO com financialId já existente: atualiza com paymentDate = now', () => {
     expect(statusChangeEffects(os({ status: 'AGUARDANDO_PAGAMENTO', financialId: 'f1' }), 'FINALIZADO', NOW))

@@ -200,6 +200,31 @@ export const TodayPage: React.FC<TodayPageProps> = ({
           )}
           {seeAll(sum.contasVencidas.length, onGoFinance, 'Ver contas a receber')}
         </section>
+
+        <section className="today-card" aria-labelledby="today-await-title">
+          <div className="today-card-head">
+            <h2 id="today-await-title" className="today-card-title">Aguardando pagamento</h2>
+            {sum.aguardandoPagamento.length > 0 && <span className="today-count" role="img" aria-label={`${sum.aguardandoPagamento.length} ${sum.aguardandoPagamento.length === 1 ? 'OS aguardando pagamento' : 'OS aguardando pagamento'}`}>{sum.aguardandoPagamento.length}</span>}
+          </div>
+          {sum.aguardandoPagamento.length === 0 ? empty('cifrao', 'Nenhuma OS aguardando pagamento') : (
+            <>
+              <p className="today-total">Total a receber: <strong>{formatMoney(sum.totalAguardando)}</strong></p>
+              <ul className="today-list">
+                {sum.aguardandoPagamento.slice(0, TODAY_LIST_LIMIT).map(({ os, amount }) => (
+                  <li key={os.id} className="today-item">
+                    <div className="today-item-main">
+                      <strong>OS #{os.osNumber} · {os.clientName}</strong>
+                      <span className="today-sub">{os.vehicle}</span>
+                    </div>
+                    <strong className="today-money">{formatMoney(amount)}</strong>
+                    <button type="button" className="btn-sm" onClick={() => onOpenOS(os)}>Abrir OS #{os.osNumber}</button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {seeAll(sum.aguardandoPagamento.length, onGoFinance, 'Ver contas a receber')}
+        </section>
       </div>
 
       {apptOpen && (

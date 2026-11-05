@@ -56,12 +56,42 @@ describe('summarizeReceivables', () => {
     expect(r.items.map(i => i.id)).toEqual(['atrasado1', 'atrasado2', 'hoje', 'futuro']);
   });
   it('ledger vazio ou só recebido: zeros', () => {
-    expect(summarizeReceivables([], TODAY)).toEqual({ totalAReceber: 0, totalAtrasado: 0, countAReceber: 0, countAtrasado: 0, items: [] });
+    expect(summarizeReceivables([], TODAY)).toEqual({ totalAReceber: 0, totalAtrasado: 0, countAReceber: 0, countAtrasado: 0, items: [], pendingOS: [] });
     expect(summarizeReceivables([e('p', { paymentDate: day(2026, 1, 1) })], TODAY).items).toEqual([]);
   });
   it('não muta o ledger', () => {
     const led = [e('b', { dueDate: day(2026, 8, 1) }), e('a', { dueDate: day(2026, 7, 1) })];
     summarizeReceivables(led, TODAY);
     expect(led.map(x => x.id)).toEqual(['b', 'a']);
+  });
+});
+
+// Item 6 (lote A): OS em Aguardando Pagamento sem lançamento também é dinheiro a receber.
+import { getPendingOSReceivables } from './receivables';
+import type { WorkOrder } from '../types';
+
+describe('OS aguardando pagamento sem lançamento', () => {
+  const wo = (over: Partial<WorkOrder> = {}): WorkOrder => ({
+    id: 'o1', osNumber: 3, vehicle: 'Gol', clientName: 'Ana', clientPhone: '1', mileage: 0,
+    status: 'AGUARDANDO_PAGAMENTO', parts: [], services: [], total: 10000, createdAt: '2026-01-10T12:00:00.000Z', ...over,
+  });
+  it('usa o restante (total - adiantamentos) e soma em A receber', () => {
+    const o = wo({ advances: [{ id: 'a', amount: 4000, date: '2026-01-11T12:00:00.000Z', entryId: 'e' }] });
+    expect(getPendingOSReceivables([o])).toEqual([{ os: o, amount: 6000 }]);
+    const s = summarizeReceivables([], TODAY, [o]);
+    expect([s.totalAReceber, s.countAReceber, s.totalAtrasado, s.countAtrasado]).toEqual([6000, 1, 0, 0]);
+    expect(s.items).toEqual([]);
+  });
+  it('fica de fora: com lançamento/parcelas, restante 0 ou outro status', () => {
+    const cfg = { totalAmount: 1, installments: 1, installmentAmount: 1, lastInstallmentAmount: 1, firstPaymentDate: '', groupId: 'g', description: '' };
+    expect(getPendingOSReceivables([
+      wo({ id: 'a', financialId: 'f' }),
+      wo({ id: 'b', installmentConfig: cfg }),
+      wo({ id: 'c', advances: [{ id: 'a', amount: 10000, date: '2026-01-11T12:00:00.000Z', entryId: 'e' }] }),
+      wo({ id: 'd', status: 'EM_SERVICO' }),
+    ])).toEqual([]);
+  });
+  it('sem passar as OS, o resumo não muda', () => {
+    expect(summarizeReceivables([], TODAY).countAReceber).toBe(0);
   });
 });

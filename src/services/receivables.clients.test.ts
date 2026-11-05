@@ -147,3 +147,15 @@ describe('clientGroupKey / osBelongsToClient', () => {
     expect(osBelongsToClient({ clientName: 'Zé', clientId: 'GONE' }, clients[2], clients)).toBe(false);
   });
 });
+
+describe('getClientReceivables com OS pendente (sem lançamento)', () => {
+  it('OS em Aguardando Pagamento entra no bucket do cliente e no emAberto', () => {
+    const works = [os('o1', 'Maria Teste', { total: 40000 })];
+    const { byClient, ranking } = getClientReceivables(works, [], TODAY, []);
+    expect(ranking).toHaveLength(1);
+    expect(ranking[0].emAberto).toBe(40000);
+    expect(ranking[0].countAberto).toBe(1);
+    expect(ranking[0].atrasado).toBe(0);
+    expect(byClient.size).toBe(1);
+  });
+});

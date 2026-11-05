@@ -13,6 +13,14 @@ const credit = (id: string, due: string, amount: number, paid = false): LedgerEn
 const today = '2026-10-22';
 
 describe('buildTodaySummary', () => {
+  it('OS aguardando pagamento sem lançamento aparece com o restante (item 6)', () => {
+    const a = { ...os(7, 'AGUARDANDO_PAGAMENTO'), total: 10000, advances: [{ id: 'a', amount: 2500, date: iso(today), entryId: 'e' }] } as unknown as WorkOrder;
+    const b = { ...os(8, 'AGUARDANDO_PAGAMENTO'), total: 5000, financialId: 'f' } as unknown as WorkOrder;
+    const s = buildTodaySummary([a, b], [], [], today);
+    expect(s.aguardandoPagamento.map(p => [p.os.osNumber, p.amount])).toEqual([[7, 7500]]);
+    expect(s.totalAguardando).toBe(7500);
+    expect(s.countVencido).toBe(0);
+  });
   it('separa entregas de hoje, atrasadas (mais atrasada primeiro) e ignora status que não conta', () => {
     const s = buildTodaySummary(
       [os(1, 'EM_SERVICO', today), os(2, 'APROVADO', '2026-10-20'), os(3, 'EM_SERVICO', '2026-10-10'), os(4, 'ORCAMENTO', '2026-10-01'), os(5, 'APROVADO', '2026-10-30')],

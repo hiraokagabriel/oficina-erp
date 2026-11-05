@@ -1,6 +1,6 @@
 import { Appointment, Client, LedgerEntry, WorkOrder, WorkshopSettings } from '../types';
 import { formatDateOnly } from '../utils/dates';
-import { getDaysOverdue, summarizeReceivables, toLocalDay } from './receivables';
+import { getDaysOverdue, PendingOSReceivable, summarizeReceivables, toLocalDay } from './receivables';
 import { getDaysLate, getDeliveryStatus, groupAppointmentsByDay, startOfWeek, summarizeDeliveries } from './schedule';
 
 // Painel "Hoje": só junta funções puras que já existem. `today` é injetado (Date ou 'AAAA-MM-DD'), dia local.
@@ -21,6 +21,9 @@ export interface TodaySummary {
   contasVencidas: TodayOverdue[];
   totalVencido: number;
   countVencido: number;
+  /** OS em Aguardando Pagamento sem lançamento no caixa (dinheiro devido que não é conta). */
+  aguardandoPagamento: PendingOSReceivable[];
+  totalAguardando: number;
 }
 
 export const buildTodaySummary = (
@@ -39,7 +42,7 @@ export const buildTodaySummary = (
   const dia = week.find(d => d.dayKey === todayKey);
   const agendamentosHoje = (dia ? dia.items : []).filter(a => a.status !== 'CANCELADO' && a.status !== 'FALTOU');
 
-  const rec = summarizeReceivables(ledger, today);
+  const rec = summarizeReceivables(ledger, today, workOrders);
   const vencidas = rec.items
     .filter(e => getDaysOverdue(e, today) > 0)
     .map(entry => ({ entry, daysOverdue: getDaysOverdue(entry, today) }));
@@ -51,6 +54,8 @@ export const buildTodaySummary = (
     contasVencidas: vencidas,
     totalVencido: rec.totalAtrasado,
     countVencido: rec.countAtrasado,
+    aguardandoPagamento: rec.pendingOS,
+    totalAguardando: rec.pendingOS.reduce((acc, p) => acc + p.amount, 0),
   };
 };
 

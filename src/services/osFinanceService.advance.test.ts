@@ -209,8 +209,8 @@ describe('statusChangeEffects: arquivar e desarquivar (D7)', () => {
     const r = statusChangeEffects(os({ status: 'ARQUIVADO', financialId: 'f1', paymentDate: NOW }), 'FINALIZADO', LATER);
     expect(r).toEqual({ kind: 'update', updates: { status: 'FINALIZADO', paymentDate: NOW } });
   });
-  it('desarquivar para ORCAMENTO mantém o financeiro (só status)', () => {
-    expect(statusChangeEffects(os({ status: 'ARQUIVADO', financialId: 'f1', paymentDate: NOW }), 'ORCAMENTO', NOW))
-      .toEqual({ kind: 'update', updates: { status: 'ORCAMENTO' } });
+  it('restaurar para ORCAMENTO com financeiro é reabertura: pede confirmação (antes só mudava o status)', () => {
+    expect(statusChangeEffects(os({ status: 'ARQUIVADO', financialId: 'f1', paymentDate: NOW }), 'ORCAMENTO', NOW).kind)
+      .toBe('ask-restore');
   });
 });

@@ -1,6 +1,7 @@
 import { Client, LedgerEntry, WorkOrder } from '../types';
 import { clientGroupKey, resolveClientId } from '../utils/links';
 import { formatDateOnly, parseDateFlexible } from '../utils/dates';
+import { getRemainingAmount } from './osFinanceService';
 
 // Conceito único de "a receber": `paymentDate` é a única verdade de "pago" (isPaid não é mais lido).
 // Funções puras; `today` é injetado (Date ou 'YYYY-MM-DD') e a comparação é por DIA LOCAL.
@@ -14,7 +15,26 @@ export interface ReceivablesSummary {
   countAtrasado: number;
   /** A_RECEBER + ATRASADO, ordenados por vencimento (mais antigo primeiro). */
   items: LedgerEntry[];
+  /** OS em Aguardando Pagamento que ainda não tem lançamento no caixa (já somadas em totalAReceber/countAReceber). */
+  pendingOS: PendingOSReceivable[];
 }
+
+export interface PendingOSReceivable {
+  os: WorkOrder;
+  /** Restante a receber (total - adiantamentos). */
+  amount: number;
+}
+
+/**
+ * OS em Aguardando Pagamento sem lançamento nem parcelas no caixa: o dinheiro é devido mas não aparece como conta.
+ * Valor = getRemainingAmount (total - adiantamentos); restante 0 fica de fora. Mais antiga (por número) primeiro.
+ */
+export const getPendingOSReceivables = (workOrders: WorkOrder[]): PendingOSReceivable[] =>
+  workOrders
+    .filter(o => o.status === 'AGUARDANDO_PAGAMENTO' && !o.financialId && !o.installmentConfig)
+    .map(os => ({ os, amount: getRemainingAmount(os) }))
+    .filter(p => p.amount > 0)
+    .sort((a, b) => a.os.osNumber - b.os.osNumber);
 
 export const getDueDate = (entry: LedgerEntry): string => entry.dueDate ?? entry.effectiveDate;
 
@@ -33,10 +53,11 @@ export const getReceivableStatus = (
 
 export const summarizeReceivables = (
   ledger: LedgerEntry[],
-  today: string | Date
+  today: string | Date,
+  workOrders: WorkOrder[] = []
 ): ReceivablesSummary => {
   const summary: ReceivablesSummary = {
-    totalAReceber: 0, totalAtrasado: 0, countAReceber: 0, countAtrasado: 0, items: [],
+    totalAReceber: 0, totalAtrasado: 0, countAReceber: 0, countAtrasado: 0, items: [], pendingOS: [],
   };
   for (const e of ledger) {
     const status = getReceivableStatus(e, today);
@@ -52,6 +73,12 @@ export const summarizeReceivables = (
   }
   summary.items.sort((a, b) =>
     parseDateFlexible(getDueDate(a)).getTime() - parseDateFlexible(getDueDate(b)).getTime());
+  // Sem vencimento definido: conta como "a receber" (nunca atrasado).
+  summary.pendingOS = getPendingOSReceivables(workOrders);
+  for (const p of summary.pendingOS) {
+    summary.totalAReceber += p.amount;
+    summary.countAReceber++;
+  }
   return summary;
 };
 
@@ -133,11 +160,7 @@ export const getClientReceivables = (
   }
 
   const byClient = new Map<string, ClientReceivable>();
-  for (const e of ledger) {
-    const status = getReceivableStatus(e, today);
-    if (status !== 'A_RECEBER' && status !== 'ATRASADO') continue;
-    const os = byEntryId.get(e.id) ?? (e.installmentGroupId ? byGroupId.get(e.installmentGroupId) : undefined);
-    if (!os) continue;
+  const bucket = (os: WorkOrder): ClientReceivable => {
     const key = clientGroupKey(os, clients);
     let c = byClient.get(key);
     if (!c) {
@@ -147,9 +170,23 @@ export const getClientReceivables = (
       if (clientId) c.clientId = clientId;
       byClient.set(key, c);
     }
+    return c;
+  };
+  for (const e of ledger) {
+    const status = getReceivableStatus(e, today);
+    if (status !== 'A_RECEBER' && status !== 'ATRASADO') continue;
+    const os = byEntryId.get(e.id) ?? (e.installmentGroupId ? byGroupId.get(e.installmentGroupId) : undefined);
+    if (!os) continue;
+    const c = bucket(os);
     c.emAberto += e.amount;
     c.countAberto++;
     if (status === 'ATRASADO') { c.atrasado += e.amount; c.countAtrasado++; }
+  }
+  // OS em Aguardando Pagamento sem lançamento: o cliente também deve esse restante.
+  for (const p of getPendingOSReceivables(workOrders)) {
+    const c = bucket(p.os);
+    c.emAberto += p.amount;
+    c.countAberto++;
   }
 
   const ranking = [...byClient.values()].sort(

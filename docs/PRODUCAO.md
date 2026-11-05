@@ -1,6 +1,8 @@
 # OficinaPro: quadro de produção
 
-Atualizado em 2026-10-30. Branch `printing-overhaul`. Fonte: `git log`, `git status`, `docs/ROADMAP.md`, `CLAUDE.md` e relatos da sessão principal.
+Atualizado em 2026-11-05. Branch `printing-overhaul`. Fonte: `git log`, `git status`, `docs/ROADMAP.md`, `CLAUDE.md` e relatos da sessão principal.
+
+**Para retomar em outro computador:** veja a seção "Iniciativa D" e "Como retomar" mais abaixo. O estado vigente do trabalho (prioridades P1 a P4, decisões do dono, o que falta) está na Iniciativa D. As seções de estado geral e de portões das iniciativas A a C são histórico e podem estar defasadas (por exemplo, a linha "Último push" e "Árvore: limpa").
 
 **Mapa do código:** para achar onde cada iniciativa mora no código, use o grafo local (`graphify-out/GRAPH_REPORT.md`, `/graphify query "..."`; ver a seção "Mapa do código (grafo)" do `CLAUDE.md`). Correspondência entre iniciativa e comunidade do grafo:
 - A (repaginação): "Menu lateral e ícones" (`Sidebar`, `Icon`), "Menu de contexto do card", "Kanban (dnd-kit)", "App e modais".
@@ -71,6 +73,112 @@ Portão extra de formato do banco para V3 (v5): migração com teste e plano de 
 | C3 | Lista de adiantamentos na OS, salvamento com auditoria, lançamento travado no financeiro | `56f13d2` | commitada |
 
 Portão extra de formato do banco para C: `arquiteto`, ok do dono, migração com teste de fixture, plano de atualização dos PCs: não registrados. Verificação no navegador e `revisor` específicos de C: não registrados.
+
+## Iniciativa D: Prioridades de correção e fluxo (P1 a P4), 2026-11
+
+Origem: revisão do fluxo de OS, financeiro e telas feita com o dono. Os itens foram agrupados em quatro prioridades. Sem mudança de schema até aqui (continua v5).
+
+### Lista de prioridades vigente
+
+P1 (dados e dinheiro). Todos feitos (Lote A e Lote B item 1):
+
+| # | Item | Estado |
+|---|---|---|
+| 1 | Com 2 PCs, salvar OS desfazia o que o outro PC fez | feito (`osEditMerge.ts`, commit `a61477a`) |
+| 2 | Excluir OS parcelada deixava parcelas no caixa | feito (`planDeleteOS`, `b7dc3c3`) |
+| 3 | Receber em OS parcelada finalizava sem receber as parcelas | feito (`planReceiveOS`, `b7dc3c3`) |
+| 4 | Voltar de Aguardando Pagamento não desfazia o parcelamento e reabrir apagava parcelas pagas | feito (`planReopenOS`, `b7dc3c3`) |
+| 5 | Financeiro deixava apagar receita ou parcelas de OS | feito (`findReceiptOwner`, `b7dc3c3`) |
+| 6 | OS em Aguardando Pagamento sem lançamento não aparecia em A receber nem no Hoje | feito (`getPendingOSReceivables`, `pendingOS`) |
+
+P2 (fluxo do dia a dia):
+
+| # | Item | Estado |
+|---|---|---|
+| 7 | Campo Data de pagamento era ignorado | feito (campo removido) |
+| 8 | Receita manual nasce "a receber" e vira atrasada | pendente (decisão tomada: nasce "já recebida") |
+| 9 | Dívida e última visita ao escolher o cliente | feito (`osClientContext.ts`) |
+| 10 | Botões Nova OS e Agendar na ficha do cliente | pendente |
+| 11 | Orçamento parado: selo e bloco no Hoje | pendente |
+| 12 | WhatsApp único, com texto por situação | pendente |
+| 13 | Vistoria: km de entrada 0; itens trocar/urgente viram linhas do orçamento; botão Abrir vistoria na OS | pendente |
+| 14 | Peças a comprar: agrupamento diferente da impressão, sem carro, seleção some ao trocar de aba, falta filtro Em serviço | pendente |
+| 15 | A receber sem busca, sem Abrir OS e sem WhatsApp de cobrança | pendente |
+
+P3 (todo pendente, exceto onde indicado):
+- Obs. interna com rótulo errado (é nota do cliente). Decisão: só troca o rótulo.
+- Aviso ao editar OS finalizada: FEITO (`editWarning`).
+- Número de OS repetido entre PCs.
+- Cliente duplicado por acento.
+- OS antiga muda de dia (UTC, após 21h).
+- Filtros de Processos por horas; busca sem telefone, técnico e acento.
+- Quatro buscas diferentes no app.
+- OS arquivada sai das estatísticas. Decisão: passa a contar.
+- CSV sem Data Pagamento.
+- Clientes: retornos sugeridos, garantia, km por OS, filtro por veículo.
+- Confirmação ao avançar OS sem itens.
+- Duplicar OS.
+- Cliente com um veículo preenche sozinho.
+- Rascunho da OS recuperável.
+- Conflito entre 2 PCs só oferece Recarregar.
+- Lixeira das fotos nunca esvazia e fotos ficam fora do backup.
+- Restante a pagar calculado em 4 lugares: parcialmente resolvido (`getRemainingAmount` agora em `src/services/osRemaining.ts`; faltam os outros pontos).
+
+P4 (todo pendente): títulos que não batem com o menu; contadores no menu; estados vazios; `alert`/`confirm` nativos; "Entregas de amanhã" no Hoje; código morto; meta no backup do Drive; duplicação de `STATUS_ICON`.
+
+### Decisões do dono
+
+- Receber em OS parcelada com parcela aberta: bloqueia.
+- Reabrir OS parcelada com parcela paga: proibido. Se todas as parcelas estão pagas, a OS só reabre depois de desmarcar o pagamento da parcela no Financeiro.
+- Data de pagamento: campo removido.
+- Receita manual: nasce já recebida por padrão. AINDA NÃO implementado (P2 item 8).
+- OS arquivada: conta nas estatísticas. AINDA NÃO implementado (P3).
+- Obs. interna: só troca o rótulo. AINDA NÃO implementado (P3).
+- Arrastar OS à vista de Finalizado para Aguardando Pagamento: mantém a confirmação. Depois de confirmar, apaga a receita recebida e a data real do recebimento se perde.
+- Restaurar do arquivo uma OS finalizada à vista: mantém a confirmação.
+
+### O que foi entregue
+
+Commits `b7dc3c3` (travas financeiras) e `a61477a` (salvar OS com merge e resumo do cliente), ambos na branch `printing-overhaul`. Um commit de correções ainda será feito pelo dono (há alteração local em `src/services/osEditMerge.ts`).
+
+Módulos novos em `src/services/`:
+- `osFinanceGuards.ts`: `planDeleteOS`, `planReopenOS`, `planReceiveOS`, `editWarning`, `findReceiptOwner`, `settleOpenReceipt`, `getPendingOSReceivables`.
+- `osEditMerge.ts`: `mergeOSEdit`, merge de 3 vias (OS aberta, OS editada, OS atual do banco) ao salvar a OS.
+- `osClientContext.ts`: `clientDebtLine`, `lastVisitLine`, `buildClientDebts`.
+- `osRemaining.ts`: módulo-folha com `sumAdvances` e `getRemainingAmount`, reexportados por `osFinanceService`.
+
+Mudanças em serviços existentes: `statusChangeEffects` ganhou o efeito `blocked` e um 4º parâmetro `ledger`; A receber e Hoje incluem OS pendente (`summarizeReceivables` recebe `workOrders`, resultado traz `pendingOS`); reabrir respeita o status de destino.
+
+### Pendências técnicas conhecidas
+
+- Avisos "deprecated" de `advanceEntryId` e `advanceAmount` (sem substituto limpo).
+- A trava refeita na confirmação (`executePendingAction`) não tem teste automatizado.
+- A linha "Deve ..." inclui a própria OS quando ela está em Aguardando Pagamento.
+- O commit `b7dc3c3` sozinho não compila: o `App.tsx` que o acompanha está no `a61477a`. Não use `b7dc3c3` isolado em bisect ou deploy.
+- Nada do Lote A e B foi verificado automaticamente na interface. O dono fez verificação visual manual e relatou que funciona. Falta `verificador` no navegador e teste com 2 PCs reais.
+- Atualizar todos os PCs no mesmo dia (schema não mudou, segue v5, mas o código novo de salvar OS muda o comportamento entre PCs).
+
+### Plano de execução restante
+
+1. Lote em paralelo, em arquivos que não se cruzam: km do checklist (P2 13, parte), receita manual "Já recebido" (P2 8), blocos do Hoje incluindo orçamento parado (P2 11), WhatsApp único (P2 12). Conferir antes quem toca `App.tsx` para não haver conflito.
+2. P2 restante: 10, 13 (itens trocar/urgente viram linhas; Abrir vistoria), 14, 15.
+3. P3, na ordem da lista, agrupando por tela. Itens que mexem em OS, número de OS ou fotos: `arquiteto` primeiro.
+4. P4.
+5. Fluxo por rodada: `dev` ou `ui-dev` implementa; sessão principal roda `npm run build`, `npm test` e `$env:TZ='UTC'; npm test`; `verificador`/`ux-revisor` no navegador para tela; `revisor` no diff; ok do dono; commit por assunto. Mudança de formato do banco entra com `arquiteto`, `CURRENT_SCHEMA_VERSION`, migração com teste e plano de atualização dos PCs.
+
+### Como retomar em outro computador
+
+1. Clonar o repositório e mudar para a branch `printing-overhaul` (se o push ainda não foi feito, o trabalho local do PC de origem precisa ser enviado ou copiado antes: ver estado da entrega).
+2. `npm install`, depois `npm run build` e `npm test` para confirmar a base verde.
+3. Ler `CLAUDE.md` e este arquivo (Iniciativa D). Os documentos de domínio estão no `docs/ROADMAP.md`.
+4. `graphify-out/` é gerado por PC e fica fora do git: criar com `/graphify` se quiser o mapa do código.
+5. Testar sempre com banco sintético em pasta temporária (campo `dbPath` em Config), nunca com o banco real.
+
+### Estado da entrega
+
+- Versão e instalador ainda NÃO foram gerados (tarefa do `entregador`: versão, notas em `docs/VERSOES.md`, build do Tauri, checklist de atualização dos PCs). `docs/VERSOES.md` ainda não existe.
+- Push NÃO feito. Só o dono autoriza.
+- Portões da Iniciativa D: P1 (build e testes) rodado pela sessão principal nos commits; P2 (navegador) não registrado, só verificação visual manual do dono; P3 (`revisor`) não registrado; P4 (ok do dono) dado para os commits; P5 (push) não feito.
 
 ## Portões por rodada ou etapa
 

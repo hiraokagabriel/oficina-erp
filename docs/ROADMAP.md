@@ -199,6 +199,21 @@ Implementado (sem mudança de formato do banco). Base brasileira gerada da API p
 
 ---
 
+### Fase 5: travas do financeiro e fluxo da OS (2026-11)
+
+Em andamento. **Sem mudança de formato do banco** (segue schema v5). O quadro detalhado, com as prioridades P1 a P4, as decisões do dono e o plano restante, está em `docs/PRODUCAO.md` (Iniciativa D).
+
+- [x] P1 itens 1 a 6 (commits `b7dc3c3` e `a61477a`): salvar OS faz merge de 3 vias com a versão atual do banco (`osEditMerge.ts`); excluir, reabrir e receber OS parcelada respeitam as parcelas (`osFinanceGuards.ts`); o Financeiro não apaga receita ou parcelas ligadas a OS; A receber e Hoje incluem OS em Aguardando Pagamento sem lançamento.
+- [x] P2 item 7 (campo Data de pagamento removido) e item 9 (dívida e última visita ao escolher o cliente, `osClientContext.ts`).
+- [x] P3: aviso ao editar OS finalizada (`editWarning`).
+- [ ] P2 itens 8 (receita manual nasce "já recebida"), 10 a 15; todo o P3 restante e o P4.
+- [ ] Decisões já tomadas e ainda não implementadas: receita manual já recebida por padrão; OS arquivada conta nas estatísticas; Obs. interna só troca o rótulo.
+- [ ] Verificar no navegador e com 2 PCs reais; gerar versão e instalador; push.
+
+Regras novas que valem para o código: Receber em OS parcelada com parcela aberta é bloqueado; reabrir OS com parcela paga é proibido (se todas as parcelas estão pagas, desmarcar o pagamento da parcela no Financeiro antes); o `getRemainingAmount` mora em `src/services/osRemaining.ts`.
+
+---
+
 ## 3.1 Comportamentos suspeitos registrados nos testes
 
 Os testes marcam os que seguem abertos com `// COMPORTAMENTO ATUAL (suspeito)` e os já corrigidos com `// CORRIGIDO (4.5)` ou `// CORRIGIDO (5.4)`. Quem corrigir um defeito deve atualizar o teste junto.

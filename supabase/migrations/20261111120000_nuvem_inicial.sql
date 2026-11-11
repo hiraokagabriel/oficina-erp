@@ -289,7 +289,7 @@ begin
        or new.data ->> 'status' not in ('ORCAMENTO', 'APROVADO', 'EM_SERVICO', 'AGUARDANDO_PAGAMENTO', 'FINALIZADO', 'ARQUIVADO')
        or coalesce(jsonb_typeof(new.data -> 'mileage'), 'null') not in ('number', 'null')
        or coalesce(jsonb_typeof(new.data -> 'photos'), 'null') not in ('array', 'null')
-       or coalesce(jsonb_typeof(new.data -> 'checklist'), 'null') not in ('array', 'null') then
+       or coalesce(jsonb_typeof(new.data -> 'checklist'), 'null') not in ('object', 'null') then -- ChecklistSchema (src/types.ts) é objeto
       raise exception 'mecanico_campo_invalido' using errcode = '22023';
     end if;
   end if;

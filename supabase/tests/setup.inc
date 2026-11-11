@@ -68,7 +68,7 @@ insert into public.devices (workshop_id, name, kind, secret_hash) values
 
 -- Dados da oficina A (gravados como postgres: guardas liberam).
 insert into public.work_orders (workshop_id, id, data) values
-  ('aaaaaaaa-0000-0000-0000-000000000001', 'os1', '{"status":"APROVADO","clientName":"Joao","parts":[{"d":"filtro"}],"mileage":100,"checklist":[],"photos":[]}'),
+  ('aaaaaaaa-0000-0000-0000-000000000001', 'os1', '{"status":"APROVADO","clientName":"Joao","parts":[{"d":"filtro"}],"mileage":100,"checklist":{"categories":[],"notes":""},"photos":[]}'),
   ('aaaaaaaa-0000-0000-0000-000000000001', 'os2', '{"status":"FINALIZADO","clientName":"Maria","parts":[]}'),
   ('aaaaaaaa-0000-0000-0000-000000000001', 'os3', '{"status":"ARQUIVADO","clientName":"Pedro","parts":[]}'),
   ('aaaaaaaa-0000-0000-0000-000000000001', 'os4', '{"status":"AGUARDANDO_PAGAMENTO","clientName":"Ana","parts":[]}'),

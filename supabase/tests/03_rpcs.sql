@@ -47,7 +47,7 @@ select throws_ok($$select public.sync_push('aaaaaaaa-0000-0000-0000-000000000001
 -- mecânico via sync_push: campo proibido e tabela sem permissão
 select pg_temp.as_user('00000000-0000-0000-0000-0000000000f1');
 create temp table r7 as select public.sync_push('aaaaaaaa-0000-0000-0000-000000000001',
-  '[{"key":"m1","rows":[{"table":"work_orders","id":"os1","version":1,"data":{"status":"APROVADO","clientName":"Hack","parts":[{"d":"filtro"}],"mileage":100,"checklist":[],"photos":[]}}]},
+  '[{"key":"m1","rows":[{"table":"work_orders","id":"os1","version":1,"data":{"status":"APROVADO","clientName":"Hack","parts":[{"d":"filtro"}],"mileage":100,"checklist":{"categories":[],"notes":""},"photos":[]}}]},
     {"key":"m2","rows":[{"table":"ledger","id":"lm","version":0,"data":{"type":"CREDIT","amount":1}}]}]'::jsonb) as j;
 grant all on r7 to public;
 select is((select j -> 0 ->> 'status' from r7), 'denied', 'mecânico: clientName via sync_push negado');

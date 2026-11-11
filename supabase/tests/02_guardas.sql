@@ -9,7 +9,7 @@ select throws_ok($$update public.work_orders set data = data || '{"clientName":"
   '42501', 'mecanico_campo_proibido', 'mecânico não altera clientName');
 select throws_ok($$update public.work_orders set data = data || '{"parts":[]}' where id = 'os1'$$,
   '42501', 'mecanico_campo_proibido', 'mecânico não altera parts');
-select lives_ok($$update public.work_orders set data = data || '{"status":"EM_SERVICO","mileage":150,"checklist":[{"k":1}]}' where id = 'os1'$$,
+select lives_ok($$update public.work_orders set data = data || '{"status":"EM_SERVICO","mileage":150,"checklist":{"categories":[{"id":"c1","label":"Motor","items":[{"id":"i1","label":"Óleo","status":"ok"}]}],"notes":"","mileageIn":150}}' where id = 'os1'$$,
   'mecânico altera status, mileage e checklist');
 select is((select (data ->> 'status') from public.work_orders where id = 'os1'), 'EM_SERVICO', 'status gravado pelo mecânico');
 select throws_ok($$update public.work_orders set data = data || '{"status":"FINALIZADO"}' where id = 'os1'$$,
@@ -18,8 +18,8 @@ select throws_ok($$update public.work_orders set data = data || '{"mileage":"abc
   '22023', 'mecanico_campo_invalido', 'mecânico: mileage precisa ser número');
 select throws_ok($$update public.work_orders set data = data || '{"photos":"x"}' where id = 'os1'$$,
   '22023', 'mecanico_campo_invalido', 'mecânico: photos precisa ser array');
-select throws_ok($$update public.work_orders set data = data || '{"checklist":{}}' where id = 'os1'$$,
-  '22023', 'mecanico_campo_invalido', 'mecânico: checklist precisa ser array');
+select throws_ok($$update public.work_orders set data = data || '{"checklist":[]}' where id = 'os1'$$,
+  '22023', 'mecanico_campo_invalido', 'mecânico: checklist precisa ser objeto (ChecklistSchema)');
 select throws_ok($$update public.work_orders set data = data || '{"status":"XYZ"}' where id = 'os1'$$,
   '22023', 'mecanico_campo_invalido', 'mecânico: status fora de OSStatus');
 select lives_ok($$update public.work_orders set data = data || '{"mileage":null,"photos":[{"id":"f1"}]}' where id = 'os1'$$,

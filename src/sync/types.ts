@@ -19,3 +19,8 @@ export interface CloudRow {
 export type CloudRole = 'dono' | 'recepcao' | 'mecanico';
 
 export type CatalogKind = 'part' | 'service';
+
+/** Coleções de `DatabaseSchema` que sincronizam (tudo menos `meta`). */
+export type CollectionKey =
+  | 'workOrders' | 'ledger' | 'clients' | 'catalogParts' | 'catalogServices'
+  | 'catalogTechnicians' | 'appointments' | 'auditLog' | 'settings';

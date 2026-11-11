@@ -236,11 +236,11 @@ export function splitCatalogItem(
 }
 
 /** Sem linha de preço (Mecânico): `price: 0`. Sem linha de custo: `cost` indefinido. */
-export function joinCatalogItem(main: CatalogMain, id: string, price?: number | null, cost?: number): CatalogItem {
+export function joinCatalogItem(main: CatalogMain, id: string, price?: number | null, cost?: number | null): CatalogItem {
   const item: CatalogItem = { id, description: main.description, price: price ?? 0 };
   if (price === null) delete (item as Partial<CatalogItem>).price; // era ausente na origem
   if (main.category !== undefined) item.category = main.category;
-  if (cost !== undefined) item.cost = cost;
+  if (cost !== undefined && cost !== null) item.cost = cost; // null = custo removido pelo Dono: "não informado"
   return item;
 }
 
@@ -302,8 +302,8 @@ export function joinDatabaseReport(rows: CloudRow[]): JoinReport {
   const costById = new Map(by<WorkOrderCosts>('work_order_costs').map(r => [r.id, r.data]));
   const priceOf = new Map<string, number | null>();
   for (const r of by<{ price: number | null }>('catalog_prices')) priceOf.set(r.id, r.data.price);
-  const costOf = new Map<string, number>();
-  for (const r of by<{ cost: number }>('catalog_costs')) costOf.set(r.id, r.data.cost);
+  const costOf = new Map<string, number | null>();
+  for (const r of by<{ cost: number | null }>('catalog_costs')) costOf.set(r.id, r.data.cost);
 
   const workOrders: WorkOrder[] = [];
   const skippedOrders: string[] = [];

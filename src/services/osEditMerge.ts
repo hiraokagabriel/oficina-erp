@@ -56,7 +56,7 @@ const localDay = (iso: string | undefined): string => (iso ? formatDateOnly(pars
 const itemsKey = (items: OrderItem[]): string =>
   JSON.stringify(items.map(i => [i.description, i.price, i.cost && i.cost > 0 ? i.cost : null, i.category ?? null]));
 // JSON com as chaves em ordem fixa: a ordem de gravação das chaves não conta como diferença.
-const stable = (v: unknown): string => JSON.stringify(v, (_k, x: unknown) => {
+export const stable = (v: unknown): string => JSON.stringify(v, (_k, x: unknown) => {
   if (x && typeof x === 'object' && !Array.isArray(x)) {
     const o = x as Record<string, unknown>;
     return Object.fromEntries(Object.keys(o).sort().map(k => [k, o[k]]));

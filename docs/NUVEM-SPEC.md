@@ -2,7 +2,7 @@
 
 Base: plano aprovado (`docs/NUVEM.md`), branch `feat/nuvem-login`. Conferido no código em 2026-11-11. O formato JSON v5 **não muda** (`CURRENT_SCHEMA_VERSION` continua 5, `src/utils/migrations.ts:10`). O formato da nuvem é novo e versionado em `supabase/migrations/`.
 
-Status: **decisões do dono fechadas** (seção 8). Próximo: PR 0 (spike no projeto Supabase do dono).
+Status: **decisões do dono fechadas** (seção 8). PR 0 feito em 2026-11-11 (`docs/NUVEM-SPIKE.md`): bundle, PIN, Realtime com RLS e SMTP funcionam; **`TZ` na Edge não funciona**: resolvido pela opção A (`setDateTimeZone` em `dates.ts`, 2026-11-11). PRs 1 (`src/sync/`) e 2 (`supabase/migrations/`, `supabase/tests/`) feitos em 2026-11-11, sem commit. Revisados pelo `revisor` e corrigidos (237 asserções pgTAP, `npm run test:db`). **Decidir antes do PR 3:** custos órfãos quando a Recepção salva a OS (os ids de item são regerados a cada salvamento, `osEditMerge.ts:54`, e a Recepção não vê `work_order_costs`: o Dono perde custo e margem). Opções: parar de regerar ids; remapear `costs` no servidor; ou travar edição de itens pela Recepção quando houver custo. Contrato final de `sync_push`/`apply_money_op`/`import_*`: comentários no topo de cada função na migração. `work_order_finance.data.extra` guarda chaves desconhecidas da OS (lista branca em `work_orders`).
 
 ## 1. Esquema Postgres
 
@@ -90,7 +90,7 @@ create policy fin_all on work_order_finance for all to authenticated
   - Mecânico: `(old.data - '{status,checklist,photos,mileage}') = (new.data - …)`, senão `42501 mecanico_campo_proibido`.
   - Todos: mudar `deleted_at` dá `money_op_required`.
   - Status: não entra nem sai de `FINALIZADO` (exceção `FINALIZADO` para `ARQUIVADO`, D7, `osFinanceService.ts:200`); não sai de `ARQUIVADO`; não volta de `AGUARDANDO_PAGAMENTO` com receita (`financialId` ou `installmentConfig` na finance). Espelho SQL de `statusChangeEffects` (`osFinanceService.ts:178-244`).
-- `guard_finance`: compara `financialId, paymentDate, paymentMethod, advances, advanceAmount, advanceEntryId` e `installmentConfig - 'description'` entre OLD e NEW. `description` liberada pela cascata (`cascadeService.ts:57-62`).
+- `guard_finance` (ajustado na revisão do PR 2): em OS com receita (`financialId` ou `installmentConfig`) ou FINALIZADO/ARQUIVADO, `total` e `prices` também só mudam por service; salvar essa OS exige `os.save` pela função `money`. Compara `financialId, paymentDate, paymentMethod, advances, advanceAmount, advanceEntryId` e `installmentConfig - 'description'` entre OLD e NEW. `description` liberada pela cascata (`cascadeService.ts:57-62`).
 - `guard_ledger`: com `os_id is not null`, só aceita mudança em `description` (cascata, `cascadeService.ts:84-100`). Recepção não grava `deleted_at`.
 
 **Storage**: bucket privado `fotos`, `file_size_limit` 3 MB, `allowed_mime_types` `image/jpeg`.
@@ -153,7 +153,8 @@ Solução:
 - `supabase/functions/<nome>/index.ts` importa `../../../src/services/serverEntry` e `@supabase/supabase-js`; type-check por `tsconfig.functions.json` com shim `deno.d.ts`.
 - `scripts/build-functions.mjs` (esbuild) gera `bundle.js`; `config.toml` aponta `entrypoint` para ele.
 - Vitest `serverEntry.imports.test.ts`: percorre o grafo e falha se entrar arquivo fora da lista, `@tauri-apps`, `react` ou `window`/`document`.
-- `TZ=America/Sao_Paulo` na função, com autoteste `new Date(2026,0,1,12).toISOString()==='2026-01-01T15:00:00.000Z'`; falhou, 500 "fuso do servidor" sem gravar.
+- Fuso: a função chama `setDateTimeZone(workshops.tz)` (`src/utils/dates.ts`) antes de usar os serviços; com isso `parseDateOnly`, `addMonths`, `formatDateOnly` e `getLocalDateString` usam o relógio da oficina por `Intl`. Autoteste na entrada: `parseDateOnly('2026-01-01').toISOString()==='2026-01-01T15:00:00.000Z'`; falhou, 500 "fuso do servidor" sem gravar.
+- **Refutado no PR 0** (`docs/NUVEM-SPIKE.md` seção 2: a Edge fica em UTC mesmo com `TZ`; `Intl` com `timeZone` funciona). Texto original: `TZ=America/Sao_Paulo` na função, com autoteste `new Date(2026,0,1,12).toISOString()==='2026-01-01T15:00:00.000Z'`; falhou, 500 "fuso do servidor" sem gravar.
 - Cliente manda `today` e datas em ISO meio-dia local (`toISOFromDateInput`); servidor aceita `today` a ±1 dia do relógio. Brasil sem horário de verão desde 2019.
 
 ## 4. Protocolo de sync
@@ -291,7 +292,7 @@ Tauri:
 
 | PR | Conteúdo | Testes | Paralelo |
 |---|---|---|---|
-| 0 | Spike no projeto do dono: `TZ` na Edge, bundle + `entrypoint`, RLS no `postgres_changes`, `generateLink`+`verifyOtp`, SMTP | relatório | — |
+| 0 | Spike no projeto do dono: `TZ` na Edge, bundle + `entrypoint`, RLS no `postgres_changes`, `generateLink`+`verifyOtp`, SMTP | relatório | feito: `docs/NUVEM-SPIKE.md` |
 | 1 | `src/sync/split.ts` (split/join OS e catálogo, `prepareForCloud`, `ledgerOwnerIndex`, `computeTotals`, `exportV5`) | volta completa com fixture sintética v0 a v5, idempotência, ids repetidos | com o 2 |
 | 2 | `supabase/migrations/0001_*.sql`: tabelas, triggers, RLS, `sync_push`, `apply_money_op`, `import_*`, Storage | pgTAP da seção 2 | com o 1 |
 | 3 | `diff.ts`, `outbox.ts`, `mergeRecord.ts` (usa `mergeOSEdit`), `permissions.ts` | Vitest puro, inclusive TZ=UTC | depois do 1 |

@@ -189,7 +189,7 @@ Branch `feat/nuvem-login` (criada em 2026-11-11). Decisões, padrões assumidos,
 | 0 | Branch e registro de decisões | sessão principal, `gerente` | nenhuma | n/a (docs) | feita |
 | 1 | Especificação técnica (tabelas, RLS, Edge Functions, sync, PIN, mapeamento v5) | `arquiteto` | 0 | ok do dono antes de qualquer código | feita (ok do dono em 2026-11-11) |
 | 2 | Telas e textos | `ux-designer` | 1 | ok do dono na direção estética | pendente |
-| 3 | Supabase: SQL, RLS | `dev` | 1; dono cria o projeto | testes SQL por papel e por oficina; `revisor`; ok do dono | em andamento (projeto criado e ligado; SMTP Brevo feito; falta o SQL) |
+| 3 | Supabase: SQL, RLS | `dev` | 1; dono cria o projeto | testes SQL por papel e por oficina; `revisor`; ok do dono | em andamento: SQL `supabase/migrations/20261111120000_nuvem_inicial.sql` com 237 asserções pgTAP passando, revisado pelo `revisor` e corrigido, no projeto de teste `xtnnayaxufhmyrqcwwnr` (`npm run test:db`); falta ok do dono e aplicar no projeto real (nova revisão do SQL antes de aplicar) |
 | 4 | Camada de dados offline | `dev` | 1, 3 | P1 (build, testes, UTC); testes Vitest da fila, diff e conflito; navegador com 2 abas e rede cortada; `revisor` | pendente |
 | 5 | Login e sessão, permissões por papel | `dev` + `ui-dev` | 2, 3, 4 | P1; `verificador` e `ux-revisor` (800 px); Rede do DevTools como Mecânico sem preço; `revisor` | pendente |
 | 6 | Dinheiro no servidor | `dev` | 3, 4; módulos puros sem imports de navegador | P1; testes das Edge Functions; `revisor` | pendente |
@@ -199,7 +199,7 @@ Branch `feat/nuvem-login` (criada em 2026-11-11). Decisões, padrões assumidos,
 | 10 | Revisão e piloto | `revisor`, `verificador`, `ux-revisor` | 4 a 9 | P1 a P3; 2 aparelhos, offline e reconexão, papéis | pendente |
 | 11 | Virada | `entregador` | 10 | backup `pre-nuvem`; todos os PCs no mesmo dia; ok do dono; push só com autorização | pendente |
 
-Pendências do dono: aprovar a direção visual (etapa 2); confirmar os padrões assumidos de `docs/NUVEM.md`; teste manual em Tauri real, celular e vários PCs (piloto). Feitas em 2026-11-11: especificação aprovada (etapa 1), projeto Supabase em `sa-east-1` e SMTP Brevo (etapa 3).
+Pendências do dono: aprovar a direção visual (etapa 2); configurar Site URL e Redirect URLs do Supabase quando existir o endereço do Pages (antes do 1º convite real; hoje é `localhost:3000`); confirmar os padrões assumidos de `docs/NUVEM.md`; teste manual em Tauri real, celular e vários PCs (piloto). Feitas em 2026-11-11: especificação aprovada (etapa 1), projeto Supabase em `sa-east-1` e SMTP Brevo (etapa 3).
 
 ## Portões por rodada ou etapa
 

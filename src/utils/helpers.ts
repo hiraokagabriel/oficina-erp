@@ -1,5 +1,6 @@
 import { CatalogItem, LedgerEntry, WorkOrder, OrderItem, Technician } from '../types';
 import { formatDateOnly, toISOFromDateInput } from './dates';
+import { ensureUniqueItemIds } from './itemIds';
 
 export const generateId = (): string => {
   return typeof crypto !== 'undefined' && crypto.randomUUID 
@@ -152,8 +153,8 @@ export const updateWorkOrderData = (
   clientName: string,
   clientPhone: string,
   mileage: string | number, // o App passa number (OSModal); os testes passam string
-  parts: CatalogItem[],
-  services: CatalogItem[],
+  parts: OrderItem[],
+  services: OrderItem[],
   dateString?: string,
   publicNotes?: string
 ): WorkOrder => {
@@ -167,8 +168,9 @@ export const updateWorkOrderData = (
       finalDate = d.toISOString();
   }
 
-  const orderParts: OrderItem[] = parts.map(p => ({ ...p, id: generateId() }));
-  const orderServices: OrderItem[] = services.map(s => ({ ...s, id: generateId() }));
+  // Ids estáveis: o item mantém o id enquanto for a mesma linha (os custos do Dono na nuvem são por id).
+  // Só id ausente ou repetido dentro da OS é preenchido, de forma determinística.
+  const { parts: orderParts, services: orderServices } = ensureUniqueItemIds(original.id, parts, services);
 
   const financials = calculateFinancials(orderParts, orderServices);
 

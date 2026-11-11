@@ -4,6 +4,7 @@ import type {
 } from '../types';
 import { stripDbSecrets } from '../utils/secrets';
 import { sumAdvances } from '../services/osRemaining';
+import { ensureUniqueItemIds } from '../utils/itemIds';
 import type { CatalogKind, CloudRole, CloudRow } from './types';
 
 // Lógica pura da divisão do banco v5 em linhas da nuvem (docs/NUVEM-SPEC.md seções 1, 4 e 7).
@@ -21,37 +22,6 @@ const pure = (v: unknown): unknown => JSON.parse(JSON.stringify(v));
 
 // ---------- prepareForCloud ----------
 
-const isId = (v: unknown): v is string => typeof v === 'string' && v !== '';
-
-/**
- * Ids únicos entre peças e serviços da mesma OS. A primeira ocorrência de um id válido fica;
- * id faltando ou repetido vira `${osId}-p${i}` (peça) ou `${osId}-s${i}` (serviço), `i` = posição na lista.
- * Se o id gerado já existir na OS, acrescenta `-x` até ficar livre. Determinístico e idempotente.
- */
-function uniqueItemIds(os: WorkOrder): { parts: OrderItem[]; services: OrderItem[] } {
-  const used = new Set<string>();
-  const keep = (list: OrderItem[]): boolean[] =>
-    list.map(it => {
-      if (isId(it.id) && !used.has(it.id)) { used.add(it.id); return true; }
-      return false;
-    });
-  const keepParts = keep(os.parts ?? []);
-  const keepServices = keep(os.services ?? []);
-
-  const fix = (list: OrderItem[], kept: boolean[], tag: 'p' | 's'): OrderItem[] =>
-    list.map((it, i) => {
-      if (kept[i]) return { ...it };
-      let id = `${os.id}-${tag}${i}`;
-      while (used.has(id)) id += '-x';
-      used.add(id);
-      return { ...it, id };
-    });
-  return {
-    parts: fix(os.parts ?? [], keepParts, 'p'),
-    services: fix(os.services ?? [], keepServices, 's'),
-  };
-}
-
 function cleanClient(c: Client): Client {
   const { totalSpent, serviceCount, lastServiceDate, averageTicket, vipStatus, ...rest } = c;
   void totalSpent; void serviceCount; void lastServiceDate; void averageTicket; void vipStatus;
@@ -61,7 +31,7 @@ function cleanClient(c: Client): Client {
 function cleanOS(os: WorkOrder): WorkOrder {
   const { profitMargin, ...rest } = os;
   void profitMargin;
-  return { ...rest, ...uniqueItemIds(os) };
+  return { ...rest, ...ensureUniqueItemIds(os.id, os.parts, os.services) };
 }
 
 /**

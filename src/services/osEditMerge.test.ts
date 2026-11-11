@@ -12,11 +12,11 @@ const os = (over: Partial<WorkOrder> = {}): WorkOrder => ({
   status: 'APROVADO', parts: [item('p1', 'Filtro', 5000)], services: [item('s1', 'Troca', 10000)], total: 15000,
   createdAt: '2026-01-10T12:00:00.000Z', publicNotes: '', ...over,
 });
-/** Simula o que o formulário produz: a abertura com os campos editados (itens com ids novos, como updateWorkOrderData). */
+/** Simula o que o formulário produz: a abertura com os campos editados (itens mantêm os ids da abertura, como updateWorkOrderData). */
 const edit = (opened: WorkOrder, over: Partial<WorkOrder> = {}): WorkOrder => ({
   ...opened,
-  parts: opened.parts.map(p => ({ ...p, id: `novo-${p.id}` })),
-  services: opened.services.map(s => ({ ...s, id: `novo-${s.id}` })),
+  parts: opened.parts.map(p => ({ ...p })),
+  services: opened.services.map(s => ({ ...s })),
   ...over,
 });
 const merge = (p: Partial<Parameters<typeof mergeOSEdit>[0]> & { opened: WorkOrder; edited: WorkOrder }) =>
@@ -106,12 +106,23 @@ describe('mergeOSEdit: itens', () => {
     expect(r.conflicts).toEqual(['peças']);
   });
 
-  it('só os ids regerados: não é edição de item', () => {
+  it('ids diferentes (banco ou PC em versão antiga) não contam como edição', () => {
     const opened = os();
     const current = os({ parts: [item('p1', 'Filtro', 5000), item('p2', 'Óleo', 100)], total: 15100 });
-    const r = ok(merge({ opened, current, edited: edit(opened) }));
+    const edited = edit(opened, {
+      parts: opened.parts.map(p => ({ ...p, id: `novo-${p.id}` })),
+      services: opened.services.map(s => ({ ...s, id: `novo-${s.id}` })),
+    });
+    const r = ok(merge({ opened, current, edited }));
     expect(r.base.parts).toBe(current.parts);
     expect(r.base.total).toBe(15100);
+  });
+
+  it('usuário muda o preço de p1: o id p1 continua', () => {
+    const opened = os();
+    const r = ok(merge({ opened, edited: edit(opened, { parts: [item('p1', 'Filtro', 5500)] }) }));
+    expect(r.base.parts[0].id).toBe('p1');
+    expect(r.base.parts[0].price).toBe(5500);
   });
 });
 

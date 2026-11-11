@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { WorkOrder, LedgerEntry, Client, OrderItem, CatalogItem, Technician, PartCategory, PART_CATEGORY_META, OSModalPayload, OSPhoto } from '../types';
 import { generateId, getLocalDateString } from '../utils/helpers';
+import { ensureUniqueItemIds } from '../utils/itemIds';
 import { buildClientDebts, clientDebtLine, lastVisitLine } from '../services/osClientContext';
 import { normalizeName, resolveCatalogItemId, resolveClientId, resolveTechnicianId, splitVehicle } from '../utils/links';
 import type { OSDraftFromAppointment } from '../services/schedule';
@@ -286,8 +287,11 @@ export const OSModal: React.FC<OSModalProps> = ({
         setPlate("");
       }
       setMileage(editingOS.mileage.toString());
-      setParts((editingOS.parts || []) as OrderItem[]);
-      setServices((editingOS.services || []) as OrderItem[]);
+      // Banco antigo pode ter id ausente/repetido: preenche só para a chave do React. Não marca a janela como
+      // alterada (a proteção só liga por evento de campo, markDirty ou foto) e o merge ignora o id.
+      const ids = ensureUniqueItemIds(editingOS.id, editingOS.parts, editingOS.services);
+      setParts(ids.parts);
+      setServices(ids.services);
       setPhotos(editingOS.photos ?? []);
     } else {
       setOsNumber(nextOSNumberRef.current.toString());

@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import type { DatabaseSchema, WorkOrder, WorkshopSettings } from '../types';
 import { migrate } from '../utils/migrations';
+import { updateWorkOrderData } from '../utils/helpers';
+import { mergeOSEdit } from '../services/osEditMerge';
 import { parseDatabase } from '../context/DatabaseContext';
 import {
   computeTotals, exportV5, joinDatabase, joinDatabaseReport, joinWorkOrder, ledgerOwnerIndex,
@@ -336,5 +338,40 @@ describe('computeTotals', () => {
   it('bate antes e depois da volta pela nuvem', () => {
     const p = prepareForCloud(migrate(fixture(2)).db);
     expect(computeTotals(joinDatabase(splitDatabase(p)))).toEqual(computeTotals(p));
+  });
+});
+
+describe('ids estáveis: edição da Recepção preserva os custos do Dono', () => {
+  it('fluxo completo split (dono) -> edição -> split (recepção) -> junção com o custo antigo', () => {
+    const osDono: WorkOrder = {
+      id: 'OSX', osNumber: 9, vehicle: 'Gol - AAA1111', clientName: 'Ana', clientPhone: '1', mileage: 1,
+      status: 'EM_SERVICO', createdAt: '2026-01-10T12:00:00.000Z', total: 10000, totalCost: 3000, profit: 7000,
+      parts: [{ id: 'p1', description: 'Filtro', price: 4000, cost: 1000 }, { id: 'p2', description: 'Óleo', price: 2000, cost: 500 }],
+      services: [{ id: 's1', description: 'Troca', price: 4000, cost: 1500 }],
+    };
+    const dono = splitWorkOrder(osDono, 'dono');
+    const custoAntigo = dono.cost!;
+    expect(custoAntigo.costs).toEqual({ p1: 1000, p2: 500, s1: 1500 });
+
+    // Recepção abre a OS (sem custos), muda o preço de p1, remove p2 e adiciona p3.
+    const aberta = joinWorkOrder(dono.main, dono.fin)!;
+    const p3 = { id: 'p3', description: 'Pastilha', price: 900 };
+    const base = updateWorkOrderData(
+      aberta, aberta.osNumber, aberta.vehicle, aberta.clientName, aberta.clientPhone, aberta.mileage,
+      [{ ...aberta.parts[0], price: 4500 }, p3], aberta.services,
+    );
+    const r = mergeOSEdit({ opened: aberta, edited: base, current: aberta, drafts: undefined, today: '2026-03-15' });
+    if (!r.ok) throw new Error('esperava ok');
+    expect(r.base.parts.map(p => p.id)).toEqual(['p1', 'p3']);
+
+    const rec = splitWorkOrder(r.base, 'recepcao');
+    expect(rec.cost).toBeUndefined();
+    const juntada = joinWorkOrder(rec.main, rec.fin, custoAntigo);
+    expect(juntada).not.toBeNull();
+    expect(juntada!.parts[0]).toMatchObject({ id: 'p1', price: 4500, cost: 1000 }); // custo mantido no item editado
+    expect(juntada!.parts[1].id).toBe('p3');
+    expect(juntada!.parts[1].cost).toBeUndefined(); // item novo: custo não informado
+    expect(juntada!.services[0].cost).toBe(1500);
+    expect(JSON.stringify(juntada)).not.toContain('"p2"'); // a chave órfã p2 do custo é ignorada
   });
 });

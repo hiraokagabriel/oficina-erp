@@ -2,7 +2,7 @@
 
 Base: plano aprovado (`docs/NUVEM.md`), branch `feat/nuvem-login`. Conferido no código em 2026-11-11. O formato JSON v5 **não muda** (`CURRENT_SCHEMA_VERSION` continua 5, `src/utils/migrations.ts:10`). O formato da nuvem é novo e versionado em `supabase/migrations/`.
 
-Status: **decisões do dono fechadas** (seção 8). PR 0 feito em 2026-11-11 (`docs/NUVEM-SPIKE.md`): bundle, PIN, Realtime com RLS e SMTP funcionam; **`TZ` na Edge não funciona**: resolvido pela opção A (`setDateTimeZone` em `dates.ts`, 2026-11-11). PRs 1 (`src/sync/`) e 2 (`supabase/migrations/`, `supabase/tests/`) feitos em 2026-11-11, sem commit. Revisados pelo `revisor` e corrigidos (237 asserções pgTAP, `npm run test:db`). **Decidir antes do PR 3:** custos órfãos quando a Recepção salva a OS (os ids de item são regerados a cada salvamento, `osEditMerge.ts:54`, e a Recepção não vê `work_order_costs`: o Dono perde custo e margem). Opções: parar de regerar ids; remapear `costs` no servidor; ou travar edição de itens pela Recepção quando houver custo. Contrato final de `sync_push`/`apply_money_op`/`import_*`: comentários no topo de cada função na migração. `work_order_finance.data.extra` guarda chaves desconhecidas da OS (lista branca em `work_orders`).
+Status: **decisões do dono fechadas** (seção 8). PR 0 feito em 2026-11-11 (`docs/NUVEM-SPIKE.md`): bundle, PIN, Realtime com RLS e SMTP funcionam; **`TZ` na Edge não funciona**: resolvido pela opção A (`setDateTimeZone` em `dates.ts`, 2026-11-11). PRs 1 (`src/sync/`) e 2 (`supabase/migrations/`, `supabase/tests/`) feitos em 2026-11-11, sem commit. Revisados pelo `revisor` e corrigidos (237 asserções pgTAP, `npm run test:db`). Custos órfãos quando a Recepção salva: resolvido com ids de item estáveis (seção 1). Contrato final de `sync_push`/`apply_money_op`/`import_*`: comentários no topo de cada função na migração. `work_order_finance.data.extra` guarda chaves desconhecidas da OS (lista branca em `work_orders`).
 
 ## 1. Esquema Postgres
 
@@ -53,7 +53,7 @@ Trigger `app.touch()`: incrementa `version`, grava `updated_at = clock_timestamp
 **Junção** (`joinWorkOrder(main, fin?, cost?)`):
 - Sem finance: `price: 0` e `total: 0`; a tela esconde por papel (seção 4).
 - Sem cost: `cost` indefinido = "não informado" (`margin.ts`).
-- Ids dos itens são regerados a cada salvamento (`osEditMerge.ts:54`). A junção só ocorre quando o conjunto de ids de itens de `work_orders` é igual às chaves de `prices`; senão mantém a OS anterior até a outra metade chegar. Evita a Recepção salvar preços zerados.
+- Ids dos itens são **estáveis** (decisão do dono, 2026-11-11): o item mantém o id enquanto for a mesma linha da janela; id novo só em linha nova; ausente ou repetido é preenchido por `ensureUniqueItemIds` (`src/utils/itemIds.ts`) ao salvar. Assim o custo do Dono (`work_order_costs`) sobrevive quando a Recepção edita preço ou descrição; item novo fica com custo "não informado" e chave de item removido é ignorada. Renomear um item mantém o custo (igual ao modo arquivo). `mergeOSEdit` continua comparando itens sem id, por compatibilidade com bancos e PCs antigos. A junção só ocorre quando o conjunto de ids de itens de `work_orders` é igual às chaves de `prices`; senão mantém a OS anterior até a outra metade chegar. Evita a Recepção salvar preços zerados.
 - A importação garante id único por item dentro da OS; faltando, usa `${osId}-p${i}` / `-s${i}` (determinístico, idempotente).
 
 ## 2. RLS
@@ -193,7 +193,7 @@ interface OutboxOp { opId: string; actor: string; deviceId: string;
 
 **Push**: `rpc('sync_push', {ws, groups})`, `security invoker`, SQL dinâmico sobre lista fixa de tabelas. Um `group` = 1 registro (OS manda as 2-3 linhas juntas) em `begin … exception`. `version` diferente: `conflict` com a linha atual. RLS/trigger recusou: `denied` com o código.
 
-**Pull**: `select … where workshop_id=? and updated_at >= cursor - interval '5 s' order by updated_at, id limit 1000`, em laço. A janela de 5 s cobre commits fora de ordem; repetidas descartadas pela `version`. Mecânico não pede `work_order_finance`, `work_order_costs`, `ledger`, `catalog_prices`.
+**Pull**: `select … where workshop_id=? and updated_at >= cursor - interval '5 s' order by updated_at, id limit 1000`, em laço. A janela de 5 s cobre commits fora de ordem; repetidas descartadas pela `version`. Mecânico não pede `work_order_finance`, `work_order_costs`, `ledger`, `catalog_prices`. Com ids estáveis, só adicionar/remover item muda as chaves: ao receber uma linha de uma OS, o pull busca também as outras 2-3 linhas dessa OS antes de juntar, para não exibir `main` velha com `fin` nova.
 
 **Realtime**: `postgres_changes` por tabela com filtro `workshop_id=eq.<ws>`, só como sinal: pull daquela tabela com debounce de 300 ms. Pull também ao reconectar e ao focar a janela (`DatabaseContext.tsx:632`).
 

@@ -142,6 +142,23 @@ describe('updateWorkOrderData', () => {
     expect(o.publicNotes).toBe('outra');
     expect(o.advances).toHaveLength(1);
   });
+  it('edição mantém os ids dos itens (ids estáveis)', () => {
+    const o = updateWorkOrderData(original, 1, 'Gol', 'Fulano', '1', '10', [cat('p1', 'Filtro', 2000)], [cat('s1', 'Troca', 3000)]);
+    expect(o.parts[0].id).toBe('p1');
+    expect(o.services[0].id).toBe('s1');
+  });
+  it('preenche id ausente de forma determinística', () => {
+    const semId = { description: 'Filtro', price: 1 } as unknown as OrderItem;
+    const a = updateWorkOrderData(original, 1, 'Gol', 'Fulano', '1', '10', [semId], []);
+    const b = updateWorkOrderData(original, 1, 'Gol', 'Fulano', '1', '10', [semId], []);
+    expect(a.parts[0].id).toBe('os1-p0');
+    expect(b.parts[0].id).toBe(a.parts[0].id);
+  });
+  it('desduplica ids repetidos (peças e serviços juntos)', () => {
+    const o = updateWorkOrderData(original, 1, 'Gol', 'Fulano', '1', '10', [cat('d', 'A', 1)], [cat('d', 'B', 2)]);
+    expect(o.parts[0].id).toBe('d');
+    expect(o.services[0].id).toBe('os1-s0');
+  });
   it('não herda profitMargin gravado (obsoleto)', () => {
     const o = updateWorkOrderData({ ...original, profitMargin: 42 }, 1, 'Gol', 'Fulano', '1', '10', [], []);
     expect('profitMargin' in o).toBe(false);

@@ -51,7 +51,8 @@ export const PHOTOS_TRIMMED_MESSAGE =
 
 const day10 = (iso: string | undefined): string => (iso ?? '').slice(0, 10);
 const localDay = (iso: string | undefined): string => (iso ? formatDateOnly(parseDateFlexible(iso)) : '');
-// Forma canônica do item: sem id (regerado a cada salvamento) nem catalogItemId (vínculo), custo 0 = não informado.
+// Forma canônica do item: sem id nem catalogItemId (vínculo), custo 0 = não informado. Os ids agora são estáveis,
+// mas a comparação continua sem id por compatibilidade com bancos e PCs em versão antiga (que regeravam o id).
 const itemsKey = (items: OrderItem[]): string =>
   JSON.stringify(items.map(i => [i.description, i.price, i.cost && i.cost > 0 ? i.cost : null, i.category ?? null]));
 // JSON com as chaves em ordem fixa: a ordem de gravação das chaves não conta como diferença.
@@ -119,7 +120,7 @@ export const mergeOSEdit = ({ opened, edited, current, drafts, today = formatDat
   linkId('vehicleId', ['vehicle', 'clientName']);
   linkId('technicianId', ['technician']);
 
-  // Itens (peças e serviços): comparados sem o id, que é regerado a cada salvamento.
+  // Itens (peças e serviços): ids estáveis; comparação continua sem id por compatibilidade com bancos e PCs em versão antiga.
   const partsChanged = itemsKey(opened.parts) !== itemsKey(edited.parts);
   const servicesChanged = itemsKey(opened.services) !== itemsKey(edited.services);
   if (partsChanged || servicesChanged) {

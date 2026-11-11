@@ -1,5 +1,5 @@
 import { CatalogItem, LedgerEntry, WorkOrder, OrderItem, Technician } from '../types';
-import { toISOFromDateInput } from './dates';
+import { formatDateOnly, toISOFromDateInput } from './dates';
 
 export const generateId = (): string => {
   return typeof crypto !== 'undefined' && crypto.randomUUID 
@@ -7,13 +7,8 @@ export const generateId = (): string => {
     : Math.random().toString(36).substring(2) + Date.now().toString(36);
 };
 
-export const getLocalDateString = (): string => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+// Hoje como 'YYYY-MM-DD' no fuso das datas (dates.ts).
+export const getLocalDateString = (): string => formatDateOnly(new Date());
 
 export const Money = {
   // toPrecision(15) remove o ruído binário (1.005 * 100 = 100.49999999999999) antes de arredondar.

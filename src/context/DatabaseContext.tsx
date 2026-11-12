@@ -8,6 +8,7 @@ import { generateId } from '../utils/helpers';
 import { adoptSecrets, hasSecrets, persistSecrets, stripDbSecrets } from '../utils/secrets';
 import { decideExternalChange, DiskMetaInfo } from '../utils/externalChange';
 import { useToast } from './ToastContext';
+import type { CloudInfo } from '../sync/syncEngine';
 
 export type LoadStatus = 'loading' | 'ok' | 'not_found' | 'error';
 
@@ -54,7 +55,7 @@ interface PreparedDb {
 const MAX_HISTORY = 50;
 const MAX_CHANGES_SHOWN = 100;
 
-interface DatabaseContextData {
+export interface DatabaseContextData {
   ledger: LedgerEntry[];
   setLedger: React.Dispatch<React.SetStateAction<LedgerEntry[]>>;
   workOrders: WorkOrder[];
@@ -89,9 +90,11 @@ interface DatabaseContextData {
   setDbPath: React.Dispatch<React.SetStateAction<string>>;
   /** Nome deste PC (mesmo valor gravado em `meta.savedBy`); 'desconhecido' até o banco carregar. Função estável. */
   getMachineName: () => string;
+  /** Modo nuvem (CloudDatabaseProvider): papel, conexão e fila de envio para o selo. `undefined` no modo arquivo. */
+  cloud?: CloudInfo;
 }
 
-const DatabaseContext = createContext<DatabaseContextData>({} as DatabaseContextData);
+export const DatabaseContext = createContext<DatabaseContextData>({} as DatabaseContextData);
 
 const DEFAULT_SETTINGS: WorkshopSettings = {
   name: "OFICINA",

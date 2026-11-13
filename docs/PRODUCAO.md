@@ -40,8 +40,8 @@ Decisões do dono:
 | 3 | Ícones: sprite local | dev | `components/ui/Icon.tsx` | 2 | commitada e mesclada |
 | 4 | Estrutura do app: menu, "Salvo", tema, Esc com proteção | dev | `App.tsx` e afins | 3 | commitada e mesclada |
 | 5 | Quadro da Oficina | dev | `KanbanCard.tsx`, `WorkshopPage.tsx` | 4 | commitada e mesclada (`d9089ef`, `2cc4699`) |
-| 6 | Janela da OS | dev | modais da OS | 4 | commitada e mesclada (`0a1d4e2`, `b2fceec`) |
-| 7 | Painel Hoje | dev | Hoje | 4 | commitada e mesclada (`e537261`, `9582a91`, `b4d69cd`) |
+| 6 | Janela da OS | dev | modais da OS | 4 | feita (revisão pendente, ver `docs/NUVEM-ESTADO.md`) |
+| 7 | Painel Hoje | dev | Hoje | 4 | feita (revisão pendente, ver `docs/NUVEM-ESTADO.md`) |
 | 8 | Financeiro | dev | Financeiro | 4 | commitada e mesclada (`4d0951c`, `ce442d7`) |
 | 9 | Agenda | dev | `AgendaPage.tsx`, `AppointmentModal.tsx` | 4 | commitada e mesclada (`1e9dc38`, `9eef6fe`) |
 | 10 | Clientes e Cadastros | dev | Clientes e Cadastros | 4 | commitada e mesclada (`7252371`, merge `042c662`) |

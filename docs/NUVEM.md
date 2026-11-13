@@ -62,8 +62,8 @@ Objetivo: login por pessoa com papéis, dados no Supabase, uso em PC (Tauri), na
 | 3 | Supabase: dono cria a conta e o projeto em `sa-east-1`; SQL em `supabase/migrations/`, RLS, testes de política (Mecânico não lê `work_order_finance` nem `ledger`; oficina A não lê B) | `dev` (Sonnet) | SQL e RLS feitos e testados no projeto de teste (`npm run test:db`); não aplicado no projeto real |
 | 4 | Camada de dados offline: repositório IndexedDB + fila + sync dentro do `DatabaseContext`, mantendo `useDatabase()`. Testes Vitest puros da fila, diff por registro e conflito | `dev` (Sonnet) | feita (PRs 1 a 4: `src/sync/`, `CloudDatabaseProvider`) |
 | 5 | Login e sessão: Auth, convite, PIN, bloqueio por inatividade, permissões por papel nas telas | `dev` + `ui-dev` (Sonnet) | feita (PR 5; funções no projeto de teste; tema no menu, PIN esquecido e bloqueio revisados) |
-| 6 | Dinheiro no servidor: Edge Functions com os serviços puros; botões offline travados | `dev` (Sonnet) | pendente |
-| 7 | Fotos no Storage | `dev` (Sonnet) | pendente |
+| 6 | Dinheiro no servidor: Edge Functions com os serviços puros; botões offline travados | `dev` (Sonnet) | feita (revisão pendente, ver `docs/NUVEM-ESTADO.md`) |
+| 7 | Fotos no Storage | `dev` (Sonnet) | feita (revisão pendente, ver `docs/NUVEM-ESTADO.md`) |
 | 8 | Web/PWA e celular: adaptadores, manifest, telas de campo responsivas, deploy Cloudflare Pages | `ui-dev` + `dev` (Sonnet) | pendente |
 | 9 | Importação e backup: "Enviar banco para a nuvem" (lê JSON, `migrate`, sobe, confere totais: nº de OS, clientes, soma do ledger em centavos) e exportação diária | `dev` (Sonnet) | pendente |
 | 10 | Revisão e piloto: banco sintético, 2 aparelhos, offline e reconexão, papéis | `revisor` (Opus); `verificador` e `ux-revisor` (Sonnet) | pendente |

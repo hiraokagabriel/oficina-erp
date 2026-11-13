@@ -111,7 +111,7 @@ export const PhotoViewerModal: React.FC<PhotoViewerModalProps> = ({ dbPath, item
             {state === 'indisponivel' && <p className="ph-viewer-msg">Fotos só no programa instalado.</p>}
             {state === 'chegando' && (
               <div className="ph-viewer-msg">
-                <p>Foto ainda chegando de outro computador.</p>
+                <p>Foto ainda chegando de outro aparelho.</p>
                 <button type="button" className="btn-secondary" onClick={() => setAttempt(n => n + 1)}>Tentar de novo</button>
               </div>
             )}

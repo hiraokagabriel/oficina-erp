@@ -115,3 +115,8 @@
 .inv-role input { margin-top: 4px; flex: none; }
 .inv-role strong { display: block; }
 .inv-role:focus-within { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+
+/* Espaço das fotos (nuvem) */
+.cfg-meter { height: 10px; margin: var(--sp-2) 0; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; }
+.cfg-meter-fill { height: 100%; background: var(--accent); }
+.cfg-meter-fill--warn { background: var(--text-warning); }

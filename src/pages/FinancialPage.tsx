@@ -7,6 +7,9 @@ import { Money as MoneyUtil } from '../utils/helpers';
 import { formatAxisBRL, parseYearDraft, YEAR_INVALID_MESSAGE } from '../services/financeView';
 import { shouldIgnoreStep } from '../services/kanbanCardView';
 import { useAccess } from '../hooks/useAccess';
+import { OnlineOnlyButton } from '../components/OnlineOnlyButton';
+import { FIN_TABLE_OFFLINE_BANNER } from '../services/moneyOfflineView';
+import { useDatabase } from '../context/DatabaseContext';
 import { summarizeReceivables, formatDueDate, getReceivableLabel, getReceivableStatus } from '../services/receivables';
 
 const COLORS = {
@@ -59,7 +62,8 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
 }) => {
   const access = useAccess();
   const canMargin = access.can('finance.margin');
-  const canDeleteEntry = access.can('ledger.delete');
+  const canDeleteEntry = access.can('ledger.delete'); // só o Dono (o botão some para a Recepção, não fica cinza)
+  const offlineCloud = useDatabase().cloud?.online === false;
   const [currentPage, setCurrentPage] = useState(1);
   // Lançamento de adiantamento -> OS dona (fica travado aqui; edição só pela OS).
   const advanceOwners = useMemo(() => {
@@ -163,7 +167,7 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
           )}
 
           <button className="btn-secondary" onClick={onOpenExport}><Icon name="arquivo" size={18} />Exportar</button>
-          <button className="btn" onClick={onOpenEntry}><Icon name="adicionar" size={18} />Lançamento</button>
+          <OnlineOnlyButton className="btn" onClick={onOpenEntry}><Icon name="adicionar" size={18} />Lançamento</OnlineOnlyButton>
         </div>
       </div>
 
@@ -208,6 +212,9 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
               </div>
             </div>
           </div>
+          {offlineCloud && (
+            <p className="cfg-warn fin-offline-banner" role="note"><Icon name="sem-internet" size={16} /> {FIN_TABLE_OFFLINE_BANNER}</p>
+          )}
           <div className="receivables-scroll">
             <table className="data-table receivables-table">
               <thead><tr><th>Vencimento</th><th>Descrição</th><th>Valor</th><th>Situação</th><th>Ação</th></tr></thead>
@@ -223,13 +230,14 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                       <td style={{fontWeight:'bold'}}>{Money.format(e.amount)}</td>
                       <td><span className={`receivable-status ${late ? 'late' : 'open'}`}>{late && <Icon name="alerta" size={14} />}{getReceivableLabel(e, today)}</span></td>
                       <td>
-                        <button
+                        <OnlineOnlyButton
                           className="btn btn-success receivable-pay"
                           onClick={(ev) => payClick(ev, e.id)}
+                          busyLabel="Recebendo..." busyKey={e.id}
                           aria-label={`Receber pagamento: ${e.description}`}
                         >
                           <Icon name="receber" size={18} />Receber
-                        </button>
+                        </OnlineOnlyButton>
                       </td>
                     </tr>
                   );
@@ -241,13 +249,14 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                     <td style={{fontWeight:'bold'}}>{Money.format(amount)}</td>
                     <td><span className="receivable-status open">A receber</span></td>
                     <td>
-                      <button
+                      <OnlineOnlyButton
                         className="btn btn-success receivable-pay"
                         onClick={() => onReceiveOS(os)}
+                        busyLabel="Recebendo..." busyKey={os.id}
                         aria-label={`Receber a OS #${os.osNumber}: ${os.clientName}`}
                       >
                         <Icon name="receber" size={18} />Receber
-                      </button>
+                      </OnlineOnlyButton>
                     </td>
                   </tr>
                 ))}
@@ -398,17 +407,18 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                                         <button className="btn-sm" onClick={() => onOpenOS(advanceOS)} aria-label={`Editar na OS #${advanceOS.osNumber}`}><Icon name="editar" size={16} />Editar na OS #{advanceOS.osNumber}</button>
                                     ) : (<>
                                     {e.type === 'CREDIT' && (
-                                        <button
+                                        <OnlineOnlyButton
+                                            busyLabel="Recebendo..." busyKey={e.id}
                                             className={isPaymentDate ? 'btn-sm fin-pay fin-pay--paid' : 'btn-sm fin-pay'}
                                             onClick={(ev) => payClick(ev, e.id)}
                                             aria-pressed={isPaymentDate}
                                             aria-label={isPaymentDate ? `Pago, clique para desfazer: ${e.description}` : `Marcar como pago: ${e.description}`}
                                         >
                                             <Icon name="check" size={16} />{isPaymentDate ? 'Desfazer pagamento' : 'Marcar como pago'}
-                                        </button>
+                                        </OnlineOnlyButton>
                                     )}
-                                    <button className="btn-sm" onClick={() => onEditEntry(e.id)} aria-label={`Editar: ${e.description}`}><Icon name="editar" size={16} />Editar</button>
-                                    {canDeleteEntry && <button className="btn-sm fin-del" onClick={() => onDeleteEntry(e)} aria-label={`Excluir: ${e.description}`}><Icon name="excluir" size={16} />Excluir</button>}
+                                    <OnlineOnlyButton className="btn-sm" onClick={() => onEditEntry(e.id)} aria-label={`Editar: ${e.description}`}><Icon name="editar" size={16} />Editar</OnlineOnlyButton>
+                                    {canDeleteEntry && <OnlineOnlyButton className="btn-sm fin-del" onClick={() => onDeleteEntry(e)} aria-label={`Excluir: ${e.description}`}><Icon name="excluir" size={16} />Excluir</OnlineOnlyButton>}
                                     </>)}
                                     </div>
                                 </td>

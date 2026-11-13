@@ -23,6 +23,7 @@ import { isAdvanceSyncLocked } from '../services/osFinanceService';
 import { OSPhotos } from '../components/OSPhotos';
 import { useDatabase } from '../context/DatabaseContext';
 import { useAccess } from '../hooks/useAccess';
+import { FINALIZED_OFFLINE_LOCK, itemsLockedOffline } from '../services/moneyOfflineView';
 import { isAppLocked } from '../utils/appLock';
 import { nextStep, statusClass } from '../services/kanbanCardView';
 import { openWhatsApp } from '../components/KanbanCardMenu';
@@ -122,7 +123,9 @@ export const OSModal: React.FC<OSModalProps> = ({
   const advancesLocked = !!editingOS && isAdvanceSyncLocked(editingOS);
 
   // Fotos (schema v5): o arquivo vai para o disco ao escolher; os metadados ficam neste rascunho até Salvar.
-  const { dbPath, readOnly } = useDatabase();
+  const { dbPath, readOnly, cloud } = useDatabase();
+  // Nuvem sem internet: OS finalizada/lançada trava itens e preços (mexe no caixa). O resto da OS continua editável.
+  const itemsLocked = itemsLockedOffline(cloud?.online !== false, editingOS);
   const [photos, setPhotos] = useState<OSPhoto[]>([]);
   const [photosBusy, setPhotosBusy] = useState(0); // fotos ainda sendo enviadas: Salvar espera
   // Lido só ao abrir: outro PC pode criar OS na recarga automática e não deve zerar o formulário.
@@ -822,6 +825,8 @@ export const OSModal: React.FC<OSModalProps> = ({
             </div>
           </div>
 
+          {itemsLocked && <p className="cfg-warn osm-offline-lock" role="note"><Icon name="sem-internet" size={16} /> {FINALIZED_OFFLINE_LOCK}</p>}
+          <fieldset className="osm-lock-fs" disabled={itemsLocked}>
           <div className="osm-columns">
             {/* PEÇAS */}
             <div className="items-list-container osm-box osm-box--parts">
@@ -969,6 +974,7 @@ export const OSModal: React.FC<OSModalProps> = ({
               </div>
             </div>
           </div>
+          </fieldset>
         </section>
 
         {/* 3. PAGAMENTO */}

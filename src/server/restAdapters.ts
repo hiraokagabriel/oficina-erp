@@ -23,7 +23,7 @@ export function hasVerifiedTotp(user: Record<string, unknown>): boolean {
 }
 const str = (v: unknown): string | null => (typeof v === 'string' ? v : null)
 
-function makeHttp(cfg: RestConfig) {
+export function makeHttp(cfg: RestConfig) {
   const f = cfg.fetchFn ?? fetch
   const base = cfg.url.replace(/\/+$/, '')
   const headers = (extra: Record<string, string> = {}): Record<string, string> => ({

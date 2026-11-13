@@ -444,3 +444,8 @@ entrypoint = "./functions/pin/bundle.js"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/device/bundle.js"
+
+[functions.money]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/money/bundle.js"

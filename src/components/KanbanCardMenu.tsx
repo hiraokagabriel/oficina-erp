@@ -2,6 +2,8 @@ import { useMemo } from 'react';
 import { WorkOrder, OSStatus } from '../types';
 import { ContextMenu, MenuItem } from './ContextMenu';
 import { Icon } from './ui/Icon';
+import { useDatabase } from '../context/DatabaseContext';
+import { statusMoveNeedsInternet } from '../services/moneyOfflineView';
 
 declare global {
   interface Window {
@@ -78,6 +80,8 @@ interface KanbanCardMenuProps {
 
 /** Menu de ações do cartão. Só é montado enquanto está aberto (botão "Mais" ou clique direito). */
 export const KanbanCardMenu = ({ os, status, actions, x, y, onClose, canManage = true, showPrices = true }: KanbanCardMenuProps) => {
+  // Modo nuvem sem internet: o que mexe no caixa aparece cinza com o motivo (docs/NUVEM-UX.md 6.2). Modo arquivo: nunca.
+  const offline = useDatabase().cloud?.online === false;
   const items = useMemo(() => {
     const list: MenuItem[] = [
       { icon: ic('editar'), label: canManage ? 'Editar OS' : 'Abrir OS', onClick: () => actions.onEdit(os), variant: 'primary' },
@@ -100,26 +104,26 @@ export const KanbanCardMenu = ({ os, status, actions, x, y, onClose, canManage =
     list.push({ divider: true });
 
     if (status !== 'ARQUIVADO' && status !== 'ORCAMENTO' && (canManage || status !== 'FINALIZADO')) {
-      list.push({ icon: ic('voltar'), label: 'Voltar Status', onClick: () => actions.onRegress(os.id) });
+      list.push({ icon: ic('voltar'), label: 'Voltar Status', onClick: () => actions.onRegress(os.id), needsInternet: offline && statusMoveNeedsInternet(status, status === 'FINALIZADO' ? 'AGUARDANDO_PAGAMENTO' : status === 'AGUARDANDO_PAGAMENTO' ? 'EM_SERVICO' : 'ORCAMENTO') });
     }
     if (status !== 'ARQUIVADO' && status !== 'FINALIZADO' && (canManage || status !== 'AGUARDANDO_PAGAMENTO')) {
-      list.push({ icon: ic('proximo'), label: 'Avançar Status', onClick: () => actions.onAdvance(os.id) });
+      list.push({ icon: ic('proximo'), label: 'Avançar Status', onClick: () => actions.onAdvance(os.id), needsInternet: offline && statusMoveNeedsInternet(status, status === 'ORCAMENTO' ? 'APROVADO' : status === 'APROVADO' ? 'EM_SERVICO' : status === 'EM_SERVICO' ? 'AGUARDANDO_PAGAMENTO' : 'FINALIZADO') });
     }
 
     if (canManage) {
       list.push({ divider: true });
 
       if (status === 'ARQUIVADO') {
-        list.push({ icon: ic('voltar'), label: 'Restaurar OS', onClick: () => actions.onRestore?.(os), variant: 'success' });
+        list.push({ icon: ic('voltar'), label: 'Restaurar OS', onClick: () => actions.onRestore?.(os), variant: 'success', needsInternet: offline });
       } else {
         list.push({ icon: ic('caixa'), label: 'Arquivar OS', onClick: () => actions.onArchive?.(os) });
       }
 
-      list.push({ icon: ic('excluir'), label: 'Excluir Permanentemente', onClick: () => actions.onDelete(os), variant: 'danger' });
+      list.push({ icon: ic('excluir'), label: 'Excluir Permanentemente', onClick: () => actions.onDelete(os), variant: 'danger', needsInternet: offline });
     }
 
     return list;
-  }, [os, status, actions, canManage, showPrices]);
+  }, [os, status, actions, canManage, showPrices, offline]);
 
   return <ContextMenu x={x} y={y} items={items} onClose={onClose} />;
 };

@@ -12,6 +12,8 @@ export interface MenuItem {
   divider?: boolean;
   /** Submenu: o item vira um botão que expande/recolhe as opções abaixo dele (não dispara `onClick` nem fecha o menu). */
   children?: MenuItem[];
+  /** Sem internet este item mexe no caixa: aparece cinza com o motivo (a ação em si avisa por toast). */
+  needsInternet?: boolean;
 }
 
 interface ContextMenuProps {
@@ -151,6 +153,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
   ) => (
     <button
       role="menuitem"
+      aria-disabled={item.needsInternet ? true : undefined}
+      title={item.needsInternet ? 'Precisa de internet' : undefined}
       aria-haspopup={opts.parentIndex !== undefined ? 'menu' : undefined}
       aria-expanded={opts.expanded}
       data-parent={opts.parentIndex}
@@ -171,7 +175,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
         cursor: 'pointer',
         fontSize: '0.9rem',
         fontWeight: 500,
-        color: getVariantColor(item.variant),
+        color: item.needsInternet ? 'var(--text-2)' : getVariantColor(item.variant),
         transition: 'all 0.15s ease',
         textAlign: 'left',
         outline: 'none'
@@ -198,6 +202,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
         {item.icon}
       </span>
       <span style={{ flex: 1, whiteSpace: 'nowrap' }}>{item.label}</span>
+      {item.needsInternet && <span style={{ fontSize: '0.75rem', color: 'var(--text-2)' }}>Precisa de internet</span>}
       {opts.parentIndex !== undefined && (
         <span aria-hidden="true" style={{ fontSize: '0.75rem', color: 'var(--text-2)' }}>{opts.expanded ? '▾' : '▸'}</span>
       )}

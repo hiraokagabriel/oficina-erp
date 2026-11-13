@@ -248,3 +248,14 @@ body:has(.modal-overlay) .toast-region { bottom: calc(var(--sp-4) + 88px); top: 
 .app-banner { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px 12px; padding: 8px 16px; text-align: center; font-weight: 600; flex: none; }
 .app-banner--warning { background: var(--warning, #f59e0b); color: #1a1a1a; }
 .app-banner--danger { background: var(--danger-fill, #b91c1c); color: var(--on-danger, #fff); }
+
+/* ---------- BOTÃO "PRECISA DE INTERNET" (dinheiro sem internet; docs/NUVEM-UX.md 6.2) ---------- */
+.btn-online-only,
+.btn-online-only:hover:not(:disabled) {
+  background: var(--surface-2); border-color: var(--border-strong); color: var(--text-2); cursor: not-allowed; box-shadow: none;
+}
+.btn-online-only svg { flex: none; }
+.ctx-offline-note { margin-left: var(--sp-3); font-size: var(--fs-xs); color: var(--text-2); }
+.osm-lock-fs { border: 0; margin: 0; padding: 0; min-width: 0; }
+.osm-lock-fs:disabled { opacity: 0.6; }
+.fin-offline-banner { margin: var(--sp-4) 0; }

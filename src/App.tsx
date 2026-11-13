@@ -65,6 +65,9 @@ import { mergeOSEdit, OS_DELETED_MESSAGE, CHANGED_ELSEWHERE_MESSAGE, ADVANCES_IG
 import { buildFinalizeMessage, buildInstallmentMessage } from './services/finalizeText';
 import { linkClient, linkCatalogItems, linkTechnician, preferredClientId } from './utils/links';
 import { toISOFromDateInput } from './utils/dates';
+import { FINALIZE_DENIED_MESSAGE, moneyFailToastType, saveNeedsMoney, statusNeedsMoneyOp } from './services/moneyRoute';
+import { MONEY_OFFLINE_TOAST } from './utils/cloudStatus';
+import type { MoneyCall, MoneyKind } from './sync/moneyClient';
 import { getTargetMargin } from './services/margin';
 import { AppointmentAction, AppointmentInput, applyAppointmentAction, linkAppointmentToOS, makeAppointment, updateAppointment } from './services/agenda';
 import { appointmentToOSDraft, OSDraftFromAppointment } from './services/schedule';
@@ -215,6 +218,30 @@ export function AppContent({ topbar }: { topbar?: ReactNode } = {}) {
 
   const handleImportData = (content: string) => setPendingAction({ type: 'IMPORT_DATA', content });
 
+  // ---------- Dinheiro no servidor (modo nuvem, PR 6) ----------
+  // No modo arquivo `cloud` é indefinido e nenhum desses ramos roda: o fluxo antigo segue igual.
+  /** Sem internet não dá para mexer no caixa: avisa e devolve true (o chamador para). */
+  const moneyOffline = (): boolean => {
+    if (!cloud || cloud.online) return false;
+    addToast(MONEY_OFFLINE_TOAST, 'info');
+    return true;
+  };
+  /**
+   * Roda a operação no servidor (função `money`). O resultado já entra no estado pelo pull do motor antes de `onOk`.
+   * Falha: toast com o motivo; se foi a rede, "Tentar de novo" repete com o MESMO `op_id` (não lança duas vezes).
+   */
+  const runMoney = (kind: MoneyKind, call: MoneyCall, onOk: (info: Record<string, unknown>) => void): void => {
+    const money = cloud?.money;
+    if (!money) return;
+    void money(kind, call).then(out => {
+      if (out.ok) { onOk(out.info); return; }
+      const retry = out.code === 'rede' || out.code === 'erro'
+        ? { label: 'Tentar de novo', onClick: () => runMoney(kind, call, onOk) }
+        : undefined;
+      addToast(out.message, moneyFailToastType(out), retry);
+    });
+  };
+
   const handleUpdateStatus = (osId: string, newStatus: OSStatus) => {
     const os = workOrders.find(o => o.id === osId);
     if (!os || os.status === newStatus) return;
@@ -223,6 +250,15 @@ export function AppContent({ topbar }: { topbar?: ReactNode } = {}) {
     if (effect.kind === 'blocked') {
       addToast(effect.message, 'error');
       return;
+    }
+    if (cloud && effect.kind !== 'noop') {
+      const money = effect.kind === 'ask-finish' || effect.kind === 'ask-restore' || statusNeedsMoneyOp(os, newStatus, effect);
+      if (money && !access.can('os.finalize')) { addToast(FINALIZE_DENIED_MESSAGE, 'info'); return; }
+      if (money && moneyOffline()) return;
+      if (money && effect.kind === 'update') {
+        runMoney('os.status', { osId, payload: { newStatus } }, () => SoundFX.pop());
+        return;
+      }
     }
     if (effect.kind === 'ask-finish') {
       setPendingAction({ type: 'FINISH_OS_FINANCIAL', data: os });
@@ -345,6 +381,22 @@ export function AppContent({ topbar }: { topbar?: ReactNode } = {}) {
         addToast(saved.error, 'error');
         return;
       }
+      // Nuvem: se a edição mexe no caixa (adiantamentos, preço de OS já lançada, receita), o servidor grava tudo junto.
+      // O modal fica aberto até a resposta; com erro, nada foi salvo e a pessoa não perde o que digitou.
+      if (cloud && saveNeedsMoney({ role: cloud.role, previous: current, saved, ledger })) {
+        if (moneyOffline()) return;
+        applyLinks();
+        runMoney('os.save', { osId: editingOS.id, payload: { opened: editingOS, base: merged.base, drafts: merged.drafts } }, () => {
+          addToast('OS atualizada!', 'success');
+          if (merged.changedElsewhere) addToast(CHANGED_ELSEWHERE_MESSAGE, 'info');
+          if (merged.conflicts.length) addToast(conflictsMessage(merged.conflicts), 'info');
+          if (merged.advancesIgnored) addToast(ADVANCES_IGNORED_MESSAGE, 'info');
+          if (merged.photosTrimmed) addToast(PHOTOS_TRIMMED_MESSAGE, 'info');
+          if (saved.exceedsTotal) addToast(ADVANCES_EXCEED_MESSAGE, 'info');
+          setIsModalOpen(false);
+        });
+        return;
+      }
       applyLinks();
       setLedger(saved.ledger);
       if (saved.events.length) setAuditLog(prev => [...prev, ...saved.events]);
@@ -385,6 +437,22 @@ export function AppContent({ topbar }: { topbar?: ReactNode } = {}) {
       const saved = prepareOSSave({ base: newOS, drafts: data.advances, ledger, machine });
       if (!saved.ok) {
         addToast(saved.error, 'error');
+        return;
+      }
+      // Nuvem: OS nova com adiantamento cria lançamentos no caixa: vai pelo servidor, junto com a OS.
+      if (cloud && saveNeedsMoney({ role: cloud.role, previous: undefined, saved, ledger })) {
+        if (moneyOffline()) return;
+        applyLinks();
+        runMoney('os.save', { osId: newOS.id, payload: { isNew: true, base: newOS, drafts: data.advances } }, () => {
+          if (osFromAppointment) {
+            const originId = osFromAppointment.appointment.id;
+            setAppointments(prev => prev.map(a => a.id === originId ? linkAppointmentToOS(a, saved.os) : a));
+            setOsFromAppointment(null);
+          }
+          addToast('Nova OS criada!', 'success');
+          if (saved.exceedsTotal) addToast(ADVANCES_EXCEED_MESSAGE, 'info');
+          setIsModalOpen(false);
+        });
         return;
       }
       applyLinks();
@@ -447,6 +515,7 @@ export function AppContent({ topbar }: { topbar?: ReactNode } = {}) {
   };
 
   const handleSaveEntryModal = (desc: string, val: number, type: 'CREDIT' | 'DEBIT', dateStr: string, recurrence: 'SINGLE' | 'INSTALLMENT' | 'RECURRING', count: number) => {
+    if (moneyOffline()) return; // lançamento do Financeiro só online (nuvem)
     const absVal = Math.abs(val);
     if (editingEntry) {
       finance.updateEntry({ ...editingEntry, description: desc, amount: Money.fromFloat(absVal), type, effectiveDate: toISOFromDateInput(dateStr) });
@@ -488,6 +557,24 @@ Abrir OS?`)) {
 
   const handleTogglePayment = (entryId: string) => {
     if (refuseIfAdvance(entryId)) return;
+    if (cloud) {
+      if (moneyOffline()) return;
+      runMoney('ledger.toggle', { entryId }, info => {
+        const eff = info.osEffect as { osNumber: number; kind: 'finalized' | 'reopened' } | undefined;
+        if (eff) {
+          addToast(
+            eff.kind === 'finalized'
+              ? `OS #${eff.osNumber} finalizada: todas as parcelas pagas`
+              : `OS #${eff.osNumber} voltou a Aguardando Pagamento: há parcela pendente`,
+            'info'
+          );
+        } else {
+          addToast(info.paid === true ? '💵 Marcado como pago!' : '⏳ Marcado como pendente', 'info');
+        }
+        SoundFX.pop();
+      });
+      return;
+    }
     const result = togglePayment(ledger, workOrders, entryId, new Date().toISOString());
     if (!result) return;
 
@@ -508,6 +595,7 @@ Abrir OS?`)) {
   };
 
   const handleRequestDeleteEntry = (entry: LedgerEntry) => {
+    if (cloud && !access.can('ledger.delete')) { addToast('Só o Dono exclui lançamentos do Financeiro.', 'info'); return; }
     if (refuseIfAdvance(entry.id)) return;
     // Receita ou parcela de OS: apagar aqui deixaria a OS com vínculo órfão. Só pela OS.
     const receiptOwner = findReceiptOwner(workOrders, entry);
@@ -519,12 +607,14 @@ Abrir OS?`)) {
   };
 
   const confirmDeleteSingle = () => {
+    if (moneyOffline()) return;
     if (deleteModalInfo.entry) finance.deleteEntry(deleteModalInfo.entry.id);
     addToast('Excluído.', 'info');
     setDeleteModalInfo({ isOpen: false, entry: null });
   };
 
   const confirmDeleteGroup = () => {
+    if (moneyOffline()) return;
     if (deleteModalInfo.entry?.groupId) finance.deleteGroup(deleteModalInfo.entry.groupId);
     addToast('Série excluída.', 'info');
     setDeleteModalInfo({ isOpen: false, entry: null });
@@ -579,6 +669,22 @@ Abrir OS?`)) {
   };
 
   const handleInstallmentConfirm = (config: InstallmentConfig) => {
+    if (cloud) {
+      // O servidor refaz a conta (restante, parcelas, datas pelo relógio da oficina); aqui só o pedido.
+      const os = installmentOS;
+      setIsInstallmentModalOpen(false);
+      setInstallmentOS(null);
+      if (!os || moneyOffline()) return;
+      runMoney('os.installment', {
+        osId: os.id,
+        payload: { config: { installments: config.installments, firstPaymentDate: config.firstPaymentDate, description: config.description, totalAmount: config.totalAmount } },
+      }, () => {
+        addToast(`OS #${os.osNumber} aguardando pagamento`, 'success');
+        setShowConfetti(true);
+        addToast(`Parcelamento criado! ${config.installments}x`, 'success');
+      });
+      return;
+    }
     const newEntries = buildInstallmentEntries(config);
     if (newEntries.length === 0) { // restante 0 ou sem parcelas: nada a lançar
       setIsInstallmentModalOpen(false);
@@ -664,6 +770,7 @@ Abrir OS?`)) {
   const requestDeleteOS = (os: WorkOrder) => {
     const plan = planDeleteOS(os, ledger);
     if (!plan.ok) { addToast(plan.message, 'error'); return; }
+    if (moneyOffline()) return;
     setPendingAction({ type: 'DELETE_OS', data: os, message: plan.message });
   };
 
@@ -770,6 +877,27 @@ Abrir OS?`)) {
   const executePendingAction = () => {
     if (!pendingAction) return;
 
+    if (pendingAction.type === 'DELETE_OS' && cloud) {
+      const os = pendingAction.data;
+      setPendingAction(null);
+      if (moneyOffline()) return;
+      runMoney('os.delete', { osId: os.id }, () => addToast('OS excluída.', 'info'));
+      return;
+    }
+
+    if (pendingAction.type === 'RESTORE_FINANCIAL' && cloud) {
+      const { data: os, target } = pendingAction;
+      setPendingAction(null);
+      if (moneyOffline()) return;
+      runMoney('os.restore', { osId: os.id, payload: { target } }, info => {
+        const n = typeof info.removedCount === 'number' ? info.removedCount : 0;
+        if (info.removedGroup === true) addToast(`${parcelas(n)} ${n === 1 ? 'removida' : 'removidas'}.`, 'info');
+        else if (n > 0) addToast('Lançamento removido.', 'info');
+        addToast('OS reaberta.', 'success');
+      });
+      return;
+    }
+
     if (pendingAction.type === 'DELETE_OS') {
       const os = pendingAction.data;
       // Refaz a trava com o caixa de agora (o diálogo pode ter ficado aberto enquanto uma parcela foi recebida).
@@ -832,6 +960,15 @@ Abrir OS?`)) {
     if (wantsInstallment) {
       setInstallmentOS(pendingInstallmentOS);
       setIsInstallmentModalOpen(true);
+    } else if (cloud) {
+      const os = pendingInstallmentOS;
+      setPendingInstallmentOS(null);
+      if (moneyOffline()) return;
+      runMoney('os.finalizeSingle', { osId: os.id }, () => {
+        addToast('OS Finalizada!', 'success');
+        setShowConfetti(true);
+      });
+      return;
     } else {
       const { entry, os: finalizedOS } = finalizeOSSingle(pendingInstallmentOS);
       if (entry) setLedger(prev => [entry, ...prev]);

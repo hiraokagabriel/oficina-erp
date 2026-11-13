@@ -2,9 +2,9 @@
 // SITE_URL, CORS_ORIGINS). Compartilhado pelas três entradas Deno.
 import type { Deps, HandlerRequest, HandlerResult } from './core'
 import { allowedOrigins, serveHandler } from './http'
-import { createAuthAdmin, createDb } from './restAdapters'
+import { createAuthAdmin, createDb, type RestConfig } from './restAdapters'
 
-export function createRuntime(env: (name: string) => string | undefined): { deps: Deps; allowed: string[] } {
+export function createRuntime(env: (name: string) => string | undefined): { deps: Deps; allowed: string[]; cfg: RestConfig } {
   const url = env('SUPABASE_URL')
   const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY')
   if (!url || !serviceKey) throw new Error('SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY ausente')
@@ -18,7 +18,7 @@ export function createRuntime(env: (name: string) => string | undefined): { deps
     log: (level, message, extra) => console[level === 'info' ? 'log' : level](message, extra ?? ''),
     siteUrl,
   }
-  return { deps, allowed: allowedOrigins(siteUrl, env('CORS_ORIGINS') ?? null) }
+  return { deps, allowed: allowedOrigins(siteUrl, env('CORS_ORIGINS') ?? null), cfg }
 }
 
 export function makeFetchHandler(

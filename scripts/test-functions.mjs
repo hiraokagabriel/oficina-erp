@@ -1,4 +1,4 @@
-// Integração das Edge Functions `users`, `pin` e `device` no projeto Supabase DE TESTE (nunca no real).
+// Integração das Edge Functions `users`, `pin`, `device` e `money` no projeto Supabase DE TESTE (nunca no real).
 // Uso: node scripts/test-functions.mjs  (depois de `npm run test:db migrate` e do deploy das funções)
 // Lê TEST_DB_URL, TEST_SUPABASE_URL e TEST_SUPABASE_ANON_KEY de .env.test.local. A chave de serviço vem do CLI
 // (`supabase projects api-keys`), fica só em memória e nunca é impressa nem gravada.
@@ -57,6 +57,7 @@ const admin = (method, path, body) => fetch(`${URL_}/auth/v1${path}`, {
   body: body ? JSON.stringify(body) : undefined,
 })
 
+let moneyWs = null
 let pass = 0
 let fail = 0
 function check(name, cond, detail = '') {
@@ -99,6 +100,15 @@ async function createUser(key, role, name, confirmed = true) {
 }
 
 async function cleanup() {
+  if (moneyWs) {
+    try {
+      for (const t of ['money_ops', 'audit_events', 'audit_log', 'ledger', 'work_order_costs', 'work_order_finance', 'work_orders']) {
+        await sql.unsafe(`delete from public.${t} where workshop_id = $1`, [moneyWs])
+      }
+      await sql`delete from public.memberships where workshop_id = ${moneyWs}`
+      await sql`delete from public.workshops where id = ${moneyWs}`
+    } catch (e) { console.error('limpeza do money:', mask(e.message)) }
+  }
   try {
     await sql`delete from public.member_pins where workshop_id = ${ws}`
     await sql`delete from public.devices where workshop_id = ${ws}`
@@ -260,6 +270,107 @@ try {
   check('mecânico banido no Auth (banned_until)', banned)
   r = await fn('users', { action: 'reactivate', userId: users.mec.id }, donoJwt)
   check('users.reactivate', r.status === 200 && r.body.active === true, show(r))
+
+  // ===================== money (PR 6): operações de dinheiro, numa 2ª oficina =====================
+  {
+    const ws2 = randomUUID()
+    moneyWs = ws2
+    await sql`insert into public.workshops (id, name, import_state) values (${ws2}, ${'Teste money ' + tag}, 'concluido')`
+    const mk = async (key, role, name) => {
+      const email = `t-${tag}-${key}@teste-oficinapro.example`
+      const res = await admin('POST', '/admin/users', { email, password, email_confirm: true })
+      const j = await res.json()
+      if (!res.ok) throw new Error(`criar usuário falhou: ${res.status} ${show(j)}`)
+      users[key] = { id: j.id, email, role, name }
+      await sql`insert into public.memberships (workshop_id, user_id, role, display_name) values (${ws2}, ${j.id}, ${role}, ${name})`
+    }
+    await mk('rec2', 'recepcao', 'Recepção Teste')
+    await mk('mec2', 'mecanico', 'Mecânico Teste 2')
+    const recJwt = await signIn(users.rec2.email, password)
+    const mec2Jwt = await signIn(users.mec2.email, password)
+    const today = new Date().toLocaleDateString('sv', { timeZone: 'America/Sao_Paulo' })
+    const money = (jwt, kind, body = {}, opId = randomUUID()) => fn('money', { opId, kind, today, ...body }, jwt).then((x) => ({ ...x, opId }))
+    const seedOS = async (id, status = 'EM_SERVICO') => {
+      const main = { id, osNumber: 1, vehicle: 'Gol 2012', clientName: 'Ana', clientPhone: '11999990000', mileage: 1, status, createdAt: '2026-11-01T15:00:00.000Z', publicNotes: '', parts: [{ id: `${id}-p0`, description: 'Filtro' }], services: [{ id: `${id}-s0`, description: 'Troca' }] }
+      const fin = { prices: { [`${id}-p0`]: 4000, [`${id}-s0`]: 6000 }, total: 10000 }
+      await sql`insert into public.work_orders (workshop_id, id, data) values (${ws2}, ${id}, ${sql.json(main)})`
+      await sql`insert into public.work_order_finance (workshop_id, id, data) values (${ws2}, ${id}, ${sql.json(fin)})`
+    }
+    const osStatus = async (id) => (await sql`select data->>'status' as s, deleted_at from public.work_orders where workshop_id = ${ws2} and id = ${id}`)[0]
+    const ledgerOf = async (id) => sql`select id, data, deleted_at, os_id from public.ledger where workshop_id = ${ws2} and os_id = ${id} and deleted_at is null order by (data->>'installmentNumber')::int nulls first`
+
+    // --- papéis ---
+    await seedOS('m-os0')
+    r = await money(mec2Jwt, 'os.finalizeSingle', { osId: 'm-os0' })
+    check('money: Mecânico 403 sem_permissao', r.status === 403 && r.body.error === 'sem_permissao', show(r))
+    r = await money(null, 'os.finalizeSingle', { osId: 'm-os0' })
+    check('money: sem JWT 401', r.status === 401, show(r))
+    r = await money(recJwt, 'ledger.delete', { osId: 'm-os0' })
+    check('money: kind de excluir lançamento não existe (400)', r.status === 400 && r.body.error === 'acao_invalida', show(r))
+    r = await money(recJwt, 'os.finalizeSingle', { osId: 'm-os0', today: '2020-01-01' })
+    check('money: today fora de ±1 dia: 400 data_invalida', r.status === 400 && r.body.error === 'data_invalida', show(r))
+    check('money: nada gravado pelas recusas', (await ledgerOf('m-os0')).length === 0 && (await osStatus('m-os0')).s === 'EM_SERVICO')
+
+    // --- finalizar à vista, repetir op_id, reabrir ---
+    r = await money(recJwt, 'os.finalizeSingle', { osId: 'm-os0' })
+    const op1 = r.opId
+    check('money: Recepção finaliza à vista (200)', r.status === 200 && r.body.ok === true, show(r))
+    let led = await ledgerOf('m-os0')
+    check('money: receita de 10000 ligada à OS (os_id) e já recebida', led.length === 1 && led[0].data.amount === 10000 && !!led[0].data.paymentDate && led[0].os_id === 'm-os0', JSON.stringify(led))
+    check('money: OS FINALIZADO', (await osStatus('m-os0')).s === 'FINALIZADO')
+    const rep = await money(recJwt, 'os.finalizeSingle', { osId: 'm-os0' }, op1)
+    check('money: repetir o mesmo op_id devolve replay sem duplicar', rep.status === 200 && rep.body.replay === true && (await ledgerOf('m-os0')).length === 1, show(rep))
+    r = await money(recJwt, 'os.finalizeSingle', { osId: 'm-os0' })
+    check('money: op_id novo na OS já finalizada: 409 estado_mudou', r.status === 409 && r.body.error === 'estado_mudou', show(r))
+    const reuse = await money(recJwt, 'os.delete', { osId: 'm-os0' }, op1)
+    check('money: op_id usado em outro kind: 409 op_id_reutilizado', reuse.status === 409 && reuse.body.error === 'op_id_reutilizado', show(reuse))
+    r = await money(recJwt, 'os.restore', { osId: 'm-os0', payload: { target: 'EM_SERVICO' } })
+    check('money: reabrir apaga a receita e volta a EM_SERVICO', r.status === 200 && (await ledgerOf('m-os0')).length === 0 && (await osStatus('m-os0')).s === 'EM_SERVICO', show(r))
+
+    // --- conflito de versão ---
+    const [v0] = await sql`select version from public.work_orders where workshop_id = ${ws2} and id = 'm-os0'`
+    r = await money(recJwt, 'os.finalizeSingle', { osId: 'm-os0', known: { 'work_orders:m-os0': Number(v0.version) - 1 } })
+    check('money: versão velha: 409 conflito_versao com as linhas atuais', r.status === 409 && r.body.error === 'conflito_versao' && Array.isArray(r.body.rows) && r.body.rows.length > 0, show(r))
+    check('money: conflito não gravou nada', (await ledgerOf('m-os0')).length === 0)
+
+    // --- parcelar, receber parcela, reabrir bloqueado ---
+    await seedOS('m-os1')
+    r = await money(recJwt, 'os.installment', { osId: 'm-os1', payload: { config: { installments: 3, firstPaymentDate: '2026-12-05', totalAmount: 10000, description: 'Parcelamento teste' } } })
+    check('money: parcelar em 3x (200)', r.status === 200, show(r))
+    led = await ledgerOf('m-os1')
+    check('money: 3 parcelas 3333/3333/3334', led.map((x) => x.data.amount).join() === '3333,3333,3334', JSON.stringify(led.map((x) => x.data.amount)))
+    check('money: vencimentos no relógio da oficina (15:00Z, fuso real da Edge)', led.map((x) => x.data.dueDate).join() === '2026-12-05T15:00:00.000Z,2027-01-05T15:00:00.000Z,2027-02-05T15:00:00.000Z', JSON.stringify(led.map((x) => x.data.dueDate)))
+    check('money: OS AGUARDANDO_PAGAMENTO', (await osStatus('m-os1')).s === 'AGUARDANDO_PAGAMENTO')
+    r = await money(recJwt, 'ledger.toggle', { entryId: led[0].id })
+    check('money: receber a 1ª parcela', r.status === 200 && r.body.info?.paid === true, show(r))
+    r = await money(recJwt, 'os.restore', { osId: 'm-os1', payload: { target: 'EM_SERVICO' } })
+    check('money: reabrir com parcela paga: 422 bloqueado', r.status === 422 && r.body.error === 'bloqueado', show(r))
+    r = await money(recJwt, 'os.delete', { osId: 'm-os1' })
+    check('money: excluir com parcela paga: 422 bloqueado', r.status === 422 && r.body.error === 'bloqueado', show(r))
+    r = await money(recJwt, 'os.status', { osId: 'm-os1', payload: { newStatus: 'FINALIZADO' } })
+    check('money: "Receber" parcelada com parcela aberta: 422', r.status === 422, show(r))
+    await money(recJwt, 'ledger.toggle', { entryId: led[1].id })
+    r = await money(recJwt, 'ledger.toggle', { entryId: led[2].id })
+    check('money: pagar a última parcela finaliza a OS', r.status === 200 && r.body.info?.osEffect?.kind === 'finalized' && (await osStatus('m-os1')).s === 'FINALIZADO', show(r))
+    r = await money(recJwt, 'ledger.toggle', { entryId: led[2].id })
+    check('money: desmarcar volta a Aguardando Pagamento', r.body.info?.osEffect?.kind === 'reopened' && (await osStatus('m-os1')).s === 'AGUARDANDO_PAGAMENTO', show(r))
+
+    // --- excluir ---
+    await seedOS('m-os2')
+    await money(recJwt, 'os.finalizeSingle', { osId: 'm-os2' })
+    r = await money(recJwt, 'os.delete', { osId: 'm-os2', machine: 'Teste (script)' })
+    const gone = await osStatus('m-os2')
+    check('money: excluir OS à vista apaga OS e receita', r.status === 200 && !!gone.deleted_at && (await ledgerOf('m-os2')).length === 0, show(r))
+    // --- direto pelo PostgREST a Recepção continua barrada: só a função mexe no dinheiro ---
+    await seedOS('m-os3')
+    const direct = await fetch(`${URL_}/rest/v1/work_orders?workshop_id=eq.${ws2}&id=eq.m-os3`, {
+      method: 'PATCH', headers: { apikey: ANON, Authorization: `Bearer ${recJwt}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ data: { id: 'm-os3', status: 'FINALIZADO', osNumber: 1, vehicle: 'Gol 2012', clientName: 'Ana', clientPhone: '1', mileage: 1, createdAt: '2026-11-01T15:00:00.000Z', publicNotes: '', parts: [{ id: 'm-os3-p0', description: 'Filtro' }], services: [{ id: 'm-os3-s0', description: 'Troca' }] } }),
+    })
+    check('money: Recepção finalizar direto pelo PostgREST é barrado', !direct.ok && (await osStatus('m-os3')).s === 'EM_SERVICO', `status ${direct.status}`)
+    const [aud] = await sql`select count(*)::int as n from public.money_ops where workshop_id = ${ws2}`
+    check('money: money_ops guarda as operações feitas', aud.n >= 8, String(aud.n))
+  }
 } catch (e) {
   fail++
   console.log('ERRO:', mask(e && e.stack ? e.stack : e))

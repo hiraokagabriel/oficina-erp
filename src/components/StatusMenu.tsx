@@ -3,6 +3,8 @@ import ReactDOM from 'react-dom';
 import { OSStatus, STATUS_LABELS } from '../types';
 import { Icon } from './ui/Icon';
 import { useCloseOnAppLock } from '../hooks/useCloseOnAppLock';
+import { useDatabase } from '../context/DatabaseContext';
+import { statusMoveNeedsInternet } from '../services/moneyOfflineView';
 
 /**
  * Botão "Status: X" que abre um menu de escolha. O menu só existe no DOM quando aberto
@@ -23,6 +25,8 @@ interface MenuPos { top: number; left: number; minWidth: number }
 const GAP = 4;
 
 const StatusMenuImpl: React.FC<StatusMenuProps> = ({ id, osNumber, current, statuses, onSelect }) => {
+  // Modo nuvem sem internet: Finalizado, sair dele, voltar de Aguardando Pagamento e sair do arquivo mexem no caixa (mesma régua do Kanban). A escolha ainda avisa por toast (docs/NUVEM-UX.md 6.2).
+  const offline = useDatabase().cloud?.online === false;
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<MenuPos | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -123,11 +127,12 @@ const StatusMenuImpl: React.FC<StatusMenuProps> = ({ id, osNumber, current, stat
               type="button"
               role="menuitem"
               tabIndex={-1}
-              className={`pr-sm-item${s === current ? ' is-current' : ''}`}
+              className={`pr-sm-item${s === current ? ' is-current' : ''}${offline && statusMoveNeedsInternet(current, s) ? ' btn-online-only' : ''}`}
+              aria-disabled={offline && statusMoveNeedsInternet(current, s) ? true : undefined}
               onClick={() => choose(s)}
             >
               <span className="pr-sm-check">{s === current && <Icon name="check" size={14} />}</span>
-              {STATUS_LABELS[s]}
+              {STATUS_LABELS[s]}{offline && statusMoveNeedsInternet(current, s) ? ' (precisa de internet)' : ''}
               {s === current && <span className="pr-sr"> (atual)</span>}
             </button>
           ))}

@@ -16,6 +16,7 @@ import { joinCatalogItem, joinWorkOrder } from './split';
 import type { CatalogMain, WorkOrderCosts, WorkOrderFinance, WorkOrderMain } from './split';
 import { CACHE_VERSION, emptyMeta } from './store';
 import type { CommitBatch, LocalStore, StoredRecord, StoreMeta } from './store';
+import type { MoneyCall, MoneyKind, MoneyOutcome } from './moneyClient';
 import type { CatalogKind, CloudTable, CollectionKey } from './types';
 
 // Motor de sincronização (docs/NUVEM-SPEC.md seção 4). Sem React, sem Supabase, sem IndexedDB: transporte, cache,
@@ -141,6 +142,12 @@ export interface CloudInfo extends SyncStatus {
   role: Role;
   /** "Tentar enviar agora" do selo: busca tudo e envia a fila. Só existe no provider da nuvem. */
   syncNow?: () => Promise<void>;
+  /** Operação de dinheiro pela função `money` (PR 6). Só existe no provider da nuvem. Nunca lança. */
+  money?: (kind: MoneyKind, call: MoneyCall) => Promise<MoneyOutcome>;
+  /** Há operação de dinheiro no ar (os botões mostram "Recebendo..."). */
+  moneyBusy?: boolean;
+  /** Registros (`osId` ou `entryId`) com operação de dinheiro no ar: só o botão deles mostra "Recebendo...". */
+  moneyBusyKeys?: readonly string[];
 }
 
 export interface EngineState {
@@ -551,6 +558,55 @@ export class SyncEngine {
     });
     this.pullQueued = q;
     return q.p;
+  }
+
+  // ---------- operação de dinheiro (função `money`, PR 6) ----------
+
+  /**
+   * Antes de chamar a função `money` sobre uma OS (ou um lançamento): envia a op pendente do registro e espera o ack,
+   * para o servidor ver as edições da pessoa. `ok:false` = ainda sobrou op do registro (rede, backoff): não chame.
+   * `known` = versões que este aparelho conhece, que o servidor confere (`conflito_versao` se mudou).
+   */
+  async prepareMoney(ref: { osId?: string; entryId?: string }): Promise<{ ok: true; known: Record<string, number> } | { ok: false; reason: 'offline' | 'pendente' }> {
+    if (!this.opened || this.stopped || !this.online) return { ok: false, reason: 'offline' };
+    const ledgerOwned = (): string[] => {
+      const out: string[] = [];
+      for (const [id, rec] of this.recMap('ledger')) if (!rec.deleted && ref.osId && rec.osId === ref.osId) out.push(id);
+      return out;
+    };
+    const mine = (): boolean => {
+      const lid = new Set<string>(ledgerOwned());
+      if (ref.entryId) lid.add(ref.entryId);
+      return this.outbox.some(o => o.actor === this.d.actor && (
+        (ref.osId !== undefined && o.collection === 'workOrders' && o.recordId === ref.osId)
+        || (o.collection === 'ledger' && lid.has(o.recordId))));
+    };
+    if (mine()) {
+      await this.flushNow();
+      if (mine()) return { ok: false, reason: this.online ? 'pendente' : 'offline' };
+    }
+    const known: Record<string, number> = {};
+    if (ref.osId) {
+      const v = this.getRec('workOrders', ref.osId)?.versions;
+      if (v) {
+        known[`work_orders:${ref.osId}`] = v.main;
+        if (v.fin !== undefined) known[`work_order_finance:${ref.osId}`] = v.fin;
+        if (v.cost !== undefined) known[`work_order_costs:${ref.osId}`] = v.cost;
+      }
+      for (const id of ledgerOwned()) known[`ledger:${id}`] = this.recMap('ledger').get(id)?.versions.main ?? 0;
+    }
+    if (ref.entryId) {
+      const rec = this.getRec('ledger', ref.entryId);
+      if (rec && !rec.deleted) known[`ledger:${ref.entryId}`] = rec.versions.main;
+    }
+    return { ok: true, known };
+  }
+
+  /** Depois da função `money` (com ou sem sucesso): puxa as tabelas de dinheiro e aplica pelo `onPatch`, sem eco. */
+  afterMoney(): Promise<void> {
+    const money: CloudTable[] = ['work_orders', 'work_order_finance', 'work_order_costs', 'ledger', 'audit_log'];
+    const mine = visibleTables(this.d.role);
+    return this.pullNow(money.filter(t => mine.includes(t)));
   }
 
   private afterNetwork(): void {

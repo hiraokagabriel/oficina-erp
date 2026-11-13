@@ -11,6 +11,8 @@ import { toLocalDay } from '../services/receivables';
 import { useAccess } from '../hooks/useAccess';
 import { useToast } from '../context/ToastContext';
 import { canMoveToStatus, MECANICO_FINALIZE_MESSAGE } from '../services/accessView';
+import { OFFLINE_COLUMN_HINT, finalizeColumnHint } from '../services/moneyOfflineView';
+import { useDatabase } from '../context/DatabaseContext';
 
 interface KanbanBoardProps {
   workOrders: WorkOrder[];
@@ -90,6 +92,7 @@ const KanbanColumn = React.memo(
     showPrices,
     canManage,
     lockedHint,
+    offlineHint,
   }: {
     status: OSStatus;
     workOrders: WorkOrder[];
@@ -103,6 +106,8 @@ const KanbanColumn = React.memo(
     canManage: boolean;
     /** Arrastando sem poder finalizar: a coluna Finalizado explica por quê. */
     lockedHint: boolean;
+    /** Arrastando sem internet: a coluna Finalizado mostra "Precisa de internet" (a soltura é recusada com toast). */
+    offlineHint?: boolean;
   }) => {
     const sortedList = useMemo(() => {
       return workOrders
@@ -140,6 +145,12 @@ const KanbanColumn = React.memo(
           <div className="kanban-lock-hint" role="status">
             <Icon name="info" size={16} />
             <span>{MECANICO_FINALIZE_MESSAGE}</span>
+          </div>
+        )}
+        {offlineHint && !lockedHint && status === 'FINALIZADO' && (
+          <div className="kanban-lock-hint" role="status">
+            <Icon name="cadeado" size={16} />
+            <span>{OFFLINE_COLUMN_HINT}</span>
           </div>
         )}
         {hasMore && <div className="kanban-partial">Mostrando {loadedItems} de {totalItems}</div>}
@@ -180,6 +191,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
     const [technicianFilter, setTechnicianFilter] = useState<'ALL' | 'NONE' | string>('ALL');
     const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
     const access = useAccess();
+    const cloudOnline = useDatabase().cloud?.online !== false;
     const { addToast } = useToast();
     const showPrices = access.os.canSeePrices;
     // Selo de margem precisa de custo: só quem vê custo (Dono), mesmo com a opção ligada.
@@ -369,6 +381,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
       showPrices,
       canManage,
       lockedHint: activeId !== null && !access.can('os.finalize'),
+      offlineHint: finalizeColumnHint({ dragging: activeId !== null, canFinalize: access.can('os.finalize'), online: cloudOnline }) === 'offline',
     };
 
     return (

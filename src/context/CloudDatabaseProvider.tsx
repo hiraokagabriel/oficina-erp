@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
   Appointment, AuditEvent, CatalogItem, Client, LedgerEntry, Technician, WorkOrder, WorkshopSettings,
@@ -8,7 +9,12 @@ import { can } from '../services/permissions';
 import { adoptSecrets, persistSecrets, stripSecrets } from '../utils/secrets';
 import { LocalScheduler } from '../sync/localScheduler';
 import { openIdbStore } from '../sync/idb';
+import { startCloudPhotos } from '../sync/photoRuntime';
+import type { CloudPhotos } from '../sync/photoRuntime';
+import { setPhotoTransport } from '../services/photoStore';
 import { describeSyncError, recoveryCopyContent, recoveryFileName, rejectionMessage } from '../sync/rejectMessages';
+import { createMoneyClient } from '../sync/moneyClient';
+import type { MoneyHttpResult, MoneyInvoke } from '../sync/moneyClient';
 import { createSupabaseTransport } from '../sync/supabaseRepo';
 import { realTimers, SyncEngine } from '../sync/syncEngine';
 import type { CloudInfo, RemotePatch, SyncStatus } from '../sync/syncEngine';
@@ -17,6 +23,7 @@ import type { CollectionKey } from '../sync/types';
 import { DatabaseContext } from './DatabaseContext';
 import type { DatabaseContextData, LoadStatus } from './DatabaseContext';
 import { useToast } from './ToastContext';
+import { formatDateOnly } from '../utils/dates';
 
 // Provider da NUVEM (docs/NUVEM-SPEC.md seção 4). Entrega o MESMO contexto do modo arquivo (`DatabaseContext`),
 // então as telas não mudam. Os `setX` são os do React; um efeito por coleção chama o motor (`SyncEngine`) com
@@ -114,6 +121,7 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
   const [localDirty, setLocalDirty] = useState(false);
 
   const engineRef = useRef<SyncEngine | null>(null);
+  const photosRef = useRef<CloudPhotos | null>(null);
   // Valores mais recentes para o debounce e para quem roda fora do render.
   const latest = useRef({ ledger, workOrders, clients, catalogParts, catalogServices, catalogTechnicians, appointments, auditLog, settings });
   latest.current = { ledger, workOrders, clients, catalogParts, catalogServices, catalogTechnicians, appointments, auditLog, settings };
@@ -159,6 +167,7 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
     setStatus({ online: true, flushing: false, pending: 0, syncState: 'salvo', lastError: null });
     let unsub: (() => void) | null = null;
     let closeStore: (() => void) | undefined;
+    let photos: CloudPhotos | null = null;
 
     const applyPatches = (patches: RemotePatch[]): void => {
       if (cancelled) return;
@@ -200,8 +209,19 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
           onNotice: message => { toastRef.current(message, 'info'); },
           onRecoveryCopy: op => { void saveRecoveryCopy(op); },
         });
+        // Fotos no Storage (PR 7): fila e cache no mesmo banco local. Falha aqui não derruba os dados: só fica sem fotos.
+        try {
+          photos = await startCloudPhotos({
+            supabase, workshopId, userId, online: typeof navigator === 'undefined' ? true : navigator.onLine,
+            onFailed: (_item, message) => { toastRef.current(message, 'error'); },
+          });
+        } catch (e) {
+          console.warn('Fotos indisponíveis neste aparelho:', e);
+        }
+        if (cancelled) { void photos?.stop(); engine.stop(); closeStore(); return; }
+        if (photos) { photosRef.current = photos; setPhotoTransport(photos.transport); }
         const initial = await engine.open();
-        if (cancelled) { engine.stop(); closeStore(); return; }
+        if (cancelled) { void photos?.stop(); engine.stop(); closeStore(); return; }
         engineRef.current = engine;
         setLedger(initial.ledger); setWorkOrders(initial.workOrders); setClients(initial.clients);
         setCatalogParts(initial.catalogParts); setCatalogServices(initial.catalogServices);
@@ -231,6 +251,9 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
       const e = engine;
       const close = closeStore;
       engineRef.current = null;
+      photosRef.current = null;
+      setPhotoTransport(null);
+      void photos?.stop();
       e?.stop();
       void (e ? e.settled() : Promise.resolve()).then(() => close?.());
     };
@@ -242,8 +265,8 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
   // Janela: foco puxa tudo; internet volta/cai; ao esconder/fechar, descarrega o debounce.
   useEffect(() => {
     const onFocus = () => engineRef.current?.focus();
-    const onOnline = () => engineRef.current?.setOnline(true);
-    const onOffline = () => engineRef.current?.setOnline(false);
+    const onOnline = () => { engineRef.current?.setOnline(true); photosRef.current?.queue.setOnline(true); };
+    const onOffline = () => { engineRef.current?.setOnline(false); photosRef.current?.queue.setOnline(false); };
     const onHide = () => { if (document.visibilityState === 'hidden') flushLocal(); };
     window.addEventListener('focus', onFocus);
     window.addEventListener('online', onOnline);
@@ -269,14 +292,37 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
   const getMachineName = useCallback(() => (userName ? `${userName} (${deviceName})` : deviceName), [userName, deviceName]);
   const noopSetDbPath = useCallback<React.Dispatch<React.SetStateAction<string>>>(() => {}, []);
 
+  // Operações de dinheiro (função `money`, PR 6). O cliente HTTP usa a sessão do supabase-js (token e chave publicável).
+  const [moneyBusyKeys, setMoneyBusyKeys] = useState<string[]>([]);
+  const moneyBusy = moneyBusyKeys.length > 0;
+  const machineRef = useRef(getMachineName);
+  machineRef.current = getMachineName;
+  const moneyClient = useMemo(() => {
+    const invoke: MoneyInvoke = async (body): Promise<MoneyHttpResult | null> => {
+      const { data, error } = await supabase.functions.invoke('money', { body });
+      if (!error) return { status: 200, body: typeof data === 'object' && data !== null ? data as Record<string, unknown> : {} };
+      if (error instanceof FunctionsHttpError) {
+        const res = error.context as Response;
+        let json: Record<string, unknown> = {};
+        try { json = await res.json() as Record<string, unknown>; } catch { /* corpo não JSON */ }
+        return { status: res.status, body: json };
+      }
+      return null; // sem resposta (rede)
+    };
+    return createMoneyClient({
+      invoke, engine: () => engineRef.current, newId: () => crypto.randomUUID(),
+      today: () => formatDateOnly(new Date()), machine: () => machineRef.current(), deviceId, onBusy: setMoneyBusyKeys,
+    });
+  }, [supabase, deviceId]);
+
   const value = useMemo<DatabaseContextData>(() => {
-    const cloud: CloudInfo = { role, ...status, syncNow };
+    const cloud: CloudInfo = { role, ...status, syncNow, money: moneyClient.run, moneyBusy, moneyBusyKeys };
     return {
       ledger, setLedger, workOrders, setWorkOrders, clients, setClients, catalogParts, setCatalogParts,
       catalogServices, setCatalogServices, catalogTechnicians, setCatalogTechnicians, appointments, setAppointments,
       auditLog, setAuditLog, settings, setSettings,
       isLoading: loadStatus === 'loading',
-      isSaving: status.flushing, // só com envio no ar: fila em espera de backoff não trava o "Salvar OS"
+      isSaving: status.flushing || moneyBusy, // só com envio no ar (ou operação de dinheiro): fila em espera de backoff não trava o "Salvar OS"
       // Campos só do modo arquivo, com valor neutro: não há banco de versão futura, diálogo de conflito de arquivo
       // (o conflito da nuvem é resolvido por campo no motor) nem caminho de arquivo.
       readOnly: false,
@@ -292,7 +338,7 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
     };
   }, [
     ledger, workOrders, clients, catalogParts, catalogServices, catalogTechnicians, appointments, auditLog, settings, setSettings,
-    loadStatus, status, lastSavedAt, localDirty, workshopId, role, noopSetDbPath, getMachineName, syncNow,
+    loadStatus, status, lastSavedAt, localDirty, workshopId, role, noopSetDbPath, getMachineName, syncNow, moneyClient, moneyBusy, moneyBusyKeys,
   ]);
 
   return (

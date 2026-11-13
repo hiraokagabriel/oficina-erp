@@ -4,7 +4,7 @@ import type { CommitBatch, LocalSnapshot, LocalStore, StoreMeta, StoredEntry, St
 import type { CollectionKey } from './types';
 
 // LocalStore em IndexedDB (docs/NUVEM-SPEC.md seção 4). Um banco por pessoa e oficina: o cache do Mecânico
-// nunca contém preços porque nunca os recebeu. `photoQueue` e `photoCache` só são criados aqui (uso: PR 7).
+// nunca contém preços porque nunca os recebeu. `photoQueue` e `photoCache` são criados aqui e usados por `photoIdb.ts` (PR 7).
 
 export const IDB_VERSION = 1;
 export const dbNameFor = (workshopId: string, userId: string): string => `oficinapro-${workshopId}-${userId}`;
@@ -19,7 +19,8 @@ const done = (tx: IDBTransaction): Promise<void> =>
     tx.onabort = () => reject(tx.error ?? new Error('IndexedDB abortado'));
   });
 
-function open(factory: IDBFactory, name: string): Promise<IDBDatabase> {
+/** Abre (ou cria) o banco da pessoa com todos os stores. As fotos (`photoQueue`/`photoCache`) abrem a mesma base. */
+export function openIdbDatabase(factory: IDBFactory, name: string): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const r = factory.open(name, IDB_VERSION);
     r.onupgradeneeded = () => {
@@ -41,7 +42,7 @@ function open(factory: IDBFactory, name: string): Promise<IDBDatabase> {
 /** `factory` só para teste (fake-indexeddb); no app vale o `indexedDB` do navegador. */
 export async function openIdbStore(opts: { workshopId: string; userId: string; factory?: IDBFactory }): Promise<LocalStore> {
   const factory = opts.factory ?? indexedDB;
-  const db = await open(factory, dbNameFor(opts.workshopId, opts.userId));
+  const db = await openIdbDatabase(factory, dbNameFor(opts.workshopId, opts.userId));
   // Outra janela quer atualizar ou apagar este banco: fecha a conexão para não travá-la.
   db.onversionchange = () => db.close();
 

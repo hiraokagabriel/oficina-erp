@@ -4,7 +4,7 @@ import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const names = process.argv.slice(2).length ? process.argv.slice(2) : ['users', 'pin', 'device']
+const names = process.argv.slice(2).length ? process.argv.slice(2) : ['users', 'pin', 'device', 'money']
 for (const name of names) {
   const out = resolve(root, 'supabase/functions', name, 'bundle.js')
   const r = await build({

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { MoneyField } from './MoneyField';
 import { Icon } from './ui/Icon';
+import { useDatabase } from '../context/DatabaseContext';
 import {
   AdvanceRow, advanceRowError, advanceTotals, removeAdvanceRow, upsertAdvanceRow,
 } from '../services/advancesDraft';
@@ -29,8 +30,11 @@ interface Editor { key: string; id?: string; date: string; cents: number | undef
 
 /** Adiantamentos da OS em rascunho local: nada vai ao caixa até salvar a OS. */
 export const AdvancesList: React.FC<AdvancesListProps> = ({
-  rows, onChange, total, today, formatMoney, locked, onDirty, onEditingChange, attention,
+  rows, onChange, total, today, formatMoney, locked: finalized, onDirty, onEditingChange, attention,
 }) => {
+  // Modo nuvem sem internet: adiantamento cria lançamento no caixa, então trava como OS finalizada (docs/NUVEM-UX.md 6.2).
+  const offline = useDatabase().cloud?.online === false;
+  const locked = finalized || offline;
   const [editor, setEditor] = useState<Editor | null>(null);
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
   const [moneyBad, setMoneyBad] = useState(false);
@@ -160,7 +164,9 @@ export const AdvancesList: React.FC<AdvancesListProps> = ({
     <div className="osm-adv" role="group" aria-labelledby="os-adv-title">
       <div id="os-adv-title" className="osm-adv-title">Adiantamentos <span className="osm-opt">(opcional)</span></div>
       {locked && (
-        <p className="osm-adv-locked field-hint" role="note"><Icon name="info" size={16} /> Esta OS já foi finalizada. Para mudar, reabra a OS.</p>
+        offline && !finalized
+          ? <p className="osm-adv-locked cfg-warn" role="note"><Icon name="sem-internet" size={16} /> Sem internet: adiantamentos só podem ser lançados com internet.</p>
+          : <p className="osm-adv-locked field-hint" role="note"><Icon name="info" size={16} /> Esta OS já foi finalizada. Para mudar, reabra a OS.</p>
       )}
       {rows.length === 0 && !editor && (
         <p className="field-hint">{locked ? 'Nenhum adiantamento nesta OS.' : 'Use só se o cliente já deixou algum valor. Nenhum adiantamento por enquanto.'}</p>

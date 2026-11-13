@@ -1,5 +1,6 @@
 import React from 'react';
 import { DevicesSection } from './DevicesSection';
+import { PhotoSpaceSection } from './PhotoSpaceSection';
 import { RecoverySection } from './RecoverySection';
 import { UsersSection } from './UsersSection';
 
@@ -10,6 +11,7 @@ const CloudConfigSections: React.FC = () => (
   <>
     <UsersSection />
     <DevicesSection />
+    <PhotoSpaceSection />
     <RecoverySection />
   </>
 );

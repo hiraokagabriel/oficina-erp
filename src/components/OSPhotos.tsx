@@ -5,7 +5,7 @@ import { PhotoViewerModal, ViewerPhoto } from '../modals/PhotoViewerModal';
 import { Icon } from './ui/Icon';
 import { PhotoThumb } from './PhotoThumb';
 import { MAX_PHOTOS_PER_OS, acceptImageFile } from '../services/photos';
-import { isPhotoStoreAvailable, newPhotoId, savePhoto, trashPhoto } from '../services/photoStore';
+import { isPhotoStoreAvailable, newPhotoId, photoStoreKind, savePhoto, trashPhoto } from '../services/photoStore';
 import {
   appendPhotoMetas, fileErrorLine, limitMessage, photoAlt, photoCountLabel, removeFromList, setCaptionInList, slotsLeft,
 } from '../services/photosView';
@@ -29,10 +29,17 @@ interface OSPhotosProps {
 
 const ACCEPT = 'image/jpeg,image/png,image/webp';
 
+/** Celular ou tablet (toque como ponteiro principal): lá o botão "Tirar foto" abre a câmera (`capture`). No PC o `capture` é ignorado. */
+const isTouchDevice = (): boolean =>
+  typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+
 /** Seção "Fotos do carro" da janela da OS: adicionar (botão, arrastar, colar), legenda, ampliar e remover. */
 export const OSPhotos: React.FC<OSPhotosProps> = ({ dbPath, osId, osNumber, photos, setPhotos, sessionRef, readOnly = false, onBusyChange }) => {
   const available = isPhotoStoreAvailable() && !readOnly;
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const cloud = photoStoreKind() === 'cloud';
+  const touch = cloud && isTouchDevice();
   const hintId = useId();
   const photosRef = useRef(photos);
   photosRef.current = photos;
@@ -147,7 +154,8 @@ export const OSPhotos: React.FC<OSPhotosProps> = ({ dbPath, osId, osNumber, phot
     setPhotos(prev => removeFromList(prev, p.id));
     // Foto gravada só nesta sessão: não existe no banco, vai já para a lixeira.
     // Foto que já estava salva: o App manda para a lixeira quando a OS for salva.
-    if (sessionRef.current.delete(p.id)) {
+    // Na nuvem, `trashPhoto` só cancela o envio na fila ("Descartar" de foto que não subiu); objetos já enviados ficam.
+    if (sessionRef.current.delete(p.id) || cloud) {
       trashPhoto(dbPath, osId, p.id).catch(err => console.warn('Não foi possível mover a foto para a lixeira:', err));
     }
   };
@@ -165,6 +173,17 @@ export const OSPhotos: React.FC<OSPhotosProps> = ({ dbPath, osId, osNumber, phot
       onDrop={onDrop}
     >
       <div className="ph-bar">
+        {touch && (
+          <button
+            type="button"
+            className="btn-accent-outline ph-add"
+            onClick={() => cameraRef.current?.click()}
+            disabled={!available || full}
+            aria-describedby={hintId}
+          >
+            <Icon name="camera" size={20} /> Tirar foto
+          </button>
+        )}
         <button
           type="button"
           className="btn-accent-outline ph-add"
@@ -172,9 +191,11 @@ export const OSPhotos: React.FC<OSPhotosProps> = ({ dbPath, osId, osNumber, phot
           disabled={!available || full}
           aria-describedby={hintId}
         >
-          <Icon name="camera" size={20} /> Adicionar fotos
+          <Icon name="camera" size={20} /> {touch ? 'Escolher da galeria' : 'Adicionar fotos'}
         </button>
-        <input ref={inputRef} type="file" accept={ACCEPT} multiple hidden tabIndex={-1} onChange={onPick} />
+        <input ref={inputRef} type="file" accept={touch ? 'image/*' : ACCEPT} multiple hidden tabIndex={-1} onChange={onPick} />
+        {/* Câmera direta no celular: `capture="environment"` abre a câmera traseira (uma foto por vez). */}
+        {touch && <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden tabIndex={-1} onChange={onPick} />}
         <span className="ph-count" aria-live="polite">{photoCountLabel(photos.length)}</span>
       </div>
       <p id={hintId} className="ph-hint">
@@ -203,7 +224,7 @@ export const OSPhotos: React.FC<OSPhotosProps> = ({ dbPath, osId, osNumber, phot
             const alt = photoAlt(p, osNumber, i + 1);
             return (
               <li key={p.id} className="ph-cell">
-                <PhotoThumb dbPath={dbPath} osId={osId} photoId={p.id} alt={alt} onOpen={() => setViewIndex(i)} />
+                <PhotoThumb dbPath={dbPath} osId={osId} photoId={p.id} alt={alt} onOpen={() => setViewIndex(i)} onDiscard={readOnly ? undefined : () => setToRemove(p)} />
                 <label className="sr-only" htmlFor={`ph-cap-${p.id}`}>Legenda da foto {i + 1}</label>
                 <input
                   id={`ph-cap-${p.id}`}
@@ -229,7 +250,7 @@ export const OSPhotos: React.FC<OSPhotosProps> = ({ dbPath, osId, osNumber, phot
         <ConfirmationModal
           isOpen
           title="Remover esta foto?"
-          message="A foto sai desta OS. Ela vai para a lixeira da pasta de fotos."
+          message={cloud ? 'A foto sai desta OS.' : 'A foto sai desta OS. Ela vai para a lixeira da pasta de fotos.'}
           confirmText="Remover"
           cancelText="Manter"
           confirmColor="danger"

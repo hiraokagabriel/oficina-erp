@@ -40,6 +40,10 @@ async function reset() {
       for r in select policyname from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname in ('f_sel', 'f_ins') loop
         execute format('drop policy %I on storage.objects', r.policyname);
       end loop;
+      -- policy do broadcast privado (depende de app.ws_topic_allowed, que sai com o drop do schema app)
+      if to_regclass('realtime.messages') is not null then
+        drop policy if exists ws_broadcast_sel on realtime.messages;
+      end if;
       -- tabelas saem da publicação junto com o drop
       for r in select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
                where n.nspname = 'public' and c.relkind in ('r', 'p')

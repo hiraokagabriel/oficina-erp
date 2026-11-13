@@ -6,3 +6,6 @@
 .env.keys
 .env.local
 .env.*.local
+
+# Edge Functions: bundle gerado por scripts/build-functions.mjs
+functions/*/bundle.js

@@ -424,3 +424,23 @@ enabled = true
 # formatted with uppercase keywords, indent 2, max width 180, trailing commas,
 # and column/key alignment. Set to "null" to emit raw, unformatted SQL.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":180,\"commaStyle\":\"trailing\"}"
+
+# Edge Functions (PR 5). O bundle vem de `node scripts/build-functions.mjs` (esbuild; entrypoint = bundle.js).
+# verify_jwt = false de propósito: (1) `pin.roster`/`pin.unlock` rodam ANTES do login, sem JWT de usuário;
+# (2) as chaves publicáveis novas (sb_publishable_...) não são JWT e o portão do gateway as recusaria;
+# (3) toda função valida o JWT sozinha (`auth.getUser`) e lê a membership ativa. Sem Authorization válido, as ações com
+# JWT respondem 401; as sem JWT exigem deviceId + segredo do aparelho.
+[functions.users]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/users/bundle.js"
+
+[functions.pin]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/pin/bundle.js"
+
+[functions.device]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/device/bundle.js"

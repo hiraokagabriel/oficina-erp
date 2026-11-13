@@ -152,3 +152,19 @@
 /* Resumo do cliente escolhido (dívida e última visita) */
 .osm-client-info { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-4); margin: 0 0 var(--sp-3); font-size: var(--fs-sm); color: var(--text-2); }
 .osm-client-info-debt { color: var(--text); font-weight: var(--fw-semibold, 600); }
+
+/* ---------- Visão de campo (Mecânico): texto no lugar de campos, sem dinheiro ---------- */
+.osm--field { width: min(720px, 95vw); }
+.osm-field-meta { margin: 0; font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--text-2); }
+.osm-field-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); }
+.osm-field-kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--sp-3) var(--sp-4); margin: 0 0 var(--sp-3); }
+.osm-field-kv dt { font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--text-2); }
+.osm-field-kv dd { margin: 0; font-size: var(--fs-md); font-weight: var(--fw-semibold); color: var(--text); overflow-wrap: anywhere; }
+.osm-field-contact { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-bottom: var(--sp-3); }
+.osm-field-contact a.btn-secondary { display: inline-flex; align-items: center; gap: var(--sp-2); text-decoration: none; }
+.osm-field-km { max-width: 200px; margin: 0; }
+.osm-field-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.osm-field-items li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); padding: var(--sp-2) 0; border-top: 1px solid var(--border); font-size: var(--fs-md); color: var(--text); }
+.osm-field-items li:first-child { border-top: 0; }
+.osm-field-chip { padding: 2px var(--sp-2); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--text-2); }
+.osm-field-obs { margin: 0 0 var(--sp-2); font-size: var(--fs-md); color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }

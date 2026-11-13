@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Icon, IconName } from './Icon';
-import { toastDurationMs, TOAST_DURATION_MS } from '../../utils/toastQueue';
+import { toastDurationMs, toastText, TOAST_DURATION_MS } from '../../utils/toastQueue';
 
 export type ToastType = 'success' | 'error' | 'info';
 
@@ -15,6 +15,8 @@ export interface ToastMessage {
   type: ToastType;
   message: string;
   action?: ToastAction;
+  /** Quantas vezes o mesmo erro chegou enquanto estava na tela. */
+  count?: number;
 }
 
 interface ToastContainerProps {
@@ -69,7 +71,7 @@ const ToastItem: React.FC<{ toast: ToastMessage; onRemove: (id: string) => void 
       onClick={isError ? undefined : () => onRemove(toast.id)}
     >
       <Icon name={ICONS[toast.type]} className="toast-item-icon" />
-      <span className="toast-item-text">{toast.message}</span>
+      <span className="toast-item-text">{toastText(toast)}</span>
       {toast.action && (
         <button
           type="button"

@@ -137,7 +137,11 @@ export interface SyncStatus {
 }
 
 /** O que o provider entrega no campo `cloud` do contexto. */
-export interface CloudInfo extends SyncStatus { role: Role }
+export interface CloudInfo extends SyncStatus {
+  role: Role;
+  /** "Tentar enviar agora" do selo: busca tudo e envia a fila. Só existe no provider da nuvem. */
+  syncNow?: () => Promise<void>;
+}
 
 export interface EngineState {
   ledger: LedgerEntry[];
@@ -655,7 +659,12 @@ export class SyncEngine {
       if (empty.length > 0) {
         const gone = new Set(empty.map(o => o.opId));
         this.outbox = this.outbox.filter(o => !gone.has(o.opId));
-        for (const o of empty) this.syncView(o.collection, o.recordId);
+        for (const o of empty) {
+          // Excluir o que nunca chegou ao servidor sai calado. Excluir um registro que o servidor TEM e que não gerou nada
+          // para enviar (ex.: o papel não enxerga as linhas) é uma alteração perdida: o usuário precisa saber.
+          if (o.kind === 'delete' && o.base !== null && o.baseVersions.main > 0) this.reject(o.collection, o.recordId, 'denied_local');
+          this.syncView(o.collection, o.recordId);
+        }
         this.emitPatches();
       }
       if (all.length === 0) { void this.persist(); continue; }
@@ -787,6 +796,7 @@ export class SyncEngine {
     const m = mergeRecord(collection, { base: op.base, value: op.value, server: server.value });
     if (m.kind === 'done') {
       this.outbox = removeOp(this.outbox, opId);
+      if (m.message) this.notice(m.message);
     } else if (m.kind === 'drop') {
       this.outbox = removeOp(this.outbox, opId);
       this.reject(collection, recordId, m.reason, m.message);
@@ -955,8 +965,10 @@ export class SyncEngine {
       // Regra do outbox: base e versões da op passam a ser as do servidor. Antes, a edição local é fundida com o que
       // chegou (senão ela regravaria por cima o que o outro aparelho mudou).
       const m = mergeRecord(collection, { base: op.base, value: op.value, server: a.value });
-      if (m.kind === 'done') this.outbox = removeOp(this.outbox, op.opId);
-      else if (m.kind === 'drop') {
+      if (m.kind === 'done') {
+        this.outbox = removeOp(this.outbox, op.opId);
+        if (m.message) this.notice(m.message);
+      } else if (m.kind === 'drop') {
         this.outbox = removeOp(this.outbox, op.opId);
         this.reject(collection, id, m.reason, m.message);
       } else {

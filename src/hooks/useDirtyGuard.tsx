@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ConfirmationModal } from '../modals/ConfirmationModal';
+import { isAppLocked } from '../utils/appLock';
+import { registerDirty } from '../utils/dirtyRegistry';
 import { decideClose, decideEscape, isNoDirtyTarget } from '../utils/dirtyGuard';
 
 interface DirtyGuardOptions {
@@ -13,6 +15,8 @@ interface DirtyGuardOptions {
   trackInputs?: boolean;
   /** Alterações que não geram evento de campo (adicionar/remover item, clicar em estado). */
   isDirty?: () => boolean;
+  /** Como a janela aparece na frase "Ana deixou <rótulo> aberta sem salvar" (padrão: "uma janela"). */
+  label?: string;
 }
 
 /**
@@ -21,7 +25,7 @@ interface DirtyGuardOptions {
  * devem chamar `requestClose`: suja pergunta "Descartar alterações?", limpa fecha direto. Salvar chama o
  * onClose da janela por conta própria, sem passar por aqui. Renderize `dialog` ao lado da janela.
  */
-export const useDirtyGuard = ({ active, onClose, resetKey, trackInputs = true, isDirty }: DirtyGuardOptions) => {
+export const useDirtyGuard = ({ active, onClose, resetKey, trackInputs = true, isDirty, label = 'uma janela' }: DirtyGuardOptions) => {
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const dirtyRef = useRef(false);
   const confirmRef = useRef(false);
@@ -41,6 +45,17 @@ export const useDirtyGuard = ({ active, onClose, resetKey, trackInputs = true, i
     setConfirm(false);
   }, [active, resetKey, setConfirm]);
 
+  // Registro global: "Trocar de pessoa" e a próxima pessoa precisam saber que há janela suja.
+  const labelRef = useRef(label);
+  labelRef.current = label;
+  useEffect(() => {
+    if (!active) return;
+    return registerDirty({
+      isDirty: () => dirtyRef.current || (latest.current.isDirty?.() ?? false),
+      get label() { return labelRef.current; },
+    });
+  }, [active]);
+
   const markDirty = useCallback(() => { dirtyRef.current = true; }, []);
 
   const requestClose = useCallback(() => {
@@ -58,7 +73,7 @@ export const useDirtyGuard = ({ active, onClose, resetKey, trackInputs = true, i
       if (root && e.target instanceof Node && root.contains(e.target)) dirtyRef.current = true;
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
+      if (e.key !== 'Escape' || isAppLocked()) return;
       const action = decideEscape({ defaultPrevented: e.defaultPrevented, isComposing: e.isComposing, confirmOpen: confirmRef.current });
       if (action === 'ignore') return;
       e.preventDefault();

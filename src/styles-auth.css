@@ -1,0 +1,116 @@
+/* Telas de acesso do modo nuvem (docs/NUVEM-UX.md seções 1 a 4 e 6.3): Entrar, convite, nova senha, "Quem está usando",
+   PIN, bloqueio, "Sem acesso". Só tokens de styles-tokens.css, sem cor nova. Carregado só pelo modo nuvem (auth/boot.tsx). */
+
+.cloud-app { display: contents; }
+
+/* Tela inteira OPACA: o cliente no balcão não vê o que está atrás. */
+.auth-screen {
+  position: fixed; inset: 0; z-index: 2000; display: flex; flex-direction: column;
+  background: var(--bg-app); color: var(--text); overflow-y: auto; font-family: var(--font-ui);
+}
+.auth-center { flex: 1; display: flex; align-items: center; justify-content: center; padding: var(--sp-4); }
+.auth-card { width: 100%; max-width: 420px; padding: var(--sp-6); display: flex; flex-direction: column; gap: var(--sp-3); box-sizing: border-box; }
+.auth-card--wide { max-width: 560px; }
+.auth-card--pin { max-width: 400px; }
+.auth-logo { text-align: center; margin-bottom: var(--sp-2); }
+.auth-title { margin: 0; font-size: var(--fs-xl); font-weight: var(--fw-bold); color: var(--text); text-align: center; }
+.auth-subtitle { margin: var(--sp-2) 0 0; font-size: var(--fs-lg); font-weight: var(--fw-semibold); color: var(--text); }
+.auth-text { margin: 0; font-size: var(--fs-base); line-height: var(--lh-base); color: var(--text-2); }
+.auth-step { margin: 0; text-align: center; font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--accent-text); }
+.auth-card > .auth-title + .auth-text { text-align: center; }
+.auth-error { margin: 0 0 var(--sp-3); font-size: var(--fs-sm); }
+.auth-wide { width: 100%; margin-top: var(--sp-2); }
+.auth-actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); justify-content: center; margin-top: var(--sp-2); }
+.auth-actions .btn, .auth-actions .btn-secondary { min-height: var(--control-h); }
+.auth-actions--center { margin-top: var(--sp-6); }
+.auth-links { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); margin-top: var(--sp-2); }
+.auth-foot { margin-top: var(--sp-3); padding-top: var(--sp-3); border-top: 1px solid var(--border); text-align: center; }
+.auth-label-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.auth-label-row .form-label { margin-bottom: 0; }
+.auth-show { min-height: var(--control-h-min); display: inline-flex; align-items: center; gap: 6px; }
+.auth-caps { display: flex; align-items: center; gap: 6px; margin: var(--sp-1) 0 0; color: var(--text-warning); }
+.auth-rule { display: flex; align-items: center; gap: 6px; margin: var(--sp-1) 0 0; font-size: var(--fs-xs); color: var(--text-2); }
+.auth-rule--ok { color: var(--text-success); }
+.auth-card .form-input, .auth-card .btn, .auth-card .btn-secondary { font-size: var(--fs-base); }
+.auth-card .form-input { min-height: var(--control-h); }
+.auth-pin-input { font-family: var(--font-tech); font-size: var(--fs-lg); letter-spacing: 0.5em; text-align: center; }
+.auth-big-icon { display: flex; justify-content: center; }
+.auth-big-icon--success { color: var(--text-success); }
+.auth-big-icon--warning { color: var(--text-warning); }
+.auth-big-icon--danger { color: var(--text-danger); }
+.auth-big-icon--muted { color: var(--text-2); }
+.auth-spinner {
+  display: inline-block; width: 16px; height: 16px; margin-right: 8px; vertical-align: -3px; border-radius: 50%;
+  border: 2px solid currentColor; border-right-color: transparent; animation: auth-spin 0.8s linear infinite;
+}
+@keyframes auth-spin { to { transform: rotate(360deg); } }
+.auth-progress { height: 10px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
+.auth-progress > span { display: block; width: 40%; height: 100%; background: var(--accent); border-radius: 99px; animation: auth-slide 1.4s ease-in-out infinite; }
+@keyframes auth-slide { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+.auth-opening { position: absolute; left: 0; right: 0; top: 96px; text-align: center; color: var(--text-2); font-size: var(--fs-md); }
+.auth-topline { padding: var(--sp-4) var(--sp-6); }
+.auth-switching {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 2100; padding: var(--sp-3) var(--sp-4); text-align: center;
+  background: var(--surface-2); color: var(--text); border-bottom: 1px solid var(--border-strong); font-weight: var(--fw-semibold);
+}
+.idle-banner { position: fixed; top: 0; left: 0; right: 0; z-index: 1900; }
+
+/* ---------- Quem está usando ---------- */
+.who-wrap { width: 100%; max-width: 800px; margin: 0 auto; padding: var(--sp-6) var(--sp-4) var(--sp-8); box-sizing: border-box; }
+.who-title { margin: 0; text-align: center; font-size: var(--fs-2xl); font-weight: var(--fw-bold); }
+.who-sub { margin: var(--sp-1) 0 var(--sp-6); text-align: center; color: var(--text-2); font-size: var(--fs-md); }
+.who-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--sp-4); }
+.who-card {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--sp-2); min-height: 160px;
+  padding: var(--sp-4); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface-1);
+  color: var(--text); cursor: pointer; font: inherit;
+}
+.who-card:hover { background: var(--surface-3); }
+.who-card:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.who-card[aria-disabled="true"] { background: var(--surface-1); color: var(--text-2); cursor: not-allowed; }
+.who-avatar {
+  display: inline-flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 50%;
+  background: var(--accent-soft); color: var(--accent-text); font-weight: var(--fw-bold); font-size: var(--fs-lg);
+}
+.who-avatar--lg { width: 72px; height: 72px; font-size: var(--fs-xl); }
+.who-name { font-size: var(--fs-lg); font-weight: var(--fw-bold); }
+.who-tag { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); color: var(--text-2); }
+.who-tag--danger { color: var(--text-danger); font-weight: var(--fw-semibold); }
+.who-skel { height: 160px; border-radius: var(--radius-lg); }
+.who-device { margin-top: var(--sp-4); text-align: center; font-size: var(--fs-sm); color: var(--text-3); }
+.who-center { text-align: center; }
+
+/* ---------- PIN ---------- */
+.pin-panel { display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); position: relative; }
+.pin-back { align-self: flex-start; }
+.pin-name { font-size: var(--fs-xl); font-weight: var(--fw-bold); }
+.pin-title { margin: var(--sp-3) 0 0; font-size: var(--fs-md); font-weight: var(--fw-semibold); color: var(--text-2); }
+.pin-dots { display: flex; gap: 16px; margin: var(--sp-2) 0; }
+.pin-dot { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--border-strong); background: transparent; }
+.pin-dot--on { background: var(--accent); border-color: var(--accent); }
+.pin-dots--busy { animation: pin-pulse 1s ease-in-out infinite; }
+@keyframes pin-pulse { 50% { opacity: 0.4; } }
+.pin-real { position: absolute; left: 50%; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.pin-msg { min-height: 44px; text-align: center; }
+.pin-msg p { margin: 0; font-size: var(--fs-sm); }
+.pin-checking { color: var(--text-2); }
+.pin-keys { display: grid; grid-template-columns: repeat(3, 72px); gap: var(--sp-3); }
+.pin-key {
+  width: 72px; height: 72px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-2); color: var(--text);
+  font: inherit; font-size: var(--fs-xl); font-variant-numeric: tabular-nums; cursor: pointer;
+}
+.pin-key--small { font-size: var(--fs-xs); font-weight: var(--fw-semibold); }
+.pin-key:hover:not(:disabled) { background: var(--surface-3); }
+.pin-key:active:not(:disabled) { transform: translateY(1px); }
+.pin-key:disabled { opacity: 0.55; cursor: not-allowed; }
+.pin-key:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+
+@media (max-width: 480px) {
+  .auth-card { padding: var(--sp-4); }
+  .who-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pin-dots--busy, .auth-spinner, .auth-progress > span { animation: none; }
+  .pin-key:active:not(:disabled) { transform: none; }
+}

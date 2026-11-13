@@ -63,7 +63,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({ isOpen, mode
   useFocusTrap(isOpen, formRef);
 
   // Esc, Cancelar: pergunta antes de descartar. Salvar fecha direto (onSave -> setModal(null) na página).
-  const guard = useDirtyGuard({ active: isOpen, onClose });
+  const guard = useDirtyGuard({ active: isOpen, onClose, label: 'um agendamento' });
 
   const sameName = useMemo(() => {
     const n = normalizeName(clientName);

@@ -5,6 +5,8 @@
 .today-date { margin: 0; font-size: var(--fs-md); color: var(--text-2); }
 
 .today-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--sp-3); }
+/* Menos de 3 botões (Mecânico): mantém o tamanho de cada um, sem esticar. */
+.today-actions--few { max-width: calc((100% - 2 * var(--sp-3)) * 2 / 3 + var(--sp-3)); }
 .today-big { min-height: 64px; font-size: var(--fs-md); }
 
 .today-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: var(--sp-4); align-items: start; }

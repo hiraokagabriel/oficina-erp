@@ -4,6 +4,7 @@ import { KanbanBoard } from '../components/KanbanBoard';
 import { summarizeDeliveries } from '../services/schedule';
 import { Icon } from '../components/ui/Icon';
 import type { KanbanCardActions } from '../components/KanbanCardMenu';
+import { useAccess } from '../hooks/useAccess';
 
 interface WorkshopPageProps {
   workOrders: WorkOrder[];
@@ -31,6 +32,7 @@ export const WorkshopPage: React.FC<WorkshopPageProps> = ({
   onStatusChange,
   kanbanActions
 }) => {
+  const access = useAccess();
   const [showArchived, setShowArchived] = useState(false);
 
   // Conta OS arquivadas
@@ -72,10 +74,12 @@ export const WorkshopPage: React.FC<WorkshopPageProps> = ({
             Documentos
           </button>
 
-          <button type="button" className="btn" onClick={onNewOS}>
-            <Icon name="adicionar" size={18} />
-            Nova OS (F2)
-          </button>
+          {access.can('os.create') && (
+            <button type="button" className="btn" onClick={onNewOS}>
+              <Icon name="adicionar" size={18} />
+              Nova OS (F2)
+            </button>
+          )}
         </div>
       </div>
       

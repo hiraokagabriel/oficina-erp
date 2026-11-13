@@ -7,6 +7,7 @@ import { buildOnboarding, buildTodaySummary, formatTodayLong, lateLabel, todayKe
 import { readGuideDismissed, readPrintedOnce, writeGuideDismissed } from '../utils/todayPrefs';
 import { Icon, IconName } from '../components/ui/Icon';
 import { AppointmentModal } from '../modals/AppointmentModal';
+import { useAccess } from '../hooks/useAccess';
 
 interface TodayPageProps {
   workOrders: WorkOrder[];
@@ -24,13 +25,23 @@ interface TodayPageProps {
   onGoFinance: () => void;
   onGoConfig: () => void;
   onGoClients: () => void;
+  /** Atalho da visão do Mecânico (no lugar de Nova OS e Receber pagamento). Sem ele, o botão não aparece. */
+  onGoWorkshop?: () => void;
 }
 
 export const TodayPage: React.FC<TodayPageProps> = ({
   workOrders, appointments, ledger, clients, settings, formatMoney,
   onNewOS, onSaveAppointment, onCreateOSFromAppointment, onOpenOS,
-  onGoProcesses, onGoAgenda, onGoFinance, onGoConfig, onGoClients,
+  onGoProcesses, onGoAgenda, onGoFinance, onGoConfig, onGoClients, onGoWorkshop,
 }) => {
+  const access = useAccess();
+  const canNewOS = access.can('os.create');
+  const canReceive = access.can('os.receive');
+  const seeFinance = access.can('finance.view');
+  // O guia leva à Config: só quem edita as configurações (Dono; modo arquivo vê como sempre).
+  const showGuide = access.can('settings.edit');
+  const showWorkshop = !canNewOS && !!onGoWorkshop;
+  const actionCount = 1 + (canNewOS ? 1 : 0) + (canReceive ? 1 : 0) + (showWorkshop ? 1 : 0);
   // Chave do dia (AAAA-MM-DD local): atualiza ao focar a janela e a cada 60 s, para a virada do dia valer sem reabrir o app.
   const [dayKey, setDayKey] = useState<string>(() => todayKeyOf(new Date()));
   useEffect(() => {
@@ -76,19 +87,28 @@ export const TodayPage: React.FC<TodayPageProps> = ({
         <p className="today-date">{formatTodayLong(now)}</p>
       </header>
 
-      <div className="today-actions" role="group" aria-label="Ações rápidas">
-        <button type="button" className="btn today-big" onClick={onNewOS}>
-          <Icon name="adicionar" size={26} /> Nova OS
-        </button>
+      <div className={`today-actions${actionCount < 3 ? ' today-actions--few' : ''}`} role="group" aria-label="Ações rápidas">
+        {canNewOS && (
+          <button type="button" className="btn today-big" onClick={onNewOS}>
+            <Icon name="adicionar" size={26} /> Nova OS
+          </button>
+        )}
         <button type="button" className="btn-secondary today-big" onClick={() => setApptOpen(true)}>
           <Icon name="calendario" size={26} /> Agendar veículo
         </button>
-        <button type="button" className="btn-secondary today-big" onClick={onGoFinance}>
-          <Icon name="receber" size={26} /> Receber pagamento
-        </button>
+        {canReceive && (
+          <button type="button" className="btn-secondary today-big" onClick={onGoFinance}>
+            <Icon name="receber" size={26} /> Receber pagamento
+          </button>
+        )}
+        {showWorkshop && (
+          <button type="button" className="btn today-big" onClick={onGoWorkshop}>
+            <Icon name="oficina" size={26} /> Abrir o quadro da oficina
+          </button>
+        )}
       </div>
 
-      {!guideHidden && (
+      {showGuide && !guideHidden && (
         <section className="today-card today-guide" aria-labelledby="today-guide-title">
           <div className="today-card-head">
             <h2 id="today-guide-title" className="today-card-title">Primeiros passos ({doneCount} de {steps.length})</h2>
@@ -167,7 +187,7 @@ export const TodayPage: React.FC<TodayPageProps> = ({
                     <span className="today-sub">{ap.vehicle}{ap.reason ? ` · ${ap.reason}` : ''}</span>
                     <span className="today-sub">{statusLabel(ap.status)}</span>
                   </div>
-                  {ap.status === 'AGENDADO' && !ap.workOrderId && (
+                  {canNewOS && ap.status === 'AGENDADO' && !ap.workOrderId && (
                     <button type="button" className="btn-sm today-primary" onClick={() => onCreateOSFromAppointment(ap)}>Criar OS</button>
                   )}
                 </li>
@@ -177,6 +197,7 @@ export const TodayPage: React.FC<TodayPageProps> = ({
           {seeAll(sum.agendamentosHoje.length, onGoAgenda, 'Ver agenda')}
         </section>
 
+        {seeFinance && (
         <section className="today-card" aria-labelledby="today-due-title">
           <div className="today-card-head">
             <h2 id="today-due-title" className="today-card-title">Contas vencidas</h2>
@@ -200,7 +221,9 @@ export const TodayPage: React.FC<TodayPageProps> = ({
           )}
           {seeAll(sum.contasVencidas.length, onGoFinance, 'Ver contas a receber')}
         </section>
+        )}
 
+        {seeFinance && (
         <section className="today-card" aria-labelledby="today-await-title">
           <div className="today-card-head">
             <h2 id="today-await-title" className="today-card-title">Aguardando pagamento</h2>
@@ -225,6 +248,7 @@ export const TodayPage: React.FC<TodayPageProps> = ({
           )}
           {seeAll(sum.aguardandoPagamento.length, onGoFinance, 'Ver contas a receber')}
         </section>
+        )}
       </div>
 
       {apptOpen && (

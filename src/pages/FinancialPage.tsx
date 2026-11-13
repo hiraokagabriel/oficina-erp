@@ -6,6 +6,7 @@ import { Icon } from '../components/ui/Icon';
 import { Money as MoneyUtil } from '../utils/helpers';
 import { formatAxisBRL, parseYearDraft, YEAR_INVALID_MESSAGE } from '../services/financeView';
 import { shouldIgnoreStep } from '../services/kanbanCardView';
+import { useAccess } from '../hooks/useAccess';
 import { summarizeReceivables, formatDueDate, getReceivableLabel, getReceivableStatus } from '../services/receivables';
 
 const COLORS = {
@@ -56,7 +57,9 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
   filterType, setFilterType,
   workOrders, settings, catalogParts, catalogServices
 }) => {
-
+  const access = useAccess();
+  const canMargin = access.can('finance.margin');
+  const canDeleteEntry = access.can('ledger.delete');
   const [currentPage, setCurrentPage] = useState(1);
   // Lançamento de adiantamento -> OS dona (fica travado aqui; edição só pela OS).
   const advanceOwners = useMemo(() => {
@@ -92,7 +95,9 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
     onTogglePayment(id);
   };
 
-  const [tab, setTab] = useState<'GERAL' | 'MARGEM'>('GERAL');
+  const [tabState, setTab] = useState<'GERAL' | 'MARGEM'>('GERAL');
+  // Sem permissão de margem (Recepção) não há abas: só a Visão geral.
+  const tab = canMargin ? tabState : 'GERAL';
 
   // Setas, Home e End alternam as abas (padrão WAI-ARIA); o foco acompanha a aba ativa.
   const onTabKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
@@ -162,6 +167,7 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
         </div>
       </div>
 
+      {canMargin && (
       <div className="fin-tabs" role="tablist" aria-label="Seções do Financeiro">
         <button type="button" role="tab" id="fin-tab-geral" className="fin-tab"
           aria-selected={tab === 'GERAL'} aria-controls="fin-panel" tabIndex={tab === 'GERAL' ? 0 : -1}
@@ -170,8 +176,9 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
           aria-selected={tab === 'MARGEM'} aria-controls="fin-panel" tabIndex={tab === 'MARGEM' ? 0 : -1}
           onClick={() => setTab('MARGEM')} onKeyDown={onTabKeyDown}>Margem</button>
       </div>
+      )}
 
-      <div id="fin-panel" role="tabpanel" aria-labelledby={tab === 'GERAL' ? 'fin-tab-geral' : 'fin-tab-margem'}>
+      <div id="fin-panel" role={canMargin ? 'tabpanel' : undefined} aria-labelledby={canMargin ? (tab === 'GERAL' ? 'fin-tab-geral' : 'fin-tab-margem') : undefined}>
       {tab === 'MARGEM' ? (
         <MarginReport
           workOrders={workOrders}
@@ -258,7 +265,7 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
             <div className="stat-card">
                <div className="stat-label">Resultado ({viewMode === 'YEAR' ? 'ano' : 'mês'})</div>
                <div className={kpiData.saldo >= 0 ? 'stat-value stat-value--success' : 'stat-value stat-value--danger'}>{Money.format(kpiData.saldo)}</div>
-               <div className="stat-trend">{kpiData.saldo >= 0 ? 'Lucro do período' : 'Prejuízo do período'}</div>
+               <div className="stat-trend">{kpiData.saldo >= 0 ? (canMargin ? 'Lucro do período' : 'Saldo positivo do período') : (canMargin ? 'Prejuízo do período' : 'Saldo negativo do período')}</div>
             </div>
             <div className="stat-card"><div className="stat-label">Receitas</div><div className="stat-value stat-value--success">{Money.format(kpiData.receitas)}</div></div>
             <div className="stat-card"><div className="stat-label">Despesas</div><div className="stat-value stat-value--danger">{Money.format(kpiData.despesas)}</div></div>
@@ -401,7 +408,7 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                                         </button>
                                     )}
                                     <button className="btn-sm" onClick={() => onEditEntry(e.id)} aria-label={`Editar: ${e.description}`}><Icon name="editar" size={16} />Editar</button>
-                                    <button className="btn-sm fin-del" onClick={() => onDeleteEntry(e)} aria-label={`Excluir: ${e.description}`}><Icon name="excluir" size={16} />Excluir</button>
+                                    {canDeleteEntry && <button className="btn-sm fin-del" onClick={() => onDeleteEntry(e)} aria-label={`Excluir: ${e.description}`}><Icon name="excluir" size={16} />Excluir</button>}
                                     </>)}
                                     </div>
                                 </td>

@@ -9,6 +9,8 @@ import { DEFAULT_LOGO_TEXT, normalizeLogoText } from '../utils/logo';
 import { defaultPdfFolder, isPdfAvailable, openFolder } from '../utils/documentOutput';
 import { getPdfFolder, setPdfFolder } from '../utils/pdfFolder';
 import { useToast } from '../context/ToastContext';
+import { useDatabase } from '../context/DatabaseContext';
+import { configSections, driveLabels } from '../utils/cloudConfig';
 import '../styles-config.css';
 
 interface ConfigPageProps {
@@ -30,6 +32,14 @@ const THEME_OPTIONS: { id: 'dark' | 'pastel'; name: string; text: string; bg: st
   { id: 'dark', name: 'Escuro', text: 'Fundo escuro com detalhes em dourado. Bom para pouca luz.', bg: '#0E0F12', surface: '#17181C', border: '#33353D', accent: '#D4A514' },
   { id: 'pastel', name: 'Pastel (claro)', text: 'Fundo claro com detalhes em violeta. Bom para ambientes bem iluminados.', bg: '#F7F5FA', surface: '#FFFFFF', border: '#E4DCEF', accent: '#6D28D9' },
 ];
+
+// Seções do modo nuvem (Usuários, Aparelhos, Cópias de recuperação): import preguiçoso, o modo arquivo nunca carrega `src/auth`.
+// A condição `VITE_CLOUD` some no build do modo arquivo (código morto): nem o chunk da nuvem entra no `dist/`.
+const CloudConfigSections = React.lazy(() => (
+  import.meta.env.VITE_CLOUD === '1'
+    ? import('../components/config/CloudConfigSections')
+    : Promise.resolve({ default: () => null })
+));
 
 export const ConfigPage: React.FC<ConfigPageProps> = ({
   settings, setSettings, currentTheme, setCurrentTheme, onBackup, onImportData, isBackuping, driveStatus, onOpenDatabase, dbPath, setDbPath
@@ -163,13 +173,30 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
   };
 
   const missingGoogle =!settings.googleApiKey || !settings.googleDriveToken;
+  const { cloud } = useDatabase();
+  const show = configSections({ cloud: !!cloud, role: cloud?.role, pdfAvailable });
+  const drive = driveLabels(!!cloud);
 
   return (
     <div className="config-container cfg-page">
       <h1 className="cfg-page-title">Configurações</h1>
 
+      {/* NUVEM: pessoas, aparelhos e cópias de recuperação (só o Dono) */}
+      {show.cloudAdmin && (
+        <React.Suspense fallback={null}>
+          <CloudConfigSections />
+        </React.Suspense>
+      )}
+
+      {show.dataLocation && (
+        <section className="card cfg-card" aria-labelledby="cfg-where">
+          <h3 id="cfg-where" className="cfg-title"><Icon name="nuvem" size={20} /> Onde ficam os dados</h3>
+          <p className="cfg-help">Os dados da oficina ficam guardados na internet. Cada aparelho guarda uma cópia para continuar funcionando sem internet.</p>
+        </section>
+      )}
+
       {/* CADASTROS */}
-      <section className="card cfg-card" aria-labelledby="cfg-cadastros">
+      {show.cadastros && <section className="card cfg-card" aria-labelledby="cfg-cadastros">
         <div className="cfg-row">
           <div className="cfg-row-text">
             <h3 id="cfg-cadastros" className="cfg-title"><Icon name="arquivo" size={20} /> Cadastros</h3>
@@ -179,10 +206,10 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
             <Icon name="arquivo" size={18} /> Abrir cadastros
           </button>
         </div>
-      </section>
+      </section>}
 
       {/* IDENTIDADE */}
-      <section className="card cfg-card" aria-labelledby="cfg-oficina">
+      {show.workshop && <section className="card cfg-card" aria-labelledby="cfg-oficina">
         <h3 id="cfg-oficina" className="cfg-title"><Icon name="oficina" size={20} /> Dados da oficina</h3>
         <p className="cfg-help">Aparecem no topo das impressões e dos relatórios.</p>
 
@@ -234,10 +261,10 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
             Prévia: círculo com as letras {logoPreview} ao lado do nome da oficina.
           </span>
         </div>
-      </section>
+      </section>}
 
       {/* PREFERÊNCIAS: tela inicial, selo de margem, meta */}
-      <section className="card cfg-card" aria-labelledby="cfg-prefs">
+      {show.preferences && <section className="card cfg-card" aria-labelledby="cfg-prefs">
         <h3 id="cfg-prefs" className="cfg-title"><Icon name="config" size={20} /> Como o programa funciona</h3>
 
         <div className="cfg-block">
@@ -293,10 +320,10 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
             {targetError && <span className="margin-config-error" role="alert">{targetError}</span>}
           </div>
         </div>
-      </section>
+      </section>}
 
       {/* DOCUMENTOS EM PDF */}
-      <section className="card cfg-card" aria-labelledby="cfg-pdf">
+      {show.pdf && <section className="card cfg-card" aria-labelledby="cfg-pdf">
         <h3 id="cfg-pdf" className="cfg-title"><Icon name="salvar" size={20} /> Documentos em PDF</h3>
         <div className="form-group">
           <label className="form-label" htmlFor="cfg-pdf-folder">Pasta onde salvar os PDFs</label>
@@ -325,10 +352,10 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
             </button>
           )}
         </div>
-      </section>
+      </section>}
 
       {/* APARÊNCIA */}
-      <section className="card cfg-card" aria-labelledby="cfg-tema">
+      {show.appearance && <section className="card cfg-card" aria-labelledby="cfg-tema">
         <h3 id="cfg-tema" className="cfg-title"><Icon name="info" size={20} /> Aparência</h3>
         <p className="cfg-help">Escolha o fundo da tela. Vale só para este computador.</p>
         <div className="cfg-themes" role="group" aria-labelledby="cfg-tema">
@@ -360,13 +387,13 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
             );
           })}
         </div>
-      </section>
+      </section>}
 
       {/* BACKUP */}
-      <section className="card cfg-card" aria-labelledby="cfg-backup">
+      {(show.restoreFile || show.drive) && <section className="card cfg-card" aria-labelledby="cfg-backup">
         <h3 id="cfg-backup" className="cfg-title"><Icon name="salvar" size={20} /> Cópia de segurança</h3>
 
-        <div className="cfg-restore">
+        {show.restoreFile && <div className="cfg-restore">
           <h4 className="cfg-subtitle">Voltar uma cópia salva neste computador</h4>
           <input
             ref={fileInputRef}
@@ -386,9 +413,9 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
           <p className="cfg-help">
             Aceita arquivos .json ou .bak. O programa vai pedir sua confirmação antes de trocar: ao confirmar, os dados atuais são substituídos.
           </p>
-        </div>
+        </div>}
 
-        <div className="cfg-drive">
+        {show.drive && <div className="cfg-drive">
           <h4 className="cfg-subtitle">Cópia no Google Drive</h4>
           <div className="form-group">
             <label className="form-label" htmlFor="cfg-gkey">Chave do Google</label>
@@ -403,24 +430,24 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
               aria-describedby="cfg-gkey-help"
             />
             <p id="cfg-gkey-help" className="cfg-help">
-              Um código que identifica o seu acesso ao Google. Você cria no{' '}
+              {drive.keyHelp}{' '}
               <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Google Cloud Console</a>.
             </p>
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="cfg-gtoken">Token de acesso</label>
+            <label className="form-label" htmlFor="cfg-gtoken">{drive.tokenLabel}</label>
             <input
               id="cfg-gtoken"
               className="form-input"
               type="password"
               autoComplete="off"
-              placeholder="Cole aqui o token de acesso"
+              placeholder={drive.tokenPlaceholder}
               value={settings.googleDriveToken || ''}
               onChange={(e) => handleChange('googleDriveToken', e.target.value)}
               aria-describedby="cfg-gtoken-help"
             />
-            <p id="cfg-gtoken-help" className="cfg-help">A senha temporária que libera o envio ao Drive. Quando vencer, gere outro.</p>
+            <p id="cfg-gtoken-help" className="cfg-help">{drive.tokenHelp}</p>
           </div>
 
           <div className="cfg-row cfg-row--start">
@@ -438,13 +465,13 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
               <Icon name="alerta" size={18} /> Preencha a chave e o token acima para liberar o envio ao Drive.
             </p>
           )}
-        </div>
-      </section>
+        </div>}
+      </section>}
 
-      <VehicleCatalogNote />
+      {show.vehicleNote && <VehicleCatalogNote />}
 
       {/* AVANÇADO: no fim, recolhido */}
-      <details className="card cfg-card cfg-advanced">
+      {show.dbPath && <details className="card cfg-card cfg-advanced">
         <summary className="cfg-advanced-summary"><Icon name="alerta" size={20} /> Avançado</summary>
         <p className="cfg-warn">
           <Icon name="alerta" size={18} /> Só mude se souber o que está fazendo. Um caminho errado faz o programa abrir sem os dados da oficina.
@@ -465,7 +492,7 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
             É a pasta onde ficam todos os dados da oficina. A mudança vale ao sair do campo ou apertar Enter, e o programa lembra dela.
           </p>
         </div>
-      </details>
+      </details>}
     </div>
   );
 };

@@ -8,6 +8,9 @@ import { InfiniteScroll } from './InfiniteScroll';
 import { Icon } from './ui/Icon';
 import { STATUS_ICON, shouldIgnoreStep, statusClass } from '../services/kanbanCardView';
 import { toLocalDay } from '../services/receivables';
+import { useAccess } from '../hooks/useAccess';
+import { useToast } from '../context/ToastContext';
+import { canMoveToStatus, MECANICO_FINALIZE_MESSAGE } from '../services/accessView';
 
 interface KanbanBoardProps {
   workOrders: WorkOrder[];
@@ -84,6 +87,9 @@ const KanbanColumn = React.memo(
     showMargin,
     onStatusChange,
     today,
+    showPrices,
+    canManage,
+    lockedHint,
   }: {
     status: OSStatus;
     workOrders: WorkOrder[];
@@ -93,6 +99,10 @@ const KanbanColumn = React.memo(
     showMargin?: boolean;
     onStatusChange: (orderId: string, newStatus: OSStatus) => void;
     today: string;
+    showPrices: boolean;
+    canManage: boolean;
+    /** Arrastando sem poder finalizar: a coluna Finalizado explica por quê. */
+    lockedHint: boolean;
   }) => {
     const sortedList = useMemo(() => {
       return workOrders
@@ -126,6 +136,12 @@ const KanbanColumn = React.memo(
           </span>
           <span className="kanban-count" aria-label={`Total: ${totalItems}`}>{totalItems}</span>
         </div>
+        {lockedHint && status === 'FINALIZADO' && (
+          <div className="kanban-lock-hint" role="status">
+            <Icon name="info" size={16} />
+            <span>{MECANICO_FINALIZE_MESSAGE}</span>
+          </div>
+        )}
         {hasMore && <div className="kanban-partial">Mostrando {loadedItems} de {totalItems}</div>}
 
         <DroppableColumn id={status}>
@@ -145,6 +161,8 @@ const KanbanColumn = React.memo(
                     today={today}
                     showMargin={showMargin}
                     targetMargin={targetMargin}
+                    showPrices={showPrices}
+                    canManage={canManage}
                   />
                 ))}
               </InfiniteScroll>
@@ -161,6 +179,12 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
     const [searchTerm, setSearchTerm] = useState('');
     const [technicianFilter, setTechnicianFilter] = useState<'ALL' | 'NONE' | string>('ALL');
     const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
+    const access = useAccess();
+    const { addToast } = useToast();
+    const showPrices = access.os.canSeePrices;
+    // Selo de margem precisa de custo: só quem vê custo (Dono), mesmo com a opção ligada.
+    const marginAllowed = !!showMargin && access.os.canSeeCosts;
+    const canManage = access.can('os.finalize') && access.can('os.reopen') && access.can('os.delete');
     // Hoje, uma vez por render do quadro (string: os cartões memoizados só re-renderizam na virada do dia).
     const today = toLocalDay(new Date());
 
@@ -272,6 +296,11 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
         return;
       }
 
+      if (!canMoveToStatus(access, newStatus, workOrder.status)) {
+        addToast(newStatus === 'FINALIZADO' ? MECANICO_FINALIZE_MESSAGE : 'Só Recepção ou Dono mexe em OS finalizada ou arquivada.', 'info');
+        return;
+      }
+
       onStatusChange(orderId, newStatus);
     };
 
@@ -334,9 +363,12 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
       actions,
       formatMoney,
       targetMargin,
-      showMargin,
+      showMargin: marginAllowed,
       onStatusChange: handleStep,
       today,
+      showPrices,
+      canManage,
+      lockedHint: activeId !== null && !access.can('os.finalize'),
     };
 
     return (
@@ -454,7 +486,9 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
                   actions={actions}
                   onStatusChange={handleStep}
                   today={today}
-                  showMargin={showMargin}
+                  showMargin={marginAllowed}
+                  showPrices={showPrices}
+                  canManage={canManage}
                   isDragging
                   targetMargin={targetMargin}
                 />

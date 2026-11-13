@@ -54,7 +54,7 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
     onSave(description, cents / 100, type, date, recurrence, count);
   };
 
-  const guard = useDirtyGuard({ active: isOpen, onClose });
+  const guard = useDirtyGuard({ active: isOpen, onClose, label: 'um lançamento' });
 
   if (!isOpen) return null;
 

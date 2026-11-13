@@ -69,8 +69,15 @@ import "./styles-perf.css";
 // Arquivo solto fora da área de fotos não pode fazer o WebView navegar até ele.
 installFileDropGuard();
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+const rootEl = document.getElementById("root") as HTMLElement;
+
+if (import.meta.env.VITE_CLOUD === "1") {
+  // Modo nuvem (login, Supabase, IndexedDB): carregado só sob a flag, para o modo arquivo não puxar nada disso.
+  void import("./auth/boot").then((m) => m.bootCloud(rootEl));
+} else {
+  ReactDOM.createRoot(rootEl).render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
+}

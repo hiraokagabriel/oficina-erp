@@ -28,7 +28,7 @@ export interface KanbanCardActions {
   onQuickFinish?: (id: string) => void;
 }
 
-const openWhatsApp = async (os: WorkOrder) => {
+export const openWhatsApp = async (os: WorkOrder) => {
   if (!os.clientPhone) return;
 
   let cleanPhone = os.clientPhone.replace(/\D/g, '');
@@ -70,20 +70,24 @@ interface KanbanCardMenuProps {
   x: number;
   y: number;
   onClose: () => void;
+  /** Papel que não finaliza nem arquiva (Mecânico) recebe o menu reduzido. Padrão: tudo (modo arquivo). */
+  canManage?: boolean;
+  /** Papel sem preços não vê "Mostrar ao cliente" nem a OS impressa. */
+  showPrices?: boolean;
 }
 
 /** Menu de ações do cartão. Só é montado enquanto está aberto (botão "Mais" ou clique direito). */
-export const KanbanCardMenu = ({ os, status, actions, x, y, onClose }: KanbanCardMenuProps) => {
+export const KanbanCardMenu = ({ os, status, actions, x, y, onClose, canManage = true, showPrices = true }: KanbanCardMenuProps) => {
   const items = useMemo(() => {
     const list: MenuItem[] = [
-      { icon: ic('editar'), label: 'Editar OS', onClick: () => actions.onEdit(os), variant: 'primary' },
+      { icon: ic('editar'), label: canManage ? 'Editar OS' : 'Abrir OS', onClick: () => actions.onEdit(os), variant: 'primary' },
       { icon: ic('prancheta'), label: 'Vistoria (Checklist de Inspeção)', onClick: () => actions.onChecklist(os) },
       { divider: true },
-      { icon: ic('imprimir'), label: 'Documentos...', onClick: (origin) => actions.onDocuments(os, origin) },
+      { icon: ic('imprimir'), label: showPrices ? 'Documentos...' : 'Imprimir vistoria', onClick: (origin) => actions.onDocuments(os, origin) },
     ];
 
     const show = actions.onShowClient;
-    if (show) {
+    if (show && showPrices) {
       list.push({ divider: true });
       list.push({ icon: ic('clientes'), label: 'Mostrar ao cliente', onClick: (origin) => show(os, origin) });
     }
@@ -95,25 +99,27 @@ export const KanbanCardMenu = ({ os, status, actions, x, y, onClose }: KanbanCar
 
     list.push({ divider: true });
 
-    if (status !== 'ARQUIVADO' && status !== 'ORCAMENTO') {
+    if (status !== 'ARQUIVADO' && status !== 'ORCAMENTO' && (canManage || status !== 'FINALIZADO')) {
       list.push({ icon: ic('voltar'), label: 'Voltar Status', onClick: () => actions.onRegress(os.id) });
     }
-    if (status !== 'ARQUIVADO' && status !== 'FINALIZADO') {
+    if (status !== 'ARQUIVADO' && status !== 'FINALIZADO' && (canManage || status !== 'AGUARDANDO_PAGAMENTO')) {
       list.push({ icon: ic('proximo'), label: 'Avançar Status', onClick: () => actions.onAdvance(os.id) });
     }
 
-    list.push({ divider: true });
+    if (canManage) {
+      list.push({ divider: true });
 
-    if (status === 'ARQUIVADO') {
-      list.push({ icon: ic('voltar'), label: 'Restaurar OS', onClick: () => actions.onRestore?.(os), variant: 'success' });
-    } else {
-      list.push({ icon: ic('caixa'), label: 'Arquivar OS', onClick: () => actions.onArchive?.(os) });
+      if (status === 'ARQUIVADO') {
+        list.push({ icon: ic('voltar'), label: 'Restaurar OS', onClick: () => actions.onRestore?.(os), variant: 'success' });
+      } else {
+        list.push({ icon: ic('caixa'), label: 'Arquivar OS', onClick: () => actions.onArchive?.(os) });
+      }
+
+      list.push({ icon: ic('excluir'), label: 'Excluir Permanentemente', onClick: () => actions.onDelete(os), variant: 'danger' });
     }
 
-    list.push({ icon: ic('excluir'), label: 'Excluir Permanentemente', onClick: () => actions.onDelete(os), variant: 'danger' });
-
     return list;
-  }, [os, status, actions]);
+  }, [os, status, actions, canManage, showPrices]);
 
   return <ContextMenu x={x} y={y} items={items} onClose={onClose} />;
 };

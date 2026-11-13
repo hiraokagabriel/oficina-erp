@@ -6,6 +6,8 @@ import { PAGE_STEP, pageSlice, nextVisible, nextBatchSize, pageCounterLabel, res
 import { Money } from '../utils/helpers';
 import { Icon, IconName } from '../components/ui/Icon';
 import { ProcessRow, ALL_STATUSES } from '../components/ProcessRow';
+import { useAccess } from '../hooks/useAccess';
+import { canMoveToStatus } from '../services/accessView';
 import '../styles-processos.css';
 
 interface ProcessPageProps {
@@ -52,6 +54,15 @@ interface Group {
 type PendingFocus = { kind: 'row'; id: string } | { kind: 'more'; status: OSStatus } | null;
 
 export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew, onUpdateStatus, onEdit, initialOnlyLate = false }) => {
+  const access = useAccess();
+  const showPrices = access.os.canSeePrices;
+  const canCreate = access.can('os.create');
+  // Status que cada papel pode escolher na linha (a opção Finalizado some para o Mecânico; sair dele também). Estável por papel.
+  const statusesByCurrent = useMemo(() => {
+    const map = {} as Record<OSStatus, readonly OSStatus[]>;
+    for (const cur of ALL_STATUSES) map[cur] = ALL_STATUSES.filter(s => s === cur || canMoveToStatus(access, s, cur));
+    return map;
+  }, [access]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<OSStatus | 'ALL'>('ALL');
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
@@ -243,14 +254,16 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
           <h1 className="pr-title">Processos</h1>
           <ul className="pr-summary" aria-label="Resumo das OS">
             <li className="chip">Total: <strong>{stats.total} OS</strong></li>
-            <li className="chip">Valor total: <strong>{Money.format(stats.totalValue)}</strong></li>
-            <li className="chip">Valor médio por OS: <strong>{Money.format(stats.avgValue)}</strong></li>
+            {showPrices && <li className="chip">Valor total: <strong>{Money.format(stats.totalValue)}</strong></li>}
+            {showPrices && <li className="chip">Valor médio por OS: <strong>{Money.format(stats.avgValue)}</strong></li>}
           </ul>
         </div>
-        <button type="button" className="btn" onClick={onOpenNew}>
-          <Icon name="adicionar" size={18} />
-          Nova OS
-        </button>
+        {canCreate && (
+          <button type="button" className="btn" onClick={onOpenNew}>
+            <Icon name="adicionar" size={18} />
+            Nova OS
+          </button>
+        )}
       </header>
 
       <section className="pr-filters" aria-label="Filtros">
@@ -342,7 +355,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                       {STATUS_LABELS[status]}
                     </span>
                     <span className="count-badge">{groupOrders.length}</span>
-                    <span className="pr-group-total">{Money.format(group.total)}</span>
+                    {showPrices && <span className="pr-group-total">{Money.format(group.total)}</span>}
                     <span className="pr-sr">{isExpanded ? '(recolher)' : '(expandir)'}</span>
                   </button>
                 </h2>
@@ -356,9 +369,9 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                             {sortTh('osNumber', 'Nº OS', 'pr-c-os')}
                             {sortTh('clientName', 'Cliente / veículo', 'pr-c-client')}
                             {sortTh('createdAt', 'Data', 'pr-c-opt')}
-                            {sortTh('paymentDate', 'Pagamento', 'pr-c-opt')}
+                            {showPrices && sortTh('paymentDate', 'Pagamento', 'pr-c-opt')}
                             {sortTh('expectedDate', 'Previsão de entrega', 'pr-c-opt')}
-                            {sortTh('total', 'Valor', 'pr-c-total')}
+                            {showPrices && sortTh('total', 'Valor', 'pr-c-total')}
                             <th scope="col" className="pr-c-status">Status</th>
                           </tr>
                         </thead>
@@ -371,6 +384,8 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ workOrders, onOpenNew,
                               canOpen={canOpen}
                               onOpen={handleOpen}
                               onUpdateStatus={handleStatus}
+                              showPrices={showPrices}
+                              statuses={statusesByCurrent[os.status]}
                             />
                           ))}
                         </tbody>

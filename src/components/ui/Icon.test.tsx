@@ -30,4 +30,11 @@ describe('Icon (sprite local)', () => {
     expect(labeled).not.toContain('aria-hidden');
     expect(labeled).toContain('width="24"');
   });
+
+  it('traz os ícones novos da nuvem (docs/NUVEM-UX.md 0.3)', () => {
+    for (const n of ['pessoa', 'cadeado', 'nuvem', 'sem-internet', 'apagar', 'olho', 'sair', 'computador', 'celular'] as const) {
+      expect(ICON_NAMES).toContain(n);
+      expect(buildSpriteMarkup()).toContain(`id="oficina-ic-${n}"`);
+    }
+  });
 });

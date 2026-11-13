@@ -10,6 +10,7 @@ import {
   countClientOrders, countTechnicianOrders, deleteCatalogMessage, deleteClientMessage, deleteTechnicianMessage,
 } from '../services/clientListView';
 import { useDirtyGuard } from '../hooks/useDirtyGuard';
+import { useAccess } from '../hooks/useAccess';
 import { ConfirmationModal } from './ConfirmationModal';
 
 interface DatabaseModalProps {
@@ -59,6 +60,11 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
   onSaveClient, onDeleteClient, onSaveCatalogItem, onDeleteCatalogItem,
   onSaveTechnician, onDeleteTechnician, formatMoney, workOrders
 }) => {
+  // Papéis (docs/NUVEM-UX.md 7.3): só o Dono vê custo e exclui peça, serviço ou técnico. Modo arquivo: tudo liberado.
+  const access = useAccess();
+  const canSeeCosts = access.can('catalog.seeCosts');
+  const canDeleteKind = (kind: 'CLIENT' | 'TECHNICIAN' | 'PART' | 'SERVICE'): boolean =>
+    kind === 'CLIENT' ? access.can('clients.delete') : kind === 'TECHNICIAN' ? access.can('technicians.delete') : access.can('catalog.delete');
   const uid = useId();
   const shopVehicles = useShopVehicles(clients, workOrders);
   const [activeTab, setActiveTab] = useState<Tab>('CLIENTS');
@@ -78,6 +84,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
   const view = editingClient ? 'client' : editingItem ? 'item' : editingTechnician ? 'technician' : 'list';
   const guard = useDirtyGuard({
     active: isOpen,
+    label: 'os cadastros',
     resetKey: view,
     trackInputs: view !== 'list',
     onClose: () => {
@@ -252,7 +259,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                 />
              </div>
 
-             <div className="form-group">
+             {canSeeCosts && <div className="form-group">
                 <label className="form-label" htmlFor="catalog-item-cost">Custo (R$) <span className="osm-opt" style={{ fontSize: '0.8rem' }}>(Opcional)</span></label>
                 <MoneyField
                     id="catalog-item-cost"
@@ -268,7 +275,7 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                 <small id="catalog-item-cost-hint" style={{ color: 'var(--text-muted)', display: 'block', marginTop: 4 }}>
                     Itens sem custo ficam fora do cálculo de margem.
                 </small>
-             </div>
+             </div>}
 
              {/* Issue #42: categoria editável diretamente no catálogo (apenas para peças) */}
              {activeTab === 'PARTS' && (
@@ -462,9 +469,9 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                                  row.kind === 'TECHNICIAN' ? '' :
                                  <>
                                     {formatMoney(row.item.price)}
-                                    <div style={{fontSize:'0.75rem', color:'var(--text-muted)'}}>
+                                    {canSeeCosts && <div style={{fontSize:'0.75rem', color:'var(--text-muted)'}}>
                                         {typeof row.item.cost === 'number' && row.item.cost > 0 ? `Custo ${formatMoney(row.item.cost)}` : 'sem custo'}
-                                    </div>
+                                    </div>}
                                  </>}
                             </td>
                             <td style={{textAlign:'center'}}>
@@ -479,12 +486,12 @@ export const DatabaseModal: React.FC<DatabaseModalProps> = ({
                                             else setEditingItem(normalizeItemCost({ ...row.item }));
                                         }}
                                     ><Icon name="editar" size={16} />Editar</button>
-                                    <button
+                                    {canDeleteKind(row.kind) && <button
                                         type="button"
                                         className="btn-sm db-del"
                                         aria-label={`Excluir ${rowName}`}
                                         onClick={() => askDelete(row)}
-                                    ><Icon name="excluir" size={16} />Excluir</button>
+                                    ><Icon name="excluir" size={16} />Excluir</button>}
                                 </div>
                             </td>
                         </tr>

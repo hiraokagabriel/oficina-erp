@@ -1,12 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { pushToast, dropToast, toastDurationMs } from './toastQueue';
+import { pushToast, dropToast, toastDurationMs, toastText } from './toastQueue';
 
 describe('fila de avisos', () => {
-  it('erro igual ainda visível não empilha', () => {
+  it('erro igual ainda visível não empilha, mas conta a repetição', () => {
     const a = pushToast([], 'falhou', 'error', '1');
     const b = pushToast(a, 'falhou', 'error', '2');
-    expect(b).toBe(a);
     expect(b).toHaveLength(1);
+    expect(b[0].count).toBe(2);
+    expect(toastText(b[0])).toBe('falhou (2 vezes)');
+    expect(toastText(pushToast(b, 'falhou', 'error', '3')[0])).toBe('falhou (3 vezes)');
+    expect(toastText(a[0])).toBe('falhou');
   });
   it('erro diferente entra', () => {
     const b = pushToast(pushToast([], 'falhou', 'error', '1'), 'outro', 'error', '2');
@@ -41,7 +44,9 @@ describe('fila de avisos', () => {
     });
     it('erro igual com ação continua sem empilhar', () => {
       const a = pushToast([], 'falhou', 'error', '1', action);
-      expect(pushToast(a, 'falhou', 'error', '2', action)).toBe(a);
+      const b = pushToast(a, 'falhou', 'error', '2', action);
+      expect(b).toHaveLength(1);
+      expect(b[0].action).toBe(action);
     });
   });
 });

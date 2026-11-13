@@ -3,6 +3,7 @@ import { Client, WorkOrder, CRMStats } from '../types';
 import { Money } from '../utils/helpers';
 import { ClientReceivable, getClientSpending } from '../services/receivables';
 import { Icon, IconName } from './ui/Icon';
+import { useAccess } from '../hooks/useAccess';
 
 interface CRMDashboardProps {
   clients: Client[];
@@ -18,6 +19,8 @@ export const CRMDashboard: React.FC<CRMDashboardProps> = ({
   topDebtors = [],
   onClientSelect
 }) => {
+  // Sem preço (Mecânico): ficam só Total de clientes e Serviços pendentes; somem VIP, receita, ticket, ranking e devedores.
+  const showMoney = useAccess().os.canSeePrices;
   const stats = useMemo((): CRMStats => {
     const clientSpending = getClientSpending(workOrders, clients);
 
@@ -76,12 +79,13 @@ export const CRMDashboard: React.FC<CRMDashboardProps> = ({
     };
   }, [clients, workOrders]);
 
-  const kpis: { key: string; icon: IconName; tone: string; value: string; label: string }[] = [
+  const allKpis: { key: string; icon: IconName; tone: string; value: string; label: string; money?: boolean }[] = [
     { key: 'clients', icon: 'clientes', tone: 'accent', value: String(stats.totalClients), label: 'Total de clientes' },
-    { key: 'vip', icon: 'bandeira', tone: 'info', value: String(stats.vipClients.length), label: 'Clientes VIP' },
-    { key: 'revenue', icon: 'cifrao', tone: 'success', value: Money.format(stats.monthlyRevenue), label: 'Receita do mês' },
-    { key: 'ticket', icon: 'receber', tone: 'warning', value: Money.format(stats.averageTicket), label: 'Ticket médio' },
+    { key: 'vip', icon: 'bandeira', tone: 'info', value: String(stats.vipClients.length), label: 'Clientes VIP', money: true },
+    { key: 'revenue', icon: 'cifrao', tone: 'success', value: Money.format(stats.monthlyRevenue), label: 'Receita do mês', money: true },
+    { key: 'ticket', icon: 'receber', tone: 'warning', value: Money.format(stats.averageTicket), label: 'Ticket médio', money: true },
   ];
+  const kpis = showMoney ? allKpis : allKpis.filter(k => !k.money);
 
   return (
     <div className="crm-dash">
@@ -102,6 +106,7 @@ export const CRMDashboard: React.FC<CRMDashboardProps> = ({
         ))}
       </div>
 
+      {showMoney && (
       <section className="crm-dash-card" aria-labelledby="crm-top5-title">
         <h2 id="crm-top5-title">Top 5 clientes</h2>
         {stats.topClients.length === 0 ? (
@@ -138,8 +143,9 @@ export const CRMDashboard: React.FC<CRMDashboardProps> = ({
           </ul>
         )}
       </section>
+      )}
 
-      {topDebtors.length > 0 && (
+      {showMoney && topDebtors.length > 0 && (
         <section className="crm-dash-card" aria-labelledby="crm-debt-title">
           <h2 id="crm-debt-title">Maiores devedores</h2>
           <div className="crm-debtors">

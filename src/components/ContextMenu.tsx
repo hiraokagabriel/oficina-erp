@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
+import { useCloseOnAppLock } from '../hooks/useCloseOnAppLock';
 
 /** Item sem `label` é renderizado como divisória (ver `divider`); por isso icon/label/onClick são opcionais. */
 export interface MenuItem {
@@ -21,6 +22,7 @@ interface ContextMenuProps {
 }
 
 export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }) => {
+  useCloseOnAppLock(true, onClose);
   const menuRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ x, y });
   // Só Esc/Tab devolvem o foco ao botão de origem; ao escolher uma ação (que pode abrir outra janela) ou clicar fora, não se disputa o foco.

@@ -41,6 +41,8 @@ export interface CloudDatabaseProviderProps {
   deviceName: string;
   /** Nome de exibição da pessoa, para `AuditEvent.machine` ("Nome (aparelho)"). */
   userName?: string;
+  /** Sobe a cada novo login da MESMA pessoa (ex.: "Entre de novo"): o motor sai do estado `sem_acesso` e volta a enviar e puxar. */
+  resumeSignal?: number;
   children: React.ReactNode;
 }
 
@@ -60,7 +62,10 @@ export function applyPatchToList<T extends WithId>(prev: readonly T[], upserts: 
   return out;
 }
 
-/** Cópia de recuperação: no Tauri, a pasta `recuperacao` do app; na web, download. Nunca lança. */
+/**
+ * Cópia de recuperação: no Tauri, a pasta `recuperacao` do app; na web, o IndexedDB (`auth/recoveryStore`): NÃO baixa
+ * arquivo sozinho (PC compartilhado). O Dono baixa depois. Nunca lança.
+ */
 async function saveRecoveryCopy(op: OutboxOp): Promise<void> {
   const savedAt = new Date().toISOString();
   const content = recoveryCopyContent(op, savedAt);
@@ -70,19 +75,15 @@ async function saveRecoveryCopy(op: OutboxOp): Promise<void> {
       await invoke('save_recovery_copy', { content });
       return;
     }
-    const url = URL.createObjectURL(new Blob([content], { type: 'application/json' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = recoveryFileName(op, savedAt);
-    a.click();
-    URL.revokeObjectURL(url);
+    const { saveRecoveryCopyLocal } = await import('../auth/recoveryStore');
+    await saveRecoveryCopyLocal({ name: recoveryFileName(op, savedAt), content, userId: op.actor });
   } catch (e) {
     console.error('Cópia de recuperação não gravada:', e);
   }
 }
 
 export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
-  supabase, workshopId, userId, role, deviceId, deviceName, userName, children,
+  supabase, workshopId, userId, role, deviceId, deviceName, userName, resumeSignal, children,
 }) => {
   const { addToast } = useToast();
   const toastRef = useRef(addToast);
@@ -235,6 +236,9 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
     };
   }, [supabase, workshopId, userId, role, deviceId]);
 
+  // Novo login da mesma pessoa: tira o motor de `sem_acesso`.
+  useEffect(() => { if (resumeSignal) engineRef.current?.resumeAfterLogin(); }, [resumeSignal]);
+
   // Janela: foco puxa tudo; internet volta/cai; ao esconder/fechar, descarrega o debounce.
   useEffect(() => {
     const onFocus = () => engineRef.current?.focus();
@@ -260,11 +264,13 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
     if (status.syncState === 'salvo' && status.pending === 0 && loadStatus === 'ok') setLastSavedAt(new Date().toISOString());
   }, [status.syncState, status.pending, loadStatus]);
 
+  // Descarrega o debounce local (a edição entra na outbox) e só então manda: quem troca de pessoa não perde o último passo.
+  const syncNow = useCallback(async (): Promise<void> => { scheduler.current?.flush(); await engineRef.current?.syncNow(); }, []);
   const getMachineName = useCallback(() => (userName ? `${userName} (${deviceName})` : deviceName), [userName, deviceName]);
   const noopSetDbPath = useCallback<React.Dispatch<React.SetStateAction<string>>>(() => {}, []);
 
   const value = useMemo<DatabaseContextData>(() => {
-    const cloud: CloudInfo = { role, ...status };
+    const cloud: CloudInfo = { role, ...status, syncNow };
     return {
       ledger, setLedger, workOrders, setWorkOrders, clients, setClients, catalogParts, setCatalogParts,
       catalogServices, setCatalogServices, catalogTechnicians, setCatalogTechnicians, appointments, setAppointments,
@@ -275,7 +281,7 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
       // (o conflito da nuvem é resolvido por campo no motor) nem caminho de arquivo.
       readOnly: false,
       loadStatus,
-      saveError: status.syncState === 'erro' ? describeSyncError(status.lastError) ?? 'Erro de sincronização' : null,
+      saveError: status.syncState === 'erro' ? describeSyncError(status.lastError) ?? 'Não deu para enviar agora.' : null,
       lastSavedAt,
       hasPendingChanges: localDirty || status.pending > 0,
       hasConflict: false,
@@ -286,7 +292,7 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
     };
   }, [
     ledger, workOrders, clients, catalogParts, catalogServices, catalogTechnicians, appointments, auditLog, settings, setSettings,
-    loadStatus, status, lastSavedAt, localDirty, workshopId, role, noopSetDbPath, getMachineName,
+    loadStatus, status, lastSavedAt, localDirty, workshopId, role, noopSetDbPath, getMachineName, syncNow,
   ]);
 
   return (

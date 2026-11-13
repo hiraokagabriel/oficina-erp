@@ -17,6 +17,10 @@ interface ProcessRowProps {
   canOpen: boolean;
   onOpen: (os: WorkOrder) => void;
   onUpdateStatus: (id: string, status: OSStatus) => void;
+  /** Sem preço (Mecânico): somem as células Pagamento e Valor (as colunas somem juntas na página). Padrão: mostra. */
+  showPrices?: boolean;
+  /** Status que o papel pode escolher nesta linha (referência estável). Padrão: todos. */
+  statuses?: readonly OSStatus[];
 }
 
 const PaymentCell: React.FC<{ os: WorkOrder }> = ({ os }) => {
@@ -39,7 +43,7 @@ const PaymentCell: React.FC<{ os: WorkOrder }> = ({ os }) => {
   return <span className="cell-secondary">A receber</span>;
 };
 
-const ProcessRowImpl: React.FC<ProcessRowProps> = ({ os, late, canOpen, onOpen, onUpdateStatus }) => (
+const ProcessRowImpl: React.FC<ProcessRowProps> = ({ os, late, canOpen, onOpen, onUpdateStatus, showPrices = true, statuses = ALL_STATUSES }) => (
   <tr
     className={`pr-row${canOpen ? ' is-openable' : ''}`}
     onClick={canOpen ? (e) => {
@@ -67,7 +71,7 @@ const ProcessRowImpl: React.FC<ProcessRowProps> = ({ os, late, canOpen, onOpen, 
       {late && <span className={`delivery-badge delivery-badge--${late.kind} pr-late-inline`}>{late.label}</span>}
     </td>
     <td className="pr-c-opt cell-secondary">{formatDate(os.createdAt)}</td>
-    <td className="pr-c-opt"><PaymentCell os={os} /></td>
+    {showPrices && <td className="pr-c-opt"><PaymentCell os={os} /></td>}
     <td className="pr-c-opt">
       {os.expectedDate ? (
         <div className="process-expected">
@@ -78,9 +82,9 @@ const ProcessRowImpl: React.FC<ProcessRowProps> = ({ os, late, canOpen, onOpen, 
         <span className="cell-secondary">Sem previsão</span>
       )}
     </td>
-    <td className="pr-c-total"><span className="pr-money">{Money.format(os.total)}</span></td>
+    {showPrices && <td className="pr-c-total"><span className="pr-money">{Money.format(os.total)}</span></td>}
     <td className="pr-c-status">
-      <StatusMenu id={os.id} osNumber={os.osNumber} current={os.status} statuses={ALL_STATUSES} onSelect={onUpdateStatus} />
+      <StatusMenu id={os.id} osNumber={os.osNumber} current={os.status} statuses={statuses} onSelect={onUpdateStatus} />
     </td>
   </tr>
 );

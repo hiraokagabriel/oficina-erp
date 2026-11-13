@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { isAppLocked } from '../utils/appLock';
 
 export const useKeyboard = (key: string, callback: (e: KeyboardEvent) => void, ctrlKey: boolean = false) => {
   useEffect(() => {
@@ -12,6 +13,8 @@ export const useKeyboard = (key: string, callback: (e: KeyboardEvent) => void, c
       }
 
       if (event.key.toLowerCase() === key.toLowerCase()) {
+        // app bloqueado (PC compartilhado, "Entre de novo"): nenhum atalho global age
+        if (isAppLocked()) return;
         if (ctrlKey && !event.ctrlKey) return;
         
         event.preventDefault();

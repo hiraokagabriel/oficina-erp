@@ -9,6 +9,7 @@ import { Icon } from '../components/ui/Icon';
 import { ClientEditModal } from '../modals/ClientEditModal';
 import { ClientPhotos } from '../components/ClientPhotos';
 import { useDatabase } from '../context/DatabaseContext';
+import { useAccess } from '../hooks/useAccess';
 
 // Declaração global do Tauri
 declare global {
@@ -78,6 +79,9 @@ export const CRMPage: React.FC<CRMPageProps> = ({
 }) => {
   const searchId = useId();
   const { dbPath } = useDatabase();
+  const access = useAccess();
+  const showMoney = access.os.canSeePrices;
+  const canEditClient = access.can('clients.edit');
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [showDashboard, setShowDashboard] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -239,7 +243,7 @@ export const CRMPage: React.FC<CRMPageProps> = ({
           <CRMDashboard
             clients={clients}
             workOrders={workOrders}
-            topDebtors={receivables.ranking.slice(0, 5)}
+            topDebtors={showMoney ? receivables.ranking.slice(0, 5) : []}
             onClientSelect={(client) => {
               setSelectedClient(client);
               setShowDashboard(false);
@@ -297,7 +301,7 @@ export const CRMPage: React.FC<CRMPageProps> = ({
                           key={c.id}
                           client={c}
                           selected={selectedClient?.id === c.id}
-                          debt={receivables.byClient.get(c.id)}
+                          debt={showMoney ? receivables.byClient.get(c.id) : undefined}
                           formatMoney={formatMoney}
                           onSelect={handleSelect}
                         />
@@ -365,14 +369,16 @@ export const CRMPage: React.FC<CRMPageProps> = ({
                                 WhatsApp
                               </button>
                             )}
-                            <button
-                              type="button"
-                              className="btn btn-secondary"
-                              onClick={() => { setNewClientDraft(null); setIsEditModalOpen(true); }}
-                            >
-                              <Icon name="editar" />
-                              Editar
-                            </button>
+                            {canEditClient && (
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={() => { setNewClientDraft(null); setIsEditModalOpen(true); }}
+                              >
+                                <Icon name="editar" />
+                                Editar
+                              </button>
+                            )}
                           </div>
                         </div>
 
@@ -403,12 +409,14 @@ export const CRMPage: React.FC<CRMPageProps> = ({
 
                       {/* NÚMEROS DO CLIENTE */}
                       <div className="crm-stats">
+                        {showMoney && (
                         <div className="crm-stat crm-stat--success">
                           <div className="crm-stat-label"><Icon name="cifrao" size={18} />Total gasto na oficina</div>
                           <div className="crm-stat-value">{formatMoney(totalSpent)}</div>
                         </div>
+                        )}
 
-                        {selectedDebt && (
+                        {showMoney && selectedDebt && (
                           <div className="crm-stat crm-stat--warning">
                             <div className="crm-stat-label"><Icon name="receber" size={18} />Em aberto</div>
                             <div className="crm-stat-value">{formatMoney(selectedDebt.emAberto)}</div>
@@ -498,7 +506,7 @@ export const CRMPage: React.FC<CRMPageProps> = ({
                                            <div className="tl-card-body">{getWorkSummary(os)}</div>
                                            <div className="tl-card-footer">
                                                <span className="tl-os-number">OS #{os.osNumber}</span>
-                                               <span className="tl-price">{formatMoney(os.total)}</span>
+                                               {showMoney && <span className="tl-price">{formatMoney(os.total)}</span>}
                                            </div>
 
                                            {os.paymentDate && (

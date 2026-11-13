@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
+import type { ReactNode } from 'react';
 
 import { invoke } from '@tauri-apps/api/core';
 import { DatabaseProvider, useDatabase, parseDatabase } from './context/DatabaseContext';
@@ -6,6 +7,9 @@ import { adoptSecrets, stripDbSecrets } from './utils/secrets';
 import { CURRENT_SCHEMA_VERSION, countUnresolvedLinks, migrate } from './utils/migrations';
 import { useFinance } from './hooks/useFinance';
 import { useKeyboard } from './hooks/useKeyboard';
+import { useAccess } from './hooks/useAccess';
+import { NEW_OS_DENIED_MESSAGE, canSeeTab, safeTab } from './services/accessView';
+import { applyFieldSave } from './services/fieldOSSave';
 import { canTriggerNewOSShortcut } from './utils/shortcuts';
 import { updateClientCascading, updateCatalogItemCascading, updateTechnicianCascading } from './services/cascadeService';
 import { uploadToDrive } from './services/googleDrive';
@@ -13,7 +17,8 @@ import { Sidebar } from './components/Sidebar';
 import { Confetti } from './components/ui/Confetti';
 import type { ToastAction, ToastType } from './components/ui/ToastContainer';
 import { ToastProvider, useToast } from './context/ToastContext';
-import { Theme, applyTheme, readStoredTheme, writeStoredTheme } from './utils/theme';
+import { applyTheme } from './utils/theme';
+import { useTheme } from './hooks/useTheme';
 import { LoadingSkeleton } from './components/ui/LoadingSkeleton';
 import { DocKind, DocOptions, buildDocument } from './services/documents';
 import { SavedPdf, fileNameFromPath, isOsDocument, printingMessage } from './services/documentsView';
@@ -73,7 +78,8 @@ type PendingAction =
   | { type: 'RESTORE_FINANCIAL'; data: WorkOrder; target: OSStatus; message: string }
   | { type: 'IMPORT_DATA'; content: string };
 
-function AppContent() {
+/** `topbar`: barra do modo nuvem, entregue por `src/auth/boot.tsx`; o modo arquivo não passa nada. */
+export function AppContent({ topbar }: { topbar?: ReactNode } = {}) {
   const {
     ledger,
     setLedger,
@@ -99,17 +105,22 @@ function AppContent() {
     dbPath,
     setDbPath,
     getMachineName,
+    cloud,
   } = useDatabase();
 
   const finance = useFinance();
+  // Papel da nuvem (docs/NUVEM-UX.md seção 7). No modo arquivo `access` libera tudo e nada muda.
+  const access = useAccess();
 
   // Trocou de banco: as object URLs das fotos do banco anterior não valem mais.
   useEffect(() => () => clearPhotoUrlCache(), [dbPath]);
 
   // Tema por computador: começa do que está gravado (o index.html já aplicou o atributo antes do primeiro desenho).
-  const [currentTheme, setCurrentThemeState] = useState<Theme>(() => readStoredTheme());
-  const setCurrentTheme = useCallback((t: Theme) => { setCurrentThemeState(t); writeStoredTheme(t); }, []);
-  const [activeTab, setActiveTab] = useState<'HOJE' | 'FINANCEIRO' | 'OFICINA' | 'AGENDA' | 'PROCESSOS' | 'CLIENTES' | 'PECAS' | 'CONFIG'>(() => readHomeTab());
+  // (hook compartilhado com o menu da pessoa da barra do topo do modo nuvem; mesmo armazenamento de antes)
+  const [currentTheme, setCurrentTheme] = useTheme();
+  const [activeTab, setActiveTab] = useState<'HOJE' | 'FINANCEIRO' | 'OFICINA' | 'AGENDA' | 'PROCESSOS' | 'CLIENTES' | 'PECAS' | 'CONFIG'>(() => safeTab(access, readHomeTab()));
+  // Trocou de papel (ou de pessoa): a aba aberta que o novo papel não vê volta para Oficina, sem aviso.
+  useEffect(() => { setActiveTab(t => safeTab(access, t)); }, [access]);
   // Filtro inicial de Processos quando vindo do painel Hoje (Ver atrasadas).
   const [processOnlyLate, setProcessOnlyLate] = useState(false);
   // Fluxo Agenda -> Criar OS: agendamento de origem e rascunho (objeto estável: o OSModal reinicia o formulário se ele mudar).
@@ -231,6 +242,24 @@ function AppContent() {
   };
 
   const handleSaveOSModal = (data: OSModalPayload) => {
+    // Visão de campo (Mecânico, sem `os.editFields`): grava SÓ km e fotos por cima da OS atual do banco.
+    // Sem vínculos de cliente/catálogo, sem ledger/auditoria e sem tocar itens, preços ou adiantamentos.
+    if (editingOS && !access.can('os.editFields')) {
+      const osId = editingOS.id;
+      const current = workOrders.find(o => o.id === osId);
+      if (!current) {
+        addToast(OS_DELETED_MESSAGE, 'error');
+        return;
+      }
+      const field = { mileage: data.mileage, photos: data.photos };
+      const next = applyFieldSave(current, field);
+      setWorkOrders(prev => prev.map(o => o.id === osId ? applyFieldSave(o, field) : o));
+      if (!readOnly && !cloud) void trashRemovedPhotos(dbPath, osId, editingOS.photos, next.photos);
+      addToast('OS atualizada!', 'success');
+      setIsModalOpen(false);
+      return;
+    }
+
     const duplicate = workOrders.find(o => o.osNumber === data.osNumber && o.id !== editingOS?.id);
     if (duplicate && !confirm(`OS #${data.osNumber} duplicada. Continuar?`)) return;
 
@@ -320,7 +349,8 @@ function AppContent() {
       setLedger(saved.ledger);
       if (saved.events.length) setAuditLog(prev => [...prev, ...saved.events]);
       setWorkOrders(prev => prev.map(o => o.id === editingOS.id ? saved.os : o));
-      if (!readOnly) {
+      // Fotos na nuvem são do PR 7: no modo nuvem `dbPath` é só um nome ("nuvem:...") e não há pasta para o Rust mexer.
+      if (!readOnly && !cloud) {
         void trashRemovedPhotos(dbPath, editingOS.id, editingOS.photos, saved.os.photos);
         if (merged.trimmedPhotoIds.length) void trashPhotoIds(dbPath, editingOS.id, merged.trimmedPhotoIds);
       }
@@ -750,7 +780,7 @@ Abrir OS?`)) {
       const removed = removeAllAdvances({ os, ledger: removeOSReceipt(os, ledger), machine: getMachineName() });
       if (removed.ledger !== ledger) setLedger(removed.ledger);
       if (removed.events.length) setAuditLog(p => [...p, ...removed.events]);
-      if (!readOnly) void trashDeletedOSPhotos(dbPath, os);
+      if (!readOnly && !cloud) void trashDeletedOSPhotos(dbPath, os);
       addToast('OS excluída.', 'info');
     }
 
@@ -828,6 +858,10 @@ Abrir OS?`)) {
       || isInstallmentModalOpen || isInstallmentChoiceOpen || deleteModalInfo.isOpen || !!pendingAction
       || document.querySelector('.modal-overlay, [role="alertdialog"], [aria-modal="true"]') !== null;
     if (!canTriggerNewOSShortcut(e.target as HTMLElement | null, hasOpenModal)) return;
+    if (!access.can('os.create')) {
+      addToast(NEW_OS_DENIED_MESSAGE, 'info');
+      return;
+    }
     setActiveTab('OFICINA');
     setEditingOS(null);
     setIsModalOpen(true);
@@ -853,9 +887,11 @@ Abrir OS?`)) {
           setActiveTab={setActiveTab}
           isCollapsed={sidebarCollapsed}
           onToggleCollapse={() => (isNarrow ? setNarrowExpanded(prev => !prev) : setIsSidebarCollapsed(prev => !prev))}
+          onOpenCadastros={() => setIsDatabaseModalOpen(true)}
         />
 
         <main className="main-content">
+          {cloud && topbar}
           <Suspense fallback={<LoadingSkeleton type="page" />}>
             {activeTab === 'HOJE' && (
               <TodayPage
@@ -874,10 +910,11 @@ Abrir OS?`)) {
                 onGoFinance={() => setActiveTab('FINANCEIRO')}
                 onGoConfig={() => setActiveTab('CONFIG')}
                 onGoClients={() => setActiveTab('CLIENTES')}
+                onGoWorkshop={() => setActiveTab('OFICINA')}
               />
             )}
 
-            {activeTab === 'FINANCEIRO' && (
+            {activeTab === 'FINANCEIRO' && canSeeTab(access, 'FINANCEIRO') && (
               <FinancialPage
                 isLoading={isLoading}
                 kpiData={finance.kpiData}
@@ -971,7 +1008,7 @@ Abrir OS?`)) {
               />
             )}
 
-            {activeTab === 'CONFIG' && (
+            {activeTab === 'CONFIG' && canSeeTab(access, 'CONFIG') && (
               <ConfigPage
                 settings={settings}
                 setSettings={setSettings}
@@ -1012,6 +1049,8 @@ Abrir OS?`)) {
             targetMargin={getTargetMargin(settings)}
             workOrders={workOrders}
             ledger={ledger}
+            onStatusChange={kanbanStatusChange}
+            onOpenChecklist={os => { setChecklistOS(os); setIsChecklistOpen(true); }}
           />
         )}
 

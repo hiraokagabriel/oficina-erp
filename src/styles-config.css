@@ -79,3 +79,39 @@
   display: flex; align-items: center; justify-content: center; font-size: 1.4rem; font-weight: 800; letter-spacing: -1px;
 }
 .cfg-logo-circle-sm { width: 40px; height: 40px; font-size: 1.1rem; }
+
+/* NUVEM: pessoas, aparelhos e cópias de recuperação (só o Dono) */
+.cfg-people { list-style: none; margin: var(--sp-4) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.person-row {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4);
+  padding: var(--sp-3) var(--sp-4); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md);
+}
+.person-row.is-inactive { opacity: 0.85; }
+.person-row--skeleton { min-height: 64px; background: var(--surface-2); }
+.person-id { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; flex: 1 1 220px; }
+.person-avatar {
+  display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; flex: none;
+  font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--on-accent); background: var(--accent); border-radius: 50%;
+}
+.person-name { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.person-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); }
+.person-role { font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--text); }
+.person-select { width: auto; min-width: 140px; min-height: var(--control-h-min); }
+.person-status { display: inline-flex; align-items: center; gap: var(--sp-1); }
+.person-status--on { color: var(--text-success); }
+.person-status--off { color: var(--text-2); }
+.person-note { flex-basis: 100%; margin: 0; }
+.cfg-people .btn-sm, .person-actions .btn-sm, .cfg-row .btn-sm, .cfg-block .btn-sm { min-height: 44px; }
+.cfg-device-line { margin: 0 0 var(--sp-3); color: var(--text); overflow-wrap: anywhere; }
+.cfg-roles-help { margin-top: var(--sp-4); color: var(--text); }
+.cfg-roles-help summary { min-height: var(--control-h-min); display: flex; align-items: center; cursor: pointer; font-weight: var(--fw-semibold); }
+.cfg-roles-help dt { font-weight: var(--fw-semibold); margin-top: var(--sp-2); }
+.cfg-roles-help dd { margin: 0; font-size: var(--fs-sm); color: var(--text-2); }
+
+/* Convite: papéis em cartões de rádio */
+.inv-roles { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.inv-role { display: flex; align-items: flex-start; gap: var(--sp-3); padding: var(--sp-3); cursor: pointer; background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius-md); }
+.inv-role.is-selected { border-color: var(--accent); background: var(--accent-soft); }
+.inv-role input { margin-top: 4px; flex: none; }
+.inv-role strong { display: block; }
+.inv-role:focus-within { outline: 3px solid var(--focus-ring); outline-offset: 2px; }

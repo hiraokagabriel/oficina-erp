@@ -51,7 +51,7 @@ export const ClientEditModal: React.FC<ClientEditModalProps> = ({
     }
   }, [isOpen, client]);
 
-  const guard = useDirtyGuard({ active: isOpen, onClose, resetKey: client.id });
+  const guard = useDirtyGuard({ active: isOpen, onClose, resetKey: client.id, label: 'um cliente' });
 
   // Esc com a pergunta aberta fecha só a pergunta (o guard ignora evento já tratado).
   useEffect(() => {

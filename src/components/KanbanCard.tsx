@@ -23,6 +23,10 @@ interface KanbanCardProps {
   isDragging?: boolean;
   /** Meta de margem global (%), das Configurações. */
   targetMargin?: number;
+  /** Sem preço (Mecânico): some o total do cartão. Padrão: mostra. */
+  showPrices?: boolean;
+  /** Sem finalizar/arquivar (Mecânico): some o passo para Finalizado, o Ctrl+clique e as ações de arquivo. Padrão: pode. */
+  canManage?: boolean;
 }
 
 const CARD_HELP =
@@ -38,7 +42,9 @@ export const KanbanCard = React.memo(({
   today,
   showMargin = false,
   isDragging: forcedDragging,
-  targetMargin = DEFAULT_TARGET_MARGIN
+  targetMargin = DEFAULT_TARGET_MARGIN,
+  showPrices = true,
+  canManage = true,
 }: KanbanCardProps) => {
   // Só abre com clique no "Mais" ou clique direito; o menu nem é montado enquanto está fechado.
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
@@ -72,7 +78,8 @@ export const KanbanCard = React.memo(({
 
   const marginBadge = showMargin ? getMarginBadge(os, targetMargin, formatMoney) : null;
   const delivery = deliveryProgress(os, today);
-  const step = nextStep(status);
+  const nextAllowed = nextStep(status);
+  const step = nextAllowed && (canManage || nextAllowed.to !== 'FINALIZADO') ? nextAllowed : null;
   const { model, plate } = splitVehicle(os.vehicle);
   const km = formatKm(os.mileage);
   const technician = (os.technician || '').trim();
@@ -80,7 +87,7 @@ export const KanbanCard = React.memo(({
   const photoLabel = `${photoN} ${photoN === 1 ? 'foto' : 'fotos'}`;
 
   const handleClick = (e: React.MouseEvent) => {
-    if (e.ctrlKey && status !== 'FINALIZADO' && actions.onQuickFinish) {
+    if (e.ctrlKey && canManage && status !== 'FINALIZADO' && actions.onQuickFinish) {
       e.preventDefault();
       e.stopPropagation();
       actions.onQuickFinish(os.id);
@@ -166,8 +173,9 @@ export const KanbanCard = React.memo(({
             </div>
           )}
 
+          {(showPrices || marginBadge || photoN > 0 || technician) && (
           <div className="kcard-foot">
-            <span className="kcard-total">{formatMoney(os.total)}</span>
+            {showPrices && <span className="kcard-total">{formatMoney(os.total)}</span>}
             {marginBadge && (
               <span
                 className={`margin-badge margin-badge--${marginBadge.level.toLowerCase()}`}
@@ -190,6 +198,7 @@ export const KanbanCard = React.memo(({
               </span>
             )}
           </div>
+          )}
 
           <div className="kcard-actions">
             {step && (
@@ -237,6 +246,8 @@ export const KanbanCard = React.memo(({
           x={menuAt.x}
           y={menuAt.y}
           onClose={closeMenu}
+          canManage={canManage}
+          showPrices={showPrices}
         />
       )}
     </>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { WorkOrder, LedgerEntry, Client, OrderItem, CatalogItem, Technician, PartCategory, PART_CATEGORY_META, OSModalPayload, OSPhoto } from '../types';
+import { WorkOrder, LedgerEntry, Client, OrderItem, CatalogItem, Technician, PartCategory, PART_CATEGORY_META, OSModalPayload, OSPhoto, OSStatus, STATUS_LABELS } from '../types';
 import { generateId, getLocalDateString } from '../utils/helpers';
 import { ensureUniqueItemIds } from '../utils/itemIds';
 import { buildClientDebts, clientDebtLine, lastVisitLine } from '../services/osClientContext';
@@ -22,6 +22,10 @@ import { AdvanceRow, advanceRowsToPayload, buildAdvanceRows, firstInvalidAdvance
 import { isAdvanceSyncLocked } from '../services/osFinanceService';
 import { OSPhotos } from '../components/OSPhotos';
 import { useDatabase } from '../context/DatabaseContext';
+import { useAccess } from '../hooks/useAccess';
+import { isAppLocked } from '../utils/appLock';
+import { nextStep, statusClass } from '../services/kanbanCardView';
+import { openWhatsApp } from '../components/KanbanCardMenu';
 import { getShowCosts, setShowCosts, getShowCostColumn, setShowCostColumn as saveShowCostColumn } from '../utils/uiPrefs';
 import { trashPhoto } from '../services/photoStore';
 import { photosChanged, trimCaptions } from '../services/photosView';
@@ -71,6 +75,10 @@ interface OSModalProps {
   workOrders: WorkOrder[];
   /** Lançamentos, para mostrar o que o cliente escolhido deve. */
   ledger: LedgerEntry[];
+  /** Visão do Mecânico: troca o status da OS aberta (mesmo handler do Kanban). Sem ele, os botões de passo não aparecem. */
+  onStatusChange?: (osId: string, status: OSStatus) => void;
+  /** Visão do Mecânico: abre a vistoria (ChecklistModal) desta OS. Sem ele, o botão não aparece. */
+  onOpenChecklist?: (os: WorkOrder) => void;
 }
 
 // 🆕 Issue #41: Ordem de exibição das categorias
@@ -80,8 +88,12 @@ const CATEGORY_ORDER: PartCategory[] = [
 ];
 
 export const OSModal: React.FC<OSModalProps> = ({
-  isOpen, onClose, onSave, editingOS, clients, catalogParts, catalogServices, catalogTechnicians, nextOSNumber, isSaving, formatMoney, draft, targetMargin, workOrders, ledger
+  isOpen, onClose, onSave, editingOS, clients, catalogParts, catalogServices, catalogTechnicians, nextOSNumber, isSaving, formatMoney, draft, targetMargin, workOrders, ledger, onStatusChange, onOpenChecklist
 }) => {
+  // Papéis (docs/NUVEM-UX.md 7.3): Recepção não vê custo nem margem; Mecânico tem a visão de campo (sem preços, só leitura, com status, km, vistoria e fotos).
+  const access = useAccess();
+  const canCosts = access.os.canSeeCosts;
+  const fieldView = !!editingOS && !access.can('os.editFields');
   // --- REFS PARA ATALHOS ---
   const partInputRef = useRef<HTMLInputElement>(null);
   const serviceInputRef = useRef<HTMLInputElement>(null);
@@ -123,6 +135,7 @@ export const OSModal: React.FC<OSModalProps> = ({
   const [parts, setParts] = useState<OrderItem[]>([]);
   const [services, setServices] = useState<OrderItem[]>([]);
   const [showCostColumn, setShowCostColumn] = useState(getShowCostColumn); // lembra a última escolha deste PC (padrão ligada)
+  const costsOn = showCostColumn && canCosts;
   const [showProfit, setShowProfit] = useState(getShowCosts); // análise de lucro: lembra a última escolha deste PC (padrão recolhida)
   const [errors, setErrors] = useState<OSFieldErrors>({});
   const clearError = (f: OSFieldId) => setErrors(prev => (prev[f] ? { ...prev, [f]: undefined } : prev));
@@ -169,20 +182,20 @@ export const OSModal: React.FC<OSModalProps> = ({
   );
   const partHistory = useMemo(() => {
     const out: Record<string, PriceSuggestion | null> = {};
-    if (!isOpen) return out;
+    if (!isOpen || fieldView) return out;
     for (const p of parts) {
       if (p.description.trim()) out[p.id] = suggestHistoricalPrice({ kind: 'PART', catalogItemId: p.catalogItemId, description: p.description }, historyOrders, today);
     }
     return out;
-  }, [isOpen, parts, historyOrders, today]);
+  }, [isOpen, fieldView, parts, historyOrders, today]);
   const serviceHistory = useMemo(() => {
     const out: Record<string, PriceSuggestion | null> = {};
-    if (!isOpen) return out;
+    if (!isOpen || fieldView) return out;
     for (const s of services) {
       if (s.description.trim()) out[s.id] = suggestHistoricalPrice({ kind: 'SERVICE', catalogItemId: s.catalogItemId, description: s.description }, historyOrders, today);
     }
     return out;
-  }, [isOpen, services, historyOrders, today]);
+  }, [isOpen, fieldView, services, historyOrders, today]);
 
   // 🆕 Issue #41: Agrupamento de peças por categoria
   const groupedParts = useMemo(() => {
@@ -230,17 +243,17 @@ export const OSModal: React.FC<OSModalProps> = ({
 
   // O que o sistema já sabe do cliente: dívida e última visita (do mesmo carro quando já digitado). Homônimo sem escolha: nada.
   const clientDebts = useMemo(
-    () => (isOpen ? buildClientDebts(workOrders, ledger, clients, getLocalDateString()) : undefined),
-    [isOpen, workOrders, ledger, clients],
+    () => (isOpen && !fieldView ? buildClientDebts(workOrders, ledger, clients, getLocalDateString()) : undefined),
+    [isOpen, fieldView, workOrders, ledger, clients],
   );
   const clientInfo = useMemo(() => {
-    if (!isOpen || needsClientChoice || !clientName.trim()) return [];
+    if (!isOpen || fieldView || needsClientChoice || !clientName.trim()) return [];
     const typedVehicle = plate ? `${vehicle} - ${plate}` : vehicle;
     return [
       clientDebtLine({ workOrders, ledger, clients, client: selectedClient, clientName, today: getLocalDateString(), debts: clientDebts }),
       lastVisitLine({ workOrders, clients, client: selectedClient, clientName, vehicle: typedVehicle, excludeId: editingOS?.id }),
     ].filter((l): l is string => !!l);
-  }, [isOpen, needsClientChoice, workOrders, ledger, clients, clientDebts, selectedClient, clientName, vehicle, plate, editingOS]);
+  }, [isOpen, fieldView, needsClientChoice, workOrders, ledger, clients, clientDebts, selectedClient, clientName, vehicle, plate, editingOS]);
 
   const suggestedVehicles = useMemo(() => selectedClient ? selectedClient.vehicles : [], [selectedClient]);
   const shopVehicles = useShopVehicles(clients, workOrders);
@@ -476,7 +489,7 @@ export const OSModal: React.FC<OSModalProps> = ({
     const numOS = parseInt(osNumber, 10);
     const fullVehicle = plate ? `${vehicle} - ${plate.toUpperCase()}` : vehicle;
 
-    if (!advancesLocked) {
+    if (!advancesLocked && !fieldView) {
       if (advanceEditing) { setAdvanceAttention(n => n + 1); return; }
       const bad = firstInvalidAdvanceRow(advanceRows, getLocalDateString());
       if (bad) {
@@ -503,7 +516,7 @@ export const OSModal: React.FC<OSModalProps> = ({
       services: services.filter(s => s.description.trim() !== "").map(normalizeItemCost),
       publicNotes,
       technician: technician.trim() || undefined,
-      advances: advancesLocked ? undefined : advanceRowsToPayload(advanceRows),
+      advances: advancesLocked || fieldView ? undefined : advanceRowsToPayload(advanceRows),
       id: osId,
       photos: trimCaptions(photos),
     });
@@ -517,7 +530,7 @@ export const OSModal: React.FC<OSModalProps> = ({
     if (!isOpen) return;
 
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && e.key === 'Enter') {
+      if (e.ctrlKey && e.shiftKey && e.key === 'Enter' && !isAppLocked()) {
         e.preventDefault();
         confirmRef.current();
       }
@@ -539,6 +552,7 @@ export const OSModal: React.FC<OSModalProps> = ({
   const guard = useDirtyGuard({
     active: isOpen,
     onClose: discardAndClose,
+    label: editingOS ? `a OS ${editingOS.osNumber}` : 'uma OS nova',
     isDirty: () => photosChanged(editingOS?.photos, photos),
     resetKey: editingOS ? `os:${editingOS.id}` : draft ? `draft:${draft.clientName}|${draft.vehicle}|${draft.notes}` : 'nova',
   });
@@ -569,6 +583,125 @@ export const OSModal: React.FC<OSModalProps> = ({
     : marginLabel(marginLvl, margin.marginPct);
 
   const advTotals = advanceTotals(advanceRows, totalRevenue);
+
+  // ---- Visão de campo (Mecânico): ramo do mesmo modal. Nunca desenha dinheiro: sem preço, custo, total, adiantamento. ----
+  if (fieldView && editingOS) {
+    const live = workOrders.find(o => o.id === editingOS.id) ?? editingOS; // status vivo: muda sem fechar a janela
+    const step = nextStep(live.status);
+    const stepAllowed = step && access.can('os.status') && step.to !== 'FINALIZADO' ? step : null;
+    const items = [...parts.map(p => ({ item: p, cat: PART_CATEGORY_META[p.category ?? 'OUTROS'].label })), ...services.map(sv => ({ item: sv, cat: '' }))];
+    const phoneDigits = contact.replace(/\D/g, '');
+    const fieldDirty = mileage !== editingOS.mileage.toString() || photosChanged(editingOS.photos, photos);
+    const obsLines = [publicNotes.trim(), notes.trim()].filter(Boolean);
+    return (
+      <>
+      <div className="modal-overlay" ref={guard.overlayRef}>
+        <div className="modal-content osm osm--field" role="dialog" aria-modal="true" aria-labelledby="os-modal-title">
+          <header className="osm-head">
+            <h2 id="os-modal-title" className="modal-title">OS {osNumber}</h2>
+            <p className="osm-field-meta">Data {date.split('-').reverse().join('/')}</p>
+            <button type="button" className="btn-ghost osm-close" onClick={guard.requestClose}>
+              <Icon name="fechar" size={18} /> Fechar
+            </button>
+          </header>
+
+          <div className="osm-body">
+            <section className="osm-section" aria-labelledby="osm-h-situacao">
+              <h3 id="osm-h-situacao" className="osm-h"><Icon name="bandeira" size={18} /> Situação</h3>
+              <div className="osm-field-status">
+                <span className={`status-light status-light--${statusClass(live.status)}`}>{STATUS_LABELS[live.status]}</span>
+                {stepAllowed && onStatusChange && (
+                  <button type="button" className="btn" onClick={() => onStatusChange(live.id, stepAllowed.to)}>
+                    Passar para {STATUS_LABELS[stepAllowed.to]}
+                    <Icon name="proximo" size={16} />
+                  </button>
+                )}
+              </div>
+            </section>
+
+            <section className="osm-section" aria-labelledby="osm-h-cliente">
+              <h3 id="osm-h-cliente" className="osm-h"><Icon name="clientes" size={18} /> Cliente e veículo</h3>
+              <dl className="osm-field-kv">
+                <div><dt>Cliente</dt><dd>{clientName}</dd></div>
+                <div><dt>Telefone</dt><dd>{contact || 'Sem telefone'}</dd></div>
+                <div><dt>Veículo</dt><dd>{vehicle}</dd></div>
+                {plate && <div><dt>Placa</dt><dd>{plate}</dd></div>}
+              </dl>
+              {phoneDigits.length >= 10 && (
+                <div className="osm-field-contact">
+                  <a className="btn-secondary" href={`tel:${phoneDigits}`}><Icon name="telefone" size={18} /> Ligar</a>
+                  <button type="button" className="btn-secondary" onClick={() => { void openWhatsApp(editingOS); }}>
+                    <Icon name="whatsapp" size={18} /> WhatsApp
+                  </button>
+                </div>
+              )}
+              <div className="form-group osm-field-km">
+                <label className="form-label" htmlFor="os-km">Km</label>
+                <input id="os-km" className="form-input" type="number" inputMode="numeric" value={mileage} onChange={e => setMileage(e.target.value)} />
+              </div>
+            </section>
+
+            <section className="osm-section" aria-labelledby="osm-h-itens">
+              <h3 id="osm-h-itens" className="osm-h"><Icon name="oficina" size={18} /> Serviço <span className="osm-h-count">{itemsCount(items.length)}</span></h3>
+              {(technician.trim() || expectedDate) && (
+                <dl className="osm-field-kv">
+                  {technician.trim() && <div><dt>Técnico</dt><dd>{technician}</dd></div>}
+                  {expectedDate && <div><dt>Previsão de entrega</dt><dd>{expectedDate.split('-').reverse().join('/')}</dd></div>}
+                </dl>
+              )}
+              {items.length === 0 ? (
+                <p className="osm-hint">Nenhum item nesta OS.</p>
+              ) : (
+                <ul className="osm-field-items">
+                  {items.map(({ item, cat }) => (
+                    <li key={item.id}>
+                      <span>{item.description}</span>
+                      {cat && <span className="osm-field-chip">{cat}</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            {onOpenChecklist && (
+              <section className="osm-section" aria-labelledby="osm-h-vistoria">
+                <h3 id="osm-h-vistoria" className="osm-h"><Icon name="prancheta" size={18} /> Vistoria</h3>
+                <button type="button" className="btn" onClick={() => onOpenChecklist(live)}>
+                  <Icon name="prancheta" size={18} /> Fazer vistoria
+                </button>
+              </section>
+            )}
+
+            <section className="osm-section" aria-labelledby="osm-h-fotos">
+              <h3 id="osm-h-fotos" className="osm-h"><Icon name="camera" size={18} /> Fotos do carro</h3>
+              <OSPhotos dbPath={dbPath} osId={osId} osNumber={parseInt(osNumber, 10) || 0} photos={photos} setPhotos={setPhotos} sessionRef={sessionPhotos} readOnly={readOnly} onBusyChange={setPhotosBusy} />
+            </section>
+
+            {obsLines.length > 0 && (
+              <section className="osm-section" aria-labelledby="osm-h-obs">
+                <h3 id="osm-h-obs" className="osm-h"><Icon name="prancheta" size={18} /> Observações</h3>
+                {obsLines.map(l => <p key={l} className="osm-field-obs">{l}</p>)}
+              </section>
+            )}
+          </div>
+
+          <footer className="osm-foot">
+            <div className="osm-foot-actions">
+              {photosBusy > 0 && <p className="osm-foot-why" role="status">Aguarde o envio das fotos para salvar.</p>}
+              <button type="button" className="btn-secondary" onClick={guard.requestClose}>Fechar</button>
+              {fieldDirty && (
+                <button type="button" className="btn osm-save" onClick={handleConfirm} disabled={isSaving || photosBusy > 0} aria-busy={isSaving} title="Atalho: Ctrl + Shift + Enter">
+                  <Icon name="salvar" size={18} /> {isSaving ? 'Salvando...' : 'Salvar'}
+                </button>
+              )}
+            </div>
+          </footer>
+        </div>
+      </div>
+      {guard.dialog}
+      </>
+    );
+  }
 
   return (
     <>
@@ -675,7 +808,7 @@ export const OSModal: React.FC<OSModalProps> = ({
         <section className="osm-section" aria-labelledby="osm-h-itens">
           <div className="osm-h-row">
             <h3 id="osm-h-itens" className="osm-h"><Icon name="oficina" size={18} /> Serviço <span className="osm-h-count">{itemsCount(parts.length + services.length)} · {formatMoney(totalRevenue)}</span></h3>
-            {costToggle}
+            {canCosts && costToggle}
           </div>
           <div className="osm-grid osm-grid--tech">
             <div className="form-group">
@@ -712,7 +845,7 @@ export const OSModal: React.FC<OSModalProps> = ({
                   onChange={cat => { if (cat !== tempPart.category) guard.markDirty(); setTempPart({ ...tempPart, category: cat }); }}
                   style={{ flex: '1 1 140px' }}
                 />
-                {showCostColumn && numf('Custo (interno)',
+                {costsOn && numf('Custo (interno)',
                   <MoneyField id="os-new-part-cost" kind="cost" className="form-input osm-num osm-num--cost" aria-label="Custo da nova peça" value={tempPart.cost}
                     onChange={c => setTempPart(prev => ({ ...prev, cost: c }))} onInvalidChange={trackMoney} showError={moneyShown}
                     onKeyDown={handlePartKeyDown} placeholder="Custo" />
@@ -745,7 +878,7 @@ export const OSModal: React.FC<OSModalProps> = ({
                             style={{ flex: '1 1 140px' }}
                             placeholder="—"
                           />
-                          {showCostColumn && numf('Custo (interno)',
+                          {costsOn && numf('Custo (interno)',
                             <MoneyField id={`os-part-${p.id}-cost`} kind="cost" className="form-input margin-cost-field osm-num osm-num--cost" value={p.cost}
                               onInvalidChange={trackMoney} showError={moneyShown}
                               onChange={c => updateItem(parts, setParts, i, 'cost', c, catalogParts)}
@@ -762,7 +895,7 @@ export const OSModal: React.FC<OSModalProps> = ({
                         </div>
                         <HistoryHint suggestion={partHistory[p.id]} currentPrice={p.price} formatMoney={formatMoney}
                           onUse={(price) => { guard.markDirty(); updateItem(parts, setParts, i, 'price', price, catalogParts); }} />
-                        {showCostColumn && p.description.trim() !== '' && (
+                        {costsOn && p.description.trim() !== '' && (
                           <MarginIndicator cost={p.cost} price={p.price} formatMoney={formatMoney} minMarginPercent={targetMargin}
                             onSuggestPrice={(sp) => { guard.markDirty(); updateItem(parts, setParts, i, 'price', sp, catalogParts); }} />
                         )}
@@ -789,7 +922,7 @@ export const OSModal: React.FC<OSModalProps> = ({
                     <option key={idx} value={cs.description}>{formatMoney(cs.price)}</option>
                   ))}
                 </datalist>
-                {showCostColumn && numf('Custo (interno)',
+                {costsOn && numf('Custo (interno)',
                   <MoneyField id="os-new-service-cost" kind="cost" className="form-input osm-num osm-num--cost" aria-label="Custo do novo serviço" value={tempService.cost}
                     onChange={c => setTempService(prev => ({ ...prev, cost: c }))} onInvalidChange={trackMoney} showError={moneyShown}
                     onKeyDown={handleServiceKeyDown} placeholder="Custo" />
@@ -810,7 +943,7 @@ export const OSModal: React.FC<OSModalProps> = ({
                     <div className="item-row osm-row">
                       <input className="form-input osm-desc" aria-label="Descrição do serviço" value={s.description}
                         onChange={e => updateItem(services, setServices, i, 'description', e.target.value, catalogServices)} />
-                      {showCostColumn && numf('Custo (interno)',
+                      {costsOn && numf('Custo (interno)',
                         <MoneyField id={`os-service-${s.id}-cost`} kind="cost" className="form-input margin-cost-field osm-num osm-num--cost" value={s.cost}
                           onInvalidChange={trackMoney} showError={moneyShown}
                           onChange={c => updateItem(services, setServices, i, 'cost', c, catalogServices)}
@@ -827,7 +960,7 @@ export const OSModal: React.FC<OSModalProps> = ({
                     </div>
                     <HistoryHint suggestion={serviceHistory[s.id]} currentPrice={s.price} formatMoney={formatMoney}
                       onUse={(price) => { guard.markDirty(); updateItem(services, setServices, i, 'price', price, catalogServices); }} />
-                    {showCostColumn && s.description.trim() !== '' && (
+                    {costsOn && s.description.trim() !== '' && (
                       <MarginIndicator cost={s.cost} price={s.price} formatMoney={formatMoney} minMarginPercent={targetMargin}
                         onSuggestPrice={(sp) => { guard.markDirty(); updateItem(services, setServices, i, 'price', sp, catalogServices); }} />
                     )}
@@ -845,8 +978,8 @@ export const OSModal: React.FC<OSModalProps> = ({
             formatMoney={formatMoney} locked={advancesLocked} onDirty={guard.markDirty}
             onEditingChange={setAdvanceEditing} attention={advanceAttention} />
 
-          {!showCostColumn && <p className="osm-hint">Lucro e margem escondidos</p>}
-          {showCostColumn && (
+          {canCosts && !costsOn && <p className="osm-hint">Lucro e margem escondidos</p>}
+          {costsOn && (
             <div className="osm-profit">
               <button type="button" className="btn-secondary osm-profit-toggle" aria-expanded={showProfit} aria-controls="osm-profit-body"
                 onClick={() => { const next = !showProfit; setShowProfit(next); setShowCosts(next); }}>

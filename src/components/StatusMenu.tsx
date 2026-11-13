@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import ReactDOM from 'react-dom';
 import { OSStatus, STATUS_LABELS } from '../types';
 import { Icon } from './ui/Icon';
+import { useCloseOnAppLock } from '../hooks/useCloseOnAppLock';
 
 /**
  * Botão "Status: X" que abre um menu de escolha. O menu só existe no DOM quando aberto
@@ -31,6 +32,8 @@ const StatusMenuImpl: React.FC<StatusMenuProps> = ({ id, osNumber, current, stat
     setOpen(false);
     if (returnFocus) btnRef.current?.focus();
   }, []);
+
+  useCloseOnAppLock(open, () => close(false));
 
   // Posiciona junto ao botão (fixo, pois a tabela tem rolagem própria) e vira para cima se faltar espaço.
   const place = useCallback(() => {

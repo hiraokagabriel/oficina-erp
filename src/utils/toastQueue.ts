@@ -2,9 +2,10 @@
 import type { ToastAction, ToastMessage, ToastType } from '../components/ui/ToastContainer';
 
 /**
- * Acrescenta um aviso. Erro igual a outro erro ainda visível não empilha (ex.: nova tentativa de salvar
- * falhando); depois que o usuário fecha o anterior, o mesmo erro volta a aparecer. Sucesso e info sempre entram
- * (somem sozinhos pelo timer do ToastItem).
+ * Acrescenta um aviso. Erro igual a outro erro ainda visível não empilha: o aviso existente ganha `count` ("3 vezes"),
+ * para o usuário saber que aconteceu de novo (ex.: várias alterações recusadas pelo servidor) sem encher a tela.
+ * Depois que o usuário fecha o anterior, o mesmo erro volta a aparecer. Sucesso e info sempre entram (somem sozinhos
+ * pelo timer do ToastItem).
  */
 export const pushToast = (
   prev: ToastMessage[],
@@ -14,8 +15,11 @@ export const pushToast = (
   action?: ToastAction,
 ): ToastMessage[] =>
   type === 'error' && prev.some((t) => t.type === 'error' && t.message === message)
-    ? prev
+    ? prev.map((t) => (t.type === 'error' && t.message === message ? { ...t, count: (t.count ?? 1) + 1 } : t))
     : [...prev, action ? { id, message, type, action } : { id, message, type }];
+
+/** Texto do aviso: com repetição, "mensagem (3 vezes)". */
+export const toastText = (t: Pick<ToastMessage, 'message' | 'count'>): string => (t.count && t.count > 1 ? `${t.message} (${t.count} vezes)` : t.message);
 
 /** Sem ação: 4 s. Com ação: 8 s, para dar tempo de clicar. */
 export const TOAST_DURATION_MS = 4000;

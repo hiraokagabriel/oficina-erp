@@ -18,6 +18,8 @@ export const ICON_NAMES = [
   'filtro', 'arquivo', 'chave', 'cifrao', 'bandeira', 'prancheta', 'caixa', 'camera',
   // pictogramas de serviço
   'motor', 'freio', 'suspensao', 'eletrica', 'pneu', 'oleo',
+  // nuvem, pessoas e aparelhos (docs/NUVEM-UX.md 0.3)
+  'pessoa', 'cadeado', 'nuvem', 'sem-internet', 'apagar', 'olho', 'sair', 'computador', 'celular',
 ] as const;
 
 export type IconName = typeof ICON_NAMES[number];
@@ -66,6 +68,16 @@ export const ICON_SPRITE: Record<IconName, string> = {
   eletrica: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
   pneu: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.500"/><path d="M12 3v4.500M12 16.500V21M3 12h4.500M16.500 12H21M5.600 5.600l3.200 3.200M15.200 15.200l3.200 3.200M18.400 5.600l-3.200 3.200M8.800 15.200l-3.200 3.200"/>',
   oleo: '<path d="M12 3c3.500 4.500 6 7.500 6 10.500a6 6 0 0 1-12 0C6 10.500 8.500 7.500 12 3z"/><path d="M9.500 14.500a2.500 2.500 0 0 0 2.500 2.500"/>',
+  // --- nuvem, pessoas e aparelhos ---
+  pessoa: '<circle cx="12" cy="8" r="3.800"/><path d="M4.500 20.500c0-4 3.400-6.500 7.500-6.500s7.500 2.500 7.500 6.500"/>',
+  cadeado: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3M12 15v2.500"/>',
+  nuvem: '<path d="M7 18a4.500 4.500 0 0 1-.6-8.960A6 6 0 0 1 17.900 9.500 4.300 4.300 0 0 1 17.500 18z"/>',
+  'sem-internet': '<path d="M7 18a4.500 4.500 0 0 1-.6-8.960A6 6 0 0 1 17.900 9.500 4.300 4.300 0 0 1 17.500 18z"/><path d="M4 4l16 16"/>',
+  apagar: '<path d="M9 5h11a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H9l-6-7z"/><path d="M12.500 9.500l5 5M17.500 9.500l-5 5"/>',
+  olho: '<path d="M2 12s3.500-6.500 10-6.500S22 12 22 12s-3.500 6.500-10 6.500S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  sair: '<path d="M10 4H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4M15 8l4 4-4 4M19 12H9"/>',
+  computador: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  celular: '<rect x="7" y="2.500" width="10" height="19" rx="2"/><path d="M11 18.500h2"/>',
 };
 
 const SPRITE_ID = 'oficina-icon-sprite';

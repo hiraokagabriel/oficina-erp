@@ -7,6 +7,7 @@ import { formatDateOnly, parseDateFlexible, parseDateOnly } from '../utils/dates
 import { AppointmentModal, AppointmentModalMode } from '../modals/AppointmentModal';
 import { ConfirmationModal } from '../modals/ConfirmationModal';
 import { Icon, IconName } from '../components/ui/Icon';
+import { useAccess } from '../hooks/useAccess';
 
 interface AgendaPageProps {
   appointments: Appointment[];
@@ -36,6 +37,9 @@ const dayTitle = (dayKey: string): string =>
   parseDateOnly(dayKey).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' });
 
 export const AgendaPage: React.FC<AgendaPageProps> = ({ appointments, workOrders, clients, onSave, onAction, onDelete, onCreateOS }) => {
+  const access = useAccess();
+  const canNewOS = access.can('os.create');
+  const canDeleteAppt = access.can('appointments.delete');
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
   const [modal, setModal] = useState<ModalState | null>(null);
   const [toDelete, setToDelete] = useState<Appointment | null>(null);
@@ -150,7 +154,7 @@ export const AgendaPage: React.FC<AgendaPageProps> = ({ appointments, workOrders
         </div>
       </div>
       <div className="appt-actions">
-        {canCreateOS(ap) && (
+        {canNewOS && canCreateOS(ap) && (
           <button type="button" className="btn appt-btn-main" onClick={() => onCreateOS(ap)}>
             <Icon name="prancheta" size={18} />Criar OS
           </button>
@@ -181,9 +185,11 @@ export const AgendaPage: React.FC<AgendaPageProps> = ({ appointments, workOrders
               <Icon name="fechar" size={16} />Cancelar agendamento
             </button>
           )}
-          <button type="button" className="btn-sm appt-btn-danger" onClick={() => setToDelete(ap)}>
-            <Icon name="excluir" size={16} />Excluir
-          </button>
+          {canDeleteAppt && (
+            <button type="button" className="btn-sm appt-btn-danger" onClick={() => setToDelete(ap)}>
+              <Icon name="excluir" size={16} />Excluir
+            </button>
+          )}
         </div>
       </div>
     </li>

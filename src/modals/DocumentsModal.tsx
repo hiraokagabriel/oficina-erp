@@ -8,6 +8,7 @@ import { useToast } from '../context/ToastContext';
 import { PICKER_LIMIT, SavedPdf, listPickerOrders, pickerOrderLabel } from '../services/documentsView';
 import { DEFAULT_SUMMARY_CHOICE, SummaryChoice, countInspectedItems, needsSummaryChoice } from '../services/serviceSummaryView';
 import { isPdfAvailable } from '../utils/documentOutput';
+import { useAccess } from '../hooks/useAccess';
 
 // Janela única de documentos: escolhe a OS (se ainda não veio escolhida), o documento e então imprime ou salva em PDF.
 
@@ -37,13 +38,17 @@ interface DocumentsModalProps {
 
 export const DocumentsModal: React.FC<DocumentsModalProps> = ({ isOpen, osId, workOrders, onClose, onGenerate, onOpenSaved }) => {
   const { addToast } = useToast();
+  // Sem preço (Mecânico): só o checklist de vistoria (a OS impressa e o resumo trazem valores).
+  const showPrices = useAccess().os.canSeePrices;
+  const choices = useMemo(() => (showPrices ? CHOICES : CHOICES.filter(c => c.id === 'CHECKLIST')), [showPrices]);
+  const firstChoice = choices[0].id;
   const dialogRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const firstOptionRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
   const [selectedId, setSelectedId] = useState<string | null>(osId);
   const [query, setQuery] = useState('');
-  const [choice, setChoice] = useState<DocChoice>('OS');
+  const [choice, setChoice] = useState<DocChoice>(firstChoice);
   const [summaryChoice, setSummaryChoice] = useState<SummaryChoice>(DEFAULT_SUMMARY_CHOICE);
   const [checklistMode, setChecklistMode] = useState<'full' | 'summary'>('full');
   const [busy, setBusy] = useState(false);
@@ -60,7 +65,7 @@ export const DocumentsModal: React.FC<DocumentsModalProps> = ({ isOpen, osId, wo
     if (!isOpen) return;
     setSelectedId(osId);
     setQuery('');
-    setChoice('OS');
+    setChoice(firstChoice);
     setSummaryChoice(DEFAULT_SUMMARY_CHOICE);
     setChecklistMode('full');
     setBusy(false);
@@ -165,7 +170,7 @@ export const DocumentsModal: React.FC<DocumentsModalProps> = ({ isOpen, osId, wo
 
             <fieldset className="docm-options">
               <legend className="form-label">Qual documento?</legend>
-              {CHOICES.map((c, i) => (
+              {choices.map((c, i) => (
                 <React.Fragment key={c.id}>
                   <label className="csm-choice-row docm-row">
                     <input

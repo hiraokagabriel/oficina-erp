@@ -15,9 +15,15 @@ export const RECORD_DELETED_MESSAGE =
 export const RECORD_EDITED_MESSAGE =
   'Este registro foi alterado em outro aparelho antes da sua exclusão. A exclusão foi cancelada e ficou o que está lá.';
 
+export const CHANGE_NOT_APPLIED_MESSAGE =
+  'Uma alteração sua não foi aplicada: o registro já estava diferente em outro aparelho. Confira o que ficou.';
+
 export type MergeRecordResult =
-  /** Servidor já igual ao desejado (ack perdido): a op está concluída. */
-  | { kind: 'done' }
+  /**
+   * Op concluída. Sem `message`: o servidor já estava igual ao desejado (ack perdido). Com `message`: a mudança do
+   * usuário NÃO foi aplicada (o servidor ficou diferente do valor local) e o usuário precisa saber.
+   */
+  | { kind: 'done'; message?: string }
   /** Regravar `value` (null = excluir) sobre a versão do servidor; `message` lista conflitos, se houve. */
   | { kind: 'merged'; value: unknown | null; conflicts: string[]; message?: string }
   /** Descartar a op e ficar com o servidor. */
@@ -131,6 +137,12 @@ export function mergeFlatRecord(base: Record<string, unknown> | null, value: Rec
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 
+/** A fusão deu o que o servidor já tem. Se o usuário tinha mudado algo (valor diferente da base e do servidor), avisa que não foi aplicado. */
+export function doneOrLost(base: unknown | null, value: unknown, server: unknown): MergeRecordResult {
+  if (eq(value, server) || eq(value, base)) return { kind: 'done' };
+  return { kind: 'done', message: CHANGE_NOT_APPLIED_MESSAGE };
+}
+
 export function mergeRecord(collection: CollectionKey, input: {
   base: unknown | null; value: unknown | null; server: unknown | null | undefined;
 }): MergeRecordResult {
@@ -156,13 +168,13 @@ export function mergeRecord(collection: CollectionKey, input: {
   if (collection === 'workOrders') {
     const r = mergeOSRecord(base as WorkOrder | null, value as WorkOrder, server as WorkOrder);
     if (!r) return { kind: 'drop', reason: 'server_deleted', message: OS_DELETED_MESSAGE };
-    if (eq(r.value, server)) return { kind: 'done' };
+    if (eq(r.value, server)) return doneOrLost(base, value, server);
     return { kind: 'merged', value: r.value, conflicts: r.conflicts, message: r.conflicts.length ? conflictsMessage(r.conflicts) : undefined };
   }
 
   if (isObject(value) && isObject(server) && (base === null || isObject(base))) {
     const r = mergeFlatRecord(base, value, server);
-    if (eq(r.value, server)) return { kind: 'done' };
+    if (eq(r.value, server)) return doneOrLost(base, value, server);
     return { kind: 'merged', value: r.value, conflicts: r.conflicts, message: r.conflicts.length ? conflictsMessage(r.conflicts) : undefined };
   }
   return { kind: 'merged', value, conflicts: [] };

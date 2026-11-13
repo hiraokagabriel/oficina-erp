@@ -62,6 +62,7 @@ export const ChecklistModal: React.FC<ChecklistModalProps> = ({ isOpen, onClose,
   const guard = useDirtyGuard({
     active: isOpen,
     onClose,
+    label: 'uma vistoria',
     isDirty: () => baselineRef.current !== null && checklist !== baselineRef.current,
   });
 

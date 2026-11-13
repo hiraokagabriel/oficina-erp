@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { ChecklistSchema, WorkOrder } from '../types';
-import { mergeRecord, OS_DELETED_MESSAGE } from './mergeRecord';
+import { CHANGE_NOT_APPLIED_MESSAGE, doneOrLost, mergeRecord, OS_DELETED_MESSAGE } from './mergeRecord';
 import type { MergeRecordResult } from './mergeRecord';
 
 const checklist = (statuses: Record<string, 'pending' | 'ok' | 'attention' | 'urgent'>, notes = ''): ChecklistSchema => ({
@@ -154,5 +154,16 @@ describe('mergeRecord: outras coleções', () => {
     expect(mergeRecord('clients', { base: c(), value: null, server: c() })).toMatchObject({ kind: 'merged', value: null });
     expect(mergeRecord('clients', { base: c(), value: null, server: c({ phone: '9' }) }).kind).toBe('drop');
     expect(mergeRecord('clients', { base: c(), value: null, server: null }).kind).toBe('done');
+  });
+});
+
+describe('doneOrLost: concluir sem perder mudança calada', () => {
+  it('servidor já igual ao valor local ou valor igual à base: concluído sem aviso', () => {
+    expect(doneOrLost({ a: 1 }, { a: 2 }, { a: 2 })).toEqual({ kind: 'done' });
+    expect(doneOrLost({ a: 1 }, { a: 1 }, { a: 3 })).toEqual({ kind: 'done' });
+  });
+  it('usuário mudou e o servidor ficou diferente do local: concluído COM aviso', () => {
+    const r = doneOrLost({ a: 1 }, { a: 2 }, { a: 3 });
+    expect(r).toEqual({ kind: 'done', message: CHANGE_NOT_APPLIED_MESSAGE });
   });
 });

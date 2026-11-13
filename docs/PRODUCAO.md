@@ -188,10 +188,10 @@ Branch `feat/nuvem-login` (criada em 2026-11-11). Decisões, padrões assumidos,
 |---|---|---|---|---|---|
 | 0 | Branch e registro de decisões | sessão principal, `gerente` | nenhuma | n/a (docs) | feita |
 | 1 | Especificação técnica (tabelas, RLS, Edge Functions, sync, PIN, mapeamento v5) | `arquiteto` | 0 | ok do dono antes de qualquer código | feita (ok do dono em 2026-11-11) |
-| 2 | Telas e textos | `ux-designer` | 1 | ok do dono na direção estética | pendente |
+| 2 | Telas e textos | `ux-designer` | 1 | ok do dono na direção estética | feita (`docs/NUVEM-UX.md`) |
 | 3 | Supabase: SQL, RLS | `dev` | 1; dono cria o projeto | testes SQL por papel e por oficina; `revisor`; ok do dono | em andamento: SQL `supabase/migrations/20261111120000_nuvem_inicial.sql` com 237 asserções pgTAP passando, revisado pelo `revisor` e corrigido, no projeto de teste `xtnnayaxufhmyrqcwwnr` (`npm run test:db`); falta ok do dono e aplicar no projeto real (nova revisão do SQL antes de aplicar) |
-| 4 | Camada de dados offline | `dev` | 1, 3 | P1 (build, testes, UTC); testes Vitest da fila, diff e conflito; navegador com 2 abas e rede cortada; `revisor` | pendente |
-| 5 | Login e sessão, permissões por papel | `dev` + `ui-dev` | 2, 3, 4 | P1; `verificador` e `ux-revisor` (800 px); Rede do DevTools como Mecânico sem preço; `revisor` | pendente |
+| 4 | Camada de dados offline | `dev` | 1, 3 | P1 (build, testes, UTC); testes Vitest da fila, diff e conflito; navegador com 2 abas e rede cortada; `revisor` | feita (PRs 3 e 4) |
+| 5 | Login e sessão, permissões por papel | `dev` + `ui-dev` | 2, 3, 4 | P1; `verificador` e `ux-revisor` (800 px); Rede do DevTools como Mecânico sem preço; `revisor` | feita |
 | 6 | Dinheiro no servidor | `dev` | 3, 4; módulos puros sem imports de navegador | P1; testes das Edge Functions; `revisor` | pendente |
 | 7 | Fotos no Storage | `dev` | 3 | P1; `verificador`; `revisor` | pendente |
 | 8 | Web/PWA e celular | `ui-dev` + `dev` | 2, 5 | P1; `verificador` e `ux-revisor` em celular e 800 px; `revisor` | pendente |

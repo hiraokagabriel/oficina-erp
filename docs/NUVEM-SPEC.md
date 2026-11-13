@@ -230,6 +230,8 @@ interface OutboxOp { opId: string; actor: string; deviceId: string;
 - Dono com TOTP: desafio MFA depois do PIN.
 
 **Superfície de ataque**:
+- **Riscos aceitos no piloto** (revisões do PR 5, 2026-11-12/13; detalhes no topo de `src/server/core.ts`): a RLS não exige `aal2` (JWT `aal1` roubado de Dono com TOTP ainda lê/grava pelo PostgREST; as funções exigem `aal2` e o PIN não abre Dono com TOTP); uma pessoa com mais de uma oficina usa a membership mais antiga; o convite revela se o e-mail já tem conta; revogar o aparelho não encerra a sessão já aberta nele (procedimento: revogar o aparelho **e** desativar a pessoa); o magic link do PIN pode invalidar um link de "esqueci a senha" pendente.
+- **PC compartilhado pelo navegador** (sem o app instalado): o cache IndexedDB de cada pessoa e as cópias de recuperação ficam legíveis por quem abrir as ferramentas do navegador nesse PC (um Mecânico veria preços do cache do Dono). No PC compartilhado, usar o app instalado (Tauri); o navegador é para aparelho pessoal. Duas pessoas em abas diferentes do mesmo navegador dividem a mesma sessão do supabase-js: não suportado.
 - Com o disco do PC, obtém-se o refresh token de quem está logado (supabase-js grava no localStorage do WebView2), como em qualquer app web. PINs dos outros não ficam no disco.
 - Força bruta do PIN só online, só em aparelho autorizado (exige o segredo), com limite no servidor.
 - Quem sabe um PIN e tem o PC autorizado entra como aquela pessoa: revogar o aparelho e desativar a pessoa.

@@ -2,6 +2,10 @@
 
 Atualizado em 2026-11-13. Branch `feat/nuvem-login` (sem push). Plano: `docs/NUVEM.md`; especificação: `docs/NUVEM-SPEC.md`; telas e textos: `docs/NUVEM-UX.md`; spike: `docs/NUVEM-SPIKE.md`.
 
+## Ponto de partida da próxima sessão
+
+**Retomar pelo PR 8** (Web/PWA e celular, tabela "A implementar" abaixo). Os PRs 0 a 7 estão commitados. A revisão do `revisor` dos PRs 6 e 7 (commit `05e81ce`) foi interrompida e **continua pendente**: pode rodar em paralelo ao PR 8, mas é obrigatória antes do piloto e de aplicar qualquer coisa no projeto real (pendência 1).
+
 ## Projetos Supabase
 
 - **Real**: `stblagzkkffbjuzltfrt` (sa-east-1). Ligado por `supabase link`; chave pública em `.env.local`. **Nenhuma migração aplicada, nenhuma função implantada, nenhum dado.** SMTP Brevo configurado (remetente Gmail verificado, bloqueio de IP desligado; e-mails caem no spam). Site URL ainda `localhost:3000`.

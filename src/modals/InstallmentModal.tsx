@@ -84,23 +84,10 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
         </div>
 
         <div className="modal-body" style={{ padding: '24px' }}>
-          <div style={{
-            background: 'linear-gradient(135deg, var(--primary) 0%, #6366f1 100%)',
-            color: 'white',
-            padding: '20px',
-            borderRadius: '12px',
-            marginBottom: '24px',
-            boxShadow: '0 4px 12px rgba(130, 87, 230, 0.3)'
-          }}>
-            <div style={{ fontSize: '0.9rem', opacity: 0.9, marginBottom: '8px' }}>
-              Valor Total
-            </div>
-            <div style={{ fontSize: '2rem', fontWeight: 'bold', marginBottom: '12px' }}>
-              {Money.format(totalAmount)}
-            </div>
-            <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>
-              {description}
-            </div>
+          <div className="inst-total">
+            <div className="inst-total-label">Valor Total</div>
+            <div className="inst-total-value">{Money.format(totalAmount)}</div>
+            <div className="inst-total-desc">{description}</div>
           </div>
 
           <div style={{ marginBottom: '24px' }}>
@@ -117,24 +104,13 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
                 return (
                   <button
                     key={num}
+                    type="button"
                     onClick={() => setInstallments(num)}
-                    style={{
-                      padding: '16px 12px',
-                      border: installments === num 
-                        ? '2px solid var(--primary)' 
-                        : '1px solid var(--border)',
-                      borderRadius: '8px',
-                      background: installments === num 
-                        ? 'rgba(130, 87, 230, 0.1)' 
-                        : 'white',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                      fontWeight: installments === num ? 'bold' : 'normal',
-                      color: installments === num ? 'var(--primary)' : 'var(--text)'
-                    }}
+                    className={`inst-opt${installments === num ? ' is-selected' : ''}`}
+                    aria-pressed={installments === num}
                   >
-                    <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>{num}x</div>
-                    <div style={{ fontSize: '0.75rem', opacity: 0.7 }}>
+                    <div className="inst-opt-n">{num}x</div>
+                    <div className="inst-opt-val">
                       {Money.format(calc.normalInstallmentAmount)}
                     </div>
                   </button>
@@ -156,22 +132,8 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
             />
           </div>
 
-          <div style={{
-            background: 'var(--bg-panel)',
-            border: '1px solid var(--border)',
-            borderRadius: '12px',
-            padding: '16px',
-            maxHeight: '300px',
-            overflowY: 'auto'
-          }}>
-            <div style={{ 
-              fontWeight: 'bold', 
-              marginBottom: '12px',
-              color: 'var(--text)',
-              fontSize: '0.95rem'
-            }}>
-              📄 Preview das Parcelas
-            </div>
+          <div className="inst-preview">
+            <div className="inst-preview-title">📄 Preview das Parcelas</div>
             {installmentDates.map((date, index) => {
               const isLast = index === installments - 1;
               const amount = isLast 
@@ -179,70 +141,31 @@ export const InstallmentModal: React.FC<InstallmentModalProps> = ({
                 : installmentCalc.normalInstallmentAmount;
               
               return (
-                <div
-                  key={index}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '12px',
-                    background: 'white',
-                    borderRadius: '8px',
-                    marginBottom: '8px',
-                    border: isLast ? '2px solid var(--success)' : '1px solid var(--border)'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: '50%',
-                      background: isLast ? 'var(--success)' : 'var(--primary)',
-                      color: 'white',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontWeight: 'bold',
-                      fontSize: '0.85rem'
-                    }}>
-                      {index + 1}
-                    </div>
+                <div key={index} className={`inst-row${isLast ? ' is-last' : ''}`}>
+                  <div className="inst-row-main">
+                    <div className="inst-num">{index + 1}</div>
                     <div>
-                      <div style={{ fontWeight: 500, color: 'var(--text)' }}>
+                      <div className="inst-row-title">
                         Parcela {index + 1}/{installments} {isLast && '✅'}
                       </div>
-                      <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                      <div className="inst-row-date">
                         Vencimento: {date.toLocaleDateString('pt-BR')}
                       </div>
                     </div>
                   </div>
-                  <div style={{ 
-                    fontWeight: 'bold', 
-                    color: isLast ? 'var(--success)' : 'var(--primary)', 
-                    fontSize: '1.1rem'
-                  }}>
+                  <div className="inst-amount">
                     {Money.format(amount)}
-                    {isLast && <div style={{ fontSize: '0.65rem', opacity: 0.7 }}>ajustada</div>}
+                    {isLast && <div className="inst-adjusted">ajustada</div>}
                   </div>
                 </div>
               );
             })}
-            
-            <div style={{
-              marginTop: '12px',
-              padding: '12px',
-              background: installmentCalc.isValid ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-              borderRadius: '8px',
-              fontSize: '0.85rem',
-              color: installmentCalc.isValid ? 'var(--success)' : 'var(--danger)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}>
+
+            <div className={`inst-sum${installmentCalc.isValid ? '' : ' is-bad'}`}>
               {installmentCalc.isValid ? '✅' : '⚠️'}
               <div>
                 <strong>Soma exata:</strong> {Money.format(totalAmount)}
-                {!installmentCalc.isValid && <div style={{ fontSize: '0.75rem', marginTop: '4px' }}>Erro de arredondamento!</div>}
+                {!installmentCalc.isValid && <div className="inst-sum-err">Erro de arredondamento!</div>}
               </div>
             </div>
           </div>

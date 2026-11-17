@@ -9,16 +9,7 @@
     
     <title>OficinaPRO - Gestão de Oficinas</title>
     
-    <script>
-      /* Tema salvo (chave "oficina.theme" no localStorage): aplica antes do primeiro desenho, sem flash.
-         Sem valor salvo, segue o tema escuro padrão. */
-      try {
-        if (localStorage.getItem('oficina.theme') === 'pastel') {
-          document.documentElement.setAttribute('data-theme', 'pastel');
-          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#F7F5FA');
-        }
-      } catch (e) { /* localStorage indisponível: segue o escuro */ }
-    </script>
+    <script src="/theme-init.js"></script>
 
     <style>
       /* Estilo inline crítico para evitar FOUC (Flash of Unstyled Content) */

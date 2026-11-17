@@ -9,7 +9,7 @@ Atualizado em 2026-11-17. Branch `feat/nuvem-login` (sem push). Plano: `docs/NUV
 ## Projetos Supabase
 
 - **Real**: `stblagzkkffbjuzltfrt` (sa-east-1). Ligado por `supabase link`; chave pública em `.env.local`. **Nenhuma migração aplicada, nenhuma função implantada, nenhum dado.** SMTP Brevo configurado (remetente Gmail verificado, bloqueio de IP desligado; e-mails caem no spam). Site URL ainda `localhost:3000`.
-- **Teste**: `oficinapro-teste` `xtnnayaxufhmyrqcwwnr`. `TEST_DB_URL`, `TEST_SUPABASE_URL`, `TEST_SUPABASE_ANON_KEY` em `.env.test.local` (fora do git). Funções `users`, `pin`, `device`, `money` implantadas; segredos `SITE_URL`, `CORS_ORIGINS`. Banco deixado vazio (`reset`).
+- **Teste**: `oficinapro-teste` `xtnnayaxufhmyrqcwwnr`. `TEST_DB_URL`, `TEST_SUPABASE_URL`, `TEST_SUPABASE_ANON_KEY` em `.env.test.local` (fora do git). Funções `users`, `pin`, `device`, `money` implantadas; segredos `SITE_URL`, `CORS_ORIGINS`. **Sem SMTP próprio**: convite e recuperação de senha não chegam (para e-mail sem conta o Supabase responde "enviado" e não manda nada). Desde 2026-11-17 há a "Oficina Teste" com a conta de Dono do dono do projeto, para ele testar `npx vite --mode cloud`. Quem rodar `reset` (verificação, pgTAP) deve refazer no fim: `node scripts/test-db.mjs migrate` e `node scripts/test-seed-owner.cjs <e-mail do dono>` (gera senha temporária nova; avisar o dono).
 - Docker local não cabe no disco deste PC: os testes de banco rodam no projeto de teste (`npm run test:db`, recusa o ref real).
 
 ## Feito (commits nesta branch)

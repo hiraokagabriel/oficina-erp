@@ -10,13 +10,17 @@
 // Respostas: 200 { ok, kind, replay?, rows:[{table,id,version}], info }; 409 `conflito_versao` com `rows` atuais;
 // 409 `estado_mudou` e 422 `bloqueado` com a mensagem pronta para a tela; 403 `sem_permissao` (Mecânico) ou
 // `exige_mfa`; 400 dados inválidos; 500 `fuso_do_servidor`.
-// `op_id` repetido devolve o resultado gravado SEM refazer as guardas (o estado já mudou).
+// `op_id` repetido devolve o resultado gravado (linhas e `info`) SEM refazer as guardas (o estado já mudou), mas só se
+// oficina, usuário, kind e o hash do corpo (`req_hash` = sha256 de stable({kind, osId, entryId, payload})) forem os mesmos:
+// corpo diferente com o mesmo `op_id` é 409 `op_id_reutilizado`.
+// `known` é obrigatório (400 sem ele): `work_orders:<osId>` em todo `os.*` (menos `os.save` com `isNew`) e
+// `ledger:<entryId>` em `ledger.toggle`; sem ele a concorrência por versão ficaria desligada.
 import {
-  HttpError, asRecord, authenticate, guarded, okResult, requireOwner, reqString, reqUuid,
+  HttpError, asRecord, authenticate, guarded, okResult, requireOwner, reqString, reqUuid, sha256Hex,
   type Caller, type Deps, type HandlerRequest, type HandlerResult,
 } from './core'
 import {
-  applyInstallmentToOS, buildInstallmentEntries, ensureUniqueItemIds, finalizeOSSingle,
+  applyInstallmentToOS, buildInstallmentEntries, calculateFinancials, ensureUniqueItemIds, finalizeOSSingle,
   findAdvanceOwner, formatDateOnly, getDateTimeZone, getRemainingAmount, joinWorkOrder, mergeOSEdit, parseDateOnly,
   planDeleteOS, prepareOSSave, removeAllAdvances, removeOSReceipt, restoreFinancial, setDateTimeZone, settleOpenReceipt,
   splitWorkOrder, stable, statusChangeEffects, togglePayment, validateAdvance,
@@ -54,12 +58,15 @@ export interface ApplyArgs {
   expected: MoneyExpected[]
   writes: MoneyWrite[]
   audit: { id: string; data: unknown }[]
+  /** Hash do corpo (op_id repetido com corpo diferente é recusado) e `info` que o replay devolve. */
+  reqHash: string
+  info: Record<string, unknown>
 }
 export type ApplyResult =
-  | { status: 'ok'; rows: { table: string; id: string; version: number }[] }
+  | { status: 'ok'; rows: { table: string; id: string; version: number }[]; info?: Record<string, unknown> }
   | { status: 'conflict'; rows: unknown[] }
 
-export interface StoredOp { workshopId: string; userId: string; kind: string; result: unknown }
+export interface StoredOp { workshopId: string; userId: string; kind: string; result: unknown; reqHash?: string | null }
 
 /** Erro conhecido da função SQL `apply_money_op` (a mensagem é o código: `op_id_reutilizado`, `sem_permissao`...). */
 export class MoneyStoreError extends Error {
@@ -96,10 +103,12 @@ const INCOMPLETE_MESSAGE = 'Os dados desta OS ainda estão chegando. Tente de no
 /** Autoteste do fuso (spec seção 3): falhou, 500 sem gravar. `America/Sao_Paulo` confere o instante exato. */
 function zoneSelfTest(tz: string): boolean {
   try {
-    if (getDateTimeZone() !== tz) return false
+    // Alias (`Brazil/East`) vira o nome canônico no Intl: compara com o resolvido, não com o texto gravado.
+    const canonical = new Intl.DateTimeFormat('en-US', { timeZone: tz }).resolvedOptions().timeZone
+    if (getDateTimeZone() !== canonical) return false
     const noon = parseDateOnly('2026-01-01')
     if (formatDateOnly(noon) !== '2026-01-01') return false
-    if (tz === 'America/Sao_Paulo' && noon.toISOString() !== '2026-01-01T15:00:00.000Z') return false
+    if (canonical === 'America/Sao_Paulo' && noon.toISOString() !== '2026-01-01T15:00:00.000Z') return false
     return true
   } catch { return false }
 }
@@ -163,6 +172,10 @@ function parseRequest(body: unknown, caller: Caller): MoneyRequest {
       known[k] = v
     }
   }
+  // Sem a versão da OS (ou do lançamento) a concorrência ficaria desligada: `os.save` de OS nova é o único sem versão.
+  const isNewOS = kind === 'os.save' && payload.isNew === true
+  const need = kind === 'ledger.toggle' ? `ledger:${entryId}` : isNewOS ? null : `work_orders:${osId}`
+  if (need && known[need] === undefined) throw new HttpError(400, 'dados_invalidos', 'Campo "known" sem a versão do registro.')
   const machineRaw = typeof b.machine === 'string' ? b.machine.trim().slice(0, 80) : ''
   const deviceId = typeof b.deviceId === 'string' && /^[0-9a-f-]{36}$/i.test(b.deviceId) ? b.deviceId.toLowerCase() : null
   return {
@@ -220,6 +233,11 @@ async function load(deps: MoneyDeps, ws: string, req: MoneyRequest): Promise<Loa
     ledgerRows = [entryRow]
   }
   return { osId, rows, os: osId ? toOS(rows) : null, ledgerRows, ledger: ledgerRows.map(r => r.data as unknown as LedgerEntry) }
+}
+
+/** `work_order_costs` (custos) só o Dono lê: 409 para Recepção não pode devolver essa linha (nem os dados nem a versão). */
+function visibleConflictRows<T extends { table?: unknown }>(rows: T[], caller: Caller): T[] {
+  return caller.role === 'dono' ? rows : rows.filter(r => r.table !== 'work_order_costs')
 }
 
 /** Versões que o cliente diz conhecer contra as do servidor (só as linhas carregadas). Devolve as linhas atuais se divergir. */
@@ -288,10 +306,9 @@ function planInstallment(c: Ctx): Plan {
   const n = raw.installments
   if (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > 60) return reject(400, 'dados_invalidos', 'Número de parcelas inválido (1 a 60).')
   const first = raw.firstPaymentDate
-  if (typeof first !== 'string' || (!DATE_ONLY.test(first) && Number.isNaN(Date.parse(first)))) {
+  if (typeof first !== 'string' || !DATE_ONLY.test(first) || formatDateOnly(parseDateOnly(first)) !== first) {
     return reject(400, 'dados_invalidos', 'Data da primeira parcela inválida.')
   }
-  if (DATE_ONLY.test(first) && formatDateOnly(parseDateOnly(first)) !== first) return reject(400, 'dados_invalidos', 'Data da primeira parcela inválida.')
   const desc = typeof raw.description === 'string' && raw.description.trim()
     ? raw.description.trim().slice(0, 200)
     : `Parcelamento OS #${os.osNumber} - ${os.clientName}`
@@ -356,9 +373,48 @@ function keepCosts(next: WorkOrder, current: WorkOrder, caller: Caller): WorkOrd
     return old?.cost !== undefined && i.cost === undefined ? { ...i, cost: old.cost } : i
   })
   const out: WorkOrder = { ...next, parts: fix(next.parts), services: fix(next.services) }
-  if (current.totalCost !== undefined) out.totalCost = current.totalCost
-  if (current.profit !== undefined) out.profit = current.profit
+  // Totais de custo e lucro refeitos com os custos repostos (valor velho ficaria errado se preço ou itens mudaram).
+  if (current.totalCost !== undefined || current.profit !== undefined) {
+    const fin = calculateFinancials(out.parts, out.services)
+    out.totalCost = fin.totalCost
+    out.profit = fin.profit
+  }
   return out
+}
+
+/** A OS como quem não vê custos a conhece (é o que a cópia `opened` da Recepção traz): sem custo por item, totalCost e profit. */
+function withoutCosts(os: WorkOrder): WorkOrder {
+  const strip = (items: WorkOrder['parts']): WorkOrder['parts'] => items.map(i => { const { cost: _c, ...rest } = i; return rest })
+  const { totalCost: _t, profit: _p, ...rest } = os
+  return { ...rest, parts: strip(os.parts), services: strip(os.services) }
+}
+
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T/
+
+/** Forma da OS que vem do cliente (`base`/`opened`): itens, campos escalares, `createdAt` ISO e ids de foto. 400 se não bate. */
+function checkOSShape(os: WorkOrder): void {
+  const bad = (): never => reject(400, 'dados_invalidos', 'OS inválida.')
+  for (const list of [os.parts, os.services]) {
+    if (!Array.isArray(list)) bad()
+    for (const it of list) {
+      if (!isObj(it) || typeof it.description !== 'string') bad()
+      if (it.id !== undefined && (typeof it.id !== 'string' || !ID_RE.test(it.id))) bad()
+      if (it.cost !== undefined && (typeof it.cost !== 'number' || !Number.isSafeInteger(it.cost))) bad()
+    }
+  }
+  if (!Number.isSafeInteger(os.osNumber)) bad()
+  // Mesma opcionalidade de `WorkOrder` (src/types.ts) e das bases antigas (v0-v5): ausente (ou null) vale; presente tem de ter o tipo certo.
+  const optStr = (v: unknown): boolean => v === undefined || v === null || typeof v === 'string'
+  if (typeof os.vehicle !== 'string' || typeof os.clientName !== 'string') bad()
+  if (!optStr(os.clientPhone) || !optStr(os.publicNotes) || !optStr(os.technician) || !optStr(os.expectedDate)) bad()
+  if (os.mileage !== undefined && os.mileage !== null && (typeof os.mileage !== 'number' || !Number.isFinite(os.mileage))) bad()
+  if (typeof os.createdAt !== 'string' || !ISO_DATETIME.test(os.createdAt) || Number.isNaN(Date.parse(os.createdAt))) bad()
+  if (os.photos !== undefined) {
+    if (!Array.isArray(os.photos) || os.photos.length > 100) bad()
+    // Mesma regra de `isValidPhotoId` (src/services/photos.ts): id vira nome de arquivo no Storage.
+    for (const ph of os.photos) if (!isObj(ph) || typeof ph.id !== 'string' || !ID_RE.test(ph.id) || typeof ph.createdAt !== 'string') bad()
+  }
 }
 
 function parseDrafts(v: unknown): OSAdvanceDraft[] | undefined {
@@ -379,12 +435,14 @@ const KEEP_FROM_CURRENT = ['status', 'financialId', 'paymentDate', 'paymentMetho
 function planSave(c: Ctx): Plan {
   const p = c.req.payload
   const edited = pure(asRecord(p.base)) as unknown as WorkOrder
-  if (!Array.isArray(edited.parts) || !Array.isArray(edited.services)) return reject(400, 'dados_invalidos', 'OS inválida.')
+  checkOSShape(edited)
   checkItemPrices(edited)
+  // Limite de "adiantamento futuro" e datas: o dia da OFICINA (já dentro do fuso dela), não o `today` do aparelho.
+  const today = formatDateOnly(new Date(c.now))
   const drafts = parseDrafts(p.drafts)
   if (drafts) {
     for (const d of drafts) {
-      const v = validateAdvance(d, c.req.today)
+      const v = validateAdvance(d, today)
       if (!v.valid) return reject(422, 'adiantamento_invalido', v.error ?? 'Adiantamento inválido.')
     }
   }
@@ -396,18 +454,21 @@ function planSave(c: Ctx): Plan {
     const clean: WorkOrder = { ...edited, ...ensureUniqueItemIds(osId, edited.parts, edited.services), status: 'ORCAMENTO' }
     for (const k of ['financialId', 'paymentDate', 'paymentMethod', 'installmentConfig', 'advanceAmount', 'advanceEntryId', 'advances', 'profitMargin'] as const) delete clean[k]
     clean.total = sumPrices(clean)
-    const saved = prepareOSSave({ base: clean, drafts, ledger: [], today: c.req.today, now: c.now, newId: c.newId, machine: c.req.machine })
+    const saved = prepareOSSave({ base: clean, drafts, ledger: [], today, now: c.now, newId: c.newId, machine: c.req.machine })
     if (!saved.ok) return reject(422, 'adiantamento_invalido', saved.error)
     return { os: saved.os, ledger: saved.ledger, audit: saved.events, info: { osNumber: clean.osNumber, exceedsTotal: saved.exceedsTotal } }
   }
 
   const current = needOS(c)
   const opened = p.opened === undefined ? current : (pure(asRecord(p.opened)) as unknown as WorkOrder)
-  const merged = mergeOSEdit({ opened, edited, current, drafts, today: c.req.today })
+  if (p.opened !== undefined) checkOSShape(opened)
+  // Quem não vê custos abriu a OS sem custos: compara com a OS atual também sem custos (senão todo item vira "mudou em outro aparelho").
+  const seen = c.caller.role === 'dono' ? current : withoutCosts(current)
+  const merged = mergeOSEdit({ opened, edited, current: seen, drafts, today })
   if (!merged.ok) return reject(409, 'os_excluida', 'Esta OS foi excluída em outro aparelho.')
   const saved = prepareOSSave({
     base: merged.base, previous: current, drafts: merged.drafts, ledger: c.loaded.ledger,
-    today: c.req.today, now: c.now, newId: c.newId, machine: c.req.machine,
+    today, now: c.now, newId: c.newId, machine: c.req.machine,
   })
   if (!saved.ok) return reject(422, 'adiantamento_invalido', saved.error)
   let next: WorkOrder = { ...saved.os }
@@ -423,7 +484,11 @@ function planSave(c: Ctx): Plan {
   next = keepCosts(next, current, c.caller)
   return {
     os: next, ledger: saved.ledger, audit: saved.events,
-    info: { osNumber: next.osNumber, exceedsTotal: saved.exceedsTotal, changedElsewhere: merged.changedElsewhere, conflicts: merged.conflicts },
+    // A tela mostra os avisos a partir DESTE `info` (merge do servidor, que é o que gravou), não do merge local.
+    info: {
+      osNumber: next.osNumber, exceedsTotal: saved.exceedsTotal, changedElsewhere: merged.changedElsewhere, conflicts: merged.conflicts,
+      advancesIgnored: merged.advancesIgnored, photosTrimmed: merged.photosTrimmed, trimmedPhotoIds: merged.trimmedPhotoIds,
+    },
   }
 }
 
@@ -500,13 +565,15 @@ export async function handleMoneyOp(deps: MoneyDeps, req: HandlerRequest): Promi
     const ws = caller.workshopId
 
     // Idempotência primeiro: o estado já mudou e as guardas recusariam a repetição.
+    const reqHash = await sha256Hex(stable({ kind: r.kind, osId: r.osId, entryId: r.entryId, payload: r.payload }))
     const prev = await deps.store.getOp(r.opId)
     if (prev) {
-      if (prev.workshopId !== ws || prev.userId !== caller.userId || prev.kind !== r.kind) {
+      // `reqHash` ausente = op gravada antes da coluna existir: só oficina, usuário e kind valem.
+      if (prev.workshopId !== ws || prev.userId !== caller.userId || prev.kind !== r.kind || (prev.reqHash && prev.reqHash !== reqHash)) {
         throw new HttpError(409, 'op_id_reutilizado', 'Este identificador de operação já foi usado em outra operação.')
       }
-      const res = prev.result as { rows?: unknown } | null
-      return okResult({ kind: r.kind, replay: true, rows: Array.isArray(res?.rows) ? res.rows : [], info: {} })
+      const res = prev.result as { rows?: unknown; info?: unknown } | null
+      return okResult({ kind: r.kind, replay: true, rows: Array.isArray(res?.rows) ? visibleConflictRows(res.rows as { table?: unknown }[], caller) : [], info: isObj(res?.info) ? res.info : {} })
     }
 
     const tz = await deps.store.workshopTz(ws)
@@ -515,7 +582,7 @@ export async function handleMoneyOp(deps: MoneyDeps, req: HandlerRequest): Promi
     const stale = checkKnown(r.known, loaded)
     if (stale) {
       throw new HttpError(409, 'conflito_versao', VERSION_CONFLICT_MESSAGE, {
-        rows: stale.map(x => ({ table: x.table, id: x.id, version: x.version, data: x.data, deleted_at: x.deletedAt, os_id: x.osId ?? null })),
+        rows: visibleConflictRows(stale, caller).map(x => ({ table: x.table, id: x.id, version: x.version, data: x.data, deleted_at: x.deletedAt, os_id: x.osId ?? null })),
       })
     }
 
@@ -545,7 +612,7 @@ export async function handleMoneyOp(deps: MoneyDeps, req: HandlerRequest): Promi
     try {
       res = await deps.store.apply({
         opId: r.opId, workshopId: ws, userId: caller.userId, deviceId, kind: r.kind,
-        expected, writes, audit: plan.audit.map(e => ({ id: e.id, data: pure(e) })),
+        expected, writes, audit: plan.audit.map(e => ({ id: e.id, data: pure(e) })), reqHash, info: pure(plan.info),
       })
     } catch (e) {
       if (e instanceof MoneyStoreError) {
@@ -555,8 +622,8 @@ export async function handleMoneyOp(deps: MoneyDeps, req: HandlerRequest): Promi
       throw e
     }
     if (res.status === 'conflict') {
-      throw new HttpError(409, 'conflito_versao', VERSION_CONFLICT_MESSAGE, { rows: res.rows })
+      throw new HttpError(409, 'conflito_versao', VERSION_CONFLICT_MESSAGE, { rows: visibleConflictRows(res.rows as { table?: unknown }[], caller) })
     }
-    return okResult({ kind: r.kind, rows: res.rows, info: plan.info })
+    return okResult({ kind: r.kind, rows: visibleConflictRows(res.rows, caller), info: plan.info })
   })
 }

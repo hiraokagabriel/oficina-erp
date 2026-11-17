@@ -174,5 +174,20 @@ select throws_ok($$select public.apply_money_op('11111111-1111-1111-1111-1111111
 select throws_ok($$select public.apply_money_op('11111111-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000e1', null, 'receber', '[]', '[]')$$,
   '22023', 'op_id_reutilizado', 'op_id com outro tipo: erro');
 
+-- op_id com hash do corpo (req_hash) e info no resultado
+create temp table mh1 as select public.apply_money_op('12121212-1212-1212-1212-121212121212', 'aaaaaaaa-0000-0000-0000-000000000001',
+  '00000000-0000-0000-0000-0000000000e1', null, 'x', '[]', '[]', '[]', 'hash-a', '{"osNumber":7,"amount":10000}') as j;
+grant all on mh1 to public;
+select is((select j ->> 'status' from mh1), 'ok', 'op com hash: ok');
+select is((select j -> 'info' ->> 'osNumber' from mh1), '7', 'resultado guarda o info');
+select is((select req_hash from public.money_ops where op_id = '12121212-1212-1212-1212-121212121212'), 'hash-a', 'money_ops guarda o req_hash');
+create temp table mh2 as select public.apply_money_op('12121212-1212-1212-1212-121212121212', 'aaaaaaaa-0000-0000-0000-000000000001',
+  '00000000-0000-0000-0000-0000000000e1', null, 'x', '[]', '[]', '[]', 'hash-a', '{}') as j;
+grant all on mh2 to public;
+select is((select j from mh2), (select j from mh1), 'replay com o mesmo hash devolve o resultado gravado, com info');
+select throws_ok($$select public.apply_money_op('12121212-1212-1212-1212-121212121212', 'aaaaaaaa-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000e1', null, 'x', '[]', '[]', '[]', 'hash-b', '{}')$$,
+  '22023', 'op_id_reutilizado', 'mesmo op_id com hash diferente: op_id_reutilizado');
+select is((select count(*) from public.money_ops where op_id = '12121212-1212-1212-1212-121212121212'), 1::bigint, 'hash diferente não regrava money_ops');
+
 select pg_temp.as_admin();
 select * from finish();

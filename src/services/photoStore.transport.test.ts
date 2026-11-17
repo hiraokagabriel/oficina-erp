@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  acquirePhotoUrl, clearPhotoUrlCache, createTauriTransport, isPhotoFailed, isPhotoPending, retryPhoto, isPhotoStoreAvailable, newPhotoId, photoStoreKind,
+  acquirePhotoUrl, clearPhotoUrlCache, createTauriTransport, isPhotoFailed, isPhotoPending, retryPhoto, isPhotoStoreAvailable, newPhotoId, pendingPhotoCount, photoStoreKind,
   releasePhotoUrl, savePhoto, setPhotoTransport, trashOSPhotos, trashPhoto,
 } from './photoStore';
 import type { InvokeFn, PhotoTransport } from './photoStore';
@@ -83,6 +83,22 @@ describe('photoStore com transporte', () => {
     t.read = async () => { throw new Error('sem rede'); };
     setPhotoTransport(t);
     await expect(acquirePhotoUrl('d', 'os1', 'f1', true)).rejects.toThrow('sem rede');
+  });
+
+  it('trocar ou remover o transporte limpa o cache de URLs; registrar o mesmo não', async () => {
+    const { t } = fakeTransport(new Map([['os1/f1/t', new Blob(['x'])]]));
+    setPhotoTransport(t);
+    const a = await acquirePhotoUrl('d', 'os1', 'f1', true);
+    setPhotoTransport(t);
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    setPhotoTransport(null);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith(a);
+  });
+
+  it('pendingPhotoCount pergunta ao transporte e é 0 sem ele', () => {
+    expect(pendingPhotoCount()).toBe(0);
+    setPhotoTransport({ ...fakeTransport().t, pendingCount: () => 3 });
+    expect(pendingPhotoCount()).toBe(3);
   });
 
   it('isPhotoPending pergunta ao transporte', () => {

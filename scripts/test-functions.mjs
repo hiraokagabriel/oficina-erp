@@ -289,7 +289,19 @@ try {
     const recJwt = await signIn(users.rec2.email, password)
     const mec2Jwt = await signIn(users.mec2.email, password)
     const today = new Date().toLocaleDateString('sv', { timeZone: 'America/Sao_Paulo' })
-    const money = (jwt, kind, body = {}, opId = randomUUID()) => fn('money', { opId, kind, today, ...body }, jwt).then((x) => ({ ...x, opId }))
+    // `known` é obrigatório no servidor (work_orders:<osId> ou ledger:<entryId>): por padrão manda a versão atual do banco;
+    // passe `known` no corpo para forçar outro valor (ex.: versão velha).
+    const money = async (jwt, kind, body = {}, opId = randomUUID()) => {
+      let known = body.known
+      if (!('known' in body)) {
+        const [row] = kind === 'ledger.toggle'
+          ? await sql`select version from public.ledger where workshop_id = ${ws2} and id = ${body.entryId}`
+          : await sql`select version from public.work_orders where workshop_id = ${ws2} and id = ${body.osId ?? ''}`
+        known = row ? { [kind === 'ledger.toggle' ? `ledger:${body.entryId}` : `work_orders:${body.osId}`]: Number(row.version) } : {}
+      }
+      const x = await fn('money', { opId, kind, today, ...body, known }, jwt)
+      return { ...x, opId }
+    }
     const seedOS = async (id, status = 'EM_SERVICO') => {
       const main = { id, osNumber: 1, vehicle: 'Gol 2012', clientName: 'Ana', clientPhone: '11999990000', mileage: 1, status, createdAt: '2026-11-01T15:00:00.000Z', publicNotes: '', parts: [{ id: `${id}-p0`, description: 'Filtro' }], services: [{ id: `${id}-s0`, description: 'Troca' }] }
       const fin = { prices: { [`${id}-p0`]: 4000, [`${id}-s0`]: 6000 }, total: 10000 }
@@ -322,6 +334,11 @@ try {
     check('money: repetir o mesmo op_id devolve replay sem duplicar', rep.status === 200 && rep.body.replay === true && (await ledgerOf('m-os0')).length === 1, show(rep))
     r = await money(recJwt, 'os.finalizeSingle', { osId: 'm-os0' })
     check('money: op_id novo na OS já finalizada: 409 estado_mudou', r.status === 409 && r.body.error === 'estado_mudou', show(r))
+    check('money: replay devolve o info gravado', rep.body.info?.osNumber === 1 && rep.body.info?.amount === 10000, show(rep))
+    const reuseBody = await money(recJwt, 'os.finalizeSingle', { osId: 'm-os0', payload: { outro: 1 } }, op1)
+    check('money: mesmo op_id e kind com corpo diferente: 409 op_id_reutilizado (hash)', reuseBody.status === 409 && reuseBody.body.error === 'op_id_reutilizado', show(reuseBody))
+    r = await money(recJwt, 'os.finalizeSingle', { osId: 'm-os0', known: undefined })
+    check('money: sem known: 400', r.status === 400 && r.body.error === 'dados_invalidos', show(r))
     const reuse = await money(recJwt, 'os.delete', { osId: 'm-os0' }, op1)
     check('money: op_id usado em outro kind: 409 op_id_reutilizado', reuse.status === 409 && reuse.body.error === 'op_id_reutilizado', show(reuse))
     r = await money(recJwt, 'os.restore', { osId: 'm-os0', payload: { target: 'EM_SERVICO' } })

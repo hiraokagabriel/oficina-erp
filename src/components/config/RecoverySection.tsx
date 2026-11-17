@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { deleteRecoveryCopy, downloadRecoveryCopy, listRecoveryCopies } from '../../auth/recoveryStore';
-import type { RecoveryCopy } from '../../auth/recoveryStore';
+import { useAuth } from '../../auth/AuthContext';
+import { deleteRecoveryCopy, downloadRecoveryCopy, downloadStuckPhotos, listRecoveryCopies, listStuckPhotoStores } from '../../auth/recoveryStore';
+import type { RecoveryCopy, StuckPhotoStore } from '../../auth/recoveryStore';
 import { ConfirmationModal } from '../../modals/ConfirmationModal';
-import { formatDay } from '../../utils/cloudUsers';
+import { formatDay, parsePeople, personNameById, stuckPhotosText } from '../../utils/cloudUsers';
+import type { MemberRow } from '../../utils/cloudUsers';
 import { Icon } from '../ui/Icon';
 
 // Config > Cópias de recuperação (docs/NUVEM-UX.md 6.3): o que uma pessoa não conseguiu enviar fica guardado neste
@@ -14,12 +16,24 @@ export const RecoverySection: React.FC = () => {
   const [copies, setCopies] = useState<RecoveryCopy[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [deleting, setDeleting] = useState<RecoveryCopy | null>(null);
+  const { api, workshopId, userId } = useAuth();
+  const [people, setPeople] = useState<MemberRow[]>([]);
+  const [stuck, setStuck] = useState<StuckPhotoStore[]>([]);
   const app = inApp();
 
   const load = useCallback(async (): Promise<void> => {
     try { setCopies(await listRecoveryCopies()); setFailed(false); } catch { setFailed(true); }
   }, []);
   useEffect(() => { if (!app) void load(); }, [app, load]);
+  useEffect(() => {
+    if (!workshopId) return;
+    void listStuckPhotoStores(workshopId, userId).then(setStuck, () => setStuck([]));
+  }, [workshopId, userId]);
+  // Nomes das pessoas (só se houver fotos presas e com internet): sem a lista, o texto cai em "pessoa que saiu deste aparelho".
+  useEffect(() => {
+    if (!workshopId || stuck.length === 0) return;
+    api.users.list().then(r => setPeople(parsePeople(r.people)), () => setPeople([]));
+  }, [api, workshopId, stuck.length]);
 
   return (
     <section className="card cfg-card" aria-labelledby="cfg-recovery">
@@ -42,6 +56,21 @@ export const RecoverySection: React.FC = () => {
             </li>
           ))}
         </ul>
+      )}
+      {workshopId && stuck.length > 0 && (
+        <>
+          <p className="cfg-help">Há fotos de outra pessoa que não chegaram a ser enviadas e ficaram guardadas neste aparelho. Baixe para não perdê-las.</p>
+          <ul className="cfg-people">
+            {stuck.map(p => (
+              <li key={p.userId} className="person-row">
+                <div className="person-id"><div className="person-name"><strong>{stuckPhotosText(p.count, personNameById(people, p.userId))}</strong><span className="cfg-help">Ainda não enviadas</span></div></div>
+                <div className="person-actions">
+                  <button type="button" className="btn-secondary btn-sm" onClick={() => void downloadStuckPhotos(workshopId, p.userId)}>Baixar fotos</button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
       {deleting && (
         <ConfirmationModal

@@ -86,8 +86,8 @@ export class MemoryMoneyStore implements MoneyStore {
       rows.push({ table: w.table, id: w.id, version: this.get(w.table, w.id)?.version ?? 0 })
     }
     for (const x of a.audit) if (!this.audit.some(y => y.id === x.id)) this.audit.push(x)
-    const result: ApplyResult = { status: 'ok', rows }
-    this.ops.set(a.opId, { workshopId: a.workshopId, userId: a.userId, kind: a.kind, result })
+    const result: ApplyResult = { status: 'ok', rows, info: a.info }
+    this.ops.set(a.opId, { workshopId: a.workshopId, userId: a.userId, kind: a.kind, result, reqHash: a.reqHash })
     return result
   }
 }

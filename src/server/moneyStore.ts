@@ -31,8 +31,8 @@ export function createMoneyStore(cfg: RestConfig): MoneyStore {
   }
   return {
     async getOp(opId): Promise<StoredOp | null> {
-      const [j] = await select(`money_ops?op_id=eq.${q(opId)}&select=workshop_id,user_id,kind,result&limit=1`)
-      return j ? { workshopId: String(j.workshop_id), userId: String(j.user_id), kind: String(j.kind), result: j.result } : null
+      const [j] = await select(`money_ops?op_id=eq.${q(opId)}&select=workshop_id,user_id,kind,result,req_hash&limit=1`)
+      return j ? { workshopId: String(j.workshop_id), userId: String(j.user_id), kind: String(j.kind), result: j.result, reqHash: typeof j.req_hash === 'string' ? j.req_hash : null } : null
     },
     async workshopTz(ws) {
       const [j] = await select(`workshops?id=eq.${q(ws)}&select=tz&limit=1`)
@@ -57,7 +57,7 @@ export function createMoneyStore(cfg: RestConfig): MoneyStore {
     async apply(a: ApplyArgs): Promise<ApplyResult> {
       const r = await h.call('POST', '/rest/v1/rpc/apply_money_op', {
         p_op_id: a.opId, p_ws: a.workshopId, p_user: a.userId, p_device: a.deviceId, p_kind: a.kind,
-        p_expected: a.expected, p_writes: a.writes, p_audit: a.audit,
+        p_expected: a.expected, p_writes: a.writes, p_audit: a.audit, p_req_hash: a.reqHash, p_info: a.info,
       })
       if (!r.ok) {
         const msg = typeof rec(r.json).message === 'string' ? String(rec(r.json).message) : ''

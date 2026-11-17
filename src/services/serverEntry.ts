@@ -17,3 +17,4 @@ export { joinWorkOrder, splitWorkOrder } from '../sync/split';
 export type { SplitOS, WorkOrderCosts, WorkOrderFinance, WorkOrderMain } from '../sync/split';
 export { stable } from './osEditMerge';
 export { ensureUniqueItemIds } from '../utils/itemIds';
+export { calculateFinancials } from '../utils/helpers';

@@ -6,6 +6,8 @@ import { dirtyLabels, joinLabels } from '../utils/dirtyRegistry';
 import { useTheme } from '../hooks/useTheme';
 import { useDatabase } from '../context/DatabaseContext';
 import { ConfirmationModal } from '../modals/ConfirmationModal';
+import { pendingPhotoCount } from '../services/photoStore';
+import { photosPendingNotice } from '../services/photoPendingView';
 import { ROLE_LABEL, initials } from '../utils/cloudUsers';
 import { ChangePasswordModal, ChangePinModal } from './AccountModals';
 import { CloudBadge } from './CloudBadge';
@@ -22,15 +24,22 @@ export const AppTopbar: React.FC = () => {
   const menu = usePopover();
   const [dialog, setDialog] = useState<'pin' | 'password' | 'signout' | null>(null);
   const [switchAsk, setSwitchAsk] = useState<string[] | null>(null);
+  const [photosAsk, setPhotosAsk] = useState<number | null>(null);
   const [theme, setTheme] = useTheme();
   const { sharedDevice, switching, switchPerson, gateClosed } = auth;
 
   // "Trocar de pessoa": se há janela com edição não salva, pergunta antes (o registro vem do useDirtyGuard).
+  // Depois disso, fotos que ainda não subiram também pedem confirmação (ficam neste aparelho até a pessoa voltar).
+  const switchOrAskPhotos = (): void => {
+    const n = pendingPhotoCount();
+    if (n > 0) setPhotosAsk(n);
+    else void switchPerson();
+  };
   const requestSwitch = (): void => {
     if (switching || gateClosed || isAppLocked()) return;
     const left = dirtyLabels();
     if (left.length > 0) setSwitchAsk(left);
-    else void switchPerson();
+    else switchOrAskPhotos();
   };
 
   // F8 troca de pessoa (não conflita com F2, Nova OS).
@@ -54,9 +63,11 @@ export const AppTopbar: React.FC = () => {
   const role = auth.role ? ROLE_LABEL[auth.role] : '';
   const pending = cloud.pending;
 
-  const signOutText = pending > 0 || hasPendingChanges
+  const photosNotice = photosPendingNotice(pendingPhotoCount());
+  const signOutBase = pending > 0 || hasPendingChanges
     ? `Ainda há ${pending > 0 ? `${pending} ${pending === 1 ? 'alteração sua' : 'alterações suas'}` : 'alterações suas'} que não ${pending === 1 ? 'foi enviada' : 'foram enviadas'}. Elas continuam guardadas neste aparelho e só chegam aos outros quando você entrar de novo aqui e houver internet.`
     : 'Você vai precisar do e-mail e da senha para entrar de novo aqui.';
+  const signOutText = photosNotice ? `${signOutBase} ${photosNotice}` : signOutBase;
 
   const pick = (d: 'pin' | 'password' | 'signout'): void => { menu.close(); setDialog(d); };
 
@@ -126,9 +137,17 @@ export const AppTopbar: React.FC = () => {
       {/* em portal: a janela da OS (desenhada depois da barra) cobriria este diálogo */}
       {switchAsk && ReactDOM.createPortal(
         <ConfirmationModal
-          isOpen onClose={() => setSwitchAsk(null)} onConfirm={() => { setSwitchAsk(null); void switchPerson(); }}
+          isOpen onClose={() => setSwitchAsk(null)} onConfirm={() => { setSwitchAsk(null); switchOrAskPhotos(); }}
           title="Descartar alterações?" confirmText="Trocar de pessoa" cancelText="Continuar editando" confirmColor="danger"
           message={`Há ${joinLabels(switchAsk)} com alterações que ainda não foram salvas. Se a outra pessoa entrar, o que foi digitado nessa janela se perde.`}
+        />,
+        document.body,
+      )}
+      {photosAsk !== null && ReactDOM.createPortal(
+        <ConfirmationModal
+          isOpen onClose={() => setPhotosAsk(null)} onConfirm={() => { setPhotosAsk(null); void switchPerson(); }}
+          title="Fotos ainda não subiram" confirmText="Trocar de pessoa" cancelText="Esperar" confirmColor="danger"
+          message={photosPendingNotice(photosAsk)}
         />,
         document.body,
       )}

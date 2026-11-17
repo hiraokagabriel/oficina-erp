@@ -25,6 +25,8 @@ export interface PhotoTransport {
   isFailed?(osId: string, photoId: string): boolean;
   /** Põe a foto com erro de volta na fila de envio. */
   retry?(osId: string, photoId: string): void;
+  /** Quantas fotos esperam para subir neste aparelho (inclui as com erro). */
+  pendingCount?(): number;
 }
 
 /** Mesmo formato de retorno dos comandos que devolvem IoResult no Rust. */
@@ -42,7 +44,14 @@ export const MAX_CACHED_PHOTO_URLS = 200;
 let activeTransport: PhotoTransport | null = null;
 
 /** Registra (ou, com `null`, remove) o transporte da nuvem. Troca de oficina/pessoa: o provider remove e registra outro. */
-export const setPhotoTransport = (t: PhotoTransport | null): void => { activeTransport = t; };
+export const setPhotoTransport = (t: PhotoTransport | null): void => {
+  // Transporte trocado ou removido: as object URLs em cache eram de outra pessoa/oficina.
+  if (t !== activeTransport) clearPhotoUrlCache();
+  activeTransport = t;
+};
+
+/** Fotos que ainda não subiram e estão guardadas só neste aparelho (0 no modo arquivo). */
+export const pendingPhotoCount = (): number => activeTransport?.pendingCount?.() ?? 0;
 
 /** Qual lugar está valendo: `nuvem`, `arquivo` (Tauri) ou `nenhum` (navegador puro sem login). */
 export const photoStoreKind = (): 'cloud' | 'tauri' | 'none' => {

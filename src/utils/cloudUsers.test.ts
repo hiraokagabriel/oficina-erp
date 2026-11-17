@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  adminErrorMessage, formatDay, initials, isOnlyActiveOwner, parseMemberRows, roleChangeTitle, sortMembers, validateInvite,
+  adminErrorMessage, formatDay, initials, isOnlyActiveOwner, parseMemberRows, personNameById, roleChangeTitle, sortMembers, stuckPhotosText, validateInvite,
 } from './cloudUsers';
 
 const rows = parseMemberRows([
@@ -40,5 +40,18 @@ describe('cloudUsers', () => {
   it('data dd/mm/aaaa', () => {
     expect(formatDay('2026-11-12T12:00:00')).toBe('12/11/2026');
     expect(formatDay('')).toBe('');
+  });
+});
+
+describe('fotos presas por pessoa', () => {
+  it('texto com nome, singular e sem nome', () => {
+    expect(stuckPhotosText(3, 'Ana')).toBe('3 fotos de Ana');
+    expect(stuckPhotosText(1, ' Ana ')).toBe('1 foto de Ana');
+    expect(stuckPhotosText(2)).toBe('2 fotos da pessoa que saiu deste aparelho');
+    expect(stuckPhotosText(2, '  ')).toBe('2 fotos da pessoa que saiu deste aparelho');
+  });
+  it('nome pelo userId; desconhecido vira vazio', () => {
+    expect(personNameById(rows, 'c')).toBe('Beto');
+    expect(personNameById(rows, 'zz')).toBe('');
   });
 });

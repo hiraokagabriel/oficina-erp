@@ -228,21 +228,22 @@ export function AppContent({ topbar }: { topbar?: ReactNode } = {}) {
   };
   /**
    * Roda a operação no servidor (função `money`). O resultado já entra no estado pelo pull do motor antes de `onOk`.
-   * Falha: toast com o motivo; se foi a rede, "Tentar de novo" repete com o MESMO `op_id` (não lança duas vezes).
+   * Falha: toast com o motivo; se foi a rede, "Tentar de novo" repete com o MESMO `op_id` (`retryOpId`: não lança duas vezes).
+   * Todo clique novo da pessoa gera `op_id` novo (sem `retryOpId`).
    */
-  const runMoney = (kind: MoneyKind, call: MoneyCall, onOk: (info: Record<string, unknown>) => void): void => {
+  const runMoney = (kind: MoneyKind, call: MoneyCall, onOk: (info: Record<string, unknown>) => void, retryOpId?: string): void => {
     const money = cloud?.money;
     if (!money) return;
-    void money(kind, call).then(out => {
+    void money(kind, call, retryOpId ? { retryOpId } : undefined).then(out => {
       if (out.ok) { onOk(out.info); return; }
-      const retry = out.code === 'rede' || out.code === 'erro'
-        ? { label: 'Tentar de novo', onClick: () => runMoney(kind, call, onOk) }
+      const retry = (out.code === 'rede' || out.code === 'erro' || out.code === 'offline' || out.code === 'pendente') && out.opId
+        ? { label: 'Tentar de novo', onClick: () => runMoney(kind, call, onOk, out.opId) }
         : undefined;
       addToast(out.message, moneyFailToastType(out), retry);
     });
   };
 
-  const handleUpdateStatus = (osId: string, newStatus: OSStatus) => {
+  const handleUpdateStatus = (osId: string, newStatus: OSStatus, onDone?: () => void) => {
     const os = workOrders.find(o => o.id === osId);
     if (!os || os.status === newStatus) return;
 
@@ -256,7 +257,7 @@ export function AppContent({ topbar }: { topbar?: ReactNode } = {}) {
       if (money && !access.can('os.finalize')) { addToast(FINALIZE_DENIED_MESSAGE, 'info'); return; }
       if (money && moneyOffline()) return;
       if (money && effect.kind === 'update') {
-        runMoney('os.status', { osId, payload: { newStatus } }, () => SoundFX.pop());
+        runMoney('os.status', { osId, payload: { newStatus } }, () => { SoundFX.pop(); onDone?.(); });
         return;
       }
     }
@@ -275,6 +276,7 @@ export function AppContent({ topbar }: { topbar?: ReactNode } = {}) {
     }
 
     SoundFX.pop();
+    onDone?.();
   };
 
   const handleSaveOSModal = (data: OSModalPayload) => {
@@ -290,7 +292,7 @@ export function AppContent({ topbar }: { topbar?: ReactNode } = {}) {
       const field = { mileage: data.mileage, photos: data.photos };
       const next = applyFieldSave(current, field);
       setWorkOrders(prev => prev.map(o => o.id === osId ? applyFieldSave(o, field) : o));
-      if (!readOnly && !cloud) void trashRemovedPhotos(dbPath, osId, editingOS.photos, next.photos);
+      if (!readOnly) void trashRemovedPhotos(dbPath, osId, editingOS.photos, next.photos);
       addToast('OS atualizada!', 'success');
       setIsModalOpen(false);
       return;
@@ -386,13 +388,24 @@ export function AppContent({ topbar }: { topbar?: ReactNode } = {}) {
       if (cloud && saveNeedsMoney({ role: cloud.role, previous: current, saved, ledger })) {
         if (moneyOffline()) return;
         applyLinks();
-        runMoney('os.save', { osId: editingOS.id, payload: { opened: editingOS, base: merged.base, drafts: merged.drafts } }, () => {
+        // O servidor refaz o merge de 3 vias (opened/edited/current): manda a OS do FORMULÁRIO (`base`) e a lista de
+        // adiantamentos do formulário, não o resultado do merge local (senão o que outro aparelho mudou viraria "edição minha").
+        // Os avisos vêm do `info` do servidor (é o merge que de fato gravou); o merge local só decide se passa pelo caixa.
+        runMoney('os.save', { osId: editingOS.id, payload: { opened: editingOS, base, drafts: data.advances } }, info => {
+          const conflicts = Array.isArray(info.conflicts) ? info.conflicts.filter((x): x is string => typeof x === 'string') : [];
           addToast('OS atualizada!', 'success');
-          if (merged.changedElsewhere) addToast(CHANGED_ELSEWHERE_MESSAGE, 'info');
-          if (merged.conflicts.length) addToast(conflictsMessage(merged.conflicts), 'info');
-          if (merged.advancesIgnored) addToast(ADVANCES_IGNORED_MESSAGE, 'info');
-          if (merged.photosTrimmed) addToast(PHOTOS_TRIMMED_MESSAGE, 'info');
-          if (saved.exceedsTotal) addToast(ADVANCES_EXCEED_MESSAGE, 'info');
+          if (info.changedElsewhere === true) addToast(CHANGED_ELSEWHERE_MESSAGE, 'info');
+          if (conflicts.length) addToast(conflictsMessage(conflicts), 'info');
+          if (info.advancesIgnored === true) addToast(ADVANCES_IGNORED_MESSAGE, 'info');
+          if (info.photosTrimmed === true) addToast(PHOTOS_TRIMMED_MESSAGE, 'info');
+          if (info.exceedsTotal === true) addToast(ADVANCES_EXCEED_MESSAGE, 'info');
+          // Fotos tiradas da OS e fotos cortadas pelo limite: lixeira (a OS gravada pelo servidor é a verdade; o merge no servidor só acrescenta cortes).
+          if (!readOnly) {
+            const trimmed = Array.isArray(info.trimmedPhotoIds) ? info.trimmedPhotoIds.filter((x): x is string => typeof x === 'string') : [];
+            const trimmedSet = new Set(trimmed);
+            void trashRemovedPhotos(dbPath, editingOS.id, editingOS.photos, (base.photos ?? []).filter(p => !trimmedSet.has(p.id)));
+            if (trimmed.length) void trashPhotoIds(dbPath, editingOS.id, trimmed);
+          }
           setIsModalOpen(false);
         });
         return;
@@ -401,8 +414,8 @@ export function AppContent({ topbar }: { topbar?: ReactNode } = {}) {
       setLedger(saved.ledger);
       if (saved.events.length) setAuditLog(prev => [...prev, ...saved.events]);
       setWorkOrders(prev => prev.map(o => o.id === editingOS.id ? saved.os : o));
-      // Fotos na nuvem são do PR 7: no modo nuvem `dbPath` é só um nome ("nuvem:...") e não há pasta para o Rust mexer.
-      if (!readOnly && !cloud) {
+      // Modo arquivo: lixeira no disco. Nuvem: o transporte só tira da fila de envio (`queue.cancel`).
+      if (!readOnly) {
         void trashRemovedPhotos(dbPath, editingOS.id, editingOS.photos, saved.os.photos);
         if (merged.trimmedPhotoIds.length) void trashPhotoIds(dbPath, editingOS.id, merged.trimmedPhotoIds);
       }
@@ -881,7 +894,11 @@ Abrir OS?`)) {
       const os = pendingAction.data;
       setPendingAction(null);
       if (moneyOffline()) return;
-      runMoney('os.delete', { osId: os.id }, () => addToast('OS excluída.', 'info'));
+      runMoney('os.delete', { osId: os.id }, () => {
+        // Só depois do servidor confirmar: tira da fila de envio as fotos que ainda não subiram.
+        void trashDeletedOSPhotos(dbPath, os);
+        addToast('OS excluída.', 'info');
+      });
       return;
     }
 
@@ -913,8 +930,16 @@ Abrir OS?`)) {
     }
 
     if (pendingAction.type === 'ARCHIVE_OS') {
-      handleUpdateStatus(pendingAction.data.id, 'ARQUIVADO');
-      addToast('OS Arquivada.', 'info');
+      const archiveId = pendingAction.data.id;
+      // Nuvem: FINALIZADO -> ARQUIVADO não mexe no caixa e vai pelo sync normal (fila de envio, offline-first), sem a função
+      // `money`: aí `onDone` roda na hora (aviso imediato, como no resto do app offline-first). Se o servidor recusar depois,
+      // o motor desfaz a mudança, guarda uma cópia de recuperação e avisa (`sweepRejected`). Só os casos que exigem a função
+      // `money` (ver `statusNeedsMoneyOp`) esperam a resposta; em erro, quem falou foi o toast de erro.
+      if (cloud) handleUpdateStatus(archiveId, 'ARQUIVADO', () => addToast('OS Arquivada.', 'info'));
+      else {
+        handleUpdateStatus(archiveId, 'ARQUIVADO');
+        addToast('OS Arquivada.', 'info');
+      }
     }
 
     if (pendingAction.type === 'FINISH_OS_FINANCIAL') {

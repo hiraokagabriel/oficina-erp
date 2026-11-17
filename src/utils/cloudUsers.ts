@@ -128,6 +128,18 @@ export const reactivateText = (name: string): string =>
   `${name} volta a entrar com e-mail e senha e cria um PIN novo no primeiro acesso.`;
 
 export const OFFLINE_ADMIN_NOTE = 'Sem internet: a lista pode estar desatualizada e não dá para convidar nem mudar nada agora.';
+/** Fotos presas de uma pessoa: "3 fotos de Ana" (nome da lista de pessoas) ou, sem nome, "3 fotos da pessoa que saiu deste aparelho". */
+export function stuckPhotosText(count: number, name?: string | null): string {
+  const n = `${count} ${count === 1 ? 'foto' : 'fotos'}`;
+  const who = name && name.trim() ? name.trim() : '';
+  return who ? `${n} de ${who}` : `${n} da pessoa que saiu deste aparelho`;
+}
+
+/** Nome da pessoa pelo `userId` na lista de pessoas (vazio se não achar ou sem nome). */
+export function personNameById(rows: readonly Pick<MemberRow, 'userId' | 'displayName'>[], userId: string): string {
+  return rows.find(r => r.userId === userId)?.displayName?.trim() ?? '';
+}
+
 export const NEEDS_INTERNET = 'Precisa de internet';
 
 /** Erro do servidor (`AuthApiError.error`) em texto simples. `fallback` é a mensagem que o servidor já mandou. */

@@ -154,8 +154,10 @@ export const OSPhotos: React.FC<OSPhotosProps> = ({ dbPath, osId, osNumber, phot
     setPhotos(prev => removeFromList(prev, p.id));
     // Foto gravada só nesta sessão: não existe no banco, vai já para a lixeira.
     // Foto que já estava salva: o App manda para a lixeira quando a OS for salva.
-    // Na nuvem, `trashPhoto` só cancela o envio na fila ("Descartar" de foto que não subiu); objetos já enviados ficam.
-    if (sessionRef.current.delete(p.id) || cloud) {
+    // Na nuvem, `trashPhoto` só tira da fila de envio (os bytes somem do aparelho): vale já só para foto desta sessão. Foto já
+    // salva na OS (inclusive com erro, via "Descartar") sai da fila quando a OS for salva (App); se a janela for cancelada,
+    // a OS ainda aponta para ela e os bytes precisam continuar subindo.
+    if (sessionRef.current.delete(p.id)) {
       trashPhoto(dbPath, osId, p.id).catch(err => console.warn('Não foi possível mover a foto para a lixeira:', err));
     }
   };

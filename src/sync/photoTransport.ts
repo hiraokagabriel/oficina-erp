@@ -100,6 +100,8 @@ export function createCloudPhotoTransport(o: CloudPhotoTransportOptions): PhotoT
     },
 
     async read(_dbPath, osId, photoId, thumb) {
+      // Mesma regra do `save`: id fora do padrão nunca vira caminho de download.
+      if (!isValidPhotoId(osId) || !isValidPhotoId(photoId)) return null;
       const local = o.queue.readLocal(osId, photoId, thumb);
       if (local) return local;
       if (thumb) {
@@ -120,6 +122,7 @@ export function createCloudPhotoTransport(o: CloudPhotoTransportOptions): PhotoT
       await o.queue.cancel(osId, photoId);
     },
 
+    pendingCount: () => o.queue.count(),
     isPending: (osId, photoId) => o.queue.has(osId, photoId),
     isFailed: (osId, photoId) => o.queue.isFailed(osId, photoId),
     retry: (osId, photoId) => o.queue.retryOne(osId, photoId),

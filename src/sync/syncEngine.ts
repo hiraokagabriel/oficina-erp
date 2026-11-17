@@ -16,7 +16,7 @@ import { joinCatalogItem, joinWorkOrder } from './split';
 import type { CatalogMain, WorkOrderCosts, WorkOrderFinance, WorkOrderMain } from './split';
 import { CACHE_VERSION, emptyMeta } from './store';
 import type { CommitBatch, LocalStore, StoredRecord, StoreMeta } from './store';
-import type { MoneyCall, MoneyKind, MoneyOutcome } from './moneyClient';
+import type { MoneyCall, MoneyKind, MoneyOutcome, MoneyRunOptions } from './moneyClient';
 import type { CatalogKind, CloudTable, CollectionKey } from './types';
 
 // Motor de sincronização (docs/NUVEM-SPEC.md seção 4). Sem React, sem Supabase, sem IndexedDB: transporte, cache,
@@ -143,7 +143,7 @@ export interface CloudInfo extends SyncStatus {
   /** "Tentar enviar agora" do selo: busca tudo e envia a fila. Só existe no provider da nuvem. */
   syncNow?: () => Promise<void>;
   /** Operação de dinheiro pela função `money` (PR 6). Só existe no provider da nuvem. Nunca lança. */
-  money?: (kind: MoneyKind, call: MoneyCall) => Promise<MoneyOutcome>;
+  money?: (kind: MoneyKind, call: MoneyCall, opts?: MoneyRunOptions) => Promise<MoneyOutcome>;
   /** Há operação de dinheiro no ar (os botões mostram "Recebendo..."). */
   moneyBusy?: boolean;
   /** Registros (`osId` ou `entryId`) com operação de dinheiro no ar: só o botão deles mostra "Recebendo...". */
@@ -587,7 +587,8 @@ export class SyncEngine {
     }
     const known: Record<string, number> = {};
     if (ref.osId) {
-      const v = this.getRec('workOrders', ref.osId)?.versions;
+      const osRec = this.getRec('workOrders', ref.osId);
+      const v = osRec && !osRec.deleted ? osRec.versions : undefined; // excluída em outro aparelho: sem versão (o cliente avisa)
       if (v) {
         known[`work_orders:${ref.osId}`] = v.main;
         if (v.fin !== undefined) known[`work_order_finance:${ref.osId}`] = v.fin;

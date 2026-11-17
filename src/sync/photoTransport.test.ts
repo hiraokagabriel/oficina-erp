@@ -119,6 +119,24 @@ describe('transporte da nuvem', () => {
     expect(await transport.read('d', 'os1', 'f1', true)).not.toBeNull();
   });
 
+  it('read: id fora do padrão não baixa nada (nem chama o Storage)', async () => {
+    const st = fakeStorage();
+    let calls = 0;
+    const real = st.api.download;
+    st.api.download = async p => { calls += 1; return real(p); };
+    const { transport } = build(st);
+    expect(await transport.read('d', '../x', 'f1', false)).toBeNull();
+    expect(await transport.read('d', 'os1', 'a/b', true)).toBeNull();
+    expect(calls).toBe(0);
+  });
+
+  it('pendingCount conta as fotos na fila', async () => {
+    const { transport } = build(fakeStorage(), WS, false);
+    expect(transport.pendingCount?.()).toBe(0);
+    await transport.save('d', 'os1', 'f1', blob(1), blob(2));
+    expect(transport.pendingCount?.()).toBe(1);
+  });
+
   it('erro de leitura que não é 404 propaga', async () => {
     const st = fakeStorage();
     st.api.download = async () => ({ data: null, error: { statusCode: '500', message: 'boom' } });

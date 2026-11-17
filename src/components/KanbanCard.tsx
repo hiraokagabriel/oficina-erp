@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useId, useRef, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { WorkOrder, OSStatus, STATUS_LABELS } from '../types';
@@ -7,6 +7,11 @@ import { Icon } from './ui/Icon';
 import { photoCount } from '../services/photos';
 import { DEFAULT_TARGET_MARGIN } from '../services/margin';
 import { getMarginBadge } from '../services/marginView';
+import { useDatabase } from '../context/DatabaseContext';
+import { useToast } from '../context/ToastContext';
+import { statusMoveNeedsInternet } from '../services/moneyOfflineView';
+import { MONEY_OFFLINE_TOAST } from '../utils/cloudStatus';
+import { ONLINE_ONLY_REASON } from './OnlineOnlyButton';
 import { deliveryProgress, formatKm, nextStep, splitVehicle, statusClass } from '../services/kanbanCardView';
 
 interface KanbanCardProps {
@@ -32,6 +37,59 @@ interface KanbanCardProps {
 const CARD_HELP =
   'Clique abre a OS. Clique direito ou botão "Mais": todas as ações. Ctrl+clique: finalizar rápido. ' +
   'Mover com o teclado: tecle M, use as setas e confirme com Enter.';
+
+interface NextStepButtonProps {
+  from: OSStatus;
+  to: OSStatus;
+  label: string;
+  onStep: (to: OSStatus) => void;
+  onPointerDown: (e: React.PointerEvent) => void;
+}
+
+/**
+ * Botão de próximo passo. Modo nuvem sem internet e passo que mexe no caixa: mesmo estado visual de `OnlineOnlyButton`
+ * (cinza, `aria-disabled`, motivo no leitor de tela); clicar só mostra o aviso. Consome o contexto aqui, não no cartão
+ * (o cartão é memoizado). Modo arquivo: botão de sempre.
+ */
+const NextStepButton = ({ from, to, label, onStep, onPointerDown }: NextStepButtonProps) => {
+  const offline = useDatabase().cloud?.online === false && statusMoveNeedsInternet(from, to);
+  const { addToast } = useToast();
+  const descId = useId();
+  if (offline) {
+    return (
+      <>
+        <button
+          type="button"
+          className="btn kcard-next btn-online-only"
+          aria-disabled="true"
+          aria-describedby={descId}
+          title={ONLINE_ONLY_REASON}
+          onPointerDown={onPointerDown}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); addToast(MONEY_OFFLINE_TOAST, 'info'); }}
+        >
+          {label}
+          <Icon name="sem-internet" size={16} />
+        </button>
+        <span id={descId} className="sr-only">{ONLINE_ONLY_REASON}</span>
+      </>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="btn kcard-next"
+      onPointerDown={onPointerDown}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (e.detail > 1) return; // clique duplo: o 2º clique não avança
+        onStep(to);
+      }}
+    >
+      {label}
+      <Icon name="proximo" size={16} />
+    </button>
+  );
+};
 
 export const KanbanCard = React.memo(({
   os,
@@ -202,19 +260,13 @@ export const KanbanCard = React.memo(({
 
           <div className="kcard-actions">
             {step && (
-              <button
-                type="button"
-                className="btn kcard-next"
+              <NextStepButton
+                from={status}
+                to={step.to}
+                label={step.label}
+                onStep={(to) => onStatusChange(os.id, to)}
                 onPointerDown={stopDrag}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (e.detail > 1) return; // clique duplo: o 2º clique não avança
-                  onStatusChange(os.id, step.to);
-                }}
-              >
-                {step.label}
-                <Icon name="proximo" size={16} />
-              </button>
+              />
             )}
             <button
               type="button"

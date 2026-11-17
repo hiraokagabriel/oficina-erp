@@ -16,9 +16,15 @@ function setup() {
   const m = makeMoney();
   let n = 100;
   const call = async (kind: string, body: Body = {}, who: string = RECEP, opts: { op?: string; authorization?: string | null } = {}) => {
+    // `known` é obrigatório no servidor: por padrão o teste manda a versão atual da OS (ou do lançamento), como o app faz.
+    // Para testar a falta dele, passe `known: undefined` (a chave presente vence o padrão).
+    const merged: Body = { osId: 'os1', ...body };
+    const target = kind === 'ledger.toggle' ? `ledger:${String(merged.entryId)}` : `work_orders:${String(merged.osId)}`;
+    const cur = m.store.get(target.startsWith('ledger') ? 'ledger' : 'work_orders', target.slice(target.indexOf(':') + 1));
+    const known = 'known' in body ? body.known : { [target]: cur?.version ?? 1 };
     const r = await handleMoneyOp(m.deps, {
       authorization: opts.authorization === undefined ? auth(who) : opts.authorization,
-      body: { opId: opts.op ?? OP(n++), kind, today: TODAY, osId: 'os1', ...body },
+      body: { opId: opts.op ?? OP(n++), kind, today: TODAY, ...merged, known },
     });
     return { status: r.status, body: r.body as Record<string, unknown> };
   };
@@ -585,5 +591,239 @@ describe('money: fuso e today', () => {
     expect(r.status).toBe(400);
     expect(r.body.error).toBe('data_invalida');
     expect((await t.call('os.restore', { today: '2026-11-14', payload: { target: 'EM_SERVICO' } })).status).toBe(400);
+  });
+});
+
+describe('money: revisão do PR 6', () => {
+  const costOf = (store: MemoryMoneyStore) => osRows(store).cost?.data as { costs: Record<string, number>; totalCost?: number; profit?: number };
+
+  it('B1: mesmo op_id com corpo diferente é 409 op_id_reutilizado; com o mesmo corpo é replay', async () => {
+    const t = setup();
+    t.store.seedOS(baseOS());
+    const a = await t.call('os.status', { payload: { newStatus: 'AGUARDANDO_PAGAMENTO' } }, RECEP, { op: OP(9) });
+    expect(a.status).toBe(200);
+    const other = await t.call('os.status', { payload: { newStatus: 'ARQUIVADO' } }, RECEP, { op: OP(9) });
+    expect(other.status).toBe(409);
+    expect(other.body.error).toBe('op_id_reutilizado');
+    const otherOs = await t.call('os.status', { osId: 'os2', payload: { newStatus: 'AGUARDANDO_PAGAMENTO' } }, RECEP, { op: OP(9) });
+    expect(otherOs.body.error).toBe('op_id_reutilizado');
+    const same = await t.call('os.status', { payload: { newStatus: 'AGUARDANDO_PAGAMENTO' } }, RECEP, { op: OP(9) });
+    expect(same.status).toBe(200);
+    expect(same.body.replay).toBe(true);
+    expect(statusOf(t.store)).toBe('AGUARDANDO_PAGAMENTO');
+  });
+
+  it('mesmo op_id e mesmo corpo com `known` diferente (ou versão 0) é replay, sem gravar de novo', async () => {
+    const t = setup();
+    t.store.seedOS(baseOS());
+    const a = await t.call('os.finalizeSingle', {}, RECEP, { op: OP(9) });
+    expect(a.status).toBe(200);
+    const applied = t.store.applyCalls;
+    const b = await t.call('os.finalizeSingle', { known: { 'work_orders:os1': 0 } }, RECEP, { op: OP(9) });
+    expect(b.status).toBe(200);
+    expect(b.body.replay).toBe(true);
+    const c = await t.call('os.finalizeSingle', { known: { 'work_orders:os1': 77, 'work_order_finance:os1': 5 } }, RECEP, { op: OP(9) });
+    expect(c.body.replay).toBe(true);
+    expect(t.store.applyCalls).toBe(applied);
+  });
+
+  it('op_id NOVO com `known` 0 (retry de op que nunca chegou) é 409 de versão e não grava', async () => {
+    const t = setup();
+    t.store.seedOS(baseOS());
+    const r = await t.call('os.finalizeSingle', { known: { 'work_orders:os1': 0 } }, RECEP, { op: OP(10) });
+    expect(r.status).toBe(409);
+    expect(r.body.error).toBe('conflito_versao');
+    expect(t.store.applyCalls).toBe(0);
+  });
+
+  it('B1: o hash do corpo vai para o banco (reqHash)', async () => {
+    const t = setup();
+    t.store.seedOS(baseOS());
+    await t.call('os.finalizeSingle', {}, RECEP, { op: OP(9) });
+    expect(t.store.ops.get(OP(9))?.reqHash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('I2: o replay devolve o mesmo info da primeira resposta', async () => {
+    const t = setup();
+    t.store.seedOS(baseOS());
+    const first = await t.call('os.finalizeSingle', {}, RECEP, { op: OP(9) });
+    const second = await t.call('os.finalizeSingle', {}, RECEP, { op: OP(9) });
+    expect(second.body.replay).toBe(true);
+    expect(second.body.info).toEqual(first.body.info);
+    expect(second.body.info).toMatchObject({ osNumber: 7, amount: 10000 });
+  });
+
+  it('I3: 409 para a Recepção não traz work_order_costs; o Dono vê', async () => {
+    const t = setup();
+    t.store.seedOS(baseOS());
+    t.store.bump('work_orders', 'os1');
+    const stale = { known: { 'work_orders:os1': 1, 'work_order_costs:os1': 0 } };
+    const rec = await t.call('os.finalizeSingle', stale, RECEP);
+    expect(rec.body.error).toBe('conflito_versao');
+    const recRows = rec.body.rows as { table: string }[];
+    expect(recRows.length).toBeGreaterThan(0);
+    expect(recRows.some(x => x.table === 'work_order_costs')).toBe(false);
+    const owner = await t.call('os.finalizeSingle', stale, OWNER);
+    expect((owner.body.rows as { table: string }[]).some(x => x.table === 'work_order_costs')).toBe(true);
+  });
+
+  it('I3: conflito detectado pelo banco (corrida) também sai sem work_order_costs para a Recepção', async () => {
+    const t = setup();
+    t.store.seedOS(baseOS());
+    t.store.beforeApply = () => { t.store.bump('work_order_finance', 'os1'); };
+    const r = await t.call('os.finalizeSingle', {}, RECEP);
+    expect(r.body.error).toBe('conflito_versao');
+    expect((r.body.rows as { table: string }[]).some(x => x.table === 'work_order_costs')).toBe(false);
+  });
+
+  it('I4: sem `known` da OS (ou do lançamento) é 400; OS nova não precisa', async () => {
+    const t = setup();
+    t.store.seedOS(baseOS(), [entry()]);
+    const base = baseOS();
+    const cases: [string, Body][] = [
+      ['os.finalizeSingle', {}], ['os.status', { payload: { newStatus: 'APROVADO' } }], ['os.delete', {}],
+      ['os.restore', { payload: { target: 'EM_SERVICO' } }], ['os.save', { payload: { opened: base, base } }],
+    ];
+    for (const [kind, body] of cases) {
+      const r = await t.call(kind, { ...body, known: undefined });
+      expect(r.status, kind).toBe(400);
+    }
+    expect((await t.call('os.finalizeSingle', { known: { 'ledger:e1': 1 } })).status).toBe(400);
+    expect((await t.call('ledger.toggle', { osId: undefined, entryId: 'e1', known: undefined })).status).toBe(400);
+    expect((await t.call('ledger.toggle', { osId: undefined, entryId: 'e1', known: { 'work_orders:os1': 1 } })).status).toBe(400);
+    expect(t.store.applyCalls).toBe(0);
+    const fresh = baseOS({ id: 'os9', status: 'ORCAMENTO' });
+    expect((await t.call('os.save', { osId: 'os9', known: undefined, payload: { isNew: true, base: fresh } })).status).toBe(200);
+  });
+
+  it('I4: os.save com `known` velho é 409 (a concorrência vale)', async () => {
+    const t = setup();
+    t.store.seedOS(baseOS());
+    t.store.bump('work_orders', 'os1');
+    const base = baseOS();
+    const r = await t.call('os.save', { known: { 'work_orders:os1': 1 }, payload: { opened: base, base: { ...base, clientName: 'Outra' } } });
+    expect(r.status).toBe(409);
+    expect(r.body.error).toBe('conflito_versao');
+  });
+
+  it('M1: itens nulos, escalares inválidos, createdAt inválido e id de foto inseguro: 400', async () => {
+    const t = setup();
+    t.store.seedOS(baseOS());
+    const base = baseOS();
+    const bads: Record<string, unknown>[] = [
+      { ...base, parts: [null] }, { ...base, services: [{ id: 'x', description: 5, price: 1 }] },
+      { ...base, clientName: 5 }, { ...base, osNumber: 'sete' }, { ...base, mileage: 'x' },
+      { ...base, createdAt: 'ontem' }, { ...base, photos: [{ id: '../x', createdAt: '2026-11-01T12:00:00.000Z' }] },
+    ];
+    for (const b of bads) expect((await t.call('os.save', { payload: { opened: base, base: b } })).status).toBe(400);
+    expect(t.store.applyCalls).toBe(0);
+    const ok = { ...base, photos: [{ id: 'f-1', createdAt: '2026-11-01T12:00:00.000Z' }] };
+    expect((await t.call('os.save', { payload: { opened: base, base: ok } })).status).toBe(200);
+  });
+
+  it('A1: OS antiga (sem publicNotes, technician null, sem clientPhone/mileage/campos opcionais) como opened e base: 200', async () => {
+    const t = setup();
+    const old = baseOS();
+    const raw: Record<string, unknown> = { ...old, technician: null };
+    delete raw.publicNotes; delete raw.clientPhone; delete raw.mileage;
+    t.store.seedOS(old);
+    const r = await t.call('os.save', { payload: { opened: raw, base: { ...raw, clientName: 'Ana Maria' } } });
+    expect(r.status).toBe(200);
+    expect((osRows(t.store).main?.data as { clientName: string }).clientName).toBe('Ana Maria');
+    const bad = await t.call('os.save', { payload: { opened: { ...raw, publicNotes: 5 }, base: raw } });
+    expect(bad.status).toBe(400);
+  });
+
+  it('M-b: info do os.save traz os ids das fotos cortadas pelo limite', async () => {
+    const t = setup();
+    t.store.seedOS(baseOS());
+    const base = baseOS();
+    const photos = Array.from({ length: 25 }, (_, i) => ({ id: `f-${i}`, createdAt: '2026-11-01T12:00:00.000Z' }));
+    const r = await t.call('os.save', { payload: { opened: base, base: { ...base, photos } } });
+    expect(r.status).toBe(200);
+    const info = r.body.info as { photosTrimmed: boolean; trimmedPhotoIds: string[] };
+    expect(info.photosTrimmed).toBe(true);
+    expect(info.trimmedPhotoIds).toEqual(['f-20', 'f-21', 'f-22', 'f-23', 'f-24']);
+  });
+
+  it('baixo 3: `rows` do sucesso e do replay também saem sem work_order_costs para a Recepção', async () => {
+    const t = setup();
+    t.store.seedOS(baseOS());
+    const opened = baseOS();
+    const edited: WorkOrder = { ...opened, parts: [{ id: 'os1-p0', description: 'Filtro', price: 5000 }], total: 11000 };
+    const rec = await t.call('os.save', { payload: { opened, base: edited } }, RECEP, { op: OP(31) });
+    expect(rec.status).toBe(200);
+    expect((rec.body.rows as { table: string }[]).some(x => x.table === 'work_order_costs')).toBe(false);
+    const again = await t.call('os.save', { payload: { opened, base: edited } }, RECEP, { op: OP(31) });
+    expect(again.body.replay).toBe(true);
+    expect((again.body.rows as { table: string }[]).some(x => x.table === 'work_order_costs')).toBe(false);
+    const t2 = setup();
+    t2.store.seedOS(baseOS());
+    const own = await t2.call('os.save', { payload: { opened, base: edited } }, OWNER, { op: OP(32) });
+    expect((own.body.rows as { table: string }[]).some(x => x.table === 'work_order_costs')).toBe(true);
+  });
+
+  it('M2: adiantamento de amanhã (today do cliente adiantado 1 dia) é recusado pelo dia da oficina', async () => {
+    const t = setup();
+    t.store.seedOS(baseOS());
+    const base = baseOS();
+    const r = await t.call('os.save', { today: '2026-11-13', payload: { opened: base, base, drafts: [{ date: '2026-11-13', amount: 1000 }] } });
+    expect(r.status).toBe(422);
+    const ok = await t.call('os.save', { today: '2026-11-13', payload: { opened: base, base, drafts: [{ date: '2026-11-12', amount: 1000 }] } });
+    expect(ok.status).toBe(200);
+  });
+
+  it('M3: a Recepção muda o preço: totalCost e profit são refeitos com os custos repostos', async () => {
+    const t = setup();
+    t.store.seedOS(baseOS({ totalCost: 1000, profit: 9000 }));
+    const opened = baseOS();
+    const edited: WorkOrder = { ...opened, parts: [{ id: 'os1-p0', description: 'Filtro', price: 5000 }], total: 11000 };
+    const r = await t.call('os.save', { payload: { opened, base: edited } }, RECEP);
+    expect(r.status).toBe(200);
+    expect(costOf(t.store).costs['os1-p0']).toBe(1000);
+    expect(costOf(t.store).totalCost).toBe(1000);
+    expect(costOf(t.store).profit).toBe(10000);
+  });
+
+  it('M4: a Recepção (opened sem custos) editando peças não gera falso conflito nem "mudou em outro aparelho"', async () => {
+    const t = setup();
+    t.store.seedOS(baseOS({ totalCost: 1000, profit: 9000 }));
+    const { cost: _c, ...part } = baseOS().parts[0];
+    const opened: WorkOrder = { ...baseOS(), parts: [part] };
+    const edited: WorkOrder = { ...opened, parts: [{ ...part, description: 'Filtro de ar' }] };
+    const r = await t.call('os.save', { payload: { opened, base: edited } }, RECEP);
+    expect(r.status).toBe(200);
+    const info = r.body.info as { conflicts: string[]; changedElsewhere: boolean };
+    expect(info.conflicts).toEqual([]);
+    expect(info.changedElsewhere).toBe(false);
+    expect(costOf(t.store).costs['os1-p0']).toBe(1000);
+  });
+
+  it('M4: conflito real (outro aparelho mexeu nas peças) vem em info.conflicts, do servidor', async () => {
+    const t = setup();
+    const opened = baseOS();
+    t.store.seedOS({ ...opened, parts: [{ id: 'os1-p0', description: 'Filtro azul', price: 4000, cost: 1000 }] });
+    const edited: WorkOrder = { ...opened, parts: [{ id: 'os1-p0', description: 'Filtro verde', price: 4000, cost: 1000 }] };
+    const r = await t.call('os.save', { payload: { opened, base: edited } }, OWNER);
+    expect(r.status).toBe(200);
+    const info = r.body.info as { conflicts: string[]; changedElsewhere: boolean };
+    expect(info.conflicts).toContain('peças');
+    expect(info.changedElsewhere).toBe(true);
+  });
+
+  it('M5: fuso da oficina gravado como alias (Brazil/East) funciona', async () => {
+    const t = setup();
+    t.store.tz = 'Brazil/East';
+    t.store.seedOS(baseOS());
+    expect((await t.call('os.finalizeSingle')).status).toBe(200);
+  });
+
+  it('M6: firstPaymentDate só aceita AAAA-MM-DD', async () => {
+    const t = setup();
+    t.store.seedOS(baseOS());
+    const iso = { config: { installments: 2, firstPaymentDate: '2026-12-05T12:00:00.000Z', totalAmount: 10000 } };
+    expect((await t.call('os.installment', { payload: iso })).status).toBe(400);
+    const ok = { config: { installments: 2, firstPaymentDate: '2026-12-05', totalAmount: 10000 } };
+    expect((await t.call('os.installment', { payload: ok })).status).toBe(200);
   });
 });

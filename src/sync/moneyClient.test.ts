@@ -1,19 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CONFLICT_MESSAGE, NETWORK_MESSAGE, PENDING_MESSAGE, createMoneyClient,
+  CONFLICT_MESSAGE, DELETED_ELSEWHERE_MESSAGE, NETWORK_MESSAGE, PENDING_MESSAGE, createMoneyClient,
   type MoneyEngine, type MoneyHttpResult,
 } from './moneyClient';
 import { MONEY_OFFLINE_TOAST } from '../utils/cloudStatus';
 
 // Cliente da função `money` com motor e HTTP falsos.
 
-function setup(opts: { prep?: Awaited<ReturnType<MoneyEngine['prepareMoney']>>; responses?: (MoneyHttpResult | null)[] } = {}) {
+function setup(opts: { prep?: Awaited<ReturnType<MoneyEngine['prepareMoney']>>; prepSeq?: Awaited<ReturnType<MoneyEngine['prepareMoney']>>[]; responses?: (MoneyHttpResult | null)[] } = {}) {
   const calls: Record<string, unknown>[] = [];
   const log: string[] = [];
   const responses = [...(opts.responses ?? [])];
+  const prepSeq = [...(opts.prepSeq ?? [])];
   let n = 0;
   const engine: MoneyEngine = {
-    prepareMoney: async () => { log.push('prepare'); return opts.prep ?? { ok: true, known: { 'work_orders:os1': 3 } }; },
+    prepareMoney: async ref => {
+      log.push('prepare');
+      const key = ref.entryId ? `ledger:${ref.entryId}` : `work_orders:${ref.osId}`;
+      return prepSeq.shift() ?? opts.prep ?? { ok: true, known: { [key]: 3 } };
+    },
     afterMoney: async () => { log.push('pull'); },
   };
   const busy: string[][] = [];
@@ -60,26 +65,70 @@ describe('moneyClient', () => {
     expect(t.calls.map(c => c.opId)).toEqual(['op-1', 'op-2']);
   });
 
-  it('internet cai no meio: repetir a MESMA operação reusa o op_id (sem lançar duas vezes)', async () => {
+  it('internet cai no meio: a falha traz o opId; "Tentar de novo" (retryOpId) reusa; clique novo usa op_id novo', async () => {
     const t = setup({ responses: [null] });
     const r1 = await t.client.run('ledger.toggle', { entryId: 'e1' });
-    expect(r1).toEqual({ ok: false, code: 'rede', message: NETWORK_MESSAGE });
+    expect(r1).toEqual({ ok: false, code: 'rede', message: NETWORK_MESSAGE, opId: 'op-1' });
     expect(t.log).not.toContain('pull');
-    const r2 = await t.client.run('ledger.toggle', { entryId: 'e1' });
+    const r2 = await t.client.run('ledger.toggle', { entryId: 'e1' }, { retryOpId: 'op-1' });
     expect(r2.ok).toBe(true);
     expect(t.calls.map(c => c.opId)).toEqual(['op-1', 'op-1']);
-    // depois do sucesso a próxima é outra operação
     await t.client.run('ledger.toggle', { entryId: 'e1' });
     expect(t.calls[2].opId).toBe('op-2');
   });
 
-  it('erro 5xx também mantém o op_id; outra operação usa outro', async () => {
+  it('depois de `rede`, o retry com versão nova (pull do Realtime) reusa o MESMO op_id; um clique novo usa outro', async () => {
+    const v = (n: number) => ({ ok: true as const, known: { 'ledger:e1': n } });
+    const t = setup({ responses: [null], prepSeq: [v(1), v(2), v(2)] });
+    const r1 = await t.client.run('ledger.toggle', { entryId: 'e1' });
+    const opId = (r1 as { opId?: string }).opId;
+    await t.client.run('ledger.toggle', { entryId: 'e1' }, { retryOpId: opId });
+    expect(t.calls.map(c => c.opId)).toEqual(['op-1', 'op-1']);
+    expect(t.calls[1].known).toEqual({ 'ledger:e1': 2 });
+    await t.client.run('ledger.toggle', { entryId: 'e1' }); // clique novo (ex.: desfazer)
+    expect(t.calls[2].opId).toBe('op-2');
+  });
+
+  it('erro 5xx traz o opId; sem retryOpId cada chamada é outra operação', async () => {
     const t = setup({ responses: [{ status: 500, body: { ok: false, error: 'erro_interno' } }] });
     const r = await t.client.run('os.installment', { osId: 'os1', payload: { config: { installments: 3 } } });
-    expect(r.ok).toBe(false);
-    await t.client.run('os.installment', { osId: 'os1', payload: { config: { installments: 3 } } });
+    expect(r).toMatchObject({ ok: false, code: 'erro', opId: 'op-1' });
+    await t.client.run('os.installment', { osId: 'os1', payload: { config: { installments: 3 } } }, { retryOpId: 'op-1' });
     await t.client.run('os.installment', { osId: 'os1', payload: { config: { installments: 4 } } });
     expect(t.calls.map(c => c.opId)).toEqual(['op-1', 'op-1', 'op-2']);
+  });
+
+  it('I4: registro fora do cache local (excluído em outro aparelho): recusa antes, em pt-BR, sem chamar o servidor', async () => {
+    const t = setup({ prep: { ok: true, known: {} } });
+    const r = await t.client.run('os.finalizeSingle', { osId: 'os1' });
+    expect(r).toEqual({ ok: false, code: 'mudou', message: DELETED_ELSEWHERE_MESSAGE });
+    expect(t.calls).toHaveLength(0);
+    const l = await t.client.run('ledger.toggle', { entryId: 'e1' });
+    expect(l).toMatchObject({ ok: false, code: 'mudou' });
+    // OS nova não tem versão: segue
+    await t.client.run('os.save', { osId: 'os9', payload: { isNew: true } });
+    expect(t.calls).toHaveLength(1);
+  });
+
+  it('retry (retryOpId) com o registro já fora do cache: não recusa antes, manda versão 0 e o mesmo op_id', async () => {
+    const t = setup({ prep: { ok: true, known: {} } });
+    const r = await t.client.run('os.delete', { osId: 'os1' }, { retryOpId: 'op-9' });
+    expect(r.ok).toBe(true);
+    expect(t.calls).toHaveLength(1);
+    expect(t.calls[0].opId).toBe('op-9');
+    expect(t.calls[0].known).toEqual({ 'work_orders:os1': 0 });
+    const l = await t.client.run('ledger.toggle', { entryId: 'e1' }, { retryOpId: 'op-8' });
+    expect(l.ok).toBe(true);
+    expect(t.calls[1].known).toEqual({ 'ledger:e1': 0 });
+  });
+
+  it('retry que cai em offline ou pendente mantém o opId para outro "Tentar de novo"', async () => {
+    const off = setup({ prep: { ok: false, reason: 'offline' } });
+    expect(await off.client.run('os.delete', { osId: 'os1' }, { retryOpId: 'op-5' })).toEqual({ ok: false, code: 'offline', message: MONEY_OFFLINE_TOAST, opId: 'op-5' });
+    const pen = setup({ prep: { ok: false, reason: 'pendente' } });
+    expect(await pen.client.run('os.delete', { osId: 'os1' }, { retryOpId: 'op-5' })).toEqual({ ok: false, code: 'pendente', message: PENDING_MESSAGE, opId: 'op-5' });
+    // clique novo: sem opId
+    expect(await pen.client.run('os.delete', { osId: 'os1' })).toEqual({ ok: false, code: 'pendente', message: PENDING_MESSAGE, opId: undefined });
   });
 
   it('regra do servidor (422) devolve a mensagem pronta; 409 de estado puxa os dados', async () => {

@@ -6,7 +6,10 @@ const ROOT_FILES = new Set(['index.html', 'theme-init.js', 'vite.svg', 'manifest
 const ROOT_ICON = /^(icon-\d+|apple-touch-icon)\.png$/;
 const ASSET = /^assets\/.+\.(js|css|svg|woff2|png)$/;
 
-const normalize = (name: string): string => name.replace(/\\/g, '/').replace(/^\/+/, '');
+/** O plugin `cloudPwa()` só age com `VITE_CLOUD=1` (valor exato). */
+export const isCloudBuild = (viteCloud: string | undefined): boolean => viteCloud === '1';
+
+const normalize =(name: string): string => name.replace(/\\/g, '/').replace(/^\/+/, '');
 
 /** Quais arquivos do build entram no pré-cache (sem `.map`, `_headers` e o próprio `sw.js`). Ordem estável, sem repetidos. */
 export function precacheList(fileNames: readonly string[]): string[] {
@@ -24,7 +27,8 @@ export function precacheList(fileNames: readonly string[]): string[] {
  * (os testes o avaliam sem trocar nada). Os arquivos viram caminhos absolutos (`/assets/...`).
  */
 export function renderServiceWorker(template: string, opts: { version: string; files: readonly string[] }): string {
-  const files = opts.files.map(f => `/${normalize(f)}`);
+  // `index.html` vira `/`: o Cloudflare Pages responde `/index.html` com 308 para `/`, e resposta redirecionada não serve a uma navegação.
+  const files = opts.files.map(f => (normalize(f) === 'index.html' ? '/' : `/${normalize(f)}`));
   const withVersion = template.replace("/*VERSION*/'dev'", () => JSON.stringify(opts.version));
   if (withVersion === template) throw new Error('Marcador VERSION não encontrado no modelo do service worker.');
   const withFiles = withVersion.replace('/*FILES*/[]', () => JSON.stringify(files));

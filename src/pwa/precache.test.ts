@@ -1,6 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { precacheList, renderServiceWorker } from './precache';
+import { isCloudBuild, precacheList, renderServiceWorker } from './precache';
+
+describe('isCloudBuild', () => {
+  it('só age com VITE_CLOUD=1', () => {
+    expect(isCloudBuild('1')).toBe(true);
+    for (const v of [undefined, '', '0', 'true', ' 1']) expect(isCloudBuild(v)).toBe(false);
+  });
+});
 
 describe('precacheList', () => {
   it('inclui index, assets por extensão, ícones e arquivos da raiz', () => {
@@ -27,7 +34,8 @@ describe('renderServiceWorker', () => {
   it('troca versão e lista, com caminhos absolutos', () => {
     const out = renderServiceWorker(template, { version: '1.2.3-x', files: ['index.html', 'assets/a.js'] });
     expect(out).toContain('const VERSION = "1.2.3-x";');
-    expect(out).toContain('const FILES = ["/index.html","/assets/a.js"];');
+    expect(out).toContain('const FILES = ["/","/assets/a.js"];');
+    expect(out).not.toContain('"/index.html"');
     expect(out).not.toContain('/*VERSION*/');
     expect(out).not.toContain('/*FILES*/');
   });

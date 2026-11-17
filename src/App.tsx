@@ -9,6 +9,9 @@ import { useFinance } from './hooks/useFinance';
 import { useKeyboard } from './hooks/useKeyboard';
 import { useAccess } from './hooks/useAccess';
 import { NEW_OS_DENIED_MESSAGE, canSeeTab, safeTab } from './services/accessView';
+import type { NavId } from './services/accessView';
+import { initialPhoneTab, isPhoneTab } from './services/mobileNav';
+import { usePhoneLayout } from './hooks/usePhoneLayout';
 import { applyFieldSave } from './services/fieldOSSave';
 import { canTriggerNewOSShortcut } from './utils/shortcuts';
 import { updateClientCascading, updateCatalogItemCascading, updateTechnicianCascading } from './services/cascadeService';
@@ -81,8 +84,14 @@ type PendingAction =
   | { type: 'RESTORE_FINANCIAL'; data: WorkOrder; target: OSStatus; message: string }
   | { type: 'IMPORT_DATA'; content: string };
 
-/** `topbar`: barra do modo nuvem, entregue por `src/auth/boot.tsx`; o modo arquivo não passa nada. */
-export function AppContent({ topbar }: { topbar?: ReactNode } = {}) {
+/** Peças do celular (barra de baixo e "Disponível no computador"), entregues por `src/auth/boot.tsx` (lazy): o App não importa o código de celular. */
+export interface PhoneShell {
+  nav: (p: { activeTab: NavId; setActiveTab: (tab: NavId) => void }) => ReactNode;
+  desktopOnly: (p: { tab: NavId; onBack: () => void }) => ReactNode;
+}
+
+/** `topbar` e `phone`: peças do modo nuvem, entregues por `src/auth/boot.tsx`; o modo arquivo não passa nada. */
+export function AppContent({ topbar, phone: phoneShell }: { topbar?: ReactNode; phone?: PhoneShell } = {}) {
   const {
     ledger,
     setLedger,
@@ -122,6 +131,9 @@ export function AppContent({ topbar }: { topbar?: ReactNode } = {}) {
   // (hook compartilhado com o menu da pessoa da barra do topo do modo nuvem; mesmo armazenamento de antes)
   const [currentTheme, setCurrentTheme] = useTheme();
   const [activeTab, setActiveTab] = useState<'HOJE' | 'FINANCEIRO' | 'OFICINA' | 'AGENDA' | 'PROCESSOS' | 'CLIENTES' | 'PECAS' | 'CONFIG'>(() => safeTab(access, readHomeTab()));
+  // Celular (só nuvem, < 800 px): sem menu lateral; barra de baixo vinda do boot. Ao entrar no celular, tela fora do campo volta para Oficina.
+  const phone = usePhoneLayout(!!cloud && !!phoneShell);
+  useEffect(() => { if (phone) setActiveTab(t => (isPhoneTab(t) ? t : initialPhoneTab())); }, [phone]);
   // Trocou de papel (ou de pessoa): a aba aberta que o novo papel não vê volta para Oficina, sem aviso.
   useEffect(() => { setActiveTab(t => safeTab(access, t)); }, [access]);
   // Filtro inicial de Processos quando vindo do painel Hoje (Ver atrasadas).
@@ -1019,6 +1031,7 @@ Abrir OS?`)) {
     const hasOpenModal = isModalOpen || isEntryModalOpen || isExportModalOpen || isChecklistOpen || isDatabaseModalOpen
       || isInstallmentModalOpen || isInstallmentChoiceOpen || deleteModalInfo.isOpen || !!pendingAction
       || document.querySelector('.modal-overlay, [role="alertdialog"], [aria-modal="true"]') !== null;
+    if (phone) return;
     if (!canTriggerNewOSShortcut(e.target as HTMLElement | null, hasOpenModal)) return;
     if (!access.can('os.create')) {
       addToast(NEW_OS_DENIED_MESSAGE, 'info');
@@ -1044,17 +1057,19 @@ Abrir OS?`)) {
       {showConfetti && <Confetti />}
 
       <div className="app-container">
-        <Sidebar
+        {!phone && <Sidebar
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           isCollapsed={sidebarCollapsed}
           onToggleCollapse={() => (isNarrow ? setNarrowExpanded(prev => !prev) : setIsSidebarCollapsed(prev => !prev))}
           onOpenCadastros={() => setIsDatabaseModalOpen(true)}
-        />
+        />}
 
         <main className="main-content">
           {cloud && topbar}
           <Suspense fallback={<LoadingSkeleton type="page" />}>
+            {phone && phoneShell && !isPhoneTab(activeTab) && phoneShell.desktopOnly({ tab: activeTab, onBack: () => setActiveTab('OFICINA') })}
+            {!(phone && !isPhoneTab(activeTab)) && <>
             {activeTab === 'HOJE' && (
               <TodayPage
                 workOrders={workOrders}
@@ -1185,8 +1200,10 @@ Abrir OS?`)) {
                 setDbPath={setDbPath}
               />
             )}
+            </>}
           </Suspense>
         </main>
+        {phone && phoneShell?.nav({ activeTab, setActiveTab })}
       </div>
 
       <Suspense fallback={null}>

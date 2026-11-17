@@ -15,7 +15,7 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
 
   return (
     <div className="modal-overlay">
-      <div className="modal-content" style={{maxWidth: '400px', textAlign: 'center'}}>
+      <div className="modal-content modal-compact" style={{maxWidth: '400px', textAlign: 'center'}}>
         <h2 style={{color: 'var(--danger)'}}>Excluir Lançamento</h2>
         
         <p style={{marginBottom: 20, color: 'var(--text-muted)'}}>

@@ -213,6 +213,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, items, onClose }
     <div
       ref={menuRef}
       role="menu"
+      className="ctx-menu"
       style={{
         position: 'fixed',
         left: position.x,

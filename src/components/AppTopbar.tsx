@@ -8,6 +8,7 @@ import { useDatabase } from '../context/DatabaseContext';
 import { ConfirmationModal } from '../modals/ConfirmationModal';
 import { pendingPhotoCount } from '../services/photoStore';
 import { photosPendingNotice } from '../services/photoPendingView';
+import { signOutMessage } from '../services/signOutText';
 import { ROLE_LABEL, initials } from '../utils/cloudUsers';
 import { ChangePasswordModal, ChangePinModal } from './AccountModals';
 import { CloudBadge } from './CloudBadge';
@@ -63,11 +64,7 @@ export const AppTopbar: React.FC = () => {
   const role = auth.role ? ROLE_LABEL[auth.role] : '';
   const pending = cloud.pending;
 
-  const photosNotice = photosPendingNotice(pendingPhotoCount());
-  const signOutBase = pending > 0 || hasPendingChanges
-    ? `Ainda há ${pending > 0 ? `${pending} ${pending === 1 ? 'alteração sua' : 'alterações suas'}` : 'alterações suas'} que não ${pending === 1 ? 'foi enviada' : 'foram enviadas'}. Elas continuam guardadas neste aparelho e só chegam aos outros quando você entrar de novo aqui e houver internet.`
-    : 'Você vai precisar do e-mail e da senha para entrar de novo aqui.';
-  const signOutText = photosNotice ? `${signOutBase} ${photosNotice}` : signOutBase;
+  const signOutText = signOutMessage(pending, hasPendingChanges, pendingPhotoCount());
 
   const pick = (d: 'pin' | 'password' | 'signout'): void => { menu.close(); setDialog(d); };
 

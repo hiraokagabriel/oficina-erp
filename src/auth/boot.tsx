@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
-import { AppContent } from '../App';
+import { AppContent, type PhoneShell } from '../App';
 import { AppTopbar } from '../components/AppTopbar';
 import { ToastProvider } from '../context/ToastContext';
 import './../styles-auth.css';
+import './../styles-mobile.css';
 import { AuthProvider } from './AuthContext';
 import { CloudRoot } from './CloudRoot';
 import { parseAuthUrl } from './screens';
@@ -26,6 +27,14 @@ function setupWebApp(): void {
   void navigator.storage?.persist?.().catch(() => undefined);
 }
 
+// Celular: componentes em chunks próprios, buscados só quando a tela fica estreita (abaixo de 800 px).
+const MobileNav = lazy(() => import('../components/MobileNav').then(m => ({ default: m.MobileNav })));
+const DesktopOnly = lazy(() => import('../components/DesktopOnly').then(m => ({ default: m.DesktopOnly })));
+const phoneShell: PhoneShell = {
+  nav: (p) => <Suspense fallback={null}><MobileNav {...p} /></Suspense>,
+  desktopOnly: (p) => <Suspense fallback={null}><DesktopOnly {...p} /></Suspense>,
+};
+
 export function bootCloud(rootEl: HTMLElement): void {
   // Lê o caminho e o hash do link do e-mail ANTES de criar o cliente do Supabase (ele limpa o hash ao ler).
   const url = parseAuthUrl(window.location.pathname, window.location.hash, window.location.search);
@@ -34,7 +43,7 @@ export function bootCloud(rootEl: HTMLElement): void {
     <React.StrictMode>
       <ToastProvider>
         <AuthProvider url={url}>
-          <CloudRoot app={<AppContent topbar={<AppTopbar />} />} />
+          <CloudRoot app={<AppContent topbar={<AppTopbar />} phone={phoneShell} />} />
         </AuthProvider>
       </ToastProvider>
     </React.StrictMode>,

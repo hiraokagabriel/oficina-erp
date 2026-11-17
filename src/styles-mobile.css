@@ -1,0 +1,95 @@
+/* CELULAR (modo nuvem, < 800 px). Importado só por src/auth/boot.tsx; tudo sob [data-layout="phone"], posto no <html> por usePhoneLayout.
+   Só tokens de styles-tokens.css. Docs: docs/NUVEM-UX.md seção 8. */
+
+/* ---------- MOLDURA ---------- */
+[data-layout="phone"] { --mobile-nav-h: 64px; --mobile-safe-bottom: env(safe-area-inset-bottom, 0px); }
+[data-layout="phone"] .app-container { flex-direction: column; height: 100dvh; width: 100%; }
+[data-layout="phone"] .main-content {
+  min-width: 0; padding: var(--sp-4);
+  padding-bottom: calc(var(--mobile-nav-h) + var(--mobile-safe-bottom) + var(--sp-4));
+  overflow-x: hidden;
+}
+/* Barra do topo cola nas bordas do conteúdo (o padding aqui é 16, não 32) */
+[data-layout="phone"] .app-topbar { top: calc(-1 * var(--sp-4)); height: 56px; margin: calc(-1 * var(--sp-4)) calc(-1 * var(--sp-4)) var(--sp-3); padding: 0 var(--sp-3); }
+/* Celular é pessoal: sem "Trocar de pessoa" */
+[data-layout="phone"] .topbar-switch { display: none; }
+[data-layout="phone"] .topbar-person-text { display: none; }
+
+/* Barra de baixo */
+[data-layout="phone"] .mobile-nav {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 90; box-sizing: border-box;
+  display: flex; align-items: stretch; height: calc(var(--mobile-nav-h) + var(--mobile-safe-bottom)); padding-bottom: var(--mobile-safe-bottom);
+  background: var(--surface-1); border-top: 1px solid var(--border);
+}
+[data-layout="phone"] .mobile-nav-item {
+  flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  font: inherit; font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--text-2);
+  background: transparent; border: 0; border-top: 3px solid transparent; cursor: pointer;
+}
+[data-layout="phone"] .mobile-nav-item[aria-current="page"] { color: var(--accent-text); border-top-color: var(--accent); }
+[data-layout="phone"] .mobile-nav-item:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: -3px; }
+
+/* Folha "Mais" */
+[data-layout="phone"] .mobile-sheet-overlay {
+  position: fixed; inset: 0; z-index: 900; display: flex; align-items: flex-end; background: rgba(0, 0, 0, 0.55);
+}
+[data-layout="phone"] .mobile-sheet {
+  box-sizing: border-box; width: 100%; max-height: 85dvh; overflow-y: auto; display: flex; flex-direction: column; gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-4) calc(var(--sp-4) + var(--mobile-safe-bottom));
+  background: var(--surface-1); color: var(--text); border-top: 1px solid var(--border-strong);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0; box-shadow: var(--elev-3);
+}
+[data-layout="phone"] .mobile-sheet-grip { align-self: center; width: 40px; height: 4px; margin: var(--sp-1) 0 var(--sp-2); border-radius: 2px; background: var(--border-strong); }
+[data-layout="phone"] .mobile-sheet-item {
+  display: flex; align-items: center; gap: var(--sp-3); width: 100%; min-height: 52px; padding: 0 var(--sp-3); box-sizing: border-box;
+  font: inherit; font-size: var(--fs-base); color: var(--text); text-align: left; cursor: pointer; background: transparent; border: 0; border-radius: var(--radius-md);
+}
+[data-layout="phone"] .mobile-sheet-item:active { background: var(--accent-soft); }
+[data-layout="phone"] .mobile-sheet-item:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: -3px; }
+[data-layout="phone"] .mobile-sheet-item svg { color: var(--accent-text); flex: none; }
+[data-layout="phone"] .mobile-sheet-label { flex: 1; }
+[data-layout="phone"] .mobile-sheet-badge {
+  flex: none; padding: 2px var(--sp-2); font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--text-2);
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+[data-layout="phone"] .mobile-sheet-group { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin: var(--sp-1) 0; }
+[data-layout="phone"] .mobile-sheet-title { font-size: var(--fs-sm); color: var(--text-2); }
+[data-layout="phone"] .mobile-sheet-group .segmented > button { flex: 1; min-height: var(--control-h); }
+[data-layout="phone"] .mobile-sheet-close { margin-top: var(--sp-2); width: 100%; }
+
+/* Disponível no computador */
+[data-layout="phone"] .desktop-only { margin-top: var(--sp-6); }
+[data-layout="phone"] .desktop-only .btn { width: 100%; margin-top: var(--sp-3); }
+
+/* ---------- JANELAS EM TELA CHEIA ---------- */
+/* Janelas de trabalho ocupam a tela; confirmações curtas (alertdialog, escolha, apagar) continuam como cartão. */
+[data-layout="phone"] .modal-overlay { height: 100dvh; width: 100%; }
+[data-layout="phone"] .modal-content:not([role="alertdialog"]):not(.choice-modal):not(.modal-compact),
+[data-layout="phone"] .modal-content.osm {
+  box-sizing: border-box; width: 100%; max-width: none; height: 100dvh; max-height: none; border: 0; border-radius: 0; box-shadow: none;
+  padding-bottom: calc(var(--sp-4) + env(safe-area-inset-bottom, 0px));
+}
+[data-layout="phone"] .modal-content.osm { padding: 0; }
+
+/* ---------- CAMPOS: 16 px ou mais (o iOS não dá zoom ao focar) ---------- */
+[data-layout="phone"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+[data-layout="phone"] select,
+[data-layout="phone"] textarea,
+[data-layout="phone"] .form-input { font-size: var(--fs-base); }
+
+/* ---------- MENU DO CARTÃO (ContextMenu) COMO FOLHA DE BAIXO ---------- */
+/* O ContextMenu posiciona por estilo em linha (left/top/max-width): aqui o !important é o único jeito de sobrepor. */
+[data-layout="phone"] .ctx-menu {
+  left: 0 !important; right: 0 !important; top: auto !important; bottom: 0 !important;
+  width: 100% !important; min-width: 0 !important; max-width: none !important; max-height: 80dvh !important;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0 !important;
+  padding-bottom: calc(var(--sp-2) + env(safe-area-inset-bottom, 0px)) !important;
+  transform-origin: bottom center !important;
+}
+[data-layout="phone"] .ctx-menu button { min-height: 48px; }
+
+/* R5 */
+
+/* R6 */
+
+/* R7 */

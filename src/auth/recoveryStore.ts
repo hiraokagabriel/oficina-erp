@@ -1,3 +1,4 @@
+import { downloadBlob, downloadTextFile } from '../utils/download';
 import { dbNameFor, deleteIdbStore, openIdbDatabase, openIdbStore } from '../sync/idb';
 import { recoveryCopyContent } from '../sync/rejectMessages';
 
@@ -60,12 +61,7 @@ export async function deleteRecoveryCopy(id: string, factory: IDBFactory = defau
 
 /** Entrega a cópia como download (ação explícita do Dono). */
 export function downloadRecoveryCopy(c: RecoveryCopy): void {
-  const url = URL.createObjectURL(new Blob([c.content], { type: 'application/json' }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = c.name;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadTextFile(c.name, c.content, 'application/json');
 }
 
 /** Quantas fotos esperam para subir no banco local da pessoa (a fila `photoQueue`, com os bytes). */
@@ -120,8 +116,6 @@ export async function readQueuedPhotos(
   } finally { db.close(); }
 }
 
-/** Dá tempo de o navegador começar cada download antes de soltar o arquivo da memória. */
-const REVOKE_AFTER_MS = 60_000;
 const CLICK_GAP_MS = 400;
 const wait = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms));
 
@@ -130,12 +124,7 @@ export async function downloadStuckPhotos(workshopId: string, userId: string, fa
   const photos = await readQueuedPhotos(workshopId, userId, factory);
   for (let i = 0; i < photos.length; i++) {
     const f = photos[i];
-    const url = URL.createObjectURL(new Blob([f.bytes], { type: 'image/jpeg' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = f.name;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), REVOKE_AFTER_MS);
+    downloadBlob(f.name, new Blob([f.bytes], { type: 'image/jpeg' }));
     if (i < photos.length - 1) await wait(CLICK_GAP_MS);
   }
   return photos.length;

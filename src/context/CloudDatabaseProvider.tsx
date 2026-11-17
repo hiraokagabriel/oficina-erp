@@ -24,6 +24,7 @@ import { DatabaseContext } from './DatabaseContext';
 import type { DatabaseContextData, LoadStatus } from './DatabaseContext';
 import { useToast } from './ToastContext';
 import { formatDateOnly } from '../utils/dates';
+import { isTauri } from '../utils/platform';
 
 // Provider da NUVEM (docs/NUVEM-SPEC.md seção 4). Entrega o MESMO contexto do modo arquivo (`DatabaseContext`),
 // então as telas não mudam. Os `setX` são os do React; um efeito por coleção chama o motor (`SyncEngine`) com
@@ -77,7 +78,7 @@ async function saveRecoveryCopy(op: OutboxOp): Promise<void> {
   const savedAt = new Date().toISOString();
   const content = recoveryCopyContent(op, savedAt);
   try {
-    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+    if (isTauri()) {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('save_recovery_copy', { content });
       return;

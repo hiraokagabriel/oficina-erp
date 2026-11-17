@@ -1,5 +1,6 @@
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 import { generateId } from '../utils/helpers';
+import { isTauri } from '../utils/platform';
 import { isValidPhotoId } from './photos';
 
 // Ponte fina entre a tela e o lugar onde as fotos ficam. Sem regra de negócio.
@@ -56,7 +57,7 @@ export const pendingPhotoCount = (): number => activeTransport?.pendingCount?.()
 /** Qual lugar está valendo: `nuvem`, `arquivo` (Tauri) ou `nenhum` (navegador puro sem login). */
 export const photoStoreKind = (): 'cloud' | 'tauri' | 'none' => {
   if (activeTransport) return activeTransport.kind;
-  return typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window) ? 'tauri' : 'none';
+  return isTauri() ? 'tauri' : 'none';
 };
 
 /** Há onde guardar fotos: nuvem logada ou programa instalado (Tauri). No navegador puro a UI avisa. */

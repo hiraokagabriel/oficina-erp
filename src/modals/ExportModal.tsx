@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { downloadTextFile } from '../utils/download';
+import { isTauri } from '../utils/platform';
 import { LedgerEntry, WorkOrder, MONTH_NAMES } from '../types'; // Importando direto de 'types'
 
 interface ExportModalProps {
@@ -101,6 +103,13 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     const filename = `Fluxo_${MONTH_NAMES[mIndex - 1]}_${targetYear}_${Date.now()}.csv`;
 
     try {
+      if (!isTauri()) {
+        // Navegador (modo nuvem): baixa o CSV. BOM igual ao que o Rust grava, para o Excel abrir os acentos.
+        downloadTextFile(filename, `\uFEFF${csvContent}`, 'text/csv;charset=utf-8');
+        SoundFX.success();
+        onClose();
+        return;
+      }
       // Chama o comando Rust para salvar o arquivo
       const res = await invoke<{success: boolean, message: string}>('export_report', { 
         targetFolder: exportPath, 
@@ -142,10 +151,12 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                 </select>
             </div>
 
-            <div className="form-group">
-                <label className="form-label">Pasta de Destino</label>
-                <input className="form-input" value={exportPath} onChange={e => setExportPath(e.target.value)}/>
-            </div>
+            {isTauri() && (
+              <div className="form-group">
+                  <label className="form-label">Pasta de Destino</label>
+                  <input className="form-input" value={exportPath} onChange={e => setExportPath(e.target.value)}/>
+              </div>
+            )}
 
             <div className="modal-actions">
                 <button className="btn-secondary" onClick={onClose}>Cancelar</button>

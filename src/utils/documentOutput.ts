@@ -1,5 +1,6 @@
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 import { getPdfFolder } from './pdfFolder';
+import { isTauri } from './platform';
 
 // Saída dos documentos: imprimir (iframe oculto) ou salvar PDF direto (comando Rust save_pdf).
 // `invoke` e `available` entram por parâmetro para os testes usarem falsos.
@@ -9,8 +10,7 @@ export type InvokeFn = <T>(cmd: string, args?: Record<string, unknown>) => Promi
 const defaultInvoke: InvokeFn = (cmd, args) => tauriInvoke(cmd, args);
 
 /** Só dentro do programa instalado (Tauri) existe o comando de PDF. */
-export const isPdfAvailable = (): boolean =>
-  typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+export const isPdfAvailable = (): boolean => isTauri();
 
 export const PDF_ONLY_INSTALLED = 'Salvar PDF só funciona no programa instalado';
 

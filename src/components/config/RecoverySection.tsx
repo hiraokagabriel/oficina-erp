@@ -5,12 +5,13 @@ import type { RecoveryCopy, StuckPhotoStore } from '../../auth/recoveryStore';
 import { ConfirmationModal } from '../../modals/ConfirmationModal';
 import { formatDay, parsePeople, personNameById, stuckPhotosText } from '../../utils/cloudUsers';
 import type { MemberRow } from '../../utils/cloudUsers';
+import { isTauri } from '../../utils/platform';
 import { Icon } from '../ui/Icon';
 
 // Config > Cópias de recuperação (docs/NUVEM-UX.md 6.3): o que uma pessoa não conseguiu enviar fica guardado neste
 // navegador; o Dono baixa o arquivo (nunca baixa sozinho). No app instalado as cópias vão para a pasta do programa.
 
-const inApp = (): boolean => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+const inApp = isTauri;
 
 export const RecoverySection: React.FC = () => {
   const [copies, setCopies] = useState<RecoveryCopy[] | null>(null);

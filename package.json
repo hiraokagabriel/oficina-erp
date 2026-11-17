@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
-    "build:web": "tsc && vite build --mode cloud",
+    "build": "tsc && tsc -p tsconfig.node.json --noEmit && vite build",
+    "build:web": "tsc && tsc -p tsconfig.node.json --noEmit && vite build --mode cloud",
     "build:analyze": "vite build --mode analyze",
     "preview": "vite preview",
     "tauri": "tauri",

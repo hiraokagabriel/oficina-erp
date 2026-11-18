@@ -1,3 +1,4 @@
+import type { DatabaseSchema } from '../types';
 import type { Role } from '../services/permissions';
 import { SyncEngine, visibleTables } from './syncEngine';
 import type { EngineState, PullRequest, PulledRow, RejectReason, RemotePatch, Timers, Transport, TransportError } from './syncEngine';
@@ -314,4 +315,58 @@ export class Device {
   async goOnline(): Promise<void> { this.engine.setOnline(true); await this.engine.settled(); }
 
   get tables(): CloudTable[] { return visibleTables(this.role); }
+}
+
+// ---------- fixture sintética do banco (split e importação) ----------
+
+// Fixtures sintéticas (nada do banco real). Preços e custos usam valores incomuns para busca por texto.
+export const PRICE_A = 98765;
+export const PRICE_B = 76543;
+export const COST_A = 43210;
+export const CAT_PRICE = 55511;
+export const CAT_COST = 22233;
+
+/** Banco de uma versão antiga: v<4 usa adiantamento legado; v>=4 usa `advances`. */
+export function fixture(version: number): DatabaseSchema {
+  const legacyAdv = version < 4;
+  const w3: Record<string, unknown> = {
+    id: 'W3', osNumber: 3, vehicle: 'Uno - ABC1234', clientName: 'Maria', clientPhone: '1', mileage: 10,
+    status: 'EM_SERVICO', createdAt: '2025-01-12T15:00:00.000Z', total: 10000,
+    parts: [{ id: 'p1', description: 'Filtro', price: 4000, cost: 1000, category: 'MOTOR' }],
+    services: [{ id: 's1', description: 'Troca', price: 6000 }],
+  };
+  if (legacyAdv) { w3.advanceAmount = 2000; w3.advanceEntryId = 'L6'; }
+  else w3.advances = [{ id: 'A1', date: '2025-01-12T15:00:00.000Z', amount: 2000, entryId: 'L6' }];
+
+  const db = {
+    ledger: [
+      { id: 'L1', description: 'Entrada OS 1', amount: 10000, type: 'CREDIT', effectiveDate: '2025-01-10', createdAt: '2025-01-10', paymentDate: '2025-01-10' },
+      { id: 'L2', description: 'Manual', amount: 500, type: 'CREDIT', effectiveDate: '2025-01-11', createdAt: '2025-01-11' },
+      { id: 'L3', description: 'Despesa', amount: 300, type: 'DEBIT', effectiveDate: '2025-01-12', createdAt: '2025-01-12', paymentDate: '2025-01-12' },
+      { id: 'L4', description: 'Parc 1/2', amount: 5000, type: 'CREDIT', effectiveDate: '2025-02-01', createdAt: '2025-01-13', installmentGroupId: 'G1', installmentNumber: 1, totalInstallments: 2 },
+      { id: 'L5', description: 'Parc 2/2', amount: 5000, type: 'CREDIT', effectiveDate: '2025-03-01', createdAt: '2025-01-13', installmentGroupId: 'G1', installmentNumber: 2, totalInstallments: 2 },
+      { id: 'L6', description: 'Adiantamento', amount: 2000, type: 'CREDIT', effectiveDate: '2025-01-12', createdAt: '2025-01-12', paymentDate: '2025-01-12' },
+    ],
+    workOrders: [
+      { id: 'W1', osNumber: 1, vehicle: 'Gol - AAA1111', clientName: 'Fulano', clientPhone: '2', mileage: 5, status: 'FINALIZADO', createdAt: '2025-01-10T15:00:00.000Z',
+        financialId: 'L1', desconto: 987654, notes: 'obs interna', paymentDate: '2025-01-10', paymentMethod: 'SINGLE', total: 10000, totalCost: 3000, profit: 7000, profitMargin: 70,
+        parts: [{ id: 'a', description: 'Pastilha', price: PRICE_A, cost: COST_A, category: 'FREIO' }],
+        services: [{ id: 'b', description: 'Mão de obra', price: PRICE_B }] },
+      { id: 'W2', osNumber: 2, vehicle: 'Palio - BBB2222', clientName: 'Fulano', clientPhone: '2', mileage: 6, status: 'FINALIZADO', createdAt: '2025-01-11T15:00:00.000Z',
+        paymentDate: '2025-01-20', paymentMethod: 'INSTALLMENT', total: 10000,
+        installmentConfig: { totalAmount: 10000, installments: 2, installmentAmount: 5000, lastInstallmentAmount: 5000, firstPaymentDate: '2025-02-01', groupId: 'G1', description: 'Parc' },
+        parts: [{ id: 'dup', description: 'X', price: 100 }, { id: 'dup', description: 'Y', price: 200 }],
+        services: [{ description: 'Sem id', price: 300 }, { id: 'np', description: 'sem preco' }] },
+      w3,
+    ],
+    clients: [{ id: 'C1', name: 'Fulano', phone: '2', vehicles: [{ model: 'Gol', plate: 'AAA1111' }], totalSpent: 1, serviceCount: 2, lastServiceDate: 'x', averageTicket: 3, vipStatus: true }],
+    catalogParts: [{ id: 'CP1', description: 'Pastilha', price: CAT_PRICE, cost: CAT_COST, category: 'FREIO' }],
+    catalogServices: [{ id: 'CS1', description: 'Alinhamento', price: 8000 }, { id: 'CS2', description: 'Sem preco' }],
+    catalogTechnicians: [{ id: 'T1', name: 'Ana' }],
+    settings: { name: 'OFICINA', cnpj: '', address: '', exportPath: '', googleDriveToken: 'tok', googleApiKey: 'key' },
+    ...(version >= 3 ? { appointments: [{ id: 'AP1', date: '2025-02-02T15:00:00.000Z', clientName: 'Maria', vehicle: 'Uno', status: 'AGENDADO', createdAt: '2025-02-01T15:00:00.000Z' }] } : {}),
+    ...(version >= 4 ? { auditLog: [{ id: 'E1', at: '2025-01-12T15:00:00.000Z', machine: 'PC', action: 'ADIANTAMENTO_CRIADO', osId: 'W3', osNumber: 3, advanceId: 'A1', after: { date: 'd', amount: 2000 } }] } : {}),
+    ...(version >= 1 ? { meta: { schemaVersion: version, revision: 'r', history: [], savedAt: 's', savedBy: 'b' } } : {}),
+  };
+  return db as unknown as DatabaseSchema;
 }

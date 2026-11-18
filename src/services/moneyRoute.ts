@@ -3,7 +3,7 @@ import { stable } from './osEditMerge';
 import type { StatusChangeEffect } from './osFinanceService';
 import type { Role } from './permissions';
 import { classify, statusNeedsMoney } from '../sync/diff';
-import type { MoneyOutcome } from '../sync/moneyClient';
+import type { MoneyKind, MoneyOutcome } from '../sync/moneyClient';
 
 // Decisões puras do modo nuvem sobre o dinheiro (PR 6): quando o handler precisa chamar a função `money` em vez de
 // gravar pelo `setX`. O `classify` do motor continua revertendo `money_op` que escape por `setX`; isto evita que escape.
@@ -44,3 +44,18 @@ export function saveNeedsMoney(a: {
 
 /** Tipo do toast para uma recusa de `cloud.money`: sem internet é aviso, o resto é erro. */
 export const moneyFailToastType = (o: Extract<MoneyOutcome, { ok: false }>): 'info' | 'error' => (o.code === 'offline' ? 'info' : 'error');
+
+/**
+ * Texto do estado "em andamento" de uma operação de dinheiro (modo nuvem). `null` = a tela já tem o seu
+ * ("Recebendo..." no botão, "Salvando..." na janela da OS). `newStatus` só vale para `os.status`.
+ */
+export function moneyBusyLabel(kind: MoneyKind, newStatus?: string): string | null {
+  switch (kind) {
+    case 'os.finalizeSingle':
+    case 'os.installment': return 'Finalizando...';
+    case 'os.delete': return 'Excluindo...';
+    case 'os.restore': return 'Reabrindo...';
+    case 'os.status': return newStatus === 'FINALIZADO' || newStatus === 'AGUARDANDO_PAGAMENTO' ? 'Finalizando...' : null;
+    default: return null;
+  }
+}

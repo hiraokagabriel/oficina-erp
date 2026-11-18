@@ -18,6 +18,7 @@ import { CACHE_VERSION, emptyMeta } from './store';
 import type { CommitBatch, LocalStore, StoredRecord, StoreMeta } from './store';
 import type { MoneyCall, MoneyKind, MoneyOutcome, MoneyRunOptions } from './moneyClient';
 import type { CatalogKind, CloudTable, CollectionKey } from './types';
+import type { LoadStage } from '../utils/cloudStatus';
 
 // Motor de sincronização (docs/NUVEM-SPEC.md seção 4). Sem React, sem Supabase, sem IndexedDB: transporte, cache,
 // relógio, id e timers entram por `EngineDeps`. Tudo que muda estado em memória é síncrono; só as chamadas de
@@ -148,6 +149,8 @@ export interface CloudInfo extends SyncStatus {
   moneyBusy?: boolean;
   /** Registros (`osId` ou `entryId`) com operação de dinheiro no ar: só o botão deles mostra "Recebendo...". */
   moneyBusyKeys?: readonly string[];
+  /** Etapa de "Preparando este aparelho" enquanto os dados abrem (sem contagem: o motor não expõe). */
+  loadStage?: LoadStage;
 }
 
 export interface EngineState {

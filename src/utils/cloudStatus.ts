@@ -99,3 +99,17 @@ export function shouldAnnounceChange(prev: CloudBadgeKind | null, next: CloudBad
   if (next === 'offline' || next === 'erro') return true;
   return next === 'salvo' && (prev === 'offline' || prev === 'erro');
 }
+
+/** Etapas de "Preparando este aparelho" (o motor não expõe contagem: só em que etapa está). */
+export type LoadStage = 'cache' | 'fotos' | 'dados';
+
+/** Texto da etapa atual. Sem internet, a etapa de dados espera a conexão. */
+export function loadStageText(stage: LoadStage, online: boolean): string {
+  switch (stage) {
+    case 'cache': return 'Etapa 1 de 3: abrindo o armazenamento deste aparelho...';
+    case 'fotos': return 'Etapa 2 de 3: preparando as fotos...';
+    case 'dados': return online
+      ? 'Etapa 3 de 3: baixando os dados da oficina...'
+      : 'Etapa 3 de 3: sem internet. Os dados baixam assim que a conexão voltar.';
+  }
+}

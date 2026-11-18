@@ -1,5 +1,5 @@
 // Monta as dependências reais a partir das variáveis de ambiente da Edge (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
-// SITE_URL, CORS_ORIGINS). Compartilhado pelas três entradas Deno.
+// SITE_URL, CORS_ORIGINS, CORS_ALLOW_LOCALHOST só no teste). Compartilhado pelas três entradas Deno.
 import type { Deps, HandlerRequest, HandlerResult } from './core'
 import { allowedOrigins, serveHandler } from './http'
 import { createAuthAdmin, createDb, type RestConfig } from './restAdapters'
@@ -18,7 +18,7 @@ export function createRuntime(env: (name: string) => string | undefined): { deps
     log: (level, message, extra) => console[level === 'info' ? 'log' : level](message, extra ?? ''),
     siteUrl,
   }
-  return { deps, allowed: allowedOrigins(siteUrl, env('CORS_ORIGINS') ?? null), cfg }
+  return { deps, allowed: allowedOrigins(siteUrl, env('CORS_ORIGINS') ?? null, env('CORS_ALLOW_LOCALHOST') === '1'), cfg }
 }
 
 export function makeFetchHandler(

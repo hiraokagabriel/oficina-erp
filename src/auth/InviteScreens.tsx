@@ -6,7 +6,7 @@ import { MSG, ROLE_BLURB, ROLE_LABEL, validateNewPassword } from './authText';
 import {
   AuthShell, AuthStatusIcon, FieldError, PASSWORD_HINT, PasswordField, PasswordRule, Spinner, useAutofocus,
 } from './AuthShell';
-import { PIN_FORMAT_MESSAGES, sanitizePinInput, validateNewPin } from './pinLogic';
+import { PIN_FORMAT_MESSAGES, PIN_LENGTH, sanitizePinInput, validateNewPin } from './pinLogic';
 
 const goHome = (): void => { window.location.replace('/'); };
 const firstName = (n: string): string => n.trim().split(/\s+/)[0] ?? '';
@@ -26,11 +26,20 @@ export const PinField: React.FC<{
           <Icon name="olho" size={16} /> {show ? 'Esconder' : 'Mostrar'}
         </button>
       </div>
-      <input
-        id={id} ref={inputRef} className="form-input auth-pin-input" type={show ? 'text' : 'password'} inputMode="numeric" maxLength={6}
-        autoComplete="off" value={value} disabled={disabled} aria-invalid={invalid || undefined} aria-describedby={describedBy}
-        onChange={e => onChange(sanitizePinInput(e.target.value))}
-      />
+      <div className="pin-boxes">
+        <div className="pin-box-row" aria-hidden="true">
+          {Array.from({ length: PIN_LENGTH }, (_, i) => (
+            <span key={i} className={`pin-box${i === value.length && !disabled ? ' pin-box--next' : ''}${invalid ? ' pin-box--invalid' : ''}`}>
+              {i < value.length ? (show ? value[i] : '●') : ''}
+            </span>
+          ))}
+        </div>
+        <input
+          id={id} ref={inputRef} className="pin-box-input" type={show ? 'text' : 'password'} inputMode="numeric" maxLength={PIN_LENGTH}
+          autoComplete="off" value={value} disabled={disabled} aria-invalid={invalid || undefined} aria-describedby={describedBy}
+          onChange={e => onChange(sanitizePinInput(e.target.value))}
+        />
+      </div>
       {hint}
     </div>
   );

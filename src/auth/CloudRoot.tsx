@@ -4,6 +4,8 @@ import { useDatabase } from '../context/DatabaseContext';
 import { useToast } from '../context/ToastContext';
 import { isExportDue } from '../sync/dailyExport';
 import { isTauri } from '../utils/platform';
+import { loadStageText } from '../utils/cloudStatus';
+import { setThemeUser } from '../hooks/useTheme';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import { Icon } from '../components/ui/Icon';
 import { AccessGateProps } from './types';
@@ -95,7 +97,7 @@ const CloudBridge: React.FC<{ inert: boolean; children: React.ReactNode; overlay
 
 /** "Abrindo os dados" (1.4): cobre o app enquanto o cache local abre. */
 const OpeningData: React.FC = () => {
-  const { isLoading } = useDatabase();
+  const { isLoading, cloud } = useDatabase();
   const { workshopId, userId } = useAuth();
   const key = workshopId && userId ? openedKey(workshopId, userId) : null;
   const [firstTime] = useState(() => { try { return key ? localStorage.getItem(key) === null : false; } catch { return false; } });
@@ -107,6 +109,7 @@ const OpeningData: React.FC = () => {
         <AuthStatusIcon name="nuvem" />
         <h1 className="auth-title">Preparando este aparelho</h1>
         <p className="auth-text">Baixando os dados da oficina para este aparelho. Na primeira vez pode levar alguns minutos. Não feche o programa.</p>
+        {cloud?.loadStage && <p className="auth-text" role="status">{loadStageText(cloud.loadStage, cloud.online)}</p>}
         <div className="auth-progress" role="progressbar" aria-label="Preparando os dados" aria-busy="true"><span /></div>
       </AuthShell>
     );
@@ -135,6 +138,8 @@ export const CloudRoot: React.FC<AccessGateProps> = ({ app }) => {
     membership: a.membershipState, mfaPending: a.mfaPending, sharedDevice: a.sharedDevice, gateClosed: a.gateClosed,
     importState: a.importState, role: a.role,
   });
+  // Tema por pessoa no modo nuvem (reserva: tema do aparelho); ao sair da nuvem volta ao do aparelho.
+  useEffect(() => { setThemeUser(a.userId); return () => setThemeUser(null); }, [a.userId]);
   const key = a.workshopId && a.userId && a.role ? `${a.workshopId}${a.userId}${a.role}` : null;
   const tab = useTabLock(screen === 'app' || screen === 'lockedApp' ? (key ? `oficinapro-sync-${key}` : null) : null);
 

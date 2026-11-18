@@ -68,7 +68,7 @@ import { mergeOSEdit, OS_DELETED_MESSAGE, CHANGED_ELSEWHERE_MESSAGE, ADVANCES_IG
 import { buildFinalizeMessage, buildInstallmentMessage } from './services/finalizeText';
 import { linkClient, linkCatalogItems, linkTechnician, preferredClientId } from './utils/links';
 import { toISOFromDateInput } from './utils/dates';
-import { FINALIZE_DENIED_MESSAGE, moneyFailToastType, saveNeedsMoney, statusNeedsMoneyOp } from './services/moneyRoute';
+import { FINALIZE_DENIED_MESSAGE, moneyBusyLabel, moneyFailToastType, saveNeedsMoney, statusNeedsMoneyOp } from './services/moneyRoute';
 import { MONEY_OFFLINE_TOAST } from './utils/cloudStatus';
 import type { MoneyCall, MoneyKind } from './sync/moneyClient';
 import { getTargetMargin } from './services/margin';
@@ -142,6 +142,8 @@ export function AppContent({ topbar, phone: phoneShell }: { topbar?: ReactNode; 
   // Fluxo Agenda -> Criar OS: agendamento de origem e rascunho (objeto estável: o OSModal reinicia o formulário se ele mudar).
   const [osFromAppointment, setOsFromAppointment] = useState<{ appointment: Appointment; draft: OSDraftFromAppointment } | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
+  /** Operações de dinheiro no ar com texto próprio ("Finalizando...", "Excluindo...", "Reabrindo..."); modo nuvem. */
+  const [moneyLabels, setMoneyLabels] = useState<string[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -256,7 +258,11 @@ export function AppContent({ topbar, phone: phoneShell }: { topbar?: ReactNode; 
   const runMoney = (kind: MoneyKind, call: MoneyCall, onOk: (info: Record<string, unknown>) => void, retryOpId?: string): void => {
     const money = cloud?.money;
     if (!money) return;
+    const newStatus = typeof call.payload?.newStatus === 'string' ? call.payload.newStatus : undefined;
+    const label = moneyBusyLabel(kind, newStatus);
+    if (label) setMoneyLabels(p => [...p, label]);
     void money(kind, call, retryOpId ? { retryOpId } : undefined).then(out => {
+      if (label) setMoneyLabels(p => { const i = p.indexOf(label); return i < 0 ? p : [...p.slice(0, i), ...p.slice(i + 1)]; });
       if (out.ok) { onOk(out.info); return; }
       const retry = (out.code === 'rede' || out.code === 'erro' || out.code === 'offline' || out.code === 'pendente') && out.opId
         ? { label: 'Tentar de novo', onClick: () => runMoney(kind, call, onOk, out.opId) }
@@ -1464,6 +1470,9 @@ Abrir OS?`)) {
           />
         )}
       </Suspense>
+      {moneyLabels.length > 0 && (
+        <div className="money-busy" role="status" aria-live="polite">{moneyLabels[moneyLabels.length - 1]}</div>
+      )}
     </>
   );
 }

@@ -34,3 +34,21 @@ export const applyTheme = (theme: Theme): void => {
   document.documentElement.setAttribute('data-theme', theme);
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME_COLORS[theme]);
 };
+
+/** Modo nuvem: o tema também vale por pessoa (`oficina.theme.<userId>`), com o tema do aparelho como reserva. */
+export const userThemeKey = (userId: string): string => `${THEME_STORAGE_KEY}.${userId}`;
+
+/** Tema da pessoa; sem escolha dela (ou valor inválido), o tema do aparelho. */
+export const readUserTheme = (userId: string, storage: ReadableStorage | null = defaultStorage()): Theme => {
+  try {
+    const raw = storage ? storage.getItem(userThemeKey(userId)) : null;
+    if (raw === 'pastel' || raw === 'dark') return raw;
+  } catch { /* cai no tema do aparelho */ }
+  return readStoredTheme(storage);
+};
+
+/** Grava para a pessoa e também como tema do aparelho (a próxima abertura já nasce sem piscar). */
+export const writeUserTheme = (userId: string, theme: Theme, storage: WritableStorage | null = defaultStorage()): boolean => {
+  try { if (!storage) return false; storage.setItem(userThemeKey(userId), theme); } catch { return false; }
+  return writeStoredTheme(theme, storage);
+};

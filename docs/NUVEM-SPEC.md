@@ -115,7 +115,7 @@ Sem policy de update nem delete: nunca sobrescreve, nunca apaga (como o Rust hoj
 
 ## 3. Edge Functions e transação
 
-**Funções:** `money` (uma, com `kind`, menos cold start); `users` (`invite`, `deactivate`, `reactivate`, `set_role`); `pin` (`set`, `unlock`, `verify`, `roster`); `device` (`register`, `revoke`, `set_idle`); `import` (`import_rows`, `import_finish`). O resto é upsert por `sync_push` (seção 4).
+**Funções:** `money` (uma, com `kind`, menos cold start); `users` (`invite`, `deactivate`, `reactivate`, `set_role`); `pin` (`set`, `unlock`, `verify`, `roster`); `device` (`register`, `revoke`, `set_idle`). **Não existe função Edge `import`**: a importação são funções do banco chamadas direto pelo app do Dono (seção 7): `import_rows`, `import_finish(ws, p_commit, p_expected)` e `import_reset`. O resto é upsert por `sync_push` (seção 4).
 
 **`money.kind`**, um por handler atual:
 - `os.finalizeSingle`: `App.tsx:806`, `finalizeOSSingle`.
@@ -127,6 +127,20 @@ Sem policy de update nem delete: nunca sobrescreve, nunca apaga (como o Rust hoj
 - `ledger.toggle`: `App.tsx:459`, `togglePayment`.
 
 Lançamento manual (`useFinance.ts:47,59`) é upsert simples, só online.
+
+**Contrato da função `money`** (como está em `src/server/moneyHandler.ts`; POST com `Authorization: Bearer <jwt>`):
+
+```
+{ opId: uuid, kind, osId?, entryId?, today: 'AAAA-MM-DD', payload?, known, machine?, deviceId? }
+```
+
+- `kind`: os 7 acima. `payload` por kind: `os.installment {config}`, `os.status {newStatus}`, `os.restore {target}`, `os.save {isNew?, opened?, base, drafts?}`; `os.finalizeSingle` e `os.delete` só `osId`; `ledger.toggle` usa `entryId`.
+- `known` é **obrigatório** (400 sem ele): versões que o aparelho viu, `{'tabela:id': versão}`. Exige `work_orders:<osId>` em todo `os.*` (menos `os.save` com `isNew`) e `ledger:<entryId>` em `ledger.toggle`. Sem ele a concorrência por versão ficaria desligada.
+- **`op_id` e `req_hash`**: `req_hash` = sha256 de `stable({kind, osId, entryId, payload})`, gravado em `money_ops`. `op_id` repetido devolve o resultado gravado (linhas e `info`) **sem refazer as guardas** (o estado já mudou), mas só se oficina, usuário, kind e hash forem os mesmos; corpo diferente com o mesmo `op_id` é 409 `op_id_reutilizado`.
+- **`retryOpId`** (cliente, `moneyClient.run(..., {retryOpId})`): só o "Tentar de novo" depois de falha de rede ou erro repete o `op_id` da falha (não lança duas vezes). Todo clique novo gera `op_id` novo.
+- **Respostas**: 200 `{ok, kind, replay?, rows:[{table,id,version}], info}`, e no replay o `info` gravado volta junto; 409 `conflito_versao` com as linhas atuais (a tela atualiza e pede para repetir); 409 `estado_mudou` (a OS já não está no estado esperado) e 422 `bloqueado` (regra do `osFinanceGuards`) com a mensagem pronta para a tela; 400 `dados_invalidos` (inclui `known` ausente ou inválido); 403 `sem_permissao` (Mecânico) ou `exige_mfa`; 423 `importacao_pendente` enquanto `workshops.import_state` não for `concluido`; 500 `fuso_do_servidor` (autoteste do fuso falhou, nada gravado).
+- **Custos por papel**: `work_order_costs` só o Dono lê. Para a Recepção, o 409 `conflito_versao` filtra a linha de custos (nem dados nem versão); a OS `opened` dela vem sem custos e o servidor compara com a OS atual também sem custos; ao gravar, os custos do Dono são repostos e totais de custo e lucro refeitos (o custo do Dono sobrevive à edição da Recepção).
+- **Cliente (`src/sync/moneyClient.ts`)**: confere que não há alteração da OS na fila (`pendente`), manda a chamada e, com sucesso, chama `engine.afterMoney()`: o resultado entra no estado pelo **pull** das tabelas de dinheiro, não por gravação local. Falhas viram códigos (`offline`, `pendente`, `conflito`, `mudou`, `bloqueado`, `sem_permissao`, `sessao`, `rede`, `erro`).
 
 **Fluxo:**
 1. Valida JWT, lê `memberships`, exige dono/recepcao `active`, deriva `workshop_id` da membership (nunca do corpo).
@@ -142,7 +156,7 @@ Lançamento manual (`useFinance.ts:47,59`) é upsert simples, só online.
 
 Transação no Postgres, regra no TS.
 
-**Deno**: `osFinanceService`, `osFinanceGuards`, `advances`, `advancesDraft`, `osRemaining`, `osSave`, `osEditMerge`, `photos`, `utils/helpers`, `utils/dates`, `utils/migrations`, `utils/links` só importam `../types` e entre si; `types.ts` não importa nada. Nenhum importa React/Vite/Tauri (`@tauri-apps` só em `App.tsx:3`, `DatabaseContext.tsx:2-3`, `ExportModal.tsx:2`, `photoStore.ts:1`, `documentOutput.ts:1`).
+**Deno**: `osFinanceService`, `osFinanceGuards`, `advances`, `advancesDraft`, `osRemaining`, `osSave`, `osEditMerge`, `photos`, `utils/helpers`, `utils/dates`, `utils/migrations`, `utils/links`, `utils/itemIds`, `utils/secrets`, `sync/split` e `sync/types` (a divisão da OS em 3 linhas exige os dois últimos) só importam `../types` e entre si (lista idêntica à `ALLOWED` de `serverEntry.imports.test.ts`); `types.ts` não importa nada. Nenhum importa React/Vite/Tauri (`@tauri-apps` só em `App.tsx:3`, `DatabaseContext.tsx:2-3`, `ExportModal.tsx:2`, `photoStore.ts:1`, `documentOutput.ts:1`).
 
 Bloqueios:
 1. Imports sem extensão (`'../types'`): Deno não resolve sem `sloppy-imports`.
@@ -153,7 +167,7 @@ Solução:
 - `supabase/functions/<nome>/index.ts` importa `../../../src/services/serverEntry` e `@supabase/supabase-js`; type-check por `tsconfig.functions.json` com shim `deno.d.ts`.
 - `scripts/build-functions.mjs` (esbuild) gera `bundle.js`; `config.toml` aponta `entrypoint` para ele.
 - Vitest `serverEntry.imports.test.ts`: percorre o grafo e falha se entrar arquivo fora da lista, `@tauri-apps`, `react` ou `window`/`document`.
-- Fuso: a função chama `setDateTimeZone(workshops.tz)` (`src/utils/dates.ts`) antes de usar os serviços; com isso `parseDateOnly`, `addMonths`, `formatDateOnly` e `getLocalDateString` usam o relógio da oficina por `Intl`. Autoteste na entrada: `parseDateOnly('2026-01-01').toISOString()==='2026-01-01T15:00:00.000Z'`; falhou, 500 "fuso do servidor" sem gravar.
+- Fuso: a função chama `setDateTimeZone(workshops.tz)` (`src/utils/dates.ts`) antes de usar os serviços; com isso `parseDateOnly`, `addMonths`, `formatDateOnly` e `getLocalDateString` usam o relógio da oficina por `Intl`. Autoteste na entrada (`zoneSelfTest`): o fuso aplicado confere com o nome canônico do `Intl` e `formatDateOnly(parseDateOnly('2026-01-01'))==='2026-01-01'`; **só para `America/Sao_Paulo`** confere também `parseDateOnly('2026-01-01').toISOString()==='2026-01-01T15:00:00.000Z'` (outro fuso não tem esse instante fixo). Falhou, 500 `fuso_do_servidor` sem gravar.
 - **Refutado no PR 0** (`docs/NUVEM-SPIKE.md` seção 2: a Edge fica em UTC mesmo com `TZ`; `Intl` com `timeZone` funciona). Texto original: `TZ=America/Sao_Paulo` na função, com autoteste `new Date(2026,0,1,12).toISOString()==='2026-01-01T15:00:00.000Z'`; falhou, 500 "fuso do servidor" sem gravar.
 - Cliente manda `today` e datas em ISO meio-dia local (`toISOFromDateInput`); servidor aceita `today` a ±1 dia do relógio. Brasil sem horário de verão desde 2019.
 
@@ -269,8 +283,11 @@ Tauri:
 **Importação** (só Dono, no Tauri):
 1. `parseDatabase` (`DatabaseContext.tsx:142`), `migrate` (`migrations.ts:200`), `backup_pre_migration` (`pre-nuvem`).
 2. `prepareForCloud(db)`, puro e idempotente: ids de item únicos; retira derivados de cliente e `profitMargin`; `stripDbSecrets`; `ledgerOwnerIndex` preenche `os_id` a partir de `financialId`, `advances[].entryId`, `advanceEntryId` e `installmentGroupId === installmentConfig.groupId`.
-3. `splitDatabase` envia lotes de 500 por `import_rows` (exige Dono e `import_state='vazio'|'importando'`, upsert por id).
-4. `import_finish` devolve totais calculados em SQL.
+3. `splitDatabase` envia lotes de 500 por `import_rows` (função do banco; exige Dono com `aal2` e `import_state='vazio'|'importando'`, upsert por id).
+4. `import_finish(ws, p_commit, p_expected)` devolve totais calculados em SQL; com `p_commit=true` só conclui se `p_expected` (os totais que o app conferiu) for igual aos do SQL, senão recusa. `import_reset(ws)` apaga o que foi enviado e volta o estado para `vazio`.
+5. Antes de enviar, o Tauri grava `backup_pre_cloud` (`backups\database-pre-nuvem-<stamp>.json`, nunca sobrescreve, fora da rotação).
+6. `photo_inventory` (Rust) lista as fotos em `<pasta do banco>\fotos\<osId>\<fotoId>.jpg` (ignora `_lixeira`) para o envio ao Storage.
+7. **Tela de bloqueio por `import_state`**: enquanto não for `concluido`, o app não abre (`pickScreen`): o Dono vê a tela de importação, os demais a tela "Preparando"; a função `money` responde 423 `importacao_pendente`. A oficina real nasce `vazio`.
 
 **Conferência**:
 - `computeTotals` puro: contagem por coleção, soma do ledger com sinal em centavos, soma de `total` das OS, nº de lançamentos pagos, soma dos adiantamentos. Totais do `prepareForCloud(db)` e do SQL têm de bater.
@@ -285,8 +302,8 @@ Tauri:
 **Exportação diária**:
 - App do Dono, ao abrir, exporta se `workshops.last_export_at` > 20 h.
 - `exportV5(estado)`: v5 exato com `meta {schemaVersion:5, revision: uuid, history: [], savedAt, savedBy:'nuvem:<aparelho>'}`.
-- Destino: `save_daily_export` + Drive opcional (`googleDrive.ts`, `fetch`, funciona na web).
-- Última exportação > 3 dias: aviso em Config.
+- Destino: `save_daily_export` (Rust) grava em `%LOCALAPPDATA%\com.oficinapro.app\backups\nuvem\nuvem-<stamp>.json`, nunca sobrescreve e mantém as 30 mais recentes; Drive opcional (`googleDrive.ts`, `fetch`, funciona na web).
+- Última exportação com MAIS de 2 dias (ou nenhuma): aviso em Config (`EXPORT_WARN_DAYS = 2` em `dailyExport.ts`; mesmo número do `NUVEM-UX.md`).
 - `audit_events` vai para `auditoria-AAAAMMDD.json` à parte; `auditLog` v5 segue só com adiantamentos.
 - Teste: `exportV5` → `parseDatabase` → `migrate` dá `changed=false`.
 

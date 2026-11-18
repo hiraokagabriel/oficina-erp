@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeCloudStatus, isAccessProblem, shouldAnnounceChange } from './cloudStatus';
+import { describeCloudStatus, isAccessProblem, loadStageText, shouldAnnounceChange } from './cloudStatus';
 
 const base = { syncState: 'salvo' as const, pending: 0, lastError: null, lastSavedAt: null };
 const iso = (h: number, m: number): string => new Date(2026, 10, 12, h, m).toISOString();
@@ -59,5 +59,14 @@ describe('cloudStatus', () => {
     expect(shouldAnnounceChange('salvo', 'enviando')).toBe(false);
     expect(shouldAnnounceChange(null, 'salvo')).toBe(false);
     expect(shouldAnnounceChange('offline', 'offline')).toBe(false);
+  });
+});
+
+describe('loadStageText', () => {
+  it('uma frase por etapa; sem internet avisa na etapa dos dados', () => {
+    expect(loadStageText('cache', true)).toContain('Etapa 1 de 3');
+    expect(loadStageText('fotos', true)).toContain('Etapa 2 de 3');
+    expect(loadStageText('dados', true)).toContain('baixando');
+    expect(loadStageText('dados', false)).toContain('sem internet');
   });
 });

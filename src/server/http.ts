@@ -4,8 +4,14 @@ import type { HandlerRequest, HandlerResult } from './core'
 /** Origens fixas do app: WebView2 (Windows), WKWebView e dev. O domínio do Pages entra por variável. */
 const TAURI_ORIGINS = ['http://tauri.localhost', 'https://tauri.localhost', 'tauri://localhost']
 
-export function allowedOrigins(siteUrl: string | null, extra: string | null): string[] {
+/** Marcador na lista de origens: libera localhost/127.0.0.1 em qualquer porta (só ambiente de TESTE). */
+const LOCALHOST_ANY = '*localhost*'
+const LOCALHOST_RE = /^http:\/\/(localhost|127\.0\.0\.1):\d{1,5}$/
+
+/** `allowLocalhost` vem de CORS_ALLOW_LOCALHOST=1, ligado só no projeto de teste (nunca no real). */
+export function allowedOrigins(siteUrl: string | null, extra: string | null, allowLocalhost = false): string[] {
   const list = [...TAURI_ORIGINS]
+  if (allowLocalhost) list.push(LOCALHOST_ANY)
   if (siteUrl) {
     try { list.push(new URL(siteUrl).origin) } catch { /* SITE_URL inválida: ignora */ }
   }
@@ -20,7 +26,9 @@ export function corsHeaders(origin: string | null, allowed: string[]): Record<st
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin',
   }
-  if (origin && allowed.includes(origin)) h['Access-Control-Allow-Origin'] = origin
+  const ok = !!origin && origin !== LOCALHOST_ANY &&
+    (allowed.includes(origin) || (allowed.includes(LOCALHOST_ANY) && LOCALHOST_RE.test(origin)))
+  if (ok && origin) h['Access-Control-Allow-Origin'] = origin
   return h
 }
 

@@ -18,6 +18,7 @@ import type { MoneyHttpResult, MoneyInvoke } from '../sync/moneyClient';
 import { createSupabaseTransport } from '../sync/supabaseRepo';
 import { realTimers, SyncEngine } from '../sync/syncEngine';
 import type { CloudInfo, RemotePatch, SyncStatus } from '../sync/syncEngine';
+import type { LoadStage } from '../utils/cloudStatus';
 import type { OutboxOp } from '../sync/outbox';
 import type { CollectionKey } from '../sync/types';
 import { DatabaseContext } from './DatabaseContext';
@@ -116,6 +117,7 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
   }, []);
 
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading');
+  const [loadStage, setLoadStage] = useState<LoadStage>('cache');
   const [loadError, setLoadError] = useState<string | null>(null);
   const [status, setStatus] = useState<SyncStatus>({ online: true, flushing: false, pending: 0, syncState: 'salvo', lastError: null });
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
@@ -164,7 +166,7 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
     setLedger([]); setWorkOrders([]); setClients([]); setCatalogParts([]); setCatalogServices([]);
     setCatalogTechnicians([]); setAppointments([]); setAuditLog([]);
     setSettingsRaw(adoptSecrets(DEFAULT_SETTINGS));
-    setLoadStatus('loading'); setLoadError(null);
+    setLoadStatus('loading'); setLoadStage('cache'); setLoadError(null);
     setStatus({ online: true, flushing: false, pending: 0, syncState: 'salvo', lastError: null });
     let unsub: (() => void) | null = null;
     let closeStore: (() => void) | undefined;
@@ -211,6 +213,7 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
           onRecoveryCopy: op => { void saveRecoveryCopy(op); },
         });
         // Fotos no Storage (PR 7): fila e cache no mesmo banco local. Falha aqui não derruba os dados: só fica sem fotos.
+        setLoadStage('fotos');
         try {
           photos = await startCloudPhotos({
             supabase, workshopId, userId, online: typeof navigator === 'undefined' ? true : navigator.onLine,
@@ -221,6 +224,7 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
         }
         if (cancelled) { void photos?.stop(); engine.stop(); closeStore(); return; }
         if (photos) { photosRef.current = photos; setPhotoTransport(photos.transport); }
+        setLoadStage('dados');
         const initial = await engine.open();
         if (cancelled) { void photos?.stop(); engine.stop(); closeStore(); return; }
         engineRef.current = engine;
@@ -317,7 +321,7 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
   }, [supabase, deviceId]);
 
   const value = useMemo<DatabaseContextData>(() => {
-    const cloud: CloudInfo = { role, ...status, syncNow, money: moneyClient.run, moneyBusy, moneyBusyKeys };
+    const cloud: CloudInfo = { role, ...status, syncNow, money: moneyClient.run, moneyBusy, moneyBusyKeys, loadStage };
     return {
       ledger, setLedger, workOrders, setWorkOrders, clients, setClients, catalogParts, setCatalogParts,
       catalogServices, setCatalogServices, catalogTechnicians, setCatalogTechnicians, appointments, setAppointments,
@@ -339,7 +343,7 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
     };
   }, [
     ledger, workOrders, clients, catalogParts, catalogServices, catalogTechnicians, appointments, auditLog, settings, setSettings,
-    loadStatus, status, lastSavedAt, localDirty, workshopId, role, noopSetDbPath, getMachineName, syncNow, moneyClient, moneyBusy, moneyBusyKeys,
+    loadStatus, status, lastSavedAt, localDirty, workshopId, role, noopSetDbPath, getMachineName, syncNow, moneyClient, moneyBusy, moneyBusyKeys, loadStage,
   ]);
 
   return (

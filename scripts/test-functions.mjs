@@ -239,6 +239,10 @@ try {
   check('CORS: origem estranha sem allow-origin', !pre2.headers.get('access-control-allow-origin'))
   const pre3 = await fetch(`${URL_}/functions/v1/pin`, { method: 'OPTIONS', headers: { Origin: 'http://localhost:1420' } })
   check('CORS: localhost:1420 (dev) liberado por CORS_ORIGINS', pre3.headers.get('access-control-allow-origin') === 'http://localhost:1420')
+  const pre4 = await fetch(`${URL_}/functions/v1/pin`, { method: 'OPTIONS', headers: { Origin: 'http://localhost:5199' } })
+  check('CORS: localhost em porta qualquer liberado (CORS_ALLOW_LOCALHOST só no teste)', pre4.headers.get('access-control-allow-origin') === 'http://localhost:5199')
+  const pre5 = await fetch(`${URL_}/functions/v1/pin`, { method: 'OPTIONS', headers: { Origin: 'http://localhost.evil.com' } })
+  check('CORS: localhost.evil.com recusado', !pre5.headers.get('access-control-allow-origin'))
   const t415 = await fetch(`${URL_}/functions/v1/pin`, { method: 'POST', headers: { apikey: ANON, 'Content-Type': 'text/plain' }, body: '{}' })
   check('Content-Type diferente de JSON: 415', t415.status === 415, `status ${t415.status}`)
 

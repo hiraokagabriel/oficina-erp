@@ -137,3 +137,16 @@
 .import-confirm { display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-3); border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-2); }
 .import-table td svg { color: var(--text-success); }
 .import-diff td svg { color: var(--text-danger); }
+
+/* PIN do convite: 6 caixas (NUVEM-UX 190); o campo real fica por cima, invisível, para teclado e leitor de tela */
+.pin-boxes { position: relative; width: fit-content; max-width: 100%; }
+.pin-box-row { display: flex; gap: var(--sp-2); }
+.pin-box {
+  width: 48px; height: 56px; display: flex; align-items: center; justify-content: center;
+  border: 2px solid var(--border-strong); border-radius: var(--radius-md, 8px); background: var(--surface-1, transparent);
+  font-family: var(--font-tech); font-size: var(--fs-lg); color: var(--text-1, inherit);
+}
+.pin-box--next { border-color: var(--accent); }
+.pin-box--invalid { border-color: var(--text-danger); }
+.pin-box-input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; font-size: 16px; cursor: text; }
+.pin-boxes:focus-within .pin-box--next { box-shadow: 0 0 0 2px var(--accent); }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LedgerEntry, WorkOrder } from '../types';
 import { classify } from '../sync/diff';
-import { ledgerTouched, saveNeedsMoney, statusNeedsMoneyOp } from './moneyRoute';
+import { ledgerTouched, moneyBusyLabel, saveNeedsMoney, statusNeedsMoneyOp } from './moneyRoute';
 import { statusChangeEffects } from './osFinanceService';
 import { prepareOSSave } from './osSave';
 
@@ -63,5 +63,19 @@ describe('moneyRoute: caixa e salvar OS', () => {
     const a = os({ status: 'AGUARDANDO_PAGAMENTO', financialId: 'e1' });
     expect(classify('recepcao', 'workOrders', a, { ...a, status: 'FINALIZADO', paymentDate: '2026-11-12T12:00:00.000Z' })).toBe('money_op');
     expect(classify('recepcao', 'ledger', entry(), entry({ paymentDate: '2026-11-12T12:00:00.000Z' }), { ledgerOsId: 'o1' })).toBe('money_op');
+  });
+});
+
+describe('moneyBusyLabel', () => {
+  it('texto de andamento por operação; sem texto onde a tela já tem o seu', () => {
+    expect(moneyBusyLabel('os.finalizeSingle')).toBe('Finalizando...');
+    expect(moneyBusyLabel('os.installment')).toBe('Finalizando...');
+    expect(moneyBusyLabel('os.delete')).toBe('Excluindo...');
+    expect(moneyBusyLabel('os.restore')).toBe('Reabrindo...');
+    expect(moneyBusyLabel('os.status', 'FINALIZADO')).toBe('Finalizando...');
+    expect(moneyBusyLabel('os.status', 'AGUARDANDO_PAGAMENTO')).toBe('Finalizando...');
+    expect(moneyBusyLabel('os.status', 'EM_SERVICO')).toBeNull();
+    expect(moneyBusyLabel('os.save')).toBeNull();
+    expect(moneyBusyLabel('ledger.toggle')).toBeNull();
   });
 });

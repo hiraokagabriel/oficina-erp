@@ -94,14 +94,16 @@ export async function runDailyExport(deps: DailyExportDeps): Promise<DailyExport
     const db: DatabaseSchema = exportV5(rep.db, { savedAt: at, savedBy: deps.savedBy, revision: deps.newId() });
     content = JSON.stringify(db);
   } catch (e) {
-    return { status: 'erro', message: `Não consegui ler os dados da internet. ${errText(e)}` };
+    console.error('Cópia diária: leitura da internet falhou', e); // detalhe técnico só no console
+    return { status: 'erro', message: 'Não consegui ler os dados da internet para fazer a cópia. Confira a conexão e tente de novo.' };
   }
 
   let path: string;
   try {
     path = await deps.saveDailyExport(content);
   } catch (e) {
-    return { status: 'erro', message: `Não consegui gravar a cópia neste computador. ${errText(e)}` };
+    console.error('Cópia diária: gravação no computador falhou', e); // detalhe técnico só no console
+    return { status: 'erro', message: 'Não consegui gravar a cópia neste computador. Confira se há espaço no disco e tente de novo.' };
   }
 
   const at = deps.now();

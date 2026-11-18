@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DailyExportResult } from '../sync/dailyExport';
-import { exportOutcome, lastExportText } from './exportView';
+import { exportOutcome, exportToastForConfig, lastExportText } from './exportView';
 
 const now = new Date(2026, 10, 17, 15, 0, 0);
 
@@ -33,5 +33,20 @@ describe('exportOutcome', () => {
     expect(exportOutcome(ok({ drive: 'falhou' }), true)?.type).toBe('error');
     expect(exportOutcome(ok({ skippedOrders: ['a', 'b'] }), true)?.message).toMatch(/2 ordem/);
     expect(exportOutcome(ok({ markError: 'x' }), true)?.type).toBe('info');
+  });
+});
+
+describe('exportToastForConfig', () => {
+  const err = { message: 'falhou', type: 'error' as const };
+  it('erro com o cartão de aviso na tela: não repete no toast', () => {
+    expect(exportToastForConfig(err, true)).toBeNull();
+  });
+  it('erro sem cartão: toast fala', () => {
+    expect(exportToastForConfig(err, false)).toEqual(err);
+  });
+  it('sucesso sempre fala', () => {
+    const okOut = { message: 'feito', type: 'success' as const };
+    expect(exportToastForConfig(okOut, true)).toEqual(okOut);
+    expect(exportToastForConfig(null, true)).toBeNull();
   });
 });

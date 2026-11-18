@@ -76,6 +76,7 @@ import { AppointmentAction, AppointmentInput, applyAppointmentAction, linkAppoin
 import { appointmentToOSDraft, OSDraftFromAppointment } from './services/schedule';
 import type { AppointmentModalMode } from './modals/AppointmentModal';
 import type { Appointment } from './types';
+import { readOnlyBlock } from './utils/readOnlyGuard';
 import { LedgerEntry, WorkOrder, Client, CatalogItem, OSStatus, Technician, InstallmentConfig, OSModalPayload } from './types';
 
 type PendingAction =
@@ -193,6 +194,15 @@ export function AppContent({ topbar, phone: phoneShell }: { topbar?: ReactNode; 
     if (type === 'error') SoundFX.error();
   };
 
+  // Banco em somente leitura (lacrado ou de versão futura): toda ação que grava para aqui, com erro claro e sem toast de sucesso.
+  const guardReadOnly = (): boolean => {
+    const msg = readOnlyBlock(readOnly);
+    if (!msg) return false;
+    addToast(msg, 'error');
+    return true;
+  };
+  const guardedSetSettings: typeof setSettings = (v) => { if (guardReadOnly()) return; setSettings(v); };
+
   const handleGoogleDriveBackup = async () => {
     if (isBackuping) return;
 
@@ -228,7 +238,7 @@ export function AppContent({ topbar, phone: phoneShell }: { topbar?: ReactNode; 
     }
   };
 
-  const handleImportData = (content: string) => setPendingAction({ type: 'IMPORT_DATA', content });
+  const handleImportData = (content: string) => { if (guardReadOnly()) return; setPendingAction({ type: 'IMPORT_DATA', content }); };
 
   // ---------- Dinheiro no servidor (modo nuvem, PR 6) ----------
   // No modo arquivo `cloud` é indefinido e nenhum desses ramos roda: o fluxo antigo segue igual.
@@ -258,6 +268,7 @@ export function AppContent({ topbar, phone: phoneShell }: { topbar?: ReactNode; 
   const handleUpdateStatus = (osId: string, newStatus: OSStatus, onDone?: () => void) => {
     const os = workOrders.find(o => o.id === osId);
     if (!os || os.status === newStatus) return;
+    if (guardReadOnly()) return;
 
     const effect = statusChangeEffects(os, newStatus, new Date().toISOString(), ledger);
     if (effect.kind === 'blocked') {
@@ -292,6 +303,7 @@ export function AppContent({ topbar, phone: phoneShell }: { topbar?: ReactNode; 
   };
 
   const handleSaveOSModal = (data: OSModalPayload) => {
+    if (guardReadOnly()) return;
     // Visão de campo (Mecânico, sem `os.editFields`): grava SÓ km e fotos por cima da OS atual do banco.
     // Sem vínculos de cliente/catálogo, sem ledger/auditoria e sem tocar itens, preços ou adiantamentos.
     if (editingOS && !access.can('os.editFields')) {
@@ -502,6 +514,7 @@ export function AppContent({ topbar, phone: phoneShell }: { topbar?: ReactNode; 
 
   // ---------- Agenda ----------
   const handleSaveAppointment = (input: AppointmentInput, editing: Appointment | null, mode: AppointmentModalMode) => {
+    if (guardReadOnly()) return;
     try {
       if (!editing) {
         const created = makeAppointment({ ...input, newId: generateId(), now: new Date() });
@@ -519,6 +532,7 @@ export function AppContent({ topbar, phone: phoneShell }: { topbar?: ReactNode; 
   };
 
   const handleAppointmentAction = (id: string, action: Exclude<AppointmentAction, 'REAGENDAR'>) => {
+    if (guardReadOnly()) return;
     const current = appointments.find(a => a.id === id);
     if (!current) return;
     try {
@@ -534,17 +548,20 @@ export function AppContent({ topbar, phone: phoneShell }: { topbar?: ReactNode; 
   };
 
   const handleDeleteAppointment = (id: string) => {
+    if (guardReadOnly()) return;
     setAppointments(prev => prev.filter(a => a.id !== id));
     addToast('Agendamento excluído.', 'info');
   };
 
   const handleCreateOSFromAppointment = (appointment: Appointment) => {
+    if (guardReadOnly()) return;
     setEditingOS(null);
     setOsFromAppointment({ appointment, draft: appointmentToOSDraft(appointment) });
     setIsModalOpen(true);
   };
 
   const handleSaveEntryModal = (desc: string, val: number, type: 'CREDIT' | 'DEBIT', dateStr: string, recurrence: 'SINGLE' | 'INSTALLMENT' | 'RECURRING', count: number) => {
+    if (guardReadOnly()) return;
     if (moneyOffline()) return; // lançamento do Financeiro só online (nuvem)
     const absVal = Math.abs(val);
     if (editingEntry) {
@@ -586,6 +603,7 @@ Abrir OS?`)) {
   };
 
   const handleTogglePayment = (entryId: string) => {
+    if (guardReadOnly()) return;
     if (refuseIfAdvance(entryId)) return;
     if (cloud) {
       if (moneyOffline()) return;
@@ -625,6 +643,7 @@ Abrir OS?`)) {
   };
 
   const handleRequestDeleteEntry = (entry: LedgerEntry) => {
+    if (guardReadOnly()) return;
     if (cloud && !access.can('ledger.delete')) { addToast('Só o Dono exclui lançamentos do Financeiro.', 'info'); return; }
     if (refuseIfAdvance(entry.id)) return;
     // Receita ou parcela de OS: apagar aqui deixaria a OS com vínculo órfão. Só pela OS.
@@ -637,6 +656,7 @@ Abrir OS?`)) {
   };
 
   const confirmDeleteSingle = () => {
+    if (guardReadOnly()) return;
     if (moneyOffline()) return;
     if (deleteModalInfo.entry) finance.deleteEntry(deleteModalInfo.entry.id);
     addToast('Excluído.', 'info');
@@ -644,6 +664,7 @@ Abrir OS?`)) {
   };
 
   const confirmDeleteGroup = () => {
+    if (guardReadOnly()) return;
     if (moneyOffline()) return;
     if (deleteModalInfo.entry?.groupId) finance.deleteGroup(deleteModalInfo.entry.groupId);
     addToast('Série excluída.', 'info');
@@ -651,6 +672,7 @@ Abrir OS?`)) {
   };
 
   const handleSaveClient = (updatedClient: Client) => {
+    if (guardReadOnly()) return;
     const oldClient = clients.find(c => c.id === updatedClient.id);
     setClients(prev => prev.find(c => c.id === updatedClient.id) ? prev.map(c => c.id === updatedClient.id ? updatedClient : c) : [...prev, updatedClient]);
     const { newWorkOrders, newLedger, newAppointments, hasChanges } = updateClientCascading(oldClient, updatedClient, workOrders, ledger, clients, appointments);
@@ -665,6 +687,7 @@ Abrir OS?`)) {
   };
 
   const handleSaveCatalogItem = (updatedItem: CatalogItem, type: 'part' | 'service') => {
+    if (guardReadOnly()) return;
     let oldItem: CatalogItem | undefined;
     if (type === 'part') {
       oldItem = catalogParts.find(p => p.id === updatedItem.id);
@@ -683,6 +706,7 @@ Abrir OS?`)) {
   };
 
   const handleSaveTechnician = (tech: Technician) => {
+    if (guardReadOnly()) return;
     setCatalogTechnicians(prev =>
       prev.find(t => t.id === tech.id)
         ? prev.map(t => t.id === tech.id ? tech : t)
@@ -699,6 +723,7 @@ Abrir OS?`)) {
   };
 
   const handleInstallmentConfirm = (config: InstallmentConfig) => {
+    if (guardReadOnly()) return;
     if (cloud) {
       // O servidor refaz a conta (restante, parcelas, datas pelo relógio da oficina); aqui só o pedido.
       const os = installmentOS;
@@ -798,6 +823,7 @@ Abrir OS?`)) {
   // Os callbacks leem sempre a versão mais recente dos handlers/estado via ref.
   // Excluir OS: parcela já recebida bloqueia; senão a confirmação diz o que sai do caixa.
   const requestDeleteOS = (os: WorkOrder) => {
+    if (guardReadOnly()) return;
     const plan = planDeleteOS(os, ledger);
     if (!plan.ok) { addToast(plan.message, 'error'); return; }
     if (moneyOffline()) return;
@@ -906,6 +932,7 @@ Abrir OS?`)) {
 
   const executePendingAction = () => {
     if (!pendingAction) return;
+    if (guardReadOnly()) { setPendingAction(null); return; }
 
     if (pendingAction.type === 'DELETE_OS' && cloud) {
       const os = pendingAction.data;
@@ -998,6 +1025,7 @@ Abrir OS?`)) {
 
   const handleInstallmentChoice = (wantsInstallment: boolean) => {
     if (!pendingInstallmentOS) return;
+    if (guardReadOnly()) { setPendingInstallmentOS(null); setIsInstallmentChoiceOpen(false); return; }
 
     if (wantsInstallment) {
       setInstallmentOS(pendingInstallmentOS);
@@ -1042,6 +1070,7 @@ Abrir OS?`)) {
       addToast(NEW_OS_DENIED_MESSAGE, 'info');
       return;
     }
+    if (guardReadOnly()) return;
     setActiveTab('OFICINA');
     setEditingOS(null);
     setIsModalOpen(true);
@@ -1083,7 +1112,7 @@ Abrir OS?`)) {
                 clients={clients}
                 settings={settings}
                 formatMoney={Money.format}
-                onNewOS={() => { setEditingOS(null); setIsModalOpen(true); }}
+                onNewOS={() => { if (guardReadOnly()) return; setEditingOS(null); setIsModalOpen(true); }}
                 onSaveAppointment={input => handleSaveAppointment(input, null, 'NOVO')}
                 onCreateOSFromAppointment={handleCreateOSFromAppointment}
                 onOpenOS={os => { setEditingOS(os); setIsModalOpen(true); }}
@@ -1107,6 +1136,7 @@ Abrir OS?`)) {
                 Money={Money}
                 onOpenExport={() => setIsExportModalOpen(true)}
                 onOpenEntry={() => {
+                  if (guardReadOnly()) return;
                   setEditingEntry(null);
                   setIsEntryModalOpen(true);
                 }}
@@ -1136,6 +1166,7 @@ Abrir OS?`)) {
                 targetMargin={getTargetMargin(settings)}
                 showMargin={settings.showMarginOnBoard === true}
                 onNewOS={() => {
+                  if (guardReadOnly()) return;
                   setEditingOS(null);
                   setIsModalOpen(true);
                 }}
@@ -1161,6 +1192,7 @@ Abrir OS?`)) {
               <ProcessPage
                 workOrders={workOrders}
                 onOpenNew={() => {
+                  if (guardReadOnly()) return;
                   setEditingOS(null);
                   setIsModalOpen(true);
                 }}
@@ -1193,7 +1225,7 @@ Abrir OS?`)) {
             {activeTab === 'CONFIG' && canSeeTab(access, 'CONFIG') && (
               <ConfigPage
                 settings={settings}
-                setSettings={setSettings}
+                setSettings={guardedSetSettings}
                 currentTheme={currentTheme}
                 setCurrentTheme={setCurrentTheme}
                 onBackup={handleGoogleDriveBackup}
@@ -1273,17 +1305,18 @@ Abrir OS?`)) {
             catalogServices={catalogServices}
             catalogTechnicians={catalogTechnicians}
             onSaveClient={handleSaveClient}
-            onDeleteClient={(id) => setClients(p => p.filter(c => c.id !== id))}
+            onDeleteClient={(id) => { if (guardReadOnly()) return; setClients(p => p.filter(c => c.id !== id)); }}
             onSaveCatalogItem={handleSaveCatalogItem}
-            onDeleteCatalogItem={(id, type) =>
-              type === 'part'
-                ? setCatalogParts(p => p.filter(x => x.id !== id))
-                : setCatalogServices(p => p.filter(x => x.id !== id))
-            }
+            onDeleteCatalogItem={(id, type) => {
+              if (guardReadOnly()) return;
+              if (type === 'part') setCatalogParts(p => p.filter(x => x.id !== id));
+              else setCatalogServices(p => p.filter(x => x.id !== id));
+            }}
             onSaveTechnician={handleSaveTechnician}
-            onDeleteTechnician={(id) =>
-              setCatalogTechnicians(p => p.filter(t => t.id !== id))
-            }
+            onDeleteTechnician={(id) => {
+              if (guardReadOnly()) return;
+              setCatalogTechnicians(p => p.filter(t => t.id !== id));
+            }}
             formatMoney={Money.format}
           />
         )}
@@ -1308,6 +1341,7 @@ Abrir OS?`)) {
             isOpen={isChecklistOpen}
             onClose={() => setIsChecklistOpen(false)}
             onSave={(data) => {
+              if (guardReadOnly()) { setIsChecklistOpen(false); return; }
               if (checklistOS) {
                 setWorkOrders(p =>
                   p.map(o => (o.id === checklistOS.id ? { ...o, checklist: data } : o))

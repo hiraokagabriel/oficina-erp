@@ -130,7 +130,7 @@
 .import-table thead th { font-weight: var(--fw-semibold); color: var(--text-2); }
 .import-table td:last-child, .import-table thead th:last-child { text-align: center; width: 32px; }
 .import-diff th, .import-diff td { color: var(--text-danger); font-weight: var(--fw-semibold); }
-.import-list { margin: 0; padding-left: var(--sp-5); max-height: 240px; overflow: auto; font-size: var(--fs-sm); color: var(--text); line-height: var(--lh-base); }
+.import-list { margin: 0; padding-left: var(--sp-5); list-style: disc; max-height: 240px; overflow: auto; font-size: var(--fs-sm); color: var(--text); line-height: var(--lh-base); }
 .import-warn { display: flex; align-items: flex-start; gap: var(--sp-2); margin: 0; padding: var(--sp-3); border: 1px solid var(--text-warning); border-radius: var(--radius-md); font-size: var(--fs-sm); color: var(--text-warning); }
 .import-warn svg { flex: none; margin-top: 2px; }
 .import-photos { display: flex; flex-direction: column; gap: var(--sp-2); }

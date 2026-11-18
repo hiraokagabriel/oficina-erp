@@ -4,7 +4,7 @@ Atualizado em 2026-11-17. Branch `feat/nuvem-login` (publicada em `origin`). Pla
 
 ## Ponto de partida da próxima sessão
 
-**PR 8 implementado (R1 a R7)**, revisado pelo `revisor` e pelo `ux-revisor`, com as correções feitas. Falta só o deploy (R8), que depende do dono: nome do projeto no Pages (D4), conta Cloudflare e os passos manuais de `docs/NUVEM-PR8.md`. Depois: teste em celular real e teste manual do exe com a CSP nova (pendência 8). **Próximo PR a implementar: 9** (importação e backup). A revisão dos PRs 6 e 7 está concluída.
+**PRs 8 e 9 implementados**, revisados e verificados no navegador (projeto de teste, Tauri simulado). PR 8: falta só o deploy (R8), que depende do dono: nome do projeto no Pages (D4), conta Cloudflare e os passos manuais de `docs/NUVEM-PR8.md`. PR 9 (`docs/NUVEM-PR9.md`): falta exercitar no app Tauri real os comandos Rust novos (`backup_pre_cloud`, `photo_inventory`, `save_daily_export`) com banco sintético (`scripts/make-synthetic-db.mjs`). Depois: celular real e teste manual do exe com a CSP nova (pendência 8). **Próximo: PR 10** (piloto com banco sintético, 2 aparelhos, offline e papéis).
 
 ## Projetos Supabase
 
@@ -33,8 +33,10 @@ Atualizado em 2026-11-17. Branch `feat/nuvem-login` (publicada em `origin`). Pla
 
 | 8 R1, R3 | `utils/platform.ts` (`isTauri`), `utils/download.ts`, CSV no navegador; PWA só com `VITE_CLOUD=1` (`cloudPwa()` no `vite.config.ts`, `scripts/pwa/sw.template.js`, `src/pwa/precache.ts`), `npm run build:web` | SW testado com fetch/caches falsos; `vite preview` abre offline; modo arquivo sem `sw.js` nem manifest |
 | 8 R4 a R7 | Celular (nuvem, < 800 px, `data-layout="phone"`): barra de baixo e "Mais", "Disponível no computador", Kanban por chips com busca por placa, ficha da OS em tela cheia com Pagamento só leitura, Agenda por dia, Clientes lista/detalhe com Ligar; `styles-mobile.css` só no boot da nuvem | navegador 360/390/800 px nos dois temas; `revisor` e `ux-revisor` |
+| 9 | Importação e cópia diária: `importCheck.ts`, `importRunner.ts` (lotes, fotos, volta completa, revision, lacre `schemaVersion 1000`), `fullPull.ts`, `dailyExport.ts`; Rust `backup_pre_cloud`, `save_daily_export` (30 cópias em `backups
+uvem`), `photo_inventory`; SQL `import_aal2` e `import_finish(ws, commit, p_expected)` (conclui só com totais iguais); `money` 423 até concluir; telas `ImportScreen` e "Onde ficam os dados"; `scripts/make-synthetic-db.mjs` | pgTAP 391; `cargo test` 57; `test-functions` 82; navegador com Tauri simulado (enviar, bloqueado, arquivo mudou, totais mudaram, v3, lacre, cópia) |
 
-Contagem atual: 124 arquivos, 1777 testes Vitest (local e `TZ=UTC`); `tsc` do app e das funções limpos; `dist/` do modo arquivo sem supabase-js/IndexedDB. O modo nuvem só liga com `VITE_CLOUD=1`; o modo arquivo continua o padrão.
+Contagem atual: 130 arquivos, 1882 testes Vitest (local e `TZ=UTC`); `tsc` do app e das funções limpos; `dist/` do modo arquivo sem supabase-js/IndexedDB. O modo nuvem só liga com `VITE_CLOUD=1`; o modo arquivo continua o padrão.
 
 ## Pendências conhecidas (antes do piloto)
 
@@ -52,7 +54,6 @@ Contagem atual: 124 arquivos, 1777 testes Vitest (local e `TZ=UTC`); `tsc` do ap
 | PR | Escopo | Observação |
 |---|---|---|
 | 8 R8 | Deploy no Cloudflare Pages (passos manuais em `docs/NUVEM-PR8.md`); depois Site URL e Redirect URLs no Auth do teste; conferir `curl -I https://<nome>.pages.dev/index.html` (308) e o `_headers` aplicado | **dono**: D4 e conta Cloudflare |
-| 9 | Importação e backup: "Enviar banco para a nuvem" (`parseDatabase` → `migrate` → `prepareForCloud` → `import_rows` → `import_finish` com conferência de totais), `save_daily_export` (Rust, `cargo test`), exportação diária e aviso em Config | só com banco sintético até a virada |
 | 10 | Revisão e piloto: banco sintético, 2 aparelhos, offline e reconexão, papéis | `revisor`, `verificador`, `ux-revisor` |
 | 11 | Virada: aplicar migrações e funções no projeto REAL, backup `pre-nuvem`, todos os PCs no mesmo dia | **exige ok do dono** (dados reais) |
 | 12 | Remover o modo arquivo do `DatabaseContext` e comandos Rust sem uso | depois da virada |

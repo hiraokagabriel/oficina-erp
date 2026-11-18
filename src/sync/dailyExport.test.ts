@@ -112,6 +112,7 @@ describe('runDailyExport', () => {
     deps.saveDailyExport = async () => { throw new Error('disco cheio'); };
     const r = await runDailyExport(deps);
     expect(r.status).toBe('erro');
+    if (r.status === 'erro') expect(r.message).not.toMatch(/disco cheio/); // erro técnico só no console
     expect(drive).toBe(0);
     expect(marks).toEqual([]);
   });
@@ -121,6 +122,7 @@ describe('runDailyExport', () => {
     deps.transport = { pull: async () => { throw new Error('sem rede'); } };
     const r = await runDailyExport(deps);
     expect(r.status).toBe('erro');
+    if (r.status === 'erro') expect(r.message).not.toMatch(/sem rede/);
     expect(saved).toEqual([]);
   });
 

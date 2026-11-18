@@ -94,3 +94,10 @@ export const RESET_WORD = 'APAGAR';
 export const confirmsReset = (typed: string): boolean => typed.trim().toUpperCase() === RESET_WORD;
 
 export const DEFAULT_DB_PATH = 'C:\\OficinaData\\database.json';
+
+export type RefazerReason = 'arquivo' | 'numeros';
+
+/** Título da tela "refazer": arquivo alterado durante o envio é diferente de totais que não batem. */
+export function refazerTitle(reason: RefazerReason): string {
+  return reason === 'arquivo' ? 'O arquivo mudou durante o envio' : 'Os números não bateram';
+}

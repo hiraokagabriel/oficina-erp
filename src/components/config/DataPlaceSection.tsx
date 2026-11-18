@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../auth/AuthContext';
 import { exportNow, readExportFolder } from '../../auth/exportNow';
-import { exportOutcome, lastExportText } from '../../auth/exportView';
+import { exportOutcome, exportToastForConfig, lastExportText } from '../../auth/exportView';
 import { useToast } from '../../context/ToastContext';
 import { exportWarning } from '../../sync/dailyExport';
 import { openFolder } from '../../utils/documentOutput';
@@ -26,7 +26,7 @@ export const DataPlaceSection: React.FC = () => {
     setBusy(true);
     try {
       const res = await exportNow({ supabase, workshopId, deviceName });
-      const out = exportOutcome(res, false);
+      const out = exportToastForConfig(exportOutcome(res, false), warning !== null);
       if (out) addToast(out.message, out.type);
       await reloadMembership();
     } finally {

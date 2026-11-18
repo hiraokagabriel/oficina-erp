@@ -67,7 +67,10 @@ const CloudBridge: React.FC<{ inert: boolean; children: React.ReactNode; overlay
         if (out) addToast(out.message, out.type);
         return reloadMembership();
       })
-      .catch(e => addToast(`Não consegui fazer a cópia de segurança. ${e instanceof Error ? e.message : String(e)}`, 'error'));
+      .catch(e => {
+        console.error('Cópia diária falhou', e); // detalhe técnico só no console
+        addToast('Não consegui fazer a cópia de segurança. Tente de novo mais tarde.', 'error');
+      });
   }, [synced, role, workshopId, lastExportAt, supabase, deviceName, addToast, reloadMembership]);
 
   // O motor travou por falta de acesso: descobre se foi desativação, entrar de novo ou troca de papel.

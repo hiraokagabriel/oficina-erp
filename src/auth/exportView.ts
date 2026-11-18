@@ -18,6 +18,15 @@ export function lastExportText(lastExportAt: string | null, now: Date): string {
   return `Última cópia: ${when} às ${time}`;
 }
 
+/**
+ * Toast depois de uma cópia feita pelo botão de Config. Se a falha já está no cartão de aviso da tela
+ * ("cópia atrasada"), não repete: só o cartão fica, para não aparecer duas vezes.
+ */
+export function exportToastForConfig(out: { message: string; type: 'success' | 'error' | 'info' } | null, warningCardVisible: boolean): { message: string; type: 'success' | 'error' | 'info' } | null {
+  if (out && out.type === 'error' && warningCardVisible) return null;
+  return out;
+}
+
 /** Aviso (e tipo do toast) depois de uma cópia. `quiet` = cópia automática ao abrir: só fala se algo deu errado. */
 export function exportOutcome(res: DailyExportResult, quiet: boolean): { message: string; type: 'success' | 'error' | 'info' } | null {
   if (res.status === 'erro') return { message: res.message, type: 'error' };

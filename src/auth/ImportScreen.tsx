@@ -1,16 +1,18 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { useConfirmDialog } from './useConfirmDialog';
 import { Icon } from '../components/ui/Icon';
 import { useToast } from '../context/ToastContext';
 import { createImportRunner } from '../sync/importRunner';
 import type { ImportPhase, ImportProgress, ImportReport, ImportSession } from '../sync/importRunner';
 import type { ImportProblem } from '../sync/importCheck';
+import type { RefazerReason } from './importView';
 import { isTauri } from '../utils/platform';
 import { useAuth } from './AuthContext';
 import { AuthShell, AuthStatusIcon, FieldError, Spinner } from './AuthShell';
 import { createImportDeps, finishWithoutData } from './importWiring';
 import {
   DEFAULT_DB_PATH, PHASE_LABEL, canFinish, confirmsReset, describeImportError, phaseMarks, photoSpaceNote, photoSummary,
-  problemLines, progressCount, progressPercent,
+  problemLines, progressCount, progressPercent, refazerTitle,
 } from './importView';
 
 // Tela de bloqueio "Trazer os dados para a internet" (docs/NUVEM-PR9.md, docs/NUVEM-UX.md seção 9). O app não monta
@@ -22,7 +24,7 @@ type View =
   | { kind: 'rodando'; phase: ImportPhase | null; done: number; total: number }
   | { kind: 'bloqueado'; problems: ImportProblem[]; backupPath: string; message: string }
   | { kind: 'erro'; message: string; canRetry: boolean }
-  | { kind: 'refazer'; message: string; report: ImportReport | null }
+  | { kind: 'refazer'; message: string; report: ImportReport | null; reason: RefazerReason }
   | { kind: 'pronto'; report: ImportReport; session: ImportSession }
   | { kind: 'concluindo' }
   | { kind: 'concluido_sem_lacre'; message: string };
@@ -104,8 +106,8 @@ export const ImportScreen: React.FC = () => {
       case 'recusado': setView({ kind: 'erro', message: res.message, canRetry: true }); break;
       case 'bloqueado': setView({ kind: 'bloqueado', problems: res.problems, backupPath: res.backupPath, message: res.message }); break;
       case 'erro': setView({ kind: 'erro', message: describeImportError(res.message), canRetry: true }); break;
-      case 'arquivo_mudou': setView({ kind: 'refazer', message: res.message, report: null }); break;
-      case 'divergente': setView({ kind: 'refazer', message: res.message, report: res.report }); break;
+      case 'arquivo_mudou': setView({ kind: 'refazer', message: res.message, report: null, reason: 'arquivo' }); break;
+      case 'divergente': setView({ kind: 'refazer', message: res.message, report: res.report, reason: 'numeros' }); break;
       case 'pronto': setView({ kind: 'pronto', report: res.report, session: res.session }); break;
     }
     void reloadMembership();
@@ -124,7 +126,7 @@ export const ImportScreen: React.FC = () => {
     } else if (res.status === 'erro') {
       setView({ kind: 'erro', message: describeImportError(res.message), canRetry: false });
     } else {
-      setView({ kind: 'refazer', message: res.message, report: session.report });
+      setView({ kind: 'refazer', message: res.message, report: session.report, reason: res.status === 'arquivo_mudou' ? 'arquivo' : 'numeros' });
     }
   }, [makeRunner, addToast, reloadMembership]);
 
@@ -237,7 +239,7 @@ export const ImportScreen: React.FC = () => {
     return (
       <AuthShell wide>
         <AuthStatusIcon name="alerta" tone="danger" />
-        <h1 className="auth-title">Os números não bateram</h1>
+        <h1 className="auth-title">{refazerTitle(view.reason)}</h1>
         <FieldError>{view.message}</FieldError>
         {view.report && <ReportTable report={view.report} />}
         {view.report && view.report.blockers.length > 0 && <ul className="import-list">{view.report.blockers.map(b => <li key={b}>{b}</li>)}</ul>}
@@ -299,15 +301,7 @@ export const ImportScreen: React.FC = () => {
       </div>
 
       {confirm === 'apagar' && <ResetConfirm typed={typed} setTyped={setTyped} busy={busy} onCancel={() => { setConfirm(null); setTyped(''); }} onConfirm={() => { void resetAll(); }} />}
-      {confirm === 'vazio' && (
-        <div className="import-confirm" role="alertdialog" aria-label="Começar sem dados">
-          <p className="auth-text"><strong>Começar a oficina sem nenhum dado?</strong> Depois disso não dá mais para trazer o arquivo antigo para a internet.</p>
-          <div className="auth-actions">
-            <button type="button" className="btn" disabled={busy || !online} onClick={() => { void startEmpty(); }}>{busy ? <><Spinner /> Aguarde...</> : 'Sim, começar sem dados'}</button>
-            <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setConfirm(null)}>Voltar</button>
-          </div>
-        </div>
-      )}
+      {confirm === 'vazio' && <EmptyConfirm busy={busy} online={online} onCancel={() => setConfirm(null)} onConfirm={() => { void startEmpty(); }} />}
 
       <div className="auth-foot">
         <button type="button" className="btn-ghost btn-sm" onClick={() => { void signOut(); }}>Sair deste aparelho</button>
@@ -316,10 +310,27 @@ export const ImportScreen: React.FC = () => {
   );
 };
 
+const EmptyConfirm: React.FC<{ busy: boolean; online: boolean; onCancel: () => void; onConfirm: () => void }> = ({ busy, online, onCancel, onConfirm }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  useConfirmDialog(ref, () => { if (!busy) onCancel(); });
+  return (
+    <div ref={ref} className="import-confirm" role="alertdialog" aria-label="Começar sem dados">
+      <p className="auth-text"><strong>Começar a oficina sem nenhum dado?</strong> Depois disso não dá mais para trazer o arquivo antigo para a internet.</p>
+      <div className="auth-actions">
+        <button type="button" className="btn" disabled={busy || !online} onClick={onConfirm}>{busy ? <><Spinner /> Aguarde...</> : 'Sim, começar sem dados'}</button>
+        <button type="button" className="btn btn-secondary" disabled={busy} onClick={onCancel} data-initial-focus>Voltar</button>
+      </div>
+    </div>
+  );
+};
+
 const ResetConfirm: React.FC<{
   typed: string; setTyped: (v: string) => void; busy: boolean; onCancel: () => void; onConfirm: () => void;
-}> = ({ typed, setTyped, busy, onCancel, onConfirm }) => (
-  <div className="import-confirm" role="alertdialog" aria-label="Apagar e recomeçar">
+}> = ({ typed, setTyped, busy, onCancel, onConfirm }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  useConfirmDialog(ref, () => { if (!busy) onCancel(); });
+  return (
+  <div ref={ref} className="import-confirm" role="alertdialog" aria-label="Apagar e recomeçar">
     <p className="auth-text"><strong>Isso apaga tudo que já foi enviado para a internet por esta importação.</strong> O arquivo deste computador não é mexido. Para confirmar, escreva APAGAR.</p>
     <input className="form-input" aria-label="Escreva APAGAR para confirmar" value={typed} onChange={e => setTyped(e.target.value)} autoComplete="off" />
     <div className="auth-actions">
@@ -327,7 +338,8 @@ const ResetConfirm: React.FC<{
       <button type="button" className="btn btn-secondary" disabled={busy} onClick={onCancel}>Voltar</button>
     </div>
   </div>
-);
+  );
+};
 
 /** Tela para quem não é Dono enquanto o Dono traz os dados (docs/NUVEM-PR9.md). */
 export const PreparingScreen: React.FC = () => {

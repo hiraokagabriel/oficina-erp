@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ImportReport } from '../sync/importRunner';
 import {
-  IMPORT_PHASES, canFinish, confirmsReset, describeImportError, phaseMarks, photoSpaceNote, photoSummary, problemLines, progressCount, progressPercent,
+  IMPORT_PHASES, canFinish, confirmsReset, describeImportError, phaseMarks, photoSpaceNote, photoSummary, problemLines, progressCount, progressPercent, refazerTitle,
 } from './importView';
 
 const photos = (o: Partial<ImportReport['photos']> = {}): ImportReport['photos'] => (
@@ -68,5 +68,14 @@ describe('importView', () => {
     expect(confirmsReset('apagar')).toBe(true);
     expect(confirmsReset(' APAGAR ')).toBe(true);
     expect(confirmsReset('apaga')).toBe(false);
+  });
+});
+
+describe('refazerTitle', () => {
+  it('título próprio quando o arquivo mudou durante o envio', () => {
+    expect(refazerTitle('arquivo')).toBe('O arquivo mudou durante o envio');
+  });
+  it('totais divergentes mantêm o título de números', () => {
+    expect(refazerTitle('numeros')).toBe('Os números não bateram');
   });
 });

@@ -108,7 +108,7 @@ Desde 2026-11-18 a oficina usa o modo nuvem (versão 0.3.0) com dados reais. Tod
 **Consequências para a Fase 1:**
 1. A base de serviços sai destes números: ~40 serviços cobrem a grande maioria das OS.
 2. Padronizar o catálogo antes (juntar nomes duplicados num item só, já com o sistema): o Claude propõe a lista de junções e o dono aprova antes de aplicar (dados reais).
-3. OS nova deve detalhar as peças: impedir ou desestimular "TOTAL PEÇAS" para o histórico passar a valer na calibração.
+3. ~~OS nova deve detalhar as peças~~: o dono confirmou (2026-11-18) que "TOTAL PEÇAS" é um padrão antigo, já abandonado; as OS atuais detalham as peças. Na calibração e nas análises, **ignorar as OS com "TOTAL PEÇAS"**; não precisa travar nada na tela.
 
 **Estado:** fórmula e categorias definidas; valor-hora e fatores a fixar com o dono (faixa recomendada acima). Fase 1 (serviços com nome por sistema, catálogo padronizado, peças detalhadas) vira pré-requisito da calibração.
 

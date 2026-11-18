@@ -61,7 +61,11 @@ Desde 2026-11-18 a oficina usa o modo nuvem (versão 0.3.0) com dados reais. Tod
 - Fase 2 (muda o formato; `arquiteto` + migração na nuvem): "serviço" como grupo dentro da OS (peças e mão de obra do mesmo trabalho juntas), pacotes prontos, preço sugerido por serviço e veículo.
 - Fase 3: "Cliente não quis" com pendência na próxima visita, ponte com a vistoria e histórico por sistema do veículo.
 
-**Estado:** em discussão; perguntas respondidas. Próximo: desenho detalhado da Fase 1 quando o dono quiser começar.
+**Mão de obra pela tabela do dono (2026-11-18):** o dono aprovou os pontos 2 e 3 acima. No ponto 1, em vez de só o histórico, quer automatizar o valor da mão de obra com a **tabela própria** que já usava (tipo de custo de mão de obra por serviço, inspirada em tempários nacionais e internacionais). Desenho provável, a confirmar com a tabela: cada serviço da base guarda o seu tipo de custo; cada veículo da OS cai numa categoria (marca e modelo da FIPE + faixa de ano); valor sugerido = tabela(tipo de custo, categoria do veículo), sempre editável; tabela editável em Configurações com reajuste em lote (ex.: +8%). O histórico de vendas (`pricing.ts`) fica como conferência ao lado do valor sugerido.
+
+**Pendente do dono:** enviar a tabela (.xlsx ou colada; `.csv` só com liberação explícita) e explicar colunas, o que é o "tipo de custo" (classe, tempo ou R$) e como modelo e ano entram (colunas por categoria, multiplicador ou valor por modelo).
+
+**Estado:** em discussão; aguardando a tabela de mão de obra do dono.
 
 ## Já levantados (2026-11-18)
 

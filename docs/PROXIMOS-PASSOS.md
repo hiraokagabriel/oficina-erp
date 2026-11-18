@@ -116,6 +116,38 @@ Desde 2026-11-18 a oficina usa o modo nuvem (versão 0.3.0) com dados reais. Tod
 
 **Estado:** fórmula e categorias definidas; valor-hora e fatores a fixar com o dono (faixa recomendada acima). Fase 1 (serviços com nome por sistema, catálogo padronizado, peças detalhadas) vira pré-requisito da calibração.
 
+### C. Markup de peças, diagnóstico, insumos e garantia (2026-11-18)
+
+**Pedido do dono:** deixar explícito o markup sobre as peças (logística, garantia, defeitos) e usá-lo também para proteger a mão de obra de pedidos de desconto (o cliente aceita peça cara e reclama de mão de obra cara). Pediu dois consultores (técnico de auto mecânica e marketing/precificação, Opus) e um equilíbrio focado em aumentar o lucro.
+
+**Dados reais (377 OS do padrão atual, sem dados de cliente):** markup de peça medido em só 80 peças com custo informado: mediana 1,86× (metade central 1,15× a 2,80×; ponderado 2,05×). Faturamento: peças 51%, mão de obra 49%.
+
+**Consenso dos dois consultores:** markup escalonado por faixa de custo (maior na peça barata, menor na cara); peça trazida pelo cliente com termo, sem garantia na peça e mão de obra × 1,3 (recusar peça de segurança duvidosa); garantia de 6 meses ou 10.000 km na peça fornecida pela oficina (além dos 90 dias legais); diagnóstico cobrado (1 h × fator do veículo) e abatido se aprovado; desconto nunca sobre o serviço (só 5% no PIX, peça linha econômica ou cortesia); orçamento agrupado por sistema, peça com marca e garantia, serviço dizendo o que inclui; fotos do defeito no orçamento.
+
+**Divergência:** marketing limita peça de prateleira pesquisável (pastilha, disco, filtro, óleo, bateria) a ~1,6× para não ser "pego no flagra"; técnico mantém o ponderado em 1,8 a 1,9× porque peça barata e média pagam retrabalho e busca de peça.
+
+**Equilíbrio proposto:**
+| Peça (custo) | Markup |
+|---|---|
+| até R$ 50 | 2,5× (ganho mínimo R$ 25 por item) |
+| R$ 50 a 200 | 2,0× |
+| R$ 200 a 600 | 1,8× |
+| R$ 600 a 1.500 | 1,6× |
+| acima de R$ 1.500 | 1,4× |
+| fluidos | 1,9× |
+| peça marcada "pesquisável" | teto 1,7× |
+| importado/original | teto no preço de balcão da concessionária |
+
+Mais: linha de **insumos** de 3% da mão de obra (mínimo R$ 20, máximo R$ 80); diagnóstico; mão de obra pela fórmula do item B (R$ 210/h; médio 1,3; premium 2,0; vintage 1,8). Ganho estimado pelo consultor técnico: +4 a 8% de lucro sobre o faturamento, sem subir peças caras.
+
+**Pré-requisito:** lançar o custo em 100% das peças (hoje 80 peças com custo em 377 OS). Depois, simular a tabela nas OS reais antes de mudar preços.
+
+**Para o sistema:** tabela de markup por faixa editável em Configurações e marca "pesquisável" no catálogo; preço sugerido = custo × markup, editável; linhas automáticas de diagnóstico (abatido se aprovado) e insumos; opção "linha econômica / original" por peça; termo de peça do cliente e garantia no orçamento; painel de indicadores (porcentagem de peças com custo, valor-hora efetivo, produtividade, markup ponderado do mês, retrabalho, descontos concedidos, valor recusado com retorno).
+
+**Avisos legais (CDC, levantados pelo marketing):** orçamento discriminado com validade (10 dias); nada executado sem aprovação; peça usada só com autorização escrita; nenhuma âncora falsa de concessionária ou "preço de custo" falso; diagnóstico cobrado só se avisado antes; serviço extra exige nova aprovação; WhatsApp de retorno só com consentimento (LGPD).
+
+**Estado:** em discussão; equilíbrio proposto, aguardando o dono.
+
 ## Já levantados (2026-11-18)
 
 | # | Item | Por quê | Estado |

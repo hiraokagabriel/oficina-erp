@@ -145,7 +145,7 @@ A importação "Enviar banco para a nuvem" só funciona no app instalado, e até
 
 Tempo: 1 hora. O site aponta para o projeto de **teste** até a virada.
 
-> **Feito em 2026-11-18**: nome `andersonmecanica`, conta Cloudflare criada, site publicado em `https://andersonmecanica.pages.dev` (apontando para o teste) e `SITE_URL` do teste trocado. Falta o D.4 item 1 (Auth do teste, no painel) e o D.5 (celular).
+> **Feito em 2026-11-18**: nome `andersonmecanica`, conta Cloudflare criada, site publicado em `https://andersonmecanica.pages.dev` (apontando para o teste) e `SITE_URL` do teste trocado. D.5 (celular) feito. Conferir o D.4 item 1 (Auth do teste, no painel).
 >
 > Para publicar de novo (Claude faz): `$env:VITE_SITE_URL="https://andersonmecanica.pages.dev"; npm run build:web; npx wrangler pages deploy dist --project-name andersonmecanica --branch main`.
 
@@ -189,6 +189,8 @@ No painel do Supabase, projeto **teste** (`xtnnayaxufhmyrqcwwnr`):
    ```
 
 Confira: `curl -I https://<nome>.pages.dev` responde 200 e mostra o cabeçalho `content-security-policy`.
+
+> **Feito pelo dono em 2026-11-18**, sem falhas.
 
 ### D.5 Testar no celular real
 

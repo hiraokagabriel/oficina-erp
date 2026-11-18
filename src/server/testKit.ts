@@ -127,6 +127,7 @@ export function makeDeps(s: FakeState, siteUrl: string | null = 'https://oficina
       p.locked = false
       return true
     },
+    async hasPin(ws, userId) { return s.pins.has(key(ws, userId)) },
     async pinSet(ws, userId, pin) { s.pins.set(key(ws, userId), { pin, failed: 0, locked: false }) },
     async pinAttempt(ws, userId, pin, deviceId): Promise<PinAttempt> {
       let dev: (DeviceRow & { failedHour: number }) | undefined

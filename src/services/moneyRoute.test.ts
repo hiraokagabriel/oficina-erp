@@ -36,6 +36,23 @@ describe('moneyRoute: caixa e salvar OS', () => {
     expect(ledgerTouched([l[0]], l)).toBe(true);
   });
 
+  it('ledgerTouched: mudar só a descrição do lançamento não é dinheiro (o servidor libera, como a cascata)', () => {
+    const l = [entry({ osId: 'o1' } as Partial<LedgerEntry>)];
+    expect(ledgerTouched([{ ...l[0], description: 'Adiantamento OS #1 - Ana' }], l)).toBe(false);
+    expect(ledgerTouched([{ ...l[0], description: 'outro', amount: 5 }], l)).toBe(true);
+    expect(ledgerTouched([{ ...l[0], description: 'outro', paymentDate: '2026-11-02T15:00:00.000Z' }], l)).toBe(true);
+  });
+
+  it('salvar só o km de OS com adiantamento antigo (descrição do lançamento desatualizada) não vira operação de dinheiro', () => {
+    const noon = new Date(2026, 10, 1, 12).toISOString(); // data só-dia = meio-dia local, em qualquer fuso
+    const adv = entry({ id: 'adv1', description: 'Adiantamento antigo', amount: 3000, effectiveDate: noon, paymentDate: noon, groupId: 'o1' });
+    const a = os({ advances: [{ id: 'adv1', amount: 3000, date: noon, entryId: 'adv1' }] } as Partial<WorkOrder>);
+    const saved = prepareOSSave({ base: { ...a, mileage: 999 }, previous: a, ledger: [adv], today: '2026-11-12', now: '2026-11-12T12:00:00.000Z', newId: () => 'n1', machine: 'm' });
+    if (!saved.ok) throw new Error(saved.error);
+    expect(saved.ledger.some(e => e.description !== adv.description)).toBe(true); // o salvar ressincroniza a descrição
+    expect(saveNeedsMoney({ role: 'recepcao', previous: a, saved, ledger: [adv] })).toBe(false);
+  });
+
   const run = (previous: WorkOrder | undefined, base: WorkOrder, ledger: LedgerEntry[], drafts?: { date: string; amount: number }[]) => {
     const saved = prepareOSSave({ base, previous, drafts, ledger, today: '2026-11-12', now: '2026-11-12T12:00:00.000Z', newId: () => 'n1', machine: 'm' });
     if (!saved.ok) throw new Error(saved.error);

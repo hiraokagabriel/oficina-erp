@@ -18,11 +18,20 @@ export function statusNeedsMoneyOp(os: WorkOrder, newStatus: OSStatus, effect: S
   return !!effect.settleEntry || Object.keys(effect.updates).some(k => k !== 'status');
 }
 
-/** Alguma linha do caixa mudou (por referência; só compara o conteúdo das que trocaram de objeto). */
+/** Conteúdo do lançamento sem o texto: a descrição é livre (cascata de renomeação; `classifyLedger` a ignora também). */
+const withoutDescription = (e: LedgerEntry): string => {
+  const { description, ...rest } = e; void description;
+  return stable(rest);
+};
+
+/**
+ * Alguma linha do caixa mudou (por referência; só compara o conteúdo das que trocaram de objeto). Mudar só a descrição
+ * não conta: salvar a OS ressincroniza o texto do adiantamento, e isso não toca valor, data nem pagamento.
+ */
 export function ledgerTouched(next: readonly LedgerEntry[], prev: readonly LedgerEntry[]): boolean {
   if (next.length !== prev.length) return true;
   for (let i = 0; i < next.length; i++) {
-    if (next[i] !== prev[i] && stable(next[i]) !== stable(prev[i])) return true;
+    if (next[i] !== prev[i] && withoutDescription(next[i]) !== withoutDescription(prev[i])) return true;
   }
   return false;
 }

@@ -40,7 +40,7 @@ export async function handlePin(deps: Deps, req: HandlerRequest): Promise<Handle
     switch (b.action) {
       case 'set': {
         const c = await authenticate(deps, req.authorization)
-        requireRecentPassword(c, deps.now())
+        await requireRecentPassword(deps, c, deps.now())
         await deps.db.pinSet(c.workshopId, c.userId, reqPin(b))
         return okResult()
       }

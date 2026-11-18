@@ -120,6 +120,32 @@ describe('abertura e pull', () => {
   });
 });
 
+describe('primeira abertura (hasPulled)', () => {
+  it('cache vazio: não puxou ainda; depois do primeiro pull completo, sim; reabrir com o cache: já puxou', async () => {
+    const store = createMemoryStore();
+    const a = await Device.create('dono', 'dono', server, clock, { store });
+    expect(a.engine.hasPulled()).toBe(false);
+    await a.sync();
+    expect(a.engine.hasPulled()).toBe(true);
+    await a.engine.settled();
+    a.engine.stop();
+    const b = await Device.create('dono', 'dono', server, clock, { store });
+    expect(b.engine.hasPulled()).toBe(true);
+  });
+  it('pull que falha (ou sem internet) não conta como primeiro pull', async () => {
+    const a = await Device.create('dono', 'dono', server, clock, { online: false });
+    await a.engine.pullNow();
+    expect(a.engine.hasPulled()).toBe(false);
+    server.failPull = true;
+    await a.goOnline();
+    await a.engine.pullNow();
+    expect(a.engine.hasPulled()).toBe(false);
+    server.failPull = false;
+    await a.engine.pullNow();
+    expect(a.engine.hasPulled()).toBe(true);
+  });
+});
+
 describe('edição offline e reconexão', () => {
   it('enfileira offline (selo offline + N guardadas) e envia ao reconectar', async () => {
     const d = await synced(dono);

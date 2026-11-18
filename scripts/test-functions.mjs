@@ -196,6 +196,34 @@ try {
     check('sessão aberta por PIN não define PIN (403 exige_senha_recente)', rs.status === 403 && rs.body.error === 'exige_senha_recente', show(rs))
   }
 
+  // Convite aceito pelo link (amr `otp`, o mesmo do magic link do PIN): conclui o PIN uma vez; com PIN já gravado, não.
+  {
+    const email = `t-${tag}-conv@teste-oficinapro.example`
+    const gl = await admin('POST', '/admin/generate_link', { type: 'invite', email })
+    const glj = await gl.json()
+    track(glj.hashed_token)
+    check('admin generate_link invite (sem e-mail) devolve token', gl.ok && !!glj.hashed_token && !!glj.id, `status ${gl.status}`)
+    if (gl.ok && glj.id) {
+      users.conv = { id: glj.id, email, role: 'recepcao', name: 'Convidado PIN' } // a limpeza apaga o usuário
+      await sql`insert into public.memberships (workshop_id, user_id, role, display_name) values (${ws}, ${glj.id}, 'recepcao', 'Convidado PIN')`
+      const iv = await fetch(`${URL_}/auth/v1/verify`, {
+        method: 'POST', headers: { apikey: ANON, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'invite', token_hash: glj.hashed_token }),
+      })
+      const ivj = await iv.json().catch(() => ({}))
+      track(ivj.access_token)
+      check('verify do convite abre sessão', iv.ok && !!ivj.access_token, `status ${iv.status}`)
+      if (ivj.access_token) {
+        const a1 = await fn('pin', { action: 'set', pin: '246810' }, ivj.access_token)
+        check('convite recém-aceito (otp, sem PIN) conclui o PIN: 200', a1.status === 200, show(a1))
+        const a2 = await fn('pin', { action: 'set', pin: '135791' }, ivj.access_token)
+        check('mesma sessão otp com PIN já gravado não troca o PIN: 403 exige_senha_recente', a2.status === 403 && a2.body.error === 'exige_senha_recente', show(a2))
+      }
+      await sql`delete from public.member_pins where workshop_id = ${ws} and user_id = ${glj.id}`
+      await sql`delete from public.memberships where workshop_id = ${ws} and user_id = ${glj.id}`
+    }
+  }
+
   // 5 erros bloqueiam
   const u = { action: 'unlock', deviceId: dev.id, secret: dev.secret, userId: users.mec.id }
   const codes = []

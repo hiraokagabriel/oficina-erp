@@ -293,3 +293,11 @@ body:has(.modal-overlay) .toast-region { bottom: calc(var(--sp-4) + 88px); top: 
 .inst-sum { margin-top: var(--sp-3); padding: var(--sp-3); background: color-mix(in srgb, var(--success) 12%, var(--surface-1)); border-radius: var(--radius-sm); font-size: var(--fs-sm); color: var(--text-success); display: flex; align-items: center; gap: var(--sp-2); }
 .inst-sum.is-bad { background: color-mix(in srgb, var(--danger) 12%, var(--surface-1)); color: var(--text-danger); }
 .inst-sum-err { font-size: var(--fs-xs); margin-top: var(--sp-1); }
+
+/* ---------- FALHA AO ABRIR UMA PARTE (LazyBoundary) ---------- */
+.lazy-error { display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); padding: var(--sp-8) var(--sp-4); text-align: center; color: var(--text); }
+.lazy-error-text { margin: 0; max-width: 420px; color: var(--text); }
+.lazy-error--float {
+  position: fixed; left: 50%; top: var(--sp-4); transform: translateX(-50%); z-index: 10004; max-width: calc(100vw - 32px);
+  padding: var(--sp-4); background: var(--surface-1); border: 1px solid var(--border-strong); border-radius: var(--radius-lg);
+}

@@ -73,7 +73,24 @@ const rootEl = document.getElementById("root") as HTMLElement;
 
 if (import.meta.env.VITE_CLOUD === "1") {
   // Modo nuvem (login, Supabase, IndexedDB): carregado só sob a flag, para o modo arquivo não puxar nada disso.
-  void import("./auth/boot").then((m) => m.bootCloud(rootEl));
+  void import("./auth/boot").then((m) => m.bootCloud(rootEl)).catch((e: unknown) => {
+    // Sem internet e sem o programa em cache: o React ainda não existe, então o aviso é DOM puro.
+    console.error("Falha ao carregar o modo nuvem:", e);
+    rootEl.innerHTML = "";
+    const box = document.createElement("div");
+    box.setAttribute("role", "alert");
+    box.className = "lazy-error";
+    const text = document.createElement("p");
+    text.className = "lazy-error-text";
+    text.textContent = "Não deu para abrir esta parte sem internet. Conecte e toque em Tentar de novo.";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn";
+    btn.textContent = "Tentar de novo";
+    btn.addEventListener("click", () => window.location.reload());
+    box.append(text, btn);
+    rootEl.append(box);
+  });
 } else {
   ReactDOM.createRoot(rootEl).render(
     <React.StrictMode>

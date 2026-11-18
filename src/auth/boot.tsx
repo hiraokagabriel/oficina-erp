@@ -1,6 +1,7 @@
 import React, { lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import { AppContent, type PhoneShell } from '../App';
+import { LazyBoundary } from '../components/LazyBoundary';
 import { AppTopbar } from '../components/AppTopbar';
 import { ToastProvider } from '../context/ToastContext';
 import './../styles-auth.css';
@@ -31,8 +32,8 @@ function setupWebApp(): void {
 const MobileNav = lazy(() => import('../components/MobileNav').then(m => ({ default: m.MobileNav })));
 const DesktopOnly = lazy(() => import('../components/DesktopOnly').then(m => ({ default: m.DesktopOnly })));
 const phoneShell: PhoneShell = {
-  nav: (p) => <Suspense fallback={null}><MobileNav {...p} /></Suspense>,
-  desktopOnly: (p) => <Suspense fallback={null}><DesktopOnly {...p} /></Suspense>,
+  nav: (p) => <LazyBoundary variant="float"><Suspense fallback={null}><MobileNav {...p} /></Suspense></LazyBoundary>,
+  desktopOnly: (p) => <LazyBoundary><Suspense fallback={null}><DesktopOnly {...p} /></Suspense></LazyBoundary>,
 };
 
 export function bootCloud(rootEl: HTMLElement): void {

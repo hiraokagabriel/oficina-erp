@@ -151,6 +151,10 @@ export interface CloudInfo extends SyncStatus {
   moneyBusyKeys?: readonly string[];
   /** Etapa de "Preparando este aparelho" enquanto os dados abrem (sem contagem: o motor não expõe). */
   loadStage?: LoadStage;
+  /** Primeira abertura: o primeiro pull falhou (sem internet ou erro). A tela de preparação mostra a mensagem e "Tentar de novo". */
+  firstPullFailed?: 'offline' | 'erro' | null;
+  /** "Tentar de novo" da primeira abertura. */
+  retryFirstPull?: () => void;
 }
 
 export interface EngineState {
@@ -404,6 +408,11 @@ export class SyncEngine {
       settings: settings ? this.settingsOut(settings) : null,
     };
   }
+
+  /** Já concluiu ao menos um pull completo neste cache (ver `utils/firstPull.ts`). */
+  hasPulled(): boolean { return this.meta.lastPullAt !== null; }
+  /** ISO do último pull completo (nulo = nunca). */
+  lastPullAt(): string | null { return this.meta.lastPullAt; }
 
   /** Liga o Realtime e faz a primeira rodada (pull e envio). Chame depois de `open()`. */
   start(): void {

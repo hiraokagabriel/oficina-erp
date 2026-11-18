@@ -19,6 +19,7 @@ import { createSupabaseTransport } from '../sync/supabaseRepo';
 import { realTimers, SyncEngine } from '../sync/syncEngine';
 import type { CloudInfo, RemotePatch, SyncStatus } from '../sync/syncEngine';
 import type { LoadStage } from '../utils/cloudStatus';
+import { firstPullOutcome, needsFirstPull } from '../utils/firstPull';
 import type { OutboxOp } from '../sync/outbox';
 import type { CollectionKey } from '../sync/types';
 import { DatabaseContext } from './DatabaseContext';
@@ -119,6 +120,9 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading');
   const [loadStage, setLoadStage] = useState<LoadStage>('cache');
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [firstPullFailed, setFirstPullFailed] = useState<'offline' | 'erro' | null>(null);
+  const retryFirstRef = useRef<(() => void) | null>(null);
+  const retryFirstPull = useCallback(() => { retryFirstRef.current?.(); }, []);
   const [status, setStatus] = useState<SyncStatus>({ online: true, flushing: false, pending: 0, syncState: 'salvo', lastError: null });
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [localDirty, setLocalDirty] = useState(false);
@@ -166,7 +170,7 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
     setLedger([]); setWorkOrders([]); setClients([]); setCatalogParts([]); setCatalogServices([]);
     setCatalogTechnicians([]); setAppointments([]); setAuditLog([]);
     setSettingsRaw(adoptSecrets(DEFAULT_SETTINGS));
-    setLoadStatus('loading'); setLoadStage('cache'); setLoadError(null);
+    setLoadStatus('loading'); setLoadStage('cache'); setLoadError(null); setFirstPullFailed(null); retryFirstRef.current = null;
     setStatus({ online: true, flushing: false, pending: 0, syncState: 'salvo', lastError: null });
     let unsub: (() => void) | null = null;
     let closeStore: (() => void) | undefined;
@@ -238,8 +242,26 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
         }
         unsub = engine.subscribeStatus(setStatus);
         setStatus(engine.getStatus());
-        setLoadStatus('ok');
-        engine.start();
+        const eng = engine;
+        // Primeira abertura neste aparelho (cache sem nenhum pull): fica em "Preparando este aparelho" até o primeiro pull
+        // completo terminar; falha vira mensagem com "Tentar de novo". Com cache, abre na hora (utils/firstPull.ts).
+        const firstOpen = needsFirstPull(eng.lastPullAt());
+        const runFirstPull = async (): Promise<void> => {
+          setFirstPullFailed(null);
+          await eng.syncNow();
+          if (cancelled) return;
+          const st = eng.getStatus();
+          const outcome = firstPullOutcome({ hasPulled: eng.hasPulled(), online: st.online, lastError: st.lastError });
+          if (outcome === 'ok') { retryFirstRef.current = null; setFirstPullFailed(null); setLoadStatus('ok'); } else setFirstPullFailed(outcome);
+        };
+        if (firstOpen) {
+          retryFirstRef.current = () => { void runFirstPull(); };
+          engine.start();
+          await runFirstPull();
+        } else {
+          setLoadStatus('ok');
+          engine.start();
+        }
       } catch (e) {
         if (cancelled) return;
         setLoadError(e instanceof Error ? e.message : String(e));
@@ -270,7 +292,7 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
   // Janela: foco puxa tudo; internet volta/cai; ao esconder/fechar, descarrega o debounce.
   useEffect(() => {
     const onFocus = () => engineRef.current?.focus();
-    const onOnline = () => { engineRef.current?.setOnline(true); photosRef.current?.queue.setOnline(true); };
+    const onOnline = () => { engineRef.current?.setOnline(true); retryFirstRef.current?.(); photosRef.current?.queue.setOnline(true); };
     const onOffline = () => { engineRef.current?.setOnline(false); photosRef.current?.queue.setOnline(false); };
     const onHide = () => { if (document.visibilityState === 'hidden') flushLocal(); };
     window.addEventListener('focus', onFocus);
@@ -321,7 +343,7 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
   }, [supabase, deviceId]);
 
   const value = useMemo<DatabaseContextData>(() => {
-    const cloud: CloudInfo = { role, ...status, syncNow, money: moneyClient.run, moneyBusy, moneyBusyKeys, loadStage };
+    const cloud: CloudInfo = { role, ...status, syncNow, money: moneyClient.run, moneyBusy, moneyBusyKeys, loadStage, firstPullFailed, retryFirstPull };
     return {
       ledger, setLedger, workOrders, setWorkOrders, clients, setClients, catalogParts, setCatalogParts,
       catalogServices, setCatalogServices, catalogTechnicians, setCatalogTechnicians, appointments, setAppointments,
@@ -343,7 +365,7 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
     };
   }, [
     ledger, workOrders, clients, catalogParts, catalogServices, catalogTechnicians, appointments, auditLog, settings, setSettings,
-    loadStatus, status, lastSavedAt, localDirty, workshopId, role, noopSetDbPath, getMachineName, syncNow, moneyClient, moneyBusy, moneyBusyKeys, loadStage,
+    loadStatus, status, lastSavedAt, localDirty, workshopId, role, noopSetDbPath, getMachineName, syncNow, moneyClient, moneyBusy, moneyBusyKeys, loadStage, firstPullFailed, retryFirstPull,
   ]);
 
   return (

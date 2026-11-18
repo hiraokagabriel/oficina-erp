@@ -22,6 +22,7 @@ import type { ToastAction, ToastType } from './components/ui/ToastContainer';
 import { ToastProvider, useToast } from './context/ToastContext';
 import { applyTheme } from './utils/theme';
 import { useTheme } from './hooks/useTheme';
+import { LazyBoundary } from './components/LazyBoundary';
 import { LoadingSkeleton } from './components/ui/LoadingSkeleton';
 import { DocKind, DocOptions, buildDocument } from './services/documents';
 import { SavedPdf, fileNameFromPath, isOsDocument, printingMessage } from './services/documentsView';
@@ -1107,6 +1108,7 @@ Abrir OS?`)) {
 
         <main className="main-content">
           {cloud && topbar}
+          <LazyBoundary>
           <Suspense fallback={<LoadingSkeleton type="page" />}>
             {phone && phoneShell && !isPhoneTab(activeTab) && phoneShell.desktopOnly({ tab: activeTab, onBack: () => setActiveTab('OFICINA') })}
             {!(phone && !isPhoneTab(activeTab)) && <>
@@ -1245,10 +1247,12 @@ Abrir OS?`)) {
             )}
             </>}
           </Suspense>
+          </LazyBoundary>
         </main>
         {phone && phoneShell?.nav({ activeTab, setActiveTab })}
       </div>
 
+      <LazyBoundary variant="float">
       <Suspense fallback={null}>
         {isModalOpen && (
           <OSModal
@@ -1470,6 +1474,7 @@ Abrir OS?`)) {
           />
         )}
       </Suspense>
+      </LazyBoundary>
       {moneyLabels.length > 0 && (
         <div className="money-busy" role="status" aria-live="polite">{moneyLabels[moneyLabels.length - 1]}</div>
       )}

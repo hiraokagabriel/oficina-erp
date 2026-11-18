@@ -76,10 +76,34 @@ describe('pin.set exige senha recente', () => {
   it('exatamente 10 min ainda vale', async () => {
     expect((await pin(makeState(), MECH, set, { amr: [{ method: 'password', timestamp: NOW_SEC - 600 }] })).status).toBe(200)
   })
-  it('sem amr ou otp/totp apenas: 403', async () => {
+  it('sem amr ou só totp: 403', async () => {
     const s = makeState()
     expect((await pin(s, MECH, set, { amr: [] })).status).toBe(403)
-    expect((await pin(s, MECH, set, { amr: [{ method: 'otp', timestamp: NOW_SEC }] })).status).toBe(403)
+    expect((await pin(s, MECH, set, { amr: [{ method: 'totp', timestamp: NOW_SEC }] })).status).toBe(403)
+  })
+  // O link de convite e o magic link do login por PIN dão o MESMO amr (`otp`): só a ausência de PIN os distingue.
+  it('otp recente de quem ainda NÃO tem PIN (convite aceito): ok', async () => {
+    const s = makeState()
+    expect((await pin(s, MECH, set, { amr: [{ method: 'otp', timestamp: NOW_SEC - 60 }] })).status).toBe(200)
+    expect(s.pins.get(`${WS}|${MECH}`)!.pin).toBe('123456')
+  })
+  it('otp antigo (mais de 10 min) de quem não tem PIN: 403', async () => {
+    const s = makeState()
+    const r = await pin(s, MECH, set, { amr: [{ method: 'otp', timestamp: NOW_SEC - 601 }] })
+    expect(r.body.error).toBe('exige_senha_recente')
+    expect(s.pins.size).toBe(0)
+  })
+  it('otp recente de quem JÁ tem PIN (sessão aberta por PIN): 403 e PIN antigo intacto', async () => {
+    const s = makeState()
+    await pin(s, MECH, set)
+    const r = await pin(s, MECH, { action: 'set', pin: '999999' }, { amr: [{ method: 'otp', timestamp: NOW_SEC }] })
+    expect(r.status).toBe(403)
+    expect(r.body.error).toBe('exige_senha_recente')
+    expect(s.pins.get(`${WS}|${MECH}`)!.pin).toBe('123456')
+  })
+  it('otp com data no futuro (> 60 s): 403', async () => {
+    const s = makeState()
+    expect((await pin(s, MECH, set, { amr: [{ method: 'otp', timestamp: NOW_SEC + 120 }] })).status).toBe(403)
   })
   it('verify não exige senha recente (desbloqueio de inatividade)', async () => {
     const s = makeState()

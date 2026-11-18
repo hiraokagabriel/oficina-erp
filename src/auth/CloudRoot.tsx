@@ -5,6 +5,7 @@ import { useToast } from '../context/ToastContext';
 import { isExportDue } from '../sync/dailyExport';
 import { isTauri } from '../utils/platform';
 import { loadStageText } from '../utils/cloudStatus';
+import { firstPullMessage } from '../utils/firstPull';
 import { setThemeUser } from '../hooks/useTheme';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import { Icon } from '../components/ui/Icon';
@@ -103,6 +104,16 @@ const OpeningData: React.FC = () => {
   const [firstTime] = useState(() => { try { return key ? localStorage.getItem(key) === null : false; } catch { return false; } });
   useEffect(() => { if (!isLoading && key) { try { localStorage.setItem(key, '1'); } catch { /* sem armazenamento */ } } }, [isLoading, key]);
   if (!isLoading) return null;
+  if (cloud?.firstPullFailed) {
+    return (
+      <AuthShell>
+        <AuthStatusIcon name="info" tone="warning" />
+        <h1 className="auth-title">Não deu para preparar este aparelho</h1>
+        <p className="auth-text" role="alert">{firstPullMessage(cloud.firstPullFailed)}</p>
+        <div className="auth-actions"><button type="button" className="btn" onClick={() => cloud.retryFirstPull?.()}>Tentar de novo</button></div>
+      </AuthShell>
+    );
+  }
   if (firstTime) {
     return (
       <AuthShell>

@@ -146,6 +146,9 @@ export function createDb(cfg: RestConfig): Db {
     async pinUnlock(ws, userId) {
       return (await rpc('pin_unlock', { p_ws: ws, p_user: userId })) === true
     },
+    async hasPin(ws, userId) {
+      return (await select(`member_pins?workshop_id=eq.${q(ws)}&user_id=eq.${q(userId)}&select=user_id&limit=1`)).length > 0
+    },
     async pinSet(ws, userId, pin) {
       await rpc('pin_set', { p_ws: ws, p_user: userId, p_pin: pin })
     },

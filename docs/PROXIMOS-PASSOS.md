@@ -148,6 +148,24 @@ Mais: linha de **insumos** de 3% da mão de obra (mínimo R$ 20, máximo R$ 80);
 
 **Estado:** em discussão; equilíbrio proposto, aguardando o dono.
 
+### D. Claude (IA) integrado ao programa (2026-11-18)
+
+**Pedido do dono:** usar o próprio Claude em alguma função do programa para melhorar algo.
+
+**Arquitetura proposta:** função nova no Supabase (como a `money`), chave `ANTHROPIC_API_KEY` só como segredo do servidor (nunca no app nem no celular), uso só para Dono e Recepção com limite diário, envio do mínimo de dados (sem nome nem telefone de cliente), resposta sempre como sugestão confirmada por uma pessoa. SDK oficial `@anthropic-ai/sdk`; modelo padrão `claude-opus-5-5` (US$ 4 / US$ 20 por milhão de tokens de entrada/saída; Sonnet 5.5 e Haiku 5.5 são mais baratos, decisão do dono); saída estruturada (`output_config.format`) para dados que vão para a OS.
+
+**Usos, em ordem de valor:**
+1. **Ler nota ou orçamento do fornecedor** (foto ou PDF) e lançar peças com código, quantidade e custo na OS. Resolve a falta de custo nas peças (80 em 377 OS), pré-requisito do item C.
+2. **Padronizar o catálogo** (uma vez): 523 descrições → ~150 nomes padrão com sistema; o dono revisa antes de aplicar. Acelera a Fase 1 do item B.
+3. **Montar o orçamento a partir do relato** (texto ou voz + vistoria): sugere serviços da base com tempo e coeficiente; o mecânico confirma.
+4. **Mensagem ao cliente** em linguagem simples (resumo, WhatsApp, lembrete do "cliente não quis").
+5. **Perguntas sobre o negócio** em português (mais tarde).
+Não fazer: diagnóstico automático por foto do carro (risco alto; no máximo apoio).
+
+**Custo estimado:** centavos de real por nota lida; R$ 10 a 50/mês no volume atual. **Cuidados:** LGPD (dados passam pela Anthropic; não enviar dados pessoais de cliente); chave da API em conta própria da Anthropic (console.anthropic.com), cobrada à parte.
+
+**Estado:** em discussão; aguardando o dono escolher por qual uso começar.
+
 ## Já levantados (2026-11-18)
 
 | # | Item | Por quê | Estado |

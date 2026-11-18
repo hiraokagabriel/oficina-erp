@@ -135,8 +135,8 @@ fn backup_file_name(secs: u64) -> String {
 }
 
 /// Lê o instante (segundos UTC) a partir do nome. None se não for um backup nosso.
-fn parse_backup_name(name: &str) -> Option<u64> {
-    let core = name.strip_prefix(BACKUP_PREFIX)?.strip_suffix(BACKUP_SUFFIX)?;
+fn parse_backup_name(name: &str, prefix: &str) -> Option<u64> {
+    let core = name.strip_prefix(prefix)?.strip_suffix(BACKUP_SUFFIX)?;
     let (date, time) = core.split_once('-')?;
     if date.len() != 8 || time.len() != 6 {
         return None;
@@ -163,10 +163,10 @@ fn parse_backup_name(name: &str) -> Option<u64> {
 /// Retenção (função pura): devolve os nomes a apagar.
 /// Mantém os 20 mais recentes e o primeiro backup de cada dia dos últimos 30 dias.
 /// Nomes fora do padrão são ignorados (nunca apagados).
-fn backups_to_delete(names: &[String], now: u64) -> Vec<String> {
+fn backups_to_delete(names: &[String], now: u64, prefix: &str) -> Vec<String> {
     let mut parsed: Vec<(u64, &String)> = names
         .iter()
-        .filter_map(|n| parse_backup_name(n).map(|t| (t, n)))
+        .filter_map(|n| parse_backup_name(n, prefix).map(|t| (t, n)))
         .collect();
     // mais recentes primeiro
     parsed.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| b.1.cmp(a.1)));
@@ -219,7 +219,7 @@ fn backup_current(
             }
         }
     }
-    let latest = names.iter().filter_map(|n| parse_backup_name(n)).max();
+    let latest = names.iter().filter_map(|n| parse_backup_name(n, BACKUP_PREFIX)).max();
     let due = first_in_session
         || match latest {
             None => true,
@@ -235,7 +235,7 @@ fn backup_current(
         }
     }
 
-    for old in backups_to_delete(&names, now) {
+    for old in backups_to_delete(&names, now, BACKUP_PREFIX) {
         if let Err(e) = fs::remove_file(backup_dir.join(&old)) {
             eprintln!("Aviso: não foi possível apagar backup antigo {}: {}", old, e);
         }
@@ -716,6 +716,125 @@ fn trash_photos(db_path: String, os_id: String, photo_id: Option<String>) -> IoR
         Ok(n) => IoResult { success: true, message: format!("{} arquivo(s) movido(s) para a lixeira", n) },
         Err(e) => IoResult { success: false, message: format!("Erro ao mover para a lixeira: {}", e) },
     }
+}
+
+// ----- migração para a nuvem (PR 9): cópia antes de enviar, cópia diária e inventário de fotos -----
+
+const PRE_CLOUD_PREFIX: &str = "database-pre-nuvem-";
+const DAILY_EXPORT_PREFIX: &str = "nuvem-";
+const DAILY_EXPORT_KEEP: usize = 30;
+
+/// Retenção das cópias diárias (pura): devolve os nomes `nuvem-*.json` além dos `keep` mais recentes.
+/// Nomes fora do padrão são ignorados (nunca apagados).
+fn daily_exports_to_delete(names: &[String], keep: usize) -> Vec<String> {
+    let mut parsed: Vec<((u64, u32), &String)> = names
+        .iter()
+        .filter_map(|n| parse_daily_export_name(n).map(|k| (k, n)))
+        .collect();
+    parsed.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| b.1.cmp(a.1)));
+    parsed.into_iter().skip(keep).map(|(_, n)| n.clone()).collect()
+}
+
+/// `nuvem-AAAAMMDD-HHmmss.json` ou com o sufixo `-n` de `write_stamped_file` (mesmo segundo).
+/// Devolve (instante, n) para ordenar; None fora do padrão.
+fn parse_daily_export_name(name: &str) -> Option<(u64, u32)> {
+    if let Some(t) = parse_backup_name(name, DAILY_EXPORT_PREFIX) {
+        return Some((t, 0));
+    }
+    let stem = name.strip_suffix(BACKUP_SUFFIX)?;
+    let (left, n) = stem.rsplit_once('-')?;
+    if n.is_empty() || n.len() > 3 || !n.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let t = parse_backup_name(&format!("{}{}", left, BACKUP_SUFFIX), DAILY_EXPORT_PREFIX)?;
+    Some((t, n.parse().ok()?))
+}
+
+fn save_daily_export_impl(dir: &Path, now: u64, content: &str) -> Result<PathBuf, String> {
+    let path = write_stamped_file(dir, DAILY_EXPORT_PREFIX, now, content)?;
+    let names: Vec<String> = fs::read_dir(dir)
+        .map_err(|e| format!("listar cópias: {}", e))?
+        .filter_map(|e| e.ok())
+        .filter_map(|e| e.file_name().to_str().map(String::from))
+        .collect();
+    for old in daily_exports_to_delete(&names, DAILY_EXPORT_KEEP) {
+        if let Err(e) = fs::remove_file(dir.join(&old)) {
+            eprintln!("Aviso: não foi possível apagar cópia antiga {}: {}", old, e);
+        }
+    }
+    Ok(path)
+}
+
+/// Cópia do banco lido antes de enviá-lo à nuvem: backups/database-pre-nuvem-<stamp>.json.
+/// Nunca sobrescreve; fora da rotação (o prefixo não casa com `database-AAAAMMDD`).
+#[command]
+fn backup_pre_cloud(app: AppHandle, content: String) -> Result<String, String> {
+    let dir = local_dir(&app, "backups").ok_or_else(|| "Pasta de dados local indisponível.".to_string())?;
+    write_stamped_file(&dir, PRE_CLOUD_PREFIX, now_secs(), &content)
+        .map(|p| p.display().to_string())
+        .map_err(|e| format!("Erro no backup pré-nuvem: {}", e))
+}
+
+/// Cópia diária vinda da nuvem: backups/nuvem/nuvem-<stamp>.json. Nunca sobrescreve;
+/// mantém só as 30 mais recentes dessa subpasta.
+#[command]
+fn save_daily_export(app: AppHandle, content: String) -> Result<String, String> {
+    let dir = local_dir(&app, "backups")
+        .map(|d| d.join("nuvem"))
+        .ok_or_else(|| "Pasta de dados local indisponível.".to_string())?;
+    save_daily_export_impl(&dir, now_secs(), &content)
+        .map(|p| p.display().to_string())
+        .map_err(|e| format!("Erro na cópia diária: {}", e))
+}
+
+#[derive(serde::Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct PhotoFile {
+    os_id: String,
+    photo_id: String,
+    bytes: u64,
+    has_thumb: bool,
+}
+
+/// Lista fotos em <pasta do banco>/fotos/<osId>/<fotoId>.jpg. Ignora `_lixeira`, ids inválidos,
+/// miniaturas soltas (sem a foto) e outros arquivos. Ordem estável (os_id, photo_id).
+fn photo_inventory_impl(db_path: &str) -> Result<Vec<PhotoFile>, String> {
+    let root = photos_root(db_path)?;
+    let mut out: Vec<PhotoFile> = Vec::new();
+    let os_dirs = match fs::read_dir(&root) {
+        Ok(r) => r,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(out),
+        Err(e) => return Err(format!("listar fotos: {}", e)),
+    };
+    for os in os_dirs.filter_map(|e| e.ok()) {
+        let Some(os_id) = os.file_name().to_str().map(String::from) else { continue };
+        if os_id == TRASH_DIR || !valid_photo_id(&os_id) || !os.path().is_dir() {
+            continue;
+        }
+        let files = fs::read_dir(os.path()).map_err(|e| format!("listar pasta da OS: {}", e))?;
+        for f in files.filter_map(|e| e.ok()) {
+            let Some(name) = f.file_name().to_str().map(String::from) else { continue };
+            let Some(photo_id) = name.strip_suffix(".jpg") else { continue };
+            // ".t.jpg" é miniatura: sobra "<id>.t", que não é id válido (tem ponto)
+            if !valid_photo_id(photo_id) {
+                continue;
+            }
+            let Ok(meta) = f.metadata() else { continue };
+            if !meta.is_file() {
+                continue;
+            }
+            let has_thumb = os.path().join(photo_file_name(photo_id, true)).is_file();
+            out.push(PhotoFile { os_id: os_id.clone(), photo_id: photo_id.to_string(), bytes: meta.len(), has_thumb });
+        }
+    }
+    out.sort_by(|a, b| (&a.os_id, &a.photo_id).cmp(&(&b.os_id, &b.photo_id)));
+    Ok(out)
+}
+
+/// Inventário das fotos no disco (para conferir o envio à nuvem).
+#[command]
+fn photo_inventory(db_path: String) -> Result<Vec<PhotoFile>, String> {
+    photo_inventory_impl(&db_path)
 }
 
 // ----- PDF direto: HTML -> PDF sem janela de impressão do navegador -----
@@ -1470,6 +1589,9 @@ pub fn run() {
             save_photo,
             read_photo,
             trash_photos,
+            backup_pre_cloud,
+            save_daily_export,
+            photo_inventory,
             save_pdf,
             default_pdf_folder,
             reveal_in_folder,
@@ -1515,27 +1637,27 @@ mod tests {
         let t = ts(2026, 10, 15, 13, 5, 9);
         let n = backup_file_name(t);
         assert_eq!(n, "database-20261015-130509.json");
-        assert_eq!(parse_backup_name(&n), Some(t));
+        assert_eq!(parse_backup_name(&n, BACKUP_PREFIX), Some(t));
         assert_eq!(
-            parse_backup_name("database-20240229-235959.json"),
+            parse_backup_name("database-20240229-235959.json", BACKUP_PREFIX),
             Some(ts(2024, 2, 29, 23, 59, 59))
         );
     }
 
     #[test]
     fn parse_rejeita_nomes_invalidos() {
-        assert_eq!(parse_backup_name("database.json"), None);
-        assert_eq!(parse_backup_name("database-20261315-000000.json"), None);
-        assert_eq!(parse_backup_name("database-20261015-250000.json"), None);
-        assert_eq!(parse_backup_name("outro-20261015-000000.json"), None);
-        assert_eq!(parse_backup_name("database-2026101-0000000.json"), None);
+        assert_eq!(parse_backup_name("database.json", BACKUP_PREFIX), None);
+        assert_eq!(parse_backup_name("database-20261315-000000.json", BACKUP_PREFIX), None);
+        assert_eq!(parse_backup_name("database-20261015-250000.json", BACKUP_PREFIX), None);
+        assert_eq!(parse_backup_name("outro-20261015-000000.json", BACKUP_PREFIX), None);
+        assert_eq!(parse_backup_name("database-2026101-0000000.json", BACKUP_PREFIX), None);
     }
 
     #[test]
     fn retencao_sem_excesso_nao_apaga_nada() {
         let now = ts(2026, 10, 15, 12, 0, 0);
         let names: Vec<String> = (0..5).map(|i| backup_file_name(now - i * 3600)).collect();
-        assert!(backups_to_delete(&names, now).is_empty());
+        assert!(backups_to_delete(&names, now, BACKUP_PREFIX).is_empty());
     }
 
     #[test]
@@ -1555,7 +1677,7 @@ mod tests {
         names.push(ancient.clone());
         names.push("lixo.txt".into());
 
-        let del = backups_to_delete(&names, now);
+        let del = backups_to_delete(&names, now, BACKUP_PREFIX);
         // dos 30 do dia: ficam os 20 mais recentes e o primeiro do dia, apaga 9
         let primeiro_do_dia = backup_file_name(ts(2026, 10, 15, 0, 0, 10));
         assert!(!del.contains(&primeiro_do_dia));
@@ -1869,11 +1991,11 @@ mod tests {
         let now = ts(2026, 10, 15, 12, 0, 0);
         let pre = format!("database-pre-v0-{}.json", stamp(now));
         assert_eq!(pre, "database-pre-v0-20261015-120000.json");
-        assert_eq!(parse_backup_name(&pre), None);
+        assert_eq!(parse_backup_name(&pre, BACKUP_PREFIX), None);
         // mesmo com excesso de backups normais, o pré-migração nunca é apagado
         let mut names: Vec<String> = (0..40).map(|i| backup_file_name(now - i * 120)).collect();
         names.push(pre.clone());
-        let del = backups_to_delete(&names, now);
+        let del = backups_to_delete(&names, now, BACKUP_PREFIX);
         assert!(!del.contains(&pre));
         assert!(!del.is_empty());
     }
@@ -1889,6 +2011,108 @@ mod tests {
         assert_eq!(a.file_name().unwrap().to_str().unwrap(), "database-conflito-20261015-120000.json");
         assert_eq!(fs::read_to_string(&a).unwrap(), "um");
         assert_eq!(fs::read_to_string(&b).unwrap(), "dois");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    // ----- PR 9: cópia pré-nuvem, cópia diária, inventário -----
+
+    #[test]
+    fn retencao_database_ignora_nuvem_e_pre_nuvem() {
+        let now = ts(2026, 10, 15, 12, 0, 0);
+        let mut names: Vec<String> = (0..40).map(|i| backup_file_name(now - i * 120)).collect();
+        names.push(format!("nuvem-{}.json", stamp(now - 999999)));
+        names.push(format!("database-pre-nuvem-{}.json", stamp(now)));
+        let del = backups_to_delete(&names, now, BACKUP_PREFIX);
+        assert!(del.iter().all(|n| n.starts_with("database-2026")));
+        assert!(!del.is_empty());
+    }
+
+    #[test]
+    fn retencao_nuvem_so_apaga_alem_de_30() {
+        let now = ts(2026, 11, 17, 12, 0, 0);
+        let mut names: Vec<String> =
+            (0..35).map(|i| format!("nuvem-{}.json", stamp(now - i * 86400))).collect();
+        names.push("lixo.txt".into());
+        names.push(format!("database-{}.json", stamp(now - 100 * 86400)));
+        names.push("nuvem-20261301-000000.json".into());
+        let del = daily_exports_to_delete(&names, 30);
+        assert_eq!(del.len(), 5);
+        for i in 30..35 {
+            assert!(del.contains(&format!("nuvem-{}.json", stamp(now - i * 86400))));
+        }
+        assert!(!del.contains(&"lixo.txt".to_string()));
+        assert!(!del.iter().any(|n| n.starts_with("database-")));
+        assert!(!del.contains(&"nuvem-20261301-000000.json".to_string()));
+        assert!(daily_exports_to_delete(&names[..30], 30).is_empty());
+    }
+
+    #[test]
+    fn save_daily_export_nao_sobrescreve_e_aplica_retencao() {
+        let d = temp_dir("nuvem-exp");
+        let dir = d.join("nuvem");
+        fs::create_dir_all(&dir).unwrap();
+        let now = ts(2026, 11, 17, 12, 0, 0);
+        for i in 1..=30u64 {
+            fs::write(dir.join(format!("nuvem-{}.json", stamp(now - i * 86400))), "x").unwrap();
+        }
+        fs::write(dir.join("outro.json"), "y").unwrap();
+        let a = save_daily_export_impl(&dir, now, "um").unwrap();
+        let b = save_daily_export_impl(&dir, now, "dois").unwrap();
+        assert_ne!(a, b);
+        assert_eq!(fs::read_to_string(&a).unwrap(), "um");
+        assert_eq!(fs::read_to_string(&b).unwrap(), "dois");
+        let nuvem = fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter_map(|e| e.file_name().to_str().map(String::from))
+            .filter(|n| n.starts_with("nuvem-"))
+            .count();
+        assert_eq!(nuvem, 30);
+        assert!(dir.join("outro.json").exists());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn pre_nuvem_nunca_sobrescreve() {
+        let d = temp_dir("pre-nuvem");
+        let t = ts(2026, 11, 17, 12, 0, 0);
+        let a = write_stamped_file(&d, PRE_CLOUD_PREFIX, t, "um").unwrap();
+        let b = write_stamped_file(&d, PRE_CLOUD_PREFIX, t, "dois").unwrap();
+        assert_ne!(a, b);
+        assert_eq!(a.file_name().unwrap().to_str().unwrap(), "database-pre-nuvem-20261117-120000.json");
+        assert_eq!(fs::read_to_string(&a).unwrap(), "um");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn inventario_ignora_lixeira_ids_invalidos_e_outros() {
+        let d = temp_dir("inv");
+        let db = d.join("database.json").to_string_lossy().into_owned();
+        assert_eq!(photo_inventory_impl(&db).unwrap(), vec![]); // sem pasta fotos
+        let fotos = d.join("fotos");
+        let os = fotos.join("os-1");
+        fs::create_dir_all(&os).unwrap();
+        fs::write(os.join("f1.jpg"), [0xFFu8, 0xD8, 0xFF, 1, 2, 3, 4, 5, 6, 7]).unwrap();
+        fs::write(os.join("f1.t.jpg"), [0xFFu8, 0xD8, 0xFF, 1]).unwrap();
+        fs::write(os.join("f2.jpg"), [0xFFu8, 0xD8, 0xFF, 1, 2, 3, 4]).unwrap(); // sem miniatura
+        fs::write(os.join("solta.t.jpg"), "xxxx").unwrap(); // miniatura sem foto
+        fs::write(os.join("f3.png"), "x").unwrap();
+        fs::write(os.join("f4.jpg.tmp"), "x").unwrap();
+        fs::write(os.join("a b.jpg"), "xxx").unwrap(); // id inválido
+        fs::create_dir_all(os.join("sub.jpg")).unwrap(); // pasta, não arquivo
+        fs::create_dir_all(fotos.join("_lixeira").join("os-1")).unwrap();
+        fs::write(fotos.join("_lixeira").join("os-1").join("l1.jpg"), "xxx").unwrap();
+        fs::create_dir_all(fotos.join("os.ruim")).unwrap(); // id de OS inválido
+        fs::write(fotos.join("os.ruim").join("g.jpg"), "xxx").unwrap();
+        fs::write(fotos.join("avulso.jpg"), "xxx").unwrap(); // arquivo na raiz
+        let inv = photo_inventory_impl(&db).unwrap();
+        assert_eq!(
+            inv,
+            vec![
+                PhotoFile { os_id: "os-1".into(), photo_id: "f1".into(), bytes: 10, has_thumb: true },
+                PhotoFile { os_id: "os-1".into(), photo_id: "f2".into(), bytes: 7, has_thumb: false },
+            ]
+        );
         let _ = fs::remove_dir_all(&d);
     }
 

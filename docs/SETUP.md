@@ -304,38 +304,57 @@ O build do modo `real` falha se `VITE_SUPABASE_URL` não contiver `stblagzkkffbj
 
 O `entregador` prepara a versão nova (número de versão, notas em `docs/VERSOES.md`, instalador) já no modo nuvem apontando para o real, e você testa o instalador em um PC antes do dia (com o real ainda vazio: só login e a tela "Falta trazer os dados").
 
-O instalador definitivo sai de `npm run tauri:build:real` (usa `scripts/tauri.nuvem-real.json`: identificador `com.oficinapro.app`, o mesmo do app atual, então o PC do Dono mantém o `oficina_db_path` e a importação já sugere o caminho do banco; roda antes `npm run build:web:real`). É build de release com instalador (bundles em `src-tauri	argeteleaseundle`) e precisa de pelo menos 6 GB livres no C:. Não o gere antes de o dono marcar o dia: ele substitui o app instalado.
+O instalador definitivo sai de `npm run tauri:build:real` (usa `scripts/tauri.nuvem-real.json`: identificador `com.oficinapro.app`, o mesmo do app atual, então o PC do Dono mantém o `oficina_db_path` e a importação já sugere o caminho do banco; roda antes `npm run build:web:real`). É build de release com instalador (bundles em `src-tauri/target/release/bundle`) e precisa de pelo menos 6 GB livres no C:. Não o gere antes de o dono marcar o dia: ele substitui o app instalado.
 
 ---
 
 ## Fase F. Dia da virada
 
-Tempo: meio período. **Você precisa estar presente**, de preferência num dia de pouco movimento (fim de semana ou fim do expediente). Todos os PCs são atualizados **no mesmo dia**.
+Tempo: meio período. **Você precisa estar presente**, de preferência num dia de pouco movimento (fim de semana ou fim do expediente). Todos os PCs são atualizados **no mesmo dia**. Versão: 0.3.0 (notas em `docs/VERSOES.md`).
 
 ### F.1 Antes de começar (checklist)
 
-- [ ] Fases C, D e E concluídas, sem pendência.
-- [ ] Instalador nuvem testado num PC (E.8).
-- [ ] Ninguém vai usar o sistema nas próximas horas.
-- [ ] Internet estável no seu PC.
+- [ ] Fases C, D e E.1 a E.3 e E.2b concluídas, sem pendência (SMTP e Auth do real conferidos).
+- [ ] Revisões finais (`revisor`) registradas em `docs/PRODUCAO.md`; `npm run build`, `npm test` e `TZ=UTC` verdes.
+- [ ] `.env.real.local` com as chaves do real; pelo menos 6 GB livres em C: (o instalador precisa).
+- [ ] Instalador nuvem testado num PC (E.8), se já gerado.
+- [ ] Ninguém vai usar o sistema nas próximas horas. Internet estável no seu PC.
+- [ ] Você deu o ok explícito para mexer no projeto real (o Claude não faz nada no real sem ele).
 
-### F.2 Passo a passo
+### F.2 Passo a passo (ordem exata e quem faz)
 
-1. **Fechar o OficinaPro em todos os PCs.** Confirme um por um. Ninguém pode salvar no arquivo durante o envio (o app detecta e não conclui, mas é melhor evitar).
-2. **Esperar a sincronização da pasta** (OneDrive/Drive/etc.) terminar no seu PC.
-3. **Cópia de segurança manual**: copie `C:\OficinaData\database.json` e a pasta `C:\OficinaData\fotos` para um pendrive. (O app também faz uma cópia automática, `database-pre-nuvem-*.json`, mas a do pendrive é a sua garantia.)
-4. **No seu PC, instale o app nuvem** (instalador da Fase E.8).
-5. Abra, entre com a sua conta de Dono do real. Aparece "Falta trazer os dados da oficina".
-6. Confira o caminho do banco (`C:\OficinaData\database.json`) e clique **"Enviar banco para a nuvem"**.
-7. Espere. O app mostra as etapas: cópia de segurança, conferência, envio, fotos, conferência de volta. As fotos podem levar alguns minutos.
-   - Se aparecer **"Há dados para consertar"**: o app achou algo estranho no arquivo (ex.: identificador repetido). Nada foi enviado. Mande a lista ao Claude.
-   - Se a internet cair: "Tentar de novo" é seguro (não duplica nada).
-8. **Confira o relatório "Arquivo × Internet"**: número de OS, clientes, lançamentos, caixa em R$, total das OS, adiantamentos e fotos. Todas as linhas devem estar iguais. Compare dois ou três números com o que você conhece (ex.: saldo do caixa).
-9. Clique **"Concluir"**. O app libera a oficina, lacra o arquivo antigo (o app antigo passa a abri-lo só para leitura, com o aviso "Este banco foi enviado para a nuvem") e abre normalmente.
-10. Teste rápido no seu PC: abra 3 OS conhecidas, confira valores, faça um recebimento de teste se quiser.
-11. **Instale o app nuvem nos outros PCs**, um por um. Em cada um, você entra com a sua conta, vai em Config > Aparelhos e clica **"Autorizar este computador"** (para o balcão, que é compartilhado).
-12. Publique o site com as chaves do real (E.7), se ainda não fez.
-13. Convide a equipe (Fase G).
+**Parte 1: preparar o servidor real (Claude, com o seu ok em cada passo)**
+
+1. Claude: `npx supabase migration list --remote` deve mostrar 0 migrações e sem sobras do spike (E.4). Depois `npx supabase db push --remote --dry-run`: confira que lista as 7 na ordem.
+2. Você: dá o ok. Claude: `npx supabase db push --remote` (precisa da senha do banco real, que você passa na hora).
+3. Claude: confere os donos das funções (`select proowner::regrole, count(*) from pg_proc where pronamespace in ('public'::regnamespace, 'app'::regnamespace) group by 1`: tudo `postgres`), Realtime com 13 tabelas e a política de broadcast.
+4. Claude: `npm run build:functions` e, uma por uma:
+   `npx supabase functions deploy users --project-ref stblagzkkffbjuzltfrt --use-api`, depois `pin`, `device` e `money`.
+5. Claude: `npx supabase secrets set SITE_URL=https://andersonmecanica.pages.dev CORS_ORIGINS=https://andersonmecanica.pages.dev --project-ref stblagzkkffbjuzltfrt`. Nunca `CORS_ALLOW_LOCALHOST` no real.
+6. Você (painel do real): Auth com os ajustes da E.2b; crie a oficina real e a sua conta de Dono (E.6).
+7. Claude: `npm run deploy:web:real` (publica em https://andersonmecanica.pages.dev). Abra o site e entre com a conta de Dono para conferir.
+8. Claude: `npm run tauri:build:real` (precisa de ~6 GB livres em C:). Confira o instalador (nome, tamanho, caminho em `src-tauri\target\release\bundle`) e passe-o para o PC do Dono.
+
+**Parte 2: PC do Dono (você)**
+
+9. **Fechar o OficinaPro em todos os PCs.** Confirme um por um. Ninguém pode salvar no arquivo durante o envio.
+10. **Esperar a sincronização da pasta** terminar no seu PC.
+11. **Cópia de segurança manual**: copie `C:\OficinaData\database.json` e a pasta `C:\OficinaData\fotos` para um pendrive. (O app também faz `database-pre-nuvem-*.json`, mas a do pendrive é a sua garantia.)
+12. **Instale o app nuvem** (0.3.0) neste PC. Abra e entre com a sua conta de Dono. Aparece "Falta trazer os dados da oficina".
+13. Confira o caminho do banco (`C:\OficinaData\database.json`) e clique **"Enviar banco para a nuvem"**.
+14. Espere. O app mostra as etapas: cópia de segurança, conferência, envio, fotos, conferência de volta. As fotos podem levar alguns minutos.
+    - **"Há dados para consertar"**: nada foi enviado. Mande a lista ao Claude.
+    - Internet caiu: "Tentar de novo" é seguro (não duplica nada).
+15. **Confira o relatório "Arquivo × Internet"**: OS, clientes, lançamentos, caixa em R$, total das OS, adiantamentos e fotos. Todas as linhas iguais. Compare dois ou três números que você conhece (ex.: saldo do caixa).
+16. Clique **"Concluir"**. O app libera a oficina, lacra o arquivo antigo (o app antigo passa a abri-lo só para leitura) e abre normalmente. **A partir daqui, reverter perde o que for lançado na nuvem** (F.3).
+17. Teste rápido: abra 3 OS conhecidas, confira valores, abra o Financeiro (Três caixas) e a Agenda.
+
+**Parte 3: outros PCs e equipe**
+
+18. **Instale o app nuvem (0.3.0) nos outros PCs**, um por um (você ou quem estiver no local). Em cada um, entre com a sua conta, vá em Config > Aparelhos e clique **"Autorizar este computador"** (o do balcão, compartilhado, é o principal).
+19. **Convide a equipe** (Fase G): Config > Usuários > Convidar. Avise para olhar o spam.
+20. Teste no celular: abrir https://andersonmecanica.pages.dev, entrar e instalar na tela inicial.
+21. Claude: atualiza `docs/NUVEM-ESTADO.md` e `docs/PRODUCAO.md` com a virada feita. O PR 12 (remover o modo arquivo) só vem depois de alguns dias estável.
 
 ### F.3 Se algo der errado no dia (reversão)
 

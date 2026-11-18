@@ -2,35 +2,47 @@
 
 Notas em linguagem simples para a oficina. A versão mais nova fica no topo.
 
-## Próxima versão (não lançada)
+## 0.3.0 (nuvem) (não lançada: aguardando o dia da virada)
 
-Ainda sem número: o `package.json` segue em 0.2.0. Conteúdo acumulado na branch `feat/nuvem-login` que chega aos PCs no modo arquivo (o de hoje). Só vira versão depois do teste do instalador (abaixo) e do ok do dono.
+Esta é a versão em que o OficinaPro **passa a guardar os dados na internet** (nuvem), em vez de um arquivo na pasta sincronizada. O instalador da 0.3.0 já nasce no modo nuvem, apontando para o projeto real. Só instale no dia da virada, com o dono presente (passo a passo em `docs/SETUP.md`, Fase F).
 
-### O que muda para a oficina
+### O que muda para quem usa
 
-- **Janela de parcelamento legível.** No tema Escuro as opções e a prévia estavam quase invisíveis; agora têm contraste correto nos dois temas.
-- **Título "Gestão de Oficina" com acentos certos** na tela da Oficina.
-- **Banco somente leitura sem falso sucesso.** Se o banco estiver bloqueado ou for de versão mais nova, criar, editar, excluir, arrastar, pagar e agendar mostram "Somente leitura: este banco não aceita alterações." em vez de avisar que deu certo sem gravar.
-- **Menu do card:** "Voltar situação" e "Avançar situação".
-- **Telefone com máscara** no cadastro de Clientes.
-- **Excluir OS** diz o nome do cliente e avisa que não dá para desfazer.
-- **"Em Serviço" legível no tema Pastel.**
-- "Terça-feira" escrito certo na Agenda.
+- **Login com e-mail e senha.** Cada pessoa entra com a própria conta. Quem convida a equipe é o Dono.
+- **PIN no computador do balcão.** O PC compartilhado fica autorizado pelo Dono (Config > Aparelhos). Cada pessoa escolhe o próprio nome em "Quem está usando" e digita o PIN de 6 números. O PC bloqueia sozinho depois de alguns minutos parado. 5 erros seguidos bloqueiam o PIN: entre de novo com e-mail e senha e crie outro.
+- **Três papéis.** Dono vê tudo. Recepção cuida de OS, clientes, agenda e financeiro, mas não vê custos nem margem e não mexe em configurações. Mecânico só vê o que precisa (km, fotos, situação), sem preços nem financeiro.
+- **Celular e site.** O sistema abre no celular pelo endereço **https://andersonmecanica.pages.dev**. Dá para instalar na tela inicial. No celular: Kanban, OS, Agenda e Clientes.
+- **Vários aparelhos ao mesmo tempo.** O que uma pessoa muda aparece nos outros aparelhos sem precisar reabrir.
+- **Fotos na nuvem.** As fotos das OS sobem para a internet e aparecem em todos os aparelhos. O espaço grátis é 1 GB (Config mostra o uso). Foto tirada sem internet sobe quando voltar a conexão.
+- **Dinheiro só com internet.** Receber, parcelar, finalizar, reabrir e excluir OS precisam de internet (o resto funciona sem). Se aparecer "Não deu para confirmar", toque em "Tentar de novo": não lança duas vezes.
+- **Financeiro novo, "Três caixas".** A Visão geral do computador foi refeita com três caixas: o que entrou, o que saiu e o que está previsto. Regra nova: **os totais contam só o que foi pago**. OS em aberto e despesa ainda não paga ficam como "previsto", não como dinheiro no caixa.
+- **Despesas: "Já paguei" ou "Vou pagar em [data]".** Ao lançar uma saída, escolha se já foi paga ou quando vai pagar. Dono e Recepção podem marcar "Paguei" depois, e "Desfazer" se foi engano.
+- **Correções:** janela de parcelamento legível nos dois temas; título "Gestão de Oficina" e "Terça-feira" com acento certo; "Em Serviço" legível no tema Pastel; menu do card com "Voltar situação" e "Avançar situação"; telefone com máscara em Clientes; excluir OS diz o nome do cliente e avisa que não dá para desfazer; banco somente leitura avisa "Somente leitura: este banco não aceita alterações." em vez de fingir que salvou.
+
+### O que muda no procedimento
+
+- **Instalar em todos os PCs no mesmo dia.** Primeiro o PC do Dono: importar o banco antigo, conferir o relatório "Arquivo × Internet" e só então "Concluir". Depois os outros PCs, um por um.
+- **O banco antigo fica lacrado.** Depois de "Concluir", o `database.json` antigo é marcado como enviado para a nuvem e a versão 0.2.0 só abre ele em leitura ("Este banco foi enviado para a nuvem"). Não use mais esse arquivo no dia a dia. As fotos antigas continuam na pasta `fotos`, mas já foram copiadas para a nuvem.
+- **Cópia diária automática.** O app do Dono, ao abrir (se a última cópia tiver mais de 20 horas), guarda uma cópia em `%LOCALAPPDATA%\com.oficinapro.app\backups\nuvem\` (as 30 mais recentes) e envia ao Google Drive, se estiver configurado. Config > "Onde ficam os dados" mostra a data da última; passou de 2 dias, aparece um aviso. Fotos tiradas na nuvem não entram nessa cópia.
+- **Cópia de segurança antes da importação.** O app guarda `database-pre-nuvem-*.json` em `%LOCALAPPDATA%\com.oficinapro.app\backups\`. Faça também a sua cópia no pendrive (banco e pasta `fotos`).
+- Formato do arquivo antigo: não muda (segue v5).
 
 ### Mudanças técnicas
 
-- Política de segurança do conteúdo (CSP) no app Tauri. **Ainda não foi testada no instalador real**: pode bloquear algo (fotos, impressão, PDF, tema). Teste obrigatório antes de liberar, com banco sintético em pasta temporária e nunca o banco real: abrir, salvar OS, foto, imprimir OS e vistoria, salvar PDF, exportar CSV, WhatsApp, tema Pastel (fechar e abrir sem piscar), backup no Drive, F12 sem "Refused to...".
-- O `npm run build` agora também confere os tipos do `vite.config.ts`.
-- Teste de guarda contra acentos corrompidos em `src/`.
-- Formato do banco: **não muda** (segue v5). Sem migração; mesmo assim, atualizar todos os PCs no mesmo dia.
+- Modo nuvem (Supabase, cache IndexedDB, PWA) ligado por `VITE_CLOUD=1`; o instalador sai de `npm run tauri:build:real` (identificador `com.oficinapro.app`, o mesmo de hoje; chaves em `.env.real.local`, fora do git) e o site de `npm run deploy:web:real`.
+- Política de segurança do conteúdo (CSP) no app Tauri, já testada pelo dono no exe de teste.
+- `npm run build` também confere os tipos do `vite.config.ts`; teste de guarda contra acentos corrompidos.
+- `LedgerEntry.pending` (opcional, só despesa) para despesa prevista; sem migração.
 
-### Modo nuvem (não chega aos PCs)
+### Voltar (reversão)
 
-O código do modo nuvem (login, papéis, celular, importação) está na mesma branch, mas **só liga quando o app é gerado com `VITE_CLOUD=1`**. O instalador normal continua no modo arquivo, sem Supabase nem IndexedDB. A virada para a nuvem é uma entrega separada (PR 11 em `docs/NUVEM-ESTADO.md`), com o dono presente e todos os PCs no mesmo dia.
-
-### Voltar
-
-Reinstalar a 0.2.0 (o formato do banco é o mesmo).
+- **Antes de "Concluir" a importação:** feche o app nuvem e reabra o antigo. Nada mudou no arquivo. "Apagar e recomeçar" limpa o que subiu.
+- **Depois de "Concluir":**
+  1. Feche o OficinaPro em todos os PCs.
+  2. Desinstale a 0.3.0 e reinstale a 0.2.0 em todos.
+  3. Restaure o banco: copie o `database.json` do pendrive (ou o `database-pre-nuvem-*.json` de `%LOCALAPPDATA%\com.oficinapro.app\backups\`, renomeando para `database.json`) por cima de `C:\OficinaData\database.json`, com o app fechado.
+  4. Avise o Claude para zerar a oficina no projeto real antes de tentar de novo.
+- **O que se perde:** tudo o que foi lançado na nuvem depois da virada (OS, pagamentos, fotos novas). A cópia diária em `backups\nuvem\` está no formato antigo e serve de ponte para recuperar os lançamentos, mas sem as fotos novas. Reverter no mesmo dia da virada perde pouco ou nada.
 
 ## 0.2.0 (novembro de 2026)
 

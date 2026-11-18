@@ -14,7 +14,7 @@ const entry = resolve(here, 'serverEntry.ts');
 const ALLOWED = new Set([
   'services/serverEntry.ts',
   'services/osFinanceService.ts', 'services/osFinanceGuards.ts', 'services/advances.ts', 'services/advancesDraft.ts',
-  'services/osRemaining.ts', 'services/osSave.ts', 'services/osEditMerge.ts', 'services/photos.ts',
+  'services/osRemaining.ts', 'services/expenseStatus.ts', 'services/osSave.ts', 'services/osEditMerge.ts', 'services/photos.ts',
   'utils/helpers.ts', 'utils/dates.ts', 'utils/migrations.ts', 'utils/links.ts', 'utils/itemIds.ts', 'utils/secrets.ts',
   'sync/split.ts', 'sync/types.ts',
   'types.ts',

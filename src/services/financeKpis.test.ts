@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { computeFinanceKpis, expensePaidDay, isExpensePaid, osRevenueDay, type FinancePeriod } from './financeKpis';
+import { computeFinanceKpis, osRevenueDay, type FinancePeriod } from './financeKpis';
 
-// Regra de despesa paga só por paymentDate (a decisão final é do arquiteto): isola os testes da regra provisória.
+// Os testes abaixo isolam a regra de despesa paga (só por paymentDate); a regra padrão fica no último bloco.
 const byPaymentDate = (en: { paymentDate?: string }) => !!en.paymentDate;
 import type { LedgerEntry, WorkOrder } from '../types';
 
@@ -151,20 +151,30 @@ describe('despesas previstas', () => {
   });
 });
 
-describe('regra provisória de despesa paga (isExpensePaid)', () => {
+describe('regra padrão de despesa paga (isDebitPaid, ver expenseStatus.test.ts)', () => {
   const d = (id: string, due: string, over: Partial<LedgerEntry> = {}) =>
     e(id, { type: 'DEBIT', amount: 500, effectiveDate: due, ...over });
-  it('despesa antiga sem paymentDate e já vencida conta como paga; futura é prevista', () => {
-    expect(isExpensePaid(d('a', day(2026, 6, 10)), '2026-06-15')).toBe(true);
-    expect(isExpensePaid(d('b', day(2026, 6, 15)), '2026-06-15')).toBe(true);
-    expect(isExpensePaid(d('c', day(2026, 6, 16)), '2026-06-15')).toBe(false);
-    expect(isExpensePaid(d('d', day(2026, 6, 20), { paymentDate: day(2026, 6, 1) }), '2026-06-15')).toBe(true);
-  });
-  it('KPIs com a regra padrão: antiga entra em despesas pelo vencimento; futura vai a previstas', () => {
-    const r = computeFinanceKpis({ ledger: [d('a', day(2026, 6, 10)), d('b', day(2026, 6, 20))], workOrders: [], period: JUNE, today: TODAY });
+  const runDefault = (ledger: LedgerEntry[], period = JUNE) =>
+    computeFinanceKpis({ ledger, workOrders: [], period, today: TODAY });
+  it('legado: antiga entra em despesas pelo vencimento; futura vai a previstas', () => {
+    const r = runDefault([d('a', day(2026, 6, 10)), d('b', day(2026, 6, 20))]);
     expect(r.despesas).toBe(500);
     expect(r.expectedExpenses.periodTotal).toBe(500);
     expect(r.expectedExpenses.overdueTotal).toBe(0);
-    expect(expensePaidDay(d('a', day(2026, 6, 10)))).toBe('2026-06-10');
+  });
+  it('pending no passado: fica fora de despesas e entra como vencida', () => {
+    const r = runDefault([d('a', day(2026, 6, 10), { pending: true })]);
+    expect(r.despesas).toBe(0);
+    expect(r.expectedExpenses.overdueTotal).toBe(500);
+    expect(r.expectedExpenses.items[0].overdue).toBe(true);
+  });
+  it('paga com paymentDate conta no mês do pagamento, mesmo vencendo depois', () => {
+    const ledger = [d('a', day(2026, 7, 10), { paymentDate: day(2026, 6, 3) })];
+    expect(runDefault(ledger).despesas).toBe(500);
+    expect(runDefault(ledger, { mode: 'MONTH', month: '2026-07' }).despesas).toBe(0);
+    expect(runDefault(ledger).expectedExpenses.items).toEqual([]);
+  });
+  it('desfeita (pending sem paymentDate) sai de despesas', () => {
+    expect(runDefault([d('a', day(2026, 6, 3), { pending: true })]).despesas).toBe(0);
   });
 });

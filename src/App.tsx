@@ -567,16 +567,17 @@ export function AppContent({ topbar, phone: phoneShell }: { topbar?: ReactNode; 
     setIsModalOpen(true);
   };
 
-  const handleSaveEntryModal = (desc: string, val: number, type: 'CREDIT' | 'DEBIT', dateStr: string, recurrence: 'SINGLE' | 'INSTALLMENT' | 'RECURRING', count: number) => {
+  const handleSaveEntryModal = (desc: string, val: number, type: 'CREDIT' | 'DEBIT', dateStr: string, recurrence: 'SINGLE' | 'INSTALLMENT' | 'RECURRING', count: number, pending: boolean) => {
     if (guardReadOnly()) return;
     if (moneyOffline()) return; // lançamento do Financeiro só online (nuvem)
     const absVal = Math.abs(val);
     if (editingEntry) {
-      finance.updateEntry({ ...editingEntry, description: desc, amount: Money.fromFloat(absVal), type, effectiveDate: toISOFromDateInput(dateStr) });
+      const { pending: oldPending, ...editingBase } = editingEntry; // `pending` é só de DEBIT
+      finance.updateEntry({ ...(type === 'DEBIT' && oldPending ? { ...editingBase, pending: oldPending } : editingBase), description: desc, amount: Money.fromFloat(absVal), type, effectiveDate: toISOFromDateInput(dateStr) });
       addToast('Lançamento atualizado.', 'success');
       setEditingEntry(null);
     } else {
-      const createdCount = finance.addEntryWithRecurrence(desc, val, type, dateStr, recurrence, count);
+      const createdCount = finance.addEntryWithRecurrence(desc, val, type, dateStr, recurrence, count, pending);
       addToast(createdCount > 1 ? `${createdCount} lançamentos gerados!` : 'Lançamento registrado.', 'success');
     }
     setIsEntryModalOpen(false);
@@ -1138,6 +1139,7 @@ Abrir OS?`)) {
                 isLoading={isLoading}
                 kpiData={finance.kpiData}
                 expectedExpenses={finance.expectedExpenses}
+                payables={finance.payables}
                 chartDataFluxo={finance.chartFluxo}
                 chartDataPie={finance.chartPie}
                 ledger={finance.filteredLedger}

@@ -13,6 +13,8 @@ export interface LedgerEntry {
   isPaid?: boolean;
   dueDate?: string;
   paymentDate?: string;
+  /** Só DEBIT: despesa prevista (a pagar), mesmo com vencimento passado. Ausente = vale a regra de expenseStatus.ts. */
+  pending?: true;
 }
 
 export interface WorkOrder {
@@ -271,7 +273,10 @@ export interface OSModalPayload {
 /** Ponto do gráfico de fluxo de caixa (useFinance.chartFluxo). */
 export type ChartFluxoPoint = {
   name: string;
-  valor: number;
+  /** Reais pagos que entraram no dia/mês. */
+  entrou: number;
+  /** Reais pagos que saíram no dia/mês. */
+  saiu: number;
 };
 
 /** Fatia do gráfico de pizza peças x serviços (useFinance.chartPie). */

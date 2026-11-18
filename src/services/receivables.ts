@@ -1,7 +1,8 @@
 import { Client, LedgerEntry, WorkOrder } from '../types';
 import { clientGroupKey, resolveClientId } from '../utils/links';
-import { formatDateOnly, parseDateFlexible } from '../utils/dates';
+import { parseDateFlexible } from '../utils/dates';
 import { getRemainingAmount } from './osFinanceService';
+import { getDueDate, toLocalDay } from './expenseStatus';
 
 // Conceito único de "a receber": `paymentDate` é a única verdade de "pago" (isPaid não é mais lido).
 // Funções puras; `today` é injetado (Date ou 'YYYY-MM-DD') e a comparação é por DIA LOCAL.
@@ -36,11 +37,8 @@ export const getPendingOSReceivables = (workOrders: WorkOrder[]): PendingOSRecei
     .filter(p => p.amount > 0)
     .sort((a, b) => a.os.osNumber - b.os.osNumber);
 
-export const getDueDate = (entry: LedgerEntry): string => entry.dueDate ?? entry.effectiveDate;
-
-// 'YYYY-MM-DD' local de um Date, de um 'YYYY-MM-DD' ou de um ISO completo.
-export const toLocalDay = (value: string | Date): string =>
-  value instanceof Date ? formatDateOnly(value) : formatDateOnly(parseDateFlexible(value));
+// Moraram aqui; foram para expenseStatus.ts (módulo-folha) e seguem exportadas por este arquivo.
+export { getDueDate, toLocalDay };
 
 export const getReceivableStatus = (
   entry: LedgerEntry,

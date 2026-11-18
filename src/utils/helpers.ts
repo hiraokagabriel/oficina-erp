@@ -42,7 +42,9 @@ export const createEntry = (
   type: 'CREDIT' | 'DEBIT',
   dateString?: string,
   groupId?: string,
-  paymentDate?: string
+  paymentDate?: string,
+  /** Só DEBIT: despesa prevista (a pagar). A chave só existe quando true. */
+  pending?: boolean
 ): LedgerEntry => {
   return {
     id: generateId(),
@@ -52,7 +54,8 @@ export const createEntry = (
     effectiveDate: dateString ? toISOFromDateInput(dateString) : new Date().toISOString(),
     createdAt: new Date().toISOString(),
     groupId,
-    paymentDate: paymentDate ? toISOFromDateInput(paymentDate) : undefined
+    paymentDate: paymentDate ? toISOFromDateInput(paymentDate) : undefined,
+    ...(pending && type === 'DEBIT' ? { pending: true as const } : {}),
   };
 };
 

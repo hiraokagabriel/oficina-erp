@@ -1,9 +1,11 @@
 import { useState, useMemo } from 'react';
 import { useDatabase } from '../context/DatabaseContext';
-import { createEntry, Money, splitCents } from '../utils/helpers';
-import { addMonths, formatDateOnly, parseDateOnly } from '../utils/dates';
+import { Money } from '../utils/helpers';
+import { formatDateOnly } from '../utils/dates';
 import { LedgerEntry } from '../types';
 import { computeFinanceKpis } from '../services/financeKpis';
+import { buildFlowSeries, buildPayables } from '../services/financeFlow';
+import { buildEntries } from '../services/entryBuild';
 
 // Helpers internos de data (locais para o hook)
 const getLocalMonth = () => {
@@ -11,10 +13,6 @@ const getLocalMonth = () => {
     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
     return d.toISOString().slice(0, 7);
 };
-
-// Soma meses com clamp no último dia do mês (31/jan + 1 mês = 28/fev).
-const addMonthsToDate = (dateStr: string, monthsToAdd: number): string =>
-    formatDateOnly(addMonths(parseDateOnly(dateStr), monthsToAdd));
 
 export const useFinance = () => {
     const { ledger, setLedger, workOrders } = useDatabase();
@@ -33,33 +31,17 @@ export const useFinance = () => {
         type: 'CREDIT' | 'DEBIT', 
         dateStr: string,
         recurrence: 'SINGLE' | 'INSTALLMENT' | 'RECURRING',
-        count: number
+        count: number,
+        /** DEBIT: true = "Vou pagar em [data]"; ausente/false = "Já paguei". */
+        pending?: boolean
     ) => {
-        const absVal = Math.abs(val);
-        const newEntries: LedgerEntry[] = [];
-        const totalCents = Money.fromFloat(absVal);
-        // Parcelado: divide em centavos inteiros, com o resto na última parcela (soma exata).
-        const installmentCents = recurrence === 'INSTALLMENT' ? splitCents(totalCents, count) : [];
-        
+        const totalCents = Money.fromFloat(Math.abs(val));
         // Gera um ID de grupo se for mais de 1 lançamento
         const groupId = count > 1 ? crypto.randomUUID() : undefined;
-          
-        if (recurrence === 'SINGLE') {
-            newEntries.push(createEntry(desc, totalCents, type, dateStr));
-        } else {
-            for (let i = 0; i < count; i++) {
-                const currentDate = addMonthsToDate(dateStr, i);
-                let finalDesc = desc;
-                let finalValue = totalCents;
-
-                if (recurrence === 'INSTALLMENT') {
-                    finalDesc = `${desc} (${i + 1}/${count})`;
-                    finalValue = installmentCents[i];
-                }
-                // Passa o groupId para vincular as parcelas
-                newEntries.push(createEntry(finalDesc, finalValue, type, currentDate, groupId));
-            }
-        }
+        // Parcelado divide em centavos inteiros; "Já paguei" x "Vou pagar em": ver services/entryBuild.ts.
+        const newEntries = buildEntries({
+            desc, totalCents, type, dateStr, recurrence, count, pending, groupId, today: formatDateOnly(new Date()),
+        });
         setLedger(prev => [...newEntries.reverse(), ...prev]);
         return newEntries.length;
     };
@@ -100,30 +82,19 @@ export const useFinance = () => {
 
     const kpiData = useMemo(() => ({
         saldo: kpis.saldo, receitas: kpis.receitas, despesas: kpis.despesas, ticketMedio: kpis.ticketMedio,
+        finalizedCount: kpis.finalizedCount,
     }), [kpis]);
 
     const expectedExpenses = kpis.expectedExpenses;
 
-    const chartFluxo = useMemo(() => {
-        const map: Record<string, number> = {};
-        const monthLabels = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-   
-        filteredLedger.forEach(e => { 
-          if (filterType === 'DEBIT' && e.type === 'DEBIT') {
-              let key = viewMode === 'YEAR' ? monthLabels[parseInt(e.effectiveDate.slice(5, 7), 10) - 1] : e.effectiveDate.slice(8, 10);
-              map[key] = (map[key] || 0) + e.amount;
-          } else if ((filterType === 'ALL' || filterType === 'CREDIT') && e.type === 'CREDIT') {
-             let key = viewMode === 'YEAR' ? monthLabels[parseInt(e.effectiveDate.slice(5, 7), 10) - 1] : e.effectiveDate.slice(8, 10);
-             map[key] = (map[key] || 0) + e.amount;
-          }
-        });
-   
-        let sortedEntries;
-        if (viewMode === 'YEAR') sortedEntries = Object.entries(map).sort((a,b) => monthLabels.indexOf(a[0]) - monthLabels.indexOf(b[0]));
-        else sortedEntries = Object.entries(map).sort((a,b) => a[0].localeCompare(b[0]));
-   
-        return sortedEntries.map(([k, v]) => ({ name: k, valor: Money.toFloat(v) }));
-    }, [filteredLedger, viewMode, filterType]);
+    // Contas a pagar: vencidas (qualquer mês) e as que vencem no período, por vencimento.
+    const payables = useMemo(() => buildPayables(kpis.expectedExpenses), [kpis]);
+
+    // Entrou e saiu (só o pago, pelo dia do pagamento), todos os dias do mês ou meses do ano; ignora o filtro de tipo.
+    const chartFluxo = useMemo(
+        () => buildFlowSeries(ledger, { mode: viewMode, month: selectedMonth }, new Date()),
+        [ledger, viewMode, selectedMonth]
+    );
 
     const chartPie = useMemo(() => {
         const { parts, services } = kpis.pie;
@@ -134,7 +105,7 @@ export const useFinance = () => {
         selectedMonth, setSelectedMonth,
         viewMode, setViewMode,
         filterType, setFilterType,
-        filteredLedger, kpiData, expectedExpenses, chartFluxo, chartPie,
+        filteredLedger, kpiData, expectedExpenses, payables, chartFluxo, chartPie,
         addEntryWithRecurrence, updateEntry, deleteEntry, deleteGroup 
     };
 };

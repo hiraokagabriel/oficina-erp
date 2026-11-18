@@ -3,11 +3,13 @@ import { LedgerEntry } from '../types';
 import { getLocalDateString } from '../utils/helpers';
 import { useDirtyGuard } from '../hooks/useDirtyGuard';
 import { MoneyField } from '../components/MoneyField';
+import { debitPaidDay, isDebitPaid, toLocalDay } from '../services/expenseStatus';
 
 interface EntryModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (desc: string, val: number, type: 'CREDIT' | 'DEBIT', date: string, recurrence: 'SINGLE' | 'INSTALLMENT' | 'RECURRING', count: number) => void;
+  /** `pending` (só despesa nova): true = "Vou pagar em [data]"; false = "Já paguei". */
+  onSave: (desc: string, val: number, type: 'CREDIT' | 'DEBIT', date: string, recurrence: 'SINGLE' | 'INSTALLMENT' | 'RECURRING', count: number, pending: boolean) => void;
   initialData: LedgerEntry | null;
 }
 
@@ -22,10 +24,13 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
   
   const [recurrence, setRecurrence] = useState<'SINGLE' | 'INSTALLMENT' | 'RECURRING'>('SINGLE');
   const [count, setCount] = useState<number>(2);
+  // Só despesa nova: "Já paguei" (padrão) ou "Vou pagar em [data]".
+  const [payLater, setPayLater] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
         setTried(false);
+        setPayLater(false);
         if (initialData) {
             setDescription(initialData.description);
             
@@ -51,8 +56,23 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
     if (amountInvalid) return;
     if (!description.trim() || cents === undefined) return alert("Preencha descrição e valor.");
     // O App recebe o valor em reais (float) e converte com Money.fromFloat; cents/100 é exato o bastante para isso.
-    onSave(description, cents / 100, type, date, recurrence, count);
+    onSave(description, cents / 100, type, date, recurrence, count, type === 'DEBIT' && payLater);
   };
+
+  const todayStr = getLocalDateString();
+  const alreadyPaid = type === 'DEBIT' && !payLater;
+  // "Já paguei" não aceita data futura (fica a de hoje).
+  const choosePayLater = (later: boolean) => {
+    if (later !== payLater) guard.markDirty();
+    setPayLater(later);
+    if (!later && date > todayStr) setDate(todayStr);
+  };
+  // Edição: só mostra o estado da despesa (mudar é pelo botão da lista).
+  const editStatus = initialData && initialData.type === 'DEBIT'
+    ? (isDebitPaid(initialData, toLocalDay(new Date()))
+        ? `Paga em ${debitPaidDay(initialData).split('-').reverse().join('/')}`
+        : 'Prevista (ainda não paga)')
+    : null;
 
   const guard = useDirtyGuard({ active: isOpen, onClose, label: 'um lançamento' });
 
@@ -154,14 +174,33 @@ export const EntryModal: React.FC<EntryModalProps> = ({ isOpen, onClose, onSave,
             </div>
         )}
 
+        {!initialData && type === 'DEBIT' && (
+            <div className="form-group">
+                <span className="field-label" id={`${uid}-pago`}>Esta despesa</span>
+                <div className="segmented" role="group" aria-labelledby={`${uid}-pago`}>
+                    <button type="button" aria-pressed={!payLater} onClick={() => choosePayLater(false)}>Já paguei</button>
+                    <button type="button" aria-pressed={payLater} onClick={() => choosePayLater(true)}>Vou pagar em...</button>
+                </div>
+            </div>
+        )}
+
+        {editStatus && <p className="field-hint" role="status">{editStatus}</p>}
+
         <div className="form-group">
-          <label htmlFor={`${uid}-data`}>{recurrence !== 'SINGLE' ? 'Data da 1ª parcela/mês' : 'Data do lançamento'}</label>
-          <input 
+          <label htmlFor={`${uid}-data`}>
+            {recurrence !== 'SINGLE'
+              ? 'Data da 1ª parcela/mês'
+              : !initialData && type === 'DEBIT'
+                ? (payLater ? 'Vou pagar em' : 'Data do pagamento')
+                : 'Data do lançamento'}
+          </label>
+          <input
             id={`${uid}-data`}
-            className="form-input" 
-            type="date" 
-            value={date} 
-            onChange={e => setDate(e.target.value)} 
+            className="form-input"
+            type="date"
+            value={date}
+            max={alreadyPaid && !initialData ? todayStr : undefined}
+            onChange={e => setDate(e.target.value)}
           />
         </div>
 

@@ -208,8 +208,45 @@ describe('togglePayment', () => {
     expect(togglePayment([p1], [linked], 'nada', NOW)).toBeNull();
   });
 
-  it('DEBIT: null (só CREDIT alterna)', () => {
-    expect(togglePayment([entry('d1', { type: 'DEBIT' })], [], 'd1', NOW)).toBeNull();
+  describe('DEBIT (despesa manual)', () => {
+    const debit = (over: Partial<LedgerEntry> = {}) => entry('d1', { type: 'DEBIT', ...over });
+    const has = (e: LedgerEntry, k: string) => Object.prototype.hasOwnProperty.call(e, k);
+
+    it('prevista (pending) vira paga: paymentDate = agora e pending removido (chave some)', () => {
+      const r = togglePayment([debit({ pending: true })], [], 'd1', NOW)!;
+      expect(r.paid).toBe(true);
+      expect(r.ledger[0].paymentDate).toBe(NOW);
+      expect(has(r.ledger[0], 'pending')).toBe(false);
+    });
+    it('paga (com paymentDate) desfaz: pending true e paymentDate removido (chave some)', () => {
+      const r = togglePayment([debit({ paymentDate: NOW })], [], 'd1', NOW)!;
+      expect(r.paid).toBe(false);
+      expect(r.ledger[0].pending).toBe(true);
+      expect(has(r.ledger[0], 'paymentDate')).toBe(false);
+    });
+    it('legado vencido (paga pela regra) desfaz para pending; legado futuro paga com paymentDate', () => {
+      const past = togglePayment([debit()], [], 'd1', NOW)!;
+      expect(past.paid).toBe(false);
+      expect(past.ledger[0].pending).toBe(true);
+      const future = togglePayment([debit({ effectiveDate: '2026-04-20T12:00:00.000Z' })], [], 'd1', NOW)!;
+      expect(future.paid).toBe(true);
+      expect(future.ledger[0].paymentDate).toBe(NOW);
+    });
+    it('não mexe em OS nem em outros lançamentos', () => {
+      const wos = [linked];
+      const other = entry('p1');
+      const r = togglePayment([other, debit({ pending: true })], wos, 'd1', NOW)!;
+      expect(r.workOrders).toBe(wos);
+      expect(r.ledger[0]).toBe(other);
+      expect(r.osEffect).toBeUndefined();
+    });
+    it('ida e volta deixa a despesa prevista, sem paymentDate', () => {
+      const a = togglePayment([debit({ pending: true })], [], 'd1', NOW)!;
+      const b = togglePayment(a.ledger, [], 'd1', NOW)!;
+      expect(b.paid).toBe(false);
+      expect(b.ledger[0].pending).toBe(true);
+      expect(has(b.ledger[0], 'paymentDate')).toBe(false);
+    });
   });
 
   it('sem OS ligada: só o ledger muda', () => {

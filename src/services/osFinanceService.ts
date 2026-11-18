@@ -2,6 +2,7 @@ import { InstallmentConfig, LedgerEntry, OSStatus, WorkOrder } from '../types';
 import { generateId } from '../utils/helpers';
 import { addMonths, formatDateOnly, parseDateFlexible, parseDateOnly } from '../utils/dates';
 import { getRemainingAmount, sumAdvances } from './osRemaining';
+import { isDebitPaid, toLocalDay } from './expenseStatus';
 import { BACKWARD_FROM_PAYMENT, getOSReceipt, planReceiveOS, planReopenOS } from './osFinanceGuards';
 
 // Regras financeiras da OS extraídas do App.tsx como funções puras (extração literal).
@@ -97,7 +98,7 @@ export interface TogglePaymentResult {
   osEffect?: { osNumber: number; kind: 'finalized' | 'reopened' };
 }
 
-// Alterna pago/pendente de um CREDIT e mantém a OS ligada coerente.
+// Alterna pago/pendente de um CREDIT (e mantém a OS ligada coerente) ou de um DEBIT (despesa; não mexe em OS).
 // À vista (ligada por financialId): o paymentDate da OS acompanha o lançamento.
 // Parcelada (installmentConfig.groupId == installmentGroupId): o estado da OS é derivado de TODAS as parcelas.
 export const togglePayment = (
@@ -107,7 +108,25 @@ export const togglePayment = (
   now: string = new Date().toISOString()
 ): TogglePaymentResult | null => {
   const entry = ledger.find(e => e.id === entryId);
-  if (!entry || entry.type !== 'CREDIT') return null;
+  if (!entry) return null;
+
+  // Despesa (DEBIT): sem OS ligada. Pagar grava paymentDate e tira `pending`; desfazer grava `pending` e tira paymentDate
+  // (as chaves somem, nunca `undefined`). "Paga" segue a regra única de expenseStatus.ts.
+  if (entry.type === 'DEBIT') {
+    const paidNow = isDebitPaid(entry, toLocalDay(now));
+    const next = ledger.map(e => {
+      if (e.id !== entryId) return e;
+      if (paidNow) {
+        const { paymentDate, ...rest } = e;
+        void paymentDate;
+        return { ...rest, pending: true as const };
+      }
+      const { pending, ...rest } = e;
+      void pending;
+      return { ...rest, paymentDate: now };
+    });
+    return { ledger: next, workOrders, paid: !paidNow };
+  }
 
   const newPaymentDate = entry.paymentDate ? undefined : now;
 

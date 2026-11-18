@@ -1,5 +1,5 @@
 import { LedgerEntry, WorkOrder } from '../types';
-import { getDueDate, toLocalDay } from './receivables';
+import { debitPaidDay, getDueDate, isDebitPaid, toLocalDay } from './expenseStatus';
 import { getOSReceipt } from './osFinanceGuards';
 
 // Números do Financeiro > Visão geral (regra "só o que entrou", decisão do dono em 2026-11-18).
@@ -40,22 +40,16 @@ export interface FinanceKpis {
   ticketMedio: number;
   pie: { parts: number; services: number };
   osCount: number;
+  /** OS finalizadas no período (mesmo número de `osCount`, nome do contrato da tela). */
+  finalizedCount: number;
   expectedExpenses: ExpectedExpenses;
 }
 
-// ---------- PONTO ÚNICO DE DECISÃO: despesa paga ou prevista (arquiteto vai trocar) ----------
-// Hoje DEBIT não tem estado "pago" (togglePayment recusa DEBIT; o EntryModal não grava paymentDate), então toda
-// despesa antiga está sem paymentDate. Provisório: paga = tem paymentDate OU vence hoje/antes (lançamento antigo
-// conta como saída realizada, como antes); prevista = vence depois de hoje. Sem isso, o histórico viraria "vencido".
+// ---------- PONTO ÚNICO DE DECISÃO: despesa paga ou prevista ----------
+// A regra mora em expenseStatus.ts (`isDebitPaid`, `debitPaidDay`): `pending` ou vencimento futuro sem paymentDate
+// = prevista; o resto = paga, no dia do pagamento (ou do vencimento, no legado).
 export type ExpensePaidFn = (entry: LedgerEntry, todayDay: string) => boolean;
-
-export const isExpensePaid: ExpensePaidFn = (entry, todayDay) =>
-  !!entry.paymentDate || toLocalDay(getDueDate(entry)) <= todayDay;
-
-/** Dia local em que a despesa paga saiu do caixa: paymentDate, senão o vencimento. */
-export const expensePaidDay = (entry: LedgerEntry): string =>
-  toLocalDay(entry.paymentDate ?? getDueDate(entry));
-// -------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------
 
 const inPeriod = (day: string, p: FinancePeriod): boolean =>
   p.mode === 'YEAR' ? day.slice(0, 4) === p.month.slice(0, 4) : day.slice(0, 7) === p.month;
@@ -90,11 +84,11 @@ export const computeFinanceKpis = (args: {
   workOrders: WorkOrder[];
   period: FinancePeriod;
   today: string | Date;
-  /** Troca da regra de despesa paga (testes e decisão futura do arquiteto). */
+  /** Troca da regra de despesa paga (só testes; o padrão é `isDebitPaid`). */
   isExpensePaid?: ExpensePaidFn;
 }): FinanceKpis => {
   const { ledger, workOrders, period, today } = args;
-  const expensePaid = args.isExpensePaid ?? isExpensePaid;
+  const expensePaid = args.isExpensePaid ?? isDebitPaid;
   const todayDay = toLocalDay(today);
 
   let receitas = 0;
@@ -108,7 +102,7 @@ export const computeFinanceKpis = (args: {
       continue;
     }
     if (expensePaid(e, todayDay)) {
-      if (inPeriod(expensePaidDay(e), period)) despesas += e.amount;
+      if (inPeriod(debitPaidDay(e), period)) despesas += e.amount;
       continue;
     }
     const dueDay = toLocalDay(getDueDate(e));
@@ -134,6 +128,7 @@ export const computeFinanceKpis = (args: {
     ticketMedio: Math.round(total / (osCount || 1)),
     pie: { parts, services },
     osCount,
+    finalizedCount: osCount,
     expectedExpenses: { periodTotal, periodCount, overdueTotal, overdueCount, items },
   };
 };

@@ -192,6 +192,31 @@ describe('money: ledger.toggle (receber parcela)', () => {
     expect(t.store.get('ledger', 'm1')?.data.paymentDate).toBeTruthy();
   });
 
+  it('despesa manual: paga grava paymentDate sem pending; desfazer grava pending sem paymentDate; Recepção pode', async () => {
+    const t = setup();
+    t.store.put('ledger', 'd1', entry({ id: 'd1', type: 'DEBIT', description: 'Aluguel', pending: true }), null);
+    let r = await t.call('ledger.toggle', { osId: undefined, entryId: 'd1' }, RECEP);
+    expect(r.status).toBe(200);
+    expect((r.body.info as { paid: boolean }).paid).toBe(true);
+    let data = t.store.get('ledger', 'd1')?.data as Record<string, unknown>;
+    expect(data.paymentDate).toBe('2026-11-12T12:00:00.000Z');
+    expect('pending' in data).toBe(false);
+    r = await t.call('ledger.toggle', { osId: undefined, entryId: 'd1' }, RECEP);
+    expect((r.body.info as { paid: boolean }).paid).toBe(false);
+    data = t.store.get('ledger', 'd1')?.data as Record<string, unknown>;
+    expect(data.pending).toBe(true);
+    expect('paymentDate' in data).toBe(false);
+  });
+
+  it('despesa legado no futuro (prevista pela regra): pagar grava paymentDate; mecânico não pode', async () => {
+    const t = setup();
+    t.store.put('ledger', 'd2', entry({ id: 'd2', type: 'DEBIT', effectiveDate: '2026-12-20T15:00:00.000Z' }), null);
+    expect((await t.call('ledger.toggle', { osId: undefined, entryId: 'd2' }, MECH)).status).toBe(403);
+    const r = await t.call('ledger.toggle', { osId: undefined, entryId: 'd2' }, OWNER);
+    expect((r.body.info as { paid: boolean }).paid).toBe(true);
+    expect(t.store.get('ledger', 'd2')?.data.paymentDate).toBe('2026-11-12T12:00:00.000Z');
+  });
+
   it('adiantamento é travado (422) e lançamento inexistente dá 404', async () => {
     const t = setup();
     t.store.seedOS(baseOS({ advances: [{ id: 'a1', date: '2026-11-05T15:00:00.000Z', amount: 4000, entryId: 'ea1' }] }),

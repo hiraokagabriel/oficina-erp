@@ -502,7 +502,8 @@ function planToggle(c: Ctx): Plan {
     return reject(422, 'bloqueado', `Este lançamento é um adiantamento. Edite pela OS #${os.osNumber}.`)
   }
   const r = togglePayment(c.loaded.ledger, os ? [os] : [], entryId, c.now)
-  if (!r) return reject(422, 'bloqueado', 'Só receitas podem ser marcadas como pagas.')
+  // Receita e despesa alternam (despesa: paymentDate/pending, sem tocar OS). O "agora" já está no fuso da oficina (withZone).
+  if (!r) return reject(404, 'lancamento_nao_encontrado', 'Este lançamento não existe mais. Os dados foram atualizados.')
   return {
     os: os ? (r.workOrders[0] ?? os) : null,
     ledger: r.ledger, audit: [],

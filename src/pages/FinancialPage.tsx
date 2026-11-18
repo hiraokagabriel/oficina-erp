@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { LedgerEntry, ChartFluxoPoint, ChartPiePoint, WorkOrder, WorkshopSettings, CatalogItem } from '../types';
 import { MarginReport } from '../components/MarginReport';
 import { Icon } from '../components/ui/Icon';
@@ -12,6 +12,8 @@ import { FIN_TABLE_OFFLINE_BANNER } from '../services/moneyOfflineView';
 import { useDatabase } from '../context/DatabaseContext';
 import { summarizeReceivables, formatDueDate, getReceivableLabel, getReceivableStatus } from '../services/receivables';
 import type { ExpectedExpenses } from '../services/financeKpis';
+import type { Payables } from '../services/financeFlow';
+import { isDebitPaid, debitPaidDay, toLocalDay } from '../services/expenseStatus';
 
 const COLORS = {
   primary: '#8257e6', secondary: '#00bcd4', success: '#04d361', warning: '#ff9800', 
@@ -23,11 +25,16 @@ const brl = (v: number | string): string => MoneyUtil.format(MoneyUtil.fromFloat
 
 const ITEMS_PER_PAGE = 20;
 
+// 'AAAA-MM-DD' -> 'DD/MM/AAAA' (dia só-data; sem passar por Date).
+const formatDebitDay = (day: string): string => day.split('-').reverse().join('/');
+
 interface FinancialPageProps {
   isLoading: boolean;
-  kpiData: { saldo: number; receitas: number; despesas: number; ticketMedio: number; };
+  kpiData: { saldo: number; receitas: number; despesas: number; ticketMedio: number; finalizedCount: number; };
   /** Saídas ainda não pagas: total do período, total vencido e lista por vencimento (financeKpis.ts). */
   expectedExpenses: ExpectedExpenses;
+  /** Contas a pagar (vencidas e do período); a repaginação (rodada 3) passa a usar isto. */
+  payables: Payables;
   chartDataFluxo: ChartFluxoPoint[];
   chartDataPie: ChartPiePoint[];
   ledger: LedgerEntry[];
@@ -309,7 +316,7 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
           ) : (
             <div className="receivables-scroll">
               <table className="data-table receivables-table">
-                <thead><tr><th>Vencimento</th><th>Descrição</th><th>Valor</th><th>Situação</th></tr></thead>
+                <thead><tr><th>Vencimento</th><th>Descrição</th><th>Valor</th><th>Situação</th><th>Ação</th></tr></thead>
                 <tbody>
                   {expectedExpenses.items.slice(0, 8).map(x => (
                     <tr key={x.entry.id}>
@@ -317,6 +324,16 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                       <td className="receivable-desc" title={x.entry.description}>{x.entry.description}</td>
                       <td style={{fontWeight:'bold'}}>{Money.format(x.entry.amount)}</td>
                       <td><span className={`receivable-status ${x.overdue ? 'late' : 'open'}`}>{x.overdue && <Icon name="alerta" size={14} />}{x.overdue ? 'Vencida' : 'A pagar'}</span></td>
+                      <td>
+                        <OnlineOnlyButton
+                          busyLabel="Pagando..." busyKey={x.entry.id}
+                          className="btn-sm fin-pay"
+                          onClick={(ev) => payClick(ev, x.entry.id)}
+                          aria-label={`Paguei: ${x.entry.description}`}
+                        >
+                          <Icon name="check" size={16} />Paguei
+                        </OnlineOnlyButton>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -331,16 +348,10 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
 
       <div className="dashboard-grid">
         <div className="chart-card">
-            <div className="chart-header"><div className="chart-title">Faturamento ({viewMode === 'YEAR' ? 'mensal' : 'diário'})</div></div>
+            <div className="chart-header"><div className="chart-title">Entrou e saiu ({viewMode === 'YEAR' ? 'por mês' : 'por dia'})</div></div>
             <div style={{flex:1, minHeight: 0}}>
                 <ResponsiveContainer>
-                    <AreaChart data={chartDataFluxo}>
-                        <defs>
-                            <linearGradient id="c" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.5}/>
-                                <stop offset="95%" stopColor="var(--primary)" stopOpacity={0}/>
-                            </linearGradient>
-                        </defs>
+                    <BarChart data={chartDataFluxo}>
                         <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} vertical={false}/>
                         <XAxis dataKey="name" stroke={COLORS.text} fontSize={12} tickLine={false} axisLine={false}/>
                         <YAxis stroke={COLORS.text} fontSize={12} tickLine={false} axisLine={false} width={76} tickFormatter={(v: number) => formatAxisBRL(Number(v))}/>
@@ -354,10 +365,11 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                             }}
                             itemStyle={{ color: 'var(--text-main)' }}
                             labelStyle={{ color: 'var(--text-muted)' }}
-                            formatter={(value: number | string) => [brl(value), 'Valor']}
+                            formatter={(value: number | string, name: string) => [brl(value), name === 'entrou' ? 'Entrou' : 'Saiu']}
                         />
-                        <Area type="monotone" dataKey="valor" stroke="var(--primary)" fill="url(#c)" strokeWidth={3} activeDot={{r: 6}} />
-                    </AreaChart>
+                        <Bar dataKey="entrou" fill={COLORS.success} isAnimationActive={false} />
+                        <Bar dataKey="saiu" fill={COLORS.danger} isAnimationActive={false} />
+                    </BarChart>
                 </ResponsiveContainer>
             </div>
         </div>
@@ -426,7 +438,10 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                                 isPaymentDate = false;
                             }
                         } else {
-                            displayDate = new Date(e.effectiveDate).toLocaleDateString('pt-BR');
+                            // Despesa: "paga" segue a regra única (expenseStatus.ts); a data é a do pagamento ou do vencimento.
+                            const debitPaid = isDebitPaid(e, toLocalDay(today));
+                            displayDate = formatDebitDay(debitPaid ? debitPaidDay(e) : toLocalDay(e.dueDate ?? e.effectiveDate));
+                            isPaymentDate = debitPaid;
                         }
 
                         const advanceOS = advanceOwners.get(e.id);
@@ -441,10 +456,10 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                                 </td>
                                 <td className="fin-date">
                                     {displayDate}
-                                    {e.type === 'CREDIT' && isPaymentDate && (
+                                    {isPaymentDate && (
                                         <span className="fin-badge fin-badge--paid"><Icon name="check" size={14} />Pago</span>
                                     )}
-                                    {e.type === 'CREDIT' && !isPaymentDate && (
+                                    {!isPaymentDate && (
                                         <span className="fin-badge fin-badge--pending"><Icon name="relogio" size={14} />Pendente</span>
                                     )}
                                 </td>
@@ -453,17 +468,15 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                                     {advanceOS ? (
                                         <button className="btn-sm" onClick={() => onOpenOS(advanceOS)} aria-label={`Editar na OS #${advanceOS.osNumber}`}><Icon name="editar" size={16} />Editar na OS #{advanceOS.osNumber}</button>
                                     ) : (<>
-                                    {e.type === 'CREDIT' && (
-                                        <OnlineOnlyButton
-                                            busyLabel="Recebendo..." busyKey={e.id}
-                                            className={isPaymentDate ? 'btn-sm fin-pay fin-pay--paid' : 'btn-sm fin-pay'}
-                                            onClick={(ev) => payClick(ev, e.id)}
-                                            aria-pressed={isPaymentDate}
-                                            aria-label={isPaymentDate ? `Pago, clique para desfazer: ${e.description}` : `Marcar como pago: ${e.description}`}
-                                        >
-                                            <Icon name="check" size={16} />{isPaymentDate ? 'Desfazer pagamento' : 'Marcar como pago'}
-                                        </OnlineOnlyButton>
-                                    )}
+                                    <OnlineOnlyButton
+                                        busyLabel={e.type === 'CREDIT' ? 'Recebendo...' : 'Pagando...'} busyKey={e.id}
+                                        className={isPaymentDate ? 'btn-sm fin-pay fin-pay--paid' : 'btn-sm fin-pay'}
+                                        onClick={(ev) => payClick(ev, e.id)}
+                                        aria-pressed={isPaymentDate}
+                                        aria-label={isPaymentDate ? `Pago, clique para desfazer: ${e.description}` : `${e.type === 'CREDIT' ? 'Marcar como pago' : 'Paguei'}: ${e.description}`}
+                                    >
+                                        <Icon name="check" size={16} />{isPaymentDate ? 'Desfazer pagamento' : e.type === 'CREDIT' ? 'Marcar como pago' : 'Paguei'}
+                                    </OnlineOnlyButton>
                                     <OnlineOnlyButton className="btn-sm" onClick={() => onEditEntry(e.id)} aria-label={`Editar: ${e.description}`}><Icon name="editar" size={16} />Editar</OnlineOnlyButton>
                                     {canDeleteEntry && <OnlineOnlyButton className="btn-sm fin-del" onClick={() => onDeleteEntry(e)} aria-label={`Excluir: ${e.description}`}><Icon name="excluir" size={16} />Excluir</OnlineOnlyButton>}
                                     </>)}

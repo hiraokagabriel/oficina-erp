@@ -22,7 +22,14 @@ Desde 2026-11-18 a oficina usa o modo nuvem (versão 0.3.0) com dados reais. Tod
 
 **Recomendação:** opção 2, com a opção 1 como reserva automática se o WebAssembly falhar. Proposta: foto em 1280 px no lado maior, busca de qualidade até ≤ 95 KB, nunca abaixo de ~55% de qualidade (se não couber, reduz para 1024 px), e miniatura de 320 px com cerca de 15 KB. Vale só para fotos novas; as já enviadas ficam como estão. Antes de decidir, um teste com 10 fotos reais de carro em 1280 e 1600 px para o dono ver a diferença lado a lado.
 
-**Estado:** aguardando decisão do dono (opção e tamanho máximo).
+**Estado:** **planejada** (dono, 2026-11-18): opção 2 (MozJPEG via `@jsquash/jpeg`) com a opção 1 como reserva. Ainda não implementada.
+
+**Plano de implementação:**
+1. Teste de qualidade: 10 fotos reais de carro, 1280 e 1600 px abaixo de 100 KB, lado a lado para o dono escolher o tamanho (a confirmar antes do passo 2).
+2. `src/utils/imageCompress.ts`: codificador MozJPEG carregado sob demanda (import dinâmico, só quando há foto para comprimir), busca de qualidade até ≤ 95 KB com piso de ~55% e queda para 1024 px se não couber; miniatura ~15 KB; reserva com o canvas atual se o WebAssembly falhar. Testes Vitest da busca (função pura com codificador injetado).
+3. CSP: acrescentar `'wasm-unsafe-eval'` em `script-src` no `src-tauri/tauri.conf.json` e no `public/_headers` (o `src/utils/csp.test.ts` confere os dois iguais); contornar o bug de build do Vite com workers (issue #19 do jSquash) carregando o `.wasm` como asset.
+4. Conferir no celular (Android e iPhone) e no exe: tempo de compressão por foto e peso final.
+5. Entrega: `npm run deploy:web:real` (celulares) e instalador novo em todos os PCs. Sem migração; vale só para fotos novas.
 
 ## Já levantados (2026-11-18)
 

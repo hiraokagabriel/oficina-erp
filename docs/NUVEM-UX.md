@@ -539,7 +539,7 @@ Os toasts de recusa de `rejectionMessage` ficam como estão. "Servidor" é aceit
 | Tela | Controle |
 |---|---|
 | Financeiro | "Lançamento" (novo), "Receber" (A receber), "Marcar como pago" / "Desmarcar", "Editar" e "Excluir" de lançamento |
-| Kanban (cartão e menu) | Soltar na coluna Finalizado; "Avançar Status" a partir de Aguardando Pagamento; "Voltar Status" a partir de Finalizado; "Restaurar OS"; "Excluir Permanentemente" |
+| Kanban (cartão e menu) | Soltar na coluna Finalizado; "Avançar situação" a partir de Aguardando Pagamento; "Voltar situação" a partir de Finalizado; "Restaurar OS"; "Excluir Permanentemente" |
 | Kanban (arrastar) | Ao arrastar sem internet, a coluna Finalizado mostra a faixa "Precisa de internet" com `cadeado` e recusa a soltura (o cartão volta). Toast com o motivo acima |
 | Processos | No select de status, a opção "Finalizado" fica desabilitada com o texto "Finalizado (precisa de internet)" |
 | Janela da OS | Bloco "Pagamento": "Adicionar adiantamento" e remover adiantamento travados, com `.cfg-warn` "Sem internet: adiantamentos só podem ser lançados com internet." Em OS finalizada, preços e itens também travam ("Sem internet: OS finalizada só pode ser mudada com internet, porque mexe no caixa."). O "Salvar OS" continua para o resto |
@@ -615,7 +615,7 @@ Legenda: **R** = Recepção, **M** = Mecânico. O Dono vê tudo como hoje.
   - "Documentos...": para M vira "Imprimir vistoria" (só o checklist; a OS impressa tem preços).
   - "Mostrar ao cliente": some para M (mostra valores).
   - "Enviar WhatsApp": todos (a mensagem não tem valor).
-  - "Avançar Status" em Aguardando Pagamento e "Voltar Status" em Finalizado: some para M (é finalizar ou reabrir).
+  - "Avançar situação" em Aguardando Pagamento e "Voltar situação" em Finalizado: some para M (é finalizar ou reabrir).
   - "Arquivar OS" e "Restaurar OS": some para M.
   - "Excluir Permanentemente": some para M.
 - Arrastar para a coluna Finalizado (M): ao começar a arrastar, a coluna mostra "Só Recepção ou Dono finaliza (envolve pagamento)" com `cadeado`. Se soltar, o cartão volta e aparece o toast com o mesmo texto. As outras colunas funcionam.

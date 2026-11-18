@@ -1,10 +1,10 @@
 # NUVEM-ESTADO: o que foi feito e o que falta (Iniciativa E)
 
-Atualizado em 2026-11-17. Branch `feat/nuvem-login` (sem push). Plano: `docs/NUVEM.md`; especificação: `docs/NUVEM-SPEC.md`; telas e textos: `docs/NUVEM-UX.md`; spike: `docs/NUVEM-SPIKE.md`; PR 8: `docs/NUVEM-PR8.md`.
+Atualizado em 2026-11-17. Branch `feat/nuvem-login` (publicada em `origin`). Plano: `docs/NUVEM.md`; especificação: `docs/NUVEM-SPEC.md`; telas e textos: `docs/NUVEM-UX.md`; spike: `docs/NUVEM-SPIKE.md`; PR 8: `docs/NUVEM-PR8.md`.
 
 ## Ponto de partida da próxima sessão
 
-**Retomar pelo PR 8, rodada R1** (adaptadores) e depois R3 (PWA), conforme `docs/NUVEM-PR8.md`. A R2 (CSP e cabeçalhos) está feita, mas falta o teste manual do exe (pendência 8). A revisão dos PRs 6 e 7 está concluída: três rodadas do `revisor`, com as correções feitas e verificadas no navegador contra o projeto de teste. Decisões D1 a D3 do PR 8 tomadas; D4 (nome do projeto no Pages) é do dono.
+**PR 8 implementado (R1 a R7)**, revisado pelo `revisor` e pelo `ux-revisor`, com as correções feitas. Falta só o deploy (R8), que depende do dono: nome do projeto no Pages (D4), conta Cloudflare e os passos manuais de `docs/NUVEM-PR8.md`. Depois: teste em celular real e teste manual do exe com a CSP nova (pendência 8). **Próximo PR a implementar: 9** (importação e backup). A revisão dos PRs 6 e 7 está concluída.
 
 ## Projetos Supabase
 
@@ -31,7 +31,10 @@ Atualizado em 2026-11-17. Branch `feat/nuvem-login` (sem push). Plano: `docs/NUV
 | revisão 6/7 | Achados do `revisor` corrigidos: hash do pedido em `money_ops` (migração `20261117120000_money_op_hash.sql`, `op_id` reusado com outro corpo = 409), `info` no replay, `known` obrigatório, custos fora das respostas para quem não é Dono, `checkOSShape`, data e fuso da oficina no servidor, "Tentar de novo" repete o mesmo `op_id` e clique novo gera outro; fotos: fila só cancelada ao salvar a OS, expurgo de pessoa sem perder fotos nem alterações, aviso ao Sair/Trocar com fotos pendentes, "fotos presas" em Config > Cópias; contraste do parcelamento; botão de próximo passo do Kanban cinza sem internet | pgTAP 364 asserções; `test-functions` 82 ok; navegador no teste (resposta perdida sem lançamento em dobro, fotos, 800 px, temas) |
 | 8 R2 | CSP do Tauri (`devCsp: null`, `dangerousDisableAssetCspModification: ["style-src"]`), `public/_headers`, tema em `public/theme-init.js`, `csp.test.ts` | `cargo test` 52 ok; `tauri build --debug` ok; exe **não aberto** (pendência 8) |
 
-Contagem atual: 115 arquivos, 1706 testes Vitest (local e `TZ=UTC`); `tsc` do app e das funções limpos; `dist/` do modo arquivo sem supabase-js/IndexedDB. O modo nuvem só liga com `VITE_CLOUD=1`; o modo arquivo continua o padrão.
+| 8 R1, R3 | `utils/platform.ts` (`isTauri`), `utils/download.ts`, CSV no navegador; PWA só com `VITE_CLOUD=1` (`cloudPwa()` no `vite.config.ts`, `scripts/pwa/sw.template.js`, `src/pwa/precache.ts`), `npm run build:web` | SW testado com fetch/caches falsos; `vite preview` abre offline; modo arquivo sem `sw.js` nem manifest |
+| 8 R4 a R7 | Celular (nuvem, < 800 px, `data-layout="phone"`): barra de baixo e "Mais", "Disponível no computador", Kanban por chips com busca por placa, ficha da OS em tela cheia com Pagamento só leitura, Agenda por dia, Clientes lista/detalhe com Ligar; `styles-mobile.css` só no boot da nuvem | navegador 360/390/800 px nos dois temas; `revisor` e `ux-revisor` |
+
+Contagem atual: 124 arquivos, 1777 testes Vitest (local e `TZ=UTC`); `tsc` do app e das funções limpos; `dist/` do modo arquivo sem supabase-js/IndexedDB. O modo nuvem só liga com `VITE_CLOUD=1`; o modo arquivo continua o padrão.
 
 ## Pendências conhecidas (antes do piloto)
 
@@ -48,7 +51,7 @@ Contagem atual: 115 arquivos, 1706 testes Vitest (local e `TZ=UTC`); `tsc` do ap
 
 | PR | Escopo | Observação |
 |---|---|---|
-| 8 | Web/PWA e celular: adaptadores, manifest, CSP (`tauri.conf.json` e `public/_headers`), rodada 8 da UX (barra de baixo, "Disponível no computador", Kanban por chips, OS em tela cheia, câmera), deploy no Cloudflare Pages | depois configurar Site URL e Redirect URLs no Auth |
+| 8 R8 | Deploy no Cloudflare Pages (passos manuais em `docs/NUVEM-PR8.md`); depois Site URL e Redirect URLs no Auth do teste; conferir `curl -I https://<nome>.pages.dev/index.html` (308) e o `_headers` aplicado | **dono**: D4 e conta Cloudflare |
 | 9 | Importação e backup: "Enviar banco para a nuvem" (`parseDatabase` → `migrate` → `prepareForCloud` → `import_rows` → `import_finish` com conferência de totais), `save_daily_export` (Rust, `cargo test`), exportação diária e aviso em Config | só com banco sintético até a virada |
 | 10 | Revisão e piloto: banco sintético, 2 aparelhos, offline e reconexão, papéis | `revisor`, `verificador`, `ux-revisor` |
 | 11 | Virada: aplicar migrações e funções no projeto REAL, backup `pre-nuvem`, todos os PCs no mesmo dia | **exige ok do dono** (dados reais) |

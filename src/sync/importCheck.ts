@@ -147,13 +147,20 @@ export function checkImportable(prepared: Collections): ImportProblem[] {
 
 // ---------- expectedTotals / compareTotals ----------
 
-/** Mesma forma do retorno de `import_finish` (sem `state`). */
+/** Mesma forma do retorno de `import_finish`. `state` só vem do servidor (o esperado do arquivo não tem). */
 export interface ImportTotals {
   counts: Record<CloudTable, number>;
   ledgerSignedCents: number;
   osTotalCents: number;
   paidEntries: number;
   advancesCents: number;
+  state?: 'vazio' | 'importando' | 'concluido';
+}
+
+/** Totais de uma oficina sem nenhuma linha ("Começar sem dados"). */
+export function emptyTotals(): ImportTotals {
+  const counts = Object.fromEntries(IMPORT_TABLES.map(t => [t, 0])) as Record<CloudTable, number>;
+  return { counts, ledgerSignedCents: 0, osTotalCents: 0, paidEntries: 0, advancesCents: 0 };
 }
 
 const cents = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);

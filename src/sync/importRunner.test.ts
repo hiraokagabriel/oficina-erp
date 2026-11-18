@@ -7,6 +7,7 @@ import { SEALED_SCHEMA_VERSION, createImportRunner, inspectFile } from './import
 import type { ImportDeps, SaveOutcome } from './importRunner';
 import type { PhotoFileInfo } from './importCheck';
 import { fixture } from './testKit';
+import { emptyTotals } from './importCheck';
 import { pullAllRows } from './fullPull';
 import type { PulledRow } from './syncEngine';
 import type { CloudTable } from './types';
@@ -42,7 +43,7 @@ function setup(db: DatabaseSchema = fixture(5), inv: PhotoFileInfo[] = []) {
     photoInventory: async () => inv,
     parseDatabase: c => parseDatabase(c, SETTINGS),
     importRows: (ws, rows) => server.importRows(ws, rows),
-    importFinish: (ws, c) => server.importFinish(ws, c),
+    importFinish: (ws, c, e) => server.importFinish(ws, c, e),
     importReset: ws => server.importReset(ws),
     transport: server.transport(),
     listPhotoObjects: async osId => listed[osId] ?? [],
@@ -211,7 +212,7 @@ describe('importRunner: conferências', () => {
     expect(r.report.ok).toBe(false);
     expect(r.report.differences.length).toBeGreaterThan(0);
     // sem sessão pronta, não há como concluir; forjar uma sessão também é recusado
-    const forged = await rn.commit({ ready: true, report: r.report, db: fixture(5), revision: 'r' });
+    const forged = await rn.commit({ ready: true, report: r.report, db: fixture(5), revision: 'r', expected: emptyTotals() });
     expect(forged.status).toBe('recusado');
     expect(s.server.finishCalls).toEqual([false]);
     expect(s.disk.saved).toEqual([]);
@@ -294,6 +295,114 @@ describe('importRunner: conferências', () => {
     expect(await rn.reset()).toEqual({ ok: true });
     expect(s.server.count('ledger')).toBe(0);
     expect(s.server.state).toBe('vazio');
+  });
+});
+
+describe('importRunner: revisão do PR 9', () => {
+  it('A1: commit manda os totais conferidos (expected) ao servidor', async () => {
+    const s = setup();
+    const seen: unknown[] = [];
+    s.deps.importFinish = (ws, c, e) => { seen.push(e); return s.server.importFinish(ws, c, e); };
+    const rn = s.runner();
+    const r = await rn.run();
+    if (r.status !== 'pronto') throw new Error('esperava pronto');
+    expect(r.session.expected.counts.work_orders).toBe(3);
+    await rn.commit(r.session);
+    expect(seen[0]).toBeUndefined();
+    expect(seen[1]).toEqual(r.session.expected);
+  });
+
+  it('A1: servidor recusa totais diferentes (outro PC mexeu): não lacra e manda reconferir', async () => {
+    const s = setup();
+    const rn = s.runner();
+    const r = await rn.run();
+    if (r.status !== 'pronto') throw new Error('esperava pronto');
+    await s.server.importRows(WS, [{ table: 'clients', id: 'extra', data: { name: 'Novo' } }]);
+    const c = await rn.commit(r.session);
+    expect(c.status).toBe('totais_mudaram');
+    if (c.status === 'totais_mudaram') expect(c.message).toBe('Os dados na internet mudaram (outro computador mexeu). Confira de novo antes de concluir.');
+    expect(s.server.state).toBe('importando');
+    expect(s.disk.saved).toEqual([]);
+  });
+
+  it('A2: resposta do commit perdida mas servidor concluiu com os mesmos totais: lacra', async () => {
+    const s = setup();
+    const rn = s.runner();
+    const r = await rn.run();
+    if (r.status !== 'pronto') throw new Error('esperava pronto');
+    s.deps.importFinish = async (ws, c, e) => {
+      const out = await s.server.importFinish(ws, c, e);
+      if (c) throw new Error('Failed to fetch');
+      return out;
+    };
+    const c = await rn.commit(r.session);
+    expect(c.status).toBe('concluido');
+    expect(s.disk.saved).toHaveLength(1);
+    expect(s.disk.saved[0].expected).toBe('r');
+  });
+
+  it('A2: erro no commit e servidor ainda importando: erro, sem lacre', async () => {
+    const s = setup();
+    const rn = s.runner();
+    const r = await rn.run();
+    if (r.status !== 'pronto') throw new Error('esperava pronto');
+    s.deps.importFinish = async (ws, c, e) => {
+      if (c) throw new Error('Failed to fetch');
+      return s.server.importFinish(ws, c, e);
+    };
+    const c = await rn.commit(r.session);
+    expect(c.status).toBe('erro');
+    expect(s.disk.saved).toEqual([]);
+  });
+
+  it('A2: servidor concluído mas com totais diferentes do expected: erro, sem lacre', async () => {
+    const s = setup();
+    const rn = s.runner();
+    const r = await rn.run();
+    if (r.status !== 'pronto') throw new Error('esperava pronto');
+    s.deps.importFinish = async (ws, c, e) => {
+      if (c) { s.server.state = 'concluido'; throw new Error('Failed to fetch'); }
+      return { ...(await s.server.importFinish(ws, c, e)), advancesCents: 999 };
+    };
+    const c = await rn.commit(r.session);
+    expect(c.status).toBe('erro');
+    expect(s.disk.saved).toEqual([]);
+  });
+
+  it('M1: arquivo sem meta/revision é recusado antes de enviar', async () => {
+    const s = setup();
+    s.deps.readMeta = async () => ({ status: 'no_meta', revision: null });
+    const r = await s.runner().run();
+    expect(r).toMatchObject({ status: 'recusado', reason: 'ilegivel' });
+    if (r.status === 'recusado') expect(r.message).toBe('Abra o banco uma vez no OficinaPro novo e feche, depois tente de novo.');
+    expect(s.server.rowsCalls).toBe(0);
+  });
+
+  it('B2: o arquivo lacrado não carrega segredos', async () => {
+    const db = fixture(5);
+    Object.assign(db.settings, { googleDriveToken: 'tok-secreto', googleApiKey: 'chave-secreta' });
+    const s = setup(db);
+    const rn = s.runner();
+    const r = await rn.run();
+    if (r.status !== 'pronto') throw new Error('esperava pronto');
+    await rn.commit(r.session);
+    expect(s.disk.saved[0].content).not.toContain('tok-secreto');
+    expect(s.disk.saved[0].content).not.toContain('chave-secreta');
+  });
+
+  it('emptyTotals: tudo zero em todas as tabelas', () => {
+    const z = emptyTotals();
+    expect(Object.values(z.counts).every(n => n === 0)).toBe(true);
+    expect(Object.keys(z.counts)).toHaveLength(13);
+    expect(z).toMatchObject({ ledgerSignedCents: 0, osTotalCents: 0, paidEntries: 0, advancesCents: 0 });
+  });
+
+  it('fake: começar sem dados (zerado) é recusado com linhas no servidor e passa sem linhas', async () => {
+    const s = setup();
+    await s.server.importRows(WS, [{ table: 'clients', id: 'c', data: {} }]);
+    await expect(s.server.importFinish(WS, true, emptyTotals())).rejects.toThrow(/totais_divergentes/);
+    s.server.drop('clients', 'c');
+    expect((await s.server.importFinish(WS, true, emptyTotals())).state).toBe('concluido');
   });
 });
 

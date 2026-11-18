@@ -117,6 +117,8 @@ export async function runDailyExport(deps: DailyExportDeps): Promise<DailyExport
     }
   }
 
+  // Cópia sem alguma OS não conta como "cópia do dia": o aviso de cópia atrasada continua valendo.
+  if (skippedOrders.length > 0) return out;
   try {
     await deps.markExported(at);
   } catch (e) {

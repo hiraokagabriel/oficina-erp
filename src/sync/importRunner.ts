@@ -1,6 +1,7 @@
 import type { DatabaseMeta, DatabaseSchema } from '../types';
 import { CURRENT_SCHEMA_VERSION, migrate } from '../utils/migrations';
 import { Money } from '../utils/helpers';
+import { stripDbSecrets } from '../utils/secrets';
 import { pullAllRows } from './fullPull';
 import {
   IMPORT_TABLES, buildBatches, checkImportable, compareTotals, expectedTotals, groupByTable, photoManifest, roundTripDiff,
@@ -45,8 +46,8 @@ export interface ImportDeps {
   parseDatabase(content: string): DatabaseSchema;
   /** RPC `import_rows`. Falha de tempo (57014) deve vir como `TransportError` de tipo `timeout`. */
   importRows(workshopId: string, rows: CloudRow[]): Promise<void>;
-  /** RPC `import_finish`. */
-  importFinish(workshopId: string, commit: boolean): Promise<ImportTotals>;
+  /** RPC `import_finish`. Com `commit`, o servidor só conclui se `expected` for igual aos totais dele (erro `totais_divergentes`). */
+  importFinish(workshopId: string, commit: boolean, expected?: ImportTotals | null): Promise<ImportTotals>;
   /** RPC `import_reset`. */
   importReset(workshopId: string): Promise<void>;
   transport: Pick<Transport, 'pull'>;
@@ -107,6 +108,8 @@ export interface ImportSession {
   /** Banco migrado (v5), base do arquivo lacrado. */
   readonly db: DatabaseSchema;
   readonly revision: string | null;
+  /** Totais do arquivo que foram conferidos; o commit manda ao servidor, que recusa se mudaram. */
+  readonly expected: ImportTotals;
 }
 
 export type RefusedReason = 'lacrado' | 'versao_futura' | 'ilegivel';
@@ -126,12 +129,19 @@ export type CommitResult =
   | { status: 'concluido_sem_lacre'; message: string }
   | { status: 'recusado'; message: string }
   | { status: 'arquivo_mudou'; message: string }
+  /** O servidor recusou: os dados na internet mudaram depois da conferência. Voltar a conferir. */
+  | { status: 'totais_mudaram'; message: string }
   | { status: 'erro'; message: string };
 
 // ---------- peças puras ----------
 
 /** Texto de um erro para a tela. */
 const errText = (e: unknown): string => (e instanceof Error && e.message ? e.message : String(e));
+
+export const TOTALS_CHANGED_MESSAGE = 'Os dados na internet mudaram (outro computador mexeu). Confira de novo antes de concluir.';
+
+/** Erro `totais_divergentes` do `import_finish(true)`. */
+export const isTotalsMismatch = (e: unknown): boolean => /totais_divergentes/i.test(errText(e));
 
 const isTimeout = (e: unknown): boolean =>
   e instanceof TransportError && (e.kind === 'timeout' || e.code === '57014');
@@ -170,7 +180,7 @@ export function buildSealedContent(
     savedBy: 'envio para a nuvem',
     cloud: { workshopId: ids.workshopId, at: ids.at },
   };
-  return JSON.stringify({ ...db, meta });
+  return JSON.stringify({ ...stripDbSecrets(db), meta }); // sem token/API key, como o salvamento normal
 }
 
 const LABEL: Record<CloudTable, string> = {
@@ -292,6 +302,10 @@ export function createImportRunner(deps: ImportDeps) {
       if (meta.status === 'not_found' || meta.status === 'unreadable') {
         return { status: 'recusado', reason: 'ilegivel', message: 'Não encontrei o arquivo do banco neste caminho.' };
       }
+      // Sem `meta`/revision não dá para saber se o arquivo muda durante o envio: recusa antes de enviar.
+      if (meta.status === 'no_meta' || meta.revision === null) {
+        return { status: 'recusado', reason: 'ilegivel', message: 'Abra o banco uma vez no OficinaPro novo e feche, depois tente de novo.' };
+      }
       const startRevision = meta.revision;
       const content = await deps.readDatabase(deps.dbPath);
       const seen = inspectFile(content);
@@ -385,7 +399,7 @@ export function createImportRunner(deps: ImportDeps) {
       if (photos.failed.length > 0) blockers.push(`${photos.failed.length} foto(s) não subiram. Envie de novo.`);
       const report = makeReport({ ok: blockers.length === 0, roundTrip: diffs, skippedOrders: back.skippedOrders, blockers });
       if (!report.ok) return { status: 'divergente', report, message: 'A conferência encontrou diferenças. Não conclua.' };
-      return { status: 'pronto', report, session: { ready: true, report, db, revision: startRevision } };
+      return { status: 'pronto', report, session: { ready: true, report, db, revision: startRevision, expected } };
     } catch (e) {
       return { status: 'erro', phase, message: errText(e) };
     }
@@ -399,7 +413,19 @@ export function createImportRunner(deps: ImportDeps) {
       if (now.revision !== session.revision) {
         return { status: 'arquivo_mudou', message: 'O arquivo do banco foi alterado depois da conferência. Não conclua: apague o que foi enviado e comece de novo.' };
       }
-      await deps.importFinish(deps.workshopId, true);
+      try {
+        await deps.importFinish(deps.workshopId, true, session.expected);
+      } catch (e) {
+        if (isTotalsMismatch(e)) return { status: 'totais_mudaram', message: TOTALS_CHANGED_MESSAGE };
+        // A resposta pode ter se perdido com o servidor já concluído: relê o estado e só segue se os totais forem os conferidos.
+        let again: ImportTotals;
+        try {
+          again = await deps.importFinish(deps.workshopId, false);
+        } catch {
+          return { status: 'erro', message: errText(e) };
+        }
+        if (again.state !== 'concluido' || compareTotals(session.expected, again).length > 0) return { status: 'erro', message: errText(e) };
+      }
     } catch (e) {
       return { status: 'erro', message: errText(e) };
     }

@@ -124,8 +124,8 @@ describe('runDailyExport', () => {
     expect(saved).toEqual([]);
   });
 
-  it('OS que não casa sai da cópia e vem listada', async () => {
-    const { deps, saved } = await seeded();
+  it('OS que não casa sai da cópia e vem listada, sem marcar a cópia do dia', async () => {
+    const { deps, saved, marks } = await seeded();
     const orig = deps.transport.pull;
     deps.transport = { pull: async (ws, t, q) => {
       const rows = await orig(ws, t, q);
@@ -134,5 +134,6 @@ describe('runDailyExport', () => {
     const r = await runDailyExport(deps);
     expect(r).toMatchObject({ status: 'ok', skippedOrders: ['W1'] });
     expect(parseDatabase(saved[0], SETTINGS).workOrders.map(o => o.id)).not.toContain('W1');
+    expect(marks).toEqual([]); // cópia incompleta não conta como "cópia do dia"
   });
 });

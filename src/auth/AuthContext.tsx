@@ -249,7 +249,8 @@ export const AuthProvider: React.FC<Props> = ({ url, children }) => {
 
   // ---------- membership (papel e oficina) ----------
   const loadMembership = useCallback(async (uid: string, mode: 'first' | 'refresh'): Promise<void> => {
-    const r = await fetchMembership(supabase, uid);
+    const known = membershipOwner.current === uid ? membershipRef.current : null;
+    const r = await fetchMembership(supabase, uid, known ?? readCachedMembership(uid));
     if (sessionRef.current?.user.id !== uid) return;
     if (r.kind === 'ok') {
       writeCachedMembership(uid, r.membership);

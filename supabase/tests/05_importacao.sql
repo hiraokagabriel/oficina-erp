@@ -23,7 +23,8 @@ select throws_ok($$select public.import_reset('aaaaaaaa-0000-0000-0000-000000000
 select throws_ok($$select public.import_reset('cccccccc-0000-0000-0000-000000000003')$$, '42501', 'import_bloqueado', 'import_reset recusado com import_state vazio');
 
 -- ===== oficina nova: fecha sobre zero linhas =====
-create temp table z1 as select public.import_finish('dddddddd-0000-0000-0000-000000000004', true) as j;
+create temp table z1 as select public.import_finish('dddddddd-0000-0000-0000-000000000004', true,
+  '{"counts":{"work_orders":0,"work_order_finance":0,"work_order_costs":0,"ledger":0,"clients":0,"catalog_parts":0,"catalog_services":0,"catalog_prices":0,"catalog_costs":0,"technicians":0,"appointments":0,"audit_log":0,"settings":0},"ledgerSignedCents":0,"osTotalCents":0,"paidEntries":0,"advancesCents":0}') as j;
 grant all on z1 to public;
 select is((select j ->> 'state' from z1), 'concluido', 'oficina nova sem dados legados fecha sobre zero linhas');
 select is((select (j ->> 'ledgerSignedCents')::numeric from z1), 0::numeric, 'totais zerados');
@@ -32,7 +33,7 @@ create temp table z2 as select public.sync_push('dddddddd-0000-0000-0000-0000000
   '[{"key":"z","rows":[{"table":"clients","id":"z1","version":0,"data":{"name":"liberado"}}]}]'::jsonb) as j;
 grant all on z2 to public;
 select is((select j -> 0 ->> 'status' from z2), 'ok', 'depois de concluir, o sync_push funciona');
-select throws_ok($$select public.import_finish('dddddddd-0000-0000-0000-000000000004', true)$$, '42501', 'import_bloqueado', 'commit repetido recusado');
+select throws_ok($$select public.import_finish('dddddddd-0000-0000-0000-000000000004', true, '{}')$$, '42501', 'import_bloqueado', 'commit repetido recusado');
 
 -- ===== importação em lote (oficina C) =====
 select throws_ok($$select public.import_rows('cccccccc-0000-0000-0000-000000000003', '[{"table":"x","id":"1","data":{}}]')$$, '22023', 'linha_invalida', 'import: tabela inválida');
@@ -85,7 +86,8 @@ select throws_ok($$select public.import_reset('cccccccc-0000-0000-0000-000000000
 select is((select count(*) from public.clients where workshop_id = 'cccccccc-0000-0000-0000-000000000003'), 2::bigint, 'nada foi apagado');
 
 -- ===== concluir =====
-select is((select public.import_finish('cccccccc-0000-0000-0000-000000000003', true) ->> 'state'), 'concluido', 'import_finish(commit) conclui');
+select is((select public.import_finish('cccccccc-0000-0000-0000-000000000003', true,
+  public.import_finish('cccccccc-0000-0000-0000-000000000003') - 'state') ->> 'state'), 'concluido', 'import_finish(commit) conclui');
 select throws_ok($$select public.import_rows('cccccccc-0000-0000-0000-000000000003', '[]')$$, '42501', 'import_bloqueado', 'depois de concluir, import_rows é recusado');
 select throws_ok($$select public.import_reset('cccccccc-0000-0000-0000-000000000003')$$, '42501', 'import_bloqueado', 'depois de concluir, import_reset é recusado');
 

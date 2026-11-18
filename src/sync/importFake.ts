@@ -1,5 +1,5 @@
 import type { ImportTotals } from './importCheck';
-import { IMPORT_TABLES } from './importCheck';
+import { IMPORT_TABLES, compareTotals } from './importCheck';
 import type { PullRequest, PulledRow, Transport } from './syncEngine';
 import { TransportError } from './syncEngine';
 import type { CloudRow, CloudTable } from './types';
@@ -60,11 +60,10 @@ export class FakeImportServer {
     this.accepted.push(rows.length);
   }
 
-  async importFinish(_ws: string, commit: boolean): Promise<ImportTotals> {
+  async importFinish(_ws: string, commit: boolean, expected?: ImportTotals | null): Promise<ImportTotals> {
     this.finishCalls.push(commit);
     if (commit) {
       if (this.state !== 'vazio' && this.state !== 'importando') throw new TransportError('import_bloqueado', 'auth', '42501');
-      this.state = 'concluido';
     } else {
       this.beforeTotals?.();
     }
@@ -84,7 +83,14 @@ export class FakeImportServer {
       osTotalCents += num(data.total);
       if (Array.isArray(data.advances)) for (const a of data.advances) advancesCents += num(isObj(a) ? a.amount : 0);
     }
-    return { counts, ledgerSignedCents, osTotalCents, paidEntries, advancesCents };
+    const totals: ImportTotals = { counts, ledgerSignedCents, osTotalCents, paidEntries, advancesCents };
+    if (commit) {
+      // Imita o SQL: commit exige `expected` e IGUAL aos totais calculados; senão recusa sem mudar o estado.
+      if (!expected) throw new TransportError('expected_obrigatorio', 'server', '22023');
+      if (compareTotals(expected, totals).length > 0) throw new TransportError('totais_divergentes', 'server', '22023');
+      this.state = 'concluido';
+    }
+    return { ...totals, state: this.state };
   }
 
   async importReset(_ws: string): Promise<void> {

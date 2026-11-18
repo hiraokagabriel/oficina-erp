@@ -5,7 +5,7 @@ import { createTauriTransport } from '../services/photoStore';
 import { PHOTO_BUCKET, createPhotoUploader } from '../sync/photoTransport';
 import { supabaseStorageApi } from '../sync/photoRuntime';
 import { createSupabaseTransport, toTransportError } from '../sync/supabaseRepo';
-import { IMPORT_TABLES } from '../sync/importCheck';
+import { IMPORT_TABLES, emptyTotals } from '../sync/importCheck';
 import type { ImportTotals, PhotoFileInfo } from '../sync/importCheck';
 import type { DiskMetaInfo, ImportDeps, ImportProgress, SaveOutcome } from '../sync/importRunner';
 import type { CloudTable } from '../sync/types';
@@ -33,6 +33,7 @@ export function toImportTotals(data: unknown): ImportTotals {
   return {
     counts, ledgerSignedCents: num(o.ledgerSignedCents), osTotalCents: num(o.osTotalCents),
     paidEntries: num(o.paidEntries), advancesCents: num(o.advancesCents),
+    state: o.state === 'vazio' || o.state === 'importando' || o.state === 'concluido' ? o.state : undefined,
   };
 }
 
@@ -75,7 +76,9 @@ export function createImportDeps(o: ImportWiringOptions): ImportDeps {
     photoInventory: dbPath => invoke<PhotoFileInfo[]>('photo_inventory', { dbPath }),
     parseDatabase: content => parseDatabase(content, DEFAULT_SETTINGS),
     async importRows(ws, rows) { await rpc('import_rows', { ws, rows }); },
-    async importFinish(ws, commit) { return toImportTotals(await rpc('import_finish', { ws, p_commit: commit })); },
+    async importFinish(ws, commit, expected) {
+      return toImportTotals(await rpc('import_finish', { ws, p_commit: commit, p_expected: commit ? expected ?? null : null }));
+    },
     async importReset(ws) { await rpc('import_reset', { ws }); },
     transport: createSupabaseTransport(supabase),
     async listPhotoObjects(osId) {
@@ -99,7 +102,8 @@ export function createImportDeps(o: ImportWiringOptions): ImportDeps {
 export async function finishWithoutData(supabase: SupabaseClient, workshopId: string): Promise<void> {
   let res;
   try {
-    res = await supabase.rpc('import_finish', { ws: workshopId, p_commit: true });
+    // Manda totais zerados: se outro PC já enviou linhas, o servidor recusa (`totais_divergentes`).
+    res = await supabase.rpc('import_finish', { ws: workshopId, p_commit: true, p_expected: emptyTotals() });
   } catch (e) {
     throw toTransportError(e);
   }

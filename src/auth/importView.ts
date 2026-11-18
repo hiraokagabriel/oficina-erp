@@ -50,6 +50,7 @@ export function problemLines(problems: readonly ImportProblem[]): { lines: strin
 /** Frase para erros do servidor/rede durante a importação. */
 export function describeImportError(raw: string): string {
   const m = raw.toLowerCase();
+  if (/totais_divergentes/.test(m)) return 'Os dados na internet mudaram (outro computador mexeu). Confira de novo antes de concluir.';
   if (/somente_dono/.test(m)) return 'Só o Dono pode enviar o banco para a internet.';
   if (/oficina_em_uso/.test(m)) return 'Outra pessoa já está usando esta oficina na internet. Peça para ela sair e tente de novo.';
   if (/import_bloqueado/.test(m)) return 'Esta oficina não aceita mais envio de dados. Se achar que é engano, chame o suporte.';

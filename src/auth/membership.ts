@@ -26,19 +26,45 @@ interface Row { workshop_id: string; role: string; display_name: string | null; 
 
 const isRole = (r: string): r is Role => r === 'dono' || r === 'recepcao' || r === 'mecanico';
 
-/** Valor desconhecido ou ausente vira `concluido`: uma leitura falha nunca pode trancar o app. */
+const isImportState = (v: unknown): v is ImportState => v === 'vazio' || v === 'importando' || v === 'concluido';
+
+/**
+ * Estado do CACHE local. Cache antigo, gravado por uma versão do app sem `importState`, vem de uma oficina que já abria
+ * normalmente, então ausente vira `concluido` (escolha documentada: não trancar quem já usava). Só vale para o cache;
+ * a leitura do servidor NUNCA cai aqui (ver `parseWorkshopRow`).
+ */
 export function toImportState(v: unknown): ImportState {
-  return v === 'vazio' || v === 'importando' ? v : 'concluido';
+  return isImportState(v) ? v : 'concluido';
 }
 
-/** Lê `name`, `import_state` e `last_export_at` da linha de `workshops`. Puro (testado). */
-export function parseWorkshopRow(data: unknown): { name: string; importState: ImportState; lastExportAt: string | null } {
-  const o = typeof data === 'object' && data !== null ? data as Record<string, unknown> : {};
+interface WorkshopInfo { name: string; importState: ImportState; lastExportAt: string | null }
+
+/**
+ * Lê `name`, `import_state` e `last_export_at` da linha de `workshops` vinda do servidor. Puro (testado).
+ * Linha ausente ou `import_state` inválido = `null`: leitura falha não pode virar `concluido` (fail-open abriria o app
+ * antes da importação).
+ */
+export function parseWorkshopRow(data: unknown): WorkshopInfo | null {
+  if (typeof data !== 'object' || data === null) return null;
+  const o = data as Record<string, unknown>;
+  if (!isImportState(o.import_state)) return null;
   return {
     name: typeof o.name === 'string' && o.name !== '' ? o.name : 'Oficina',
-    importState: toImportState(o.import_state),
+    importState: o.import_state,
     lastExportAt: typeof o.last_export_at === 'string' && o.last_export_at !== '' ? o.last_export_at : null,
   };
+}
+
+/**
+ * Junta a leitura de `workshops` com o que já se sabia (membership em memória ou cache da MESMA oficina).
+ * Leitura ruim: mantém o estado anterior; sem anterior, `null` (= sem conexão). Puro (testado).
+ */
+export function resolveWorkshop(workshopId: string, read: WorkshopInfo | null, previous: MembershipInfo | null): WorkshopInfo | null {
+  if (read) return read;
+  if (previous && previous.workshopId === workshopId) {
+    return { name: previous.workshopName, importState: previous.importState, lastExportAt: previous.lastExportAt };
+  }
+  return null;
 }
 
 /** Escolhe a membership ativa mais antiga. Puro (testado). */
@@ -47,13 +73,14 @@ export function pickActiveMembership(rows: readonly Row[]): Row | null {
   return ok[0] ?? null;
 }
 
-export async function fetchMembership(sb: SupabaseClient, userId: string): Promise<MembershipResult> {
+export async function fetchMembership(sb: SupabaseClient, userId: string, previous: MembershipInfo | null = null): Promise<MembershipResult> {
   const { data, error } = await sb.from('memberships').select('workshop_id, role, display_name, active, invited_at').eq('user_id', userId);
   if (error) return { kind: 'unreachable' };
   const row = pickActiveMembership((data ?? []) as Row[]);
   if (!row) return { kind: 'none' };
   const w = await sb.from('workshops').select('name, import_state, last_export_at').eq('id', row.workshop_id).maybeSingle();
-  const ws = parseWorkshopRow(w.error ? null : w.data);
+  const ws = resolveWorkshop(row.workshop_id, w.error ? null : parseWorkshopRow(w.data), previous);
+  if (!ws) return { kind: 'unreachable' };
   return {
     kind: 'ok',
     membership: {

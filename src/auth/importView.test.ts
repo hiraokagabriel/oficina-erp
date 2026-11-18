@@ -33,6 +33,7 @@ describe('importView', () => {
     expect(r.lines[0]).toContain('c0');
   });
   it('erros viram frases simples', () => {
+    expect(describeImportError('totais_divergentes')).toMatch(/mudaram/);
     expect(describeImportError('somente_dono')).toMatch(/Dono/);
     expect(describeImportError('oficina_em_uso')).toMatch(/usando/);
     expect(describeImportError('import_bloqueado')).toMatch(/não aceita/);

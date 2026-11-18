@@ -1,6 +1,16 @@
 # NUVEM-ESTADO: o que foi feito e o que falta (Iniciativa E)
 
-Atualizado em 2026-11-18. Branch `feat/nuvem-login` (publicada em `origin`). Plano: `docs/NUVEM.md`; especificação: `docs/NUVEM-SPEC.md`; telas e textos: `docs/NUVEM-UX.md`; spike: `docs/NUVEM-SPIKE.md`; PR 8: `docs/NUVEM-PR8.md`.
+Atualizado em 2026-11-18 (virada feita). Branch `feat/nuvem-login` (publicada em `origin`). Plano: `docs/NUVEM.md`; especificação: `docs/NUVEM-SPEC.md`; telas e textos: `docs/NUVEM-UX.md`; spike: `docs/NUVEM-SPIKE.md`; PR 8: `docs/NUVEM-PR8.md`.
+
+## Virada feita em 2026-11-18
+
+A oficina trabalha na nuvem desde 2026-11-18 (versão 0.3.0), instalada em todos os aparelhos. Projeto real `stblagzkkffbjuzltfrt`: 7 migrações aplicadas por `npx supabase db push --remote` e conferidas (funções de `postgres`, RLS em todas as tabelas, Realtime com 13 tabelas, broadcast, bucket `fotos` privado JPEG 3 MB, sem pgTAP); funções `users`, `pin`, `device`, `money` implantadas; segredos `SITE_URL` e `CORS_ORIGINS` = `https://andersonmecanica.pages.dev`; site com as chaves do real (`npm run deploy:web:real`); instalador `npm run tauri:build:real`. Importação conferida linha a linha ("Arquivo × Internet" igual: 1096 OS, 380 clientes, 1136 lançamentos, saldo R$ 1.586.182,15) e concluída; o `database.json` antigo ficou lacrado. No dia: catálogo com id vazio ou repetido (corrigido em `prepareForCloud`, commit 78a5c7e) e Site URL do Auth do real ainda em `localhost` (corrigido no painel; convites antigos precisam ser reenviados).
+
+**Como mudar o programa daqui em diante:**
+1. Mudar e testar sempre contra o projeto de TESTE (`npx vite --mode cloud`, `npm test`, `npm run test:db`, `node scripts/test-functions.mjs`).
+2. Só tela ou lógica do app: `npm run deploy:web:real` atualiza o site (celulares) na hora; os PCs precisam do instalador novo (`npm run tauri:build:real`, versão nova em `package.json`, `tauri.conf.json` e `Cargo.toml`) instalado em todos.
+3. Mudança no banco ou nas funções: migração NOVA (nunca editar uma já aplicada), `npx supabase db push --remote` ANTES das funções, funções compatíveis com o app ainda instalado nos PCs, depois o app.
+4. Nunca `npx supabase config push` no real; nunca `CORS_ALLOW_LOCALHOST` no real; `scripts/test-db.mjs` recusa o real.
 
 ## Ponto de partida da próxima sessão
 

@@ -10,6 +10,7 @@ import { decideExternalChange, DiskMetaInfo } from '../utils/externalChange';
 import { readSealedInfo, sealedBannerText } from '../utils/sealed';
 import type { SealedInfo } from '../utils/sealed';
 import { useToast } from './ToastContext';
+import { registerBeforeReload } from '../utils/beforeReload';
 import type { CloudInfo } from '../sync/syncEngine';
 
 export type LoadStatus = 'loading' | 'ok' | 'not_found' | 'error';
@@ -633,6 +634,9 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       window.removeEventListener('focus', tick);
     };
   }, [loadStatus]);
+
+  // Descarrega o debounce antes de "Tentar de novo" recarregar a janela (LazyBoundary).
+  useEffect(() => registerBeforeReload(async () => { clearTimers(); await saveNowRef.current(); }), []);
 
   // ------------------------------------------------- gravar ao fechar a janela
   useEffect(() => {

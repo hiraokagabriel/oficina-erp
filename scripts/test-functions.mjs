@@ -302,6 +302,15 @@ try {
   check('mecânico banido no Auth (banned_until)', banned)
   r = await fn('users', { action: 'reactivate', userId: users.mec.id }, donoJwt)
   check('users.reactivate', r.status === 200 && r.body.active === true, show(r))
+  const [ra] = await sql`select reactivated_at from public.memberships where workshop_id = ${ws} and user_id = ${users.mec.id}`
+  check('reativar grava reactivated_at', !!ra.reactivated_at, JSON.stringify(ra))
+  // sessão de desbloqueio (otp) aberta ANTES de desativar+reativar não cria PIN novo (o PIN foi apagado na desativação)
+  if (vj.access_token) {
+    r = await fn('pin', { action: 'set', pin: '777777' }, vj.access_token)
+    check('unlock -> deactivate -> reactivate -> pin.set com o token antigo: 403 exige_senha_recente', r.status === 403 && r.body.error === 'exige_senha_recente', show(r))
+    const [np] = await sql`select count(*)::int as n from public.member_pins where user_id = ${users.mec.id}`
+    check('nenhum PIN foi criado pelo token antigo', np.n === 0, String(np.n))
+  }
 
   // ===================== money (PR 6): operações de dinheiro, numa 2ª oficina =====================
   {

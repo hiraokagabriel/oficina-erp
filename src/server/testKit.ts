@@ -17,7 +17,7 @@ export interface FakeState {
   totp: Set<string>
   /** Se verdadeiro, getUser levanta erro (Auth fora do ar). */
   authDown: boolean
-  members: Map<string, Membership & { active: boolean; invitedAt?: string }>
+  members: Map<string, Membership & { active: boolean; invitedAt?: string; reactivatedAt?: number }>
   pins: Map<string, { pin: string; failed: number; locked: boolean }>
   devices: Map<string, DeviceRow & { failedHour: number }>
   invites: { email: string; redirectTo: string; displayName: string }[]
@@ -109,7 +109,7 @@ export function makeDeps(s: FakeState, siteUrl: string | null = 'https://oficina
         return { status: 'last_owner', role: t.role, active: t.active }
       }
       if (action === 'deactivate') { t.active = false; s.pins.delete(key(ws, userId)) }
-      else if (action === 'reactivate') t.active = true
+      else if (action === 'reactivate') { t.active = true; t.reactivatedAt = new Date('2026-11-12T12:00:00Z').getTime() }
       else if (role) t.role = role
       return { status: 'ok', role: t.role, active: t.active }
     },
@@ -127,7 +127,8 @@ export function makeDeps(s: FakeState, siteUrl: string | null = 'https://oficina
       p.locked = false
       return true
     },
-    async hasPin(ws, userId) { return s.pins.has(key(ws, userId)) },
+    async hasAnyPin(userId) { return [...s.pins.keys()].some((k) => k.endsWith(`|${userId}`)) },
+    async reactivatedAt(_ws, userId) { return s.members.get(userId)?.reactivatedAt ?? null },
     async pinSet(ws, userId, pin) { s.pins.set(key(ws, userId), { pin, failed: 0, locked: false }) },
     async pinAttempt(ws, userId, pin, deviceId): Promise<PinAttempt> {
       let dev: (DeviceRow & { failedHour: number }) | undefined

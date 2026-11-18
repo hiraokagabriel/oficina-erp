@@ -120,8 +120,10 @@ export interface Db {
   pinLockedUsers(workshopId: string): Promise<string[]>
   /** Zera erros e bloqueio do PIN (função SQL `pin_unlock`). Falso = a pessoa não tem PIN. */
   pinUnlock(workshopId: string, userId: string): Promise<boolean>
-  /** A pessoa já tem PIN gravado (bloqueado ou não)? */
-  hasPin(workshopId: string, userId: string): Promise<boolean>
+  /** A pessoa tem PIN gravado em QUALQUER oficina (bloqueado ou não)? */
+  hasAnyPin(userId: string): Promise<boolean>
+  /** Instante (ms) da última reativação da pessoa nesta oficina; nulo = nunca foi reativada. */
+  reactivatedAt(workshopId: string, userId: string): Promise<number | null>
   pinSet(workshopId: string, userId: string, pin: string): Promise<void>
   pinAttempt(workshopId: string, userId: string, pin: string, deviceId: string | null): Promise<PinAttempt>
   roster(workshopId: string): Promise<RosterEntry[]>
@@ -325,13 +327,18 @@ const freshAmr = (c: Caller, now: Date, methods: string[]): boolean =>
  *
  * Caso `otp`: o GoTrue devolve `amr:[{method:"otp"}]` tanto para o link de CONVITE aceito (`/verify` type invite) quanto
  * para o magic link que o `unlock` entrega no login por PIN (medido no projeto de teste: os dois vêm como `otp`).
- * Aceitar `otp` sempre anularia esta trava. Por isso `otp` recente só vale para quem ainda NÃO tem PIN: o login por PIN
- * exige PIN existente, logo uma sessão `otp` sem PIN veio de link no e-mail (convite ou "entrar por link"), mesma posse
- * do e-mail que invite/recovery. Quem já tem PIN e está só com `otp` precisa entrar de novo com a senha.
+ * Aceitar `otp` sempre anularia esta trava. Por isso `otp` recente só vale para quem NÃO tem PIN em NENHUMA oficina
+ * (o magic link do `unlock` vem do PIN de qualquer oficina do aparelho, não só da ativa) e cujo `otp` seja POSTERIOR
+ * à última reativação (sessão de desbloqueio aberta antes de a pessoa ser desativada e reativada não vale: a
+ * desativação apagou o PIN, mas a sessão antiga continua com `otp` recente). Quem tem PIN e está só com `otp`
+ * precisa entrar de novo com a senha.
  */
 export async function requireRecentPassword(deps: Deps, c: Caller, now: Date): Promise<void> {
   if (freshAmr(c, now, FRESH_LOGIN_METHODS)) return
-  if (freshAmr(c, now, ['otp']) && !(await deps.db.hasPin(c.workshopId, c.userId))) return
+  if (freshAmr(c, now, ['otp']) && !(await deps.db.hasAnyPin(c.userId))) {
+    const since = await deps.db.reactivatedAt(c.workshopId, c.userId)
+    if (since === null || c.amr.some((e) => e.method === 'otp' && e.timestamp * 1000 > since)) return
+  }
   throw new HttpError(403, 'exige_senha_recente', 'Por segurança, entre de novo com a senha para definir o PIN.')
 }
 

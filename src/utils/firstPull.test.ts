@@ -24,8 +24,12 @@ describe('firstPullOutcome', () => {
   it('sem pull e sem erro nem offline (rodada que não rodou): erro, nunca "ok"', () => {
     expect(firstPullOutcome(base)).toBe('erro');
   });
-  it('sem acesso: deixa as telas de acesso do app assumirem', () => {
-    expect(firstPullOutcome({ ...base, lastError: 'sem_acesso' })).toBe('ok');
+  it('sem acesso e sem pull: "acesso" (nunca ok: o quadro abriria vazio); as telas de acesso assumem', () => {
+    expect(firstPullOutcome({ ...base, lastError: 'sem_acesso' })).toBe('acesso');
+    expect(firstPullOutcome({ ...base, online: false, lastError: 'sem_acesso' })).toBe('acesso');
+  });
+  it('pull concluído vence sem_acesso', () => {
+    expect(firstPullOutcome({ ...base, hasPulled: true, lastError: 'sem_acesso' })).toBe('ok');
   });
   it('pull concluído vence um erro de envio antigo', () => {
     expect(firstPullOutcome({ ...base, hasPulled: true, lastError: 'x' })).toBe('ok');

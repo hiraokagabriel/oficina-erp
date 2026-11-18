@@ -101,6 +101,32 @@ describe('pin.set exige senha recente', () => {
     expect(r.body.error).toBe('exige_senha_recente')
     expect(s.pins.get(`${WS}|${MECH}`)!.pin).toBe('123456')
   })
+  it('otp de quem tem PIN em OUTRA oficina (sessão de PIN da oficina B): 403 e nenhum PIN criado em A', async () => {
+    const s = makeState()
+    s.pins.set(`bbbbbbbb-0000-0000-0000-000000000002|${MECH}`, { pin: '222222', failed: 0, locked: false })
+    const r = await pin(s, MECH, set, { amr: [{ method: 'otp', timestamp: NOW_SEC - 60 }] })
+    expect(r.status).toBe(403)
+    expect(r.body.error).toBe('exige_senha_recente')
+    expect(s.pins.has(`${WS}|${MECH}`)).toBe(false)
+  })
+  it('otp anterior à reativação (sessão de antes da desativação): 403, PIN não criado', async () => {
+    const s = makeState()
+    const old = { amr: [{ method: 'otp', timestamp: NOW_SEC - 60 }] }
+    const users = (body: unknown) => handleUsers(makeDeps(s), { authorization: auth(OWNER), body })
+    expect((await users({ action: 'deactivate', userId: MECH })).status).toBe(200)
+    expect((await users({ action: 'reactivate', userId: MECH })).status).toBe(200)
+    const r = await pin(s, MECH, set, old)
+    expect(r.status).toBe(403)
+    expect(r.body.error).toBe('exige_senha_recente')
+    expect(s.pins.has(`${WS}|${MECH}`)).toBe(false)
+  })
+  it('otp POSTERIOR à reativação (convite/link novo): ok', async () => {
+    const s = makeState()
+    const users = (body: unknown) => handleUsers(makeDeps(s), { authorization: auth(OWNER), body })
+    await users({ action: 'deactivate', userId: MECH })
+    await users({ action: 'reactivate', userId: MECH })
+    expect((await pin(s, MECH, set, { amr: [{ method: 'otp', timestamp: NOW_SEC + 30 }] })).status).toBe(200)
+  })
   it('otp com data no futuro (> 60 s): 403', async () => {
     const s = makeState()
     expect((await pin(s, MECH, set, { amr: [{ method: 'otp', timestamp: NOW_SEC + 120 }] })).status).toBe(403)

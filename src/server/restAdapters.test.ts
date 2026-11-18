@@ -140,6 +140,21 @@ describe('createDb', () => {
     expect(m).toEqual({ workshopId: 'w', userId: 'u', role: 'dono', displayName: 'Ana' })
     expect(f.calls[0].url).toContain('active=eq.true')
   })
+  it('hasAnyPin: olha member_pins só pelo user_id (todas as oficinas)', async () => {
+    const f = fakeFetch(() => ({ status: 200, body: [{ user_id: 'u' }] }))
+    expect(await createDb({ url: URL_, serviceKey: JWT_KEY, fetchFn: f.fetchFn }).hasAnyPin('u')).toBe(true)
+    expect(f.calls[0].url).toContain('member_pins?user_id=eq.u')
+    expect(f.calls[0].url).not.toContain('workshop_id')
+    const none = fakeFetch(() => ({ status: 200, body: [] }))
+    expect(await createDb({ url: URL_, serviceKey: JWT_KEY, fetchFn: none.fetchFn }).hasAnyPin('u')).toBe(false)
+  })
+  it('reactivatedAt: converte reactivated_at em ms; nulo se ausente', async () => {
+    const f = fakeFetch(() => ({ status: 200, body: [{ reactivated_at: '2026-11-12T12:00:00+00:00' }] }))
+    expect(await createDb({ url: URL_, serviceKey: JWT_KEY, fetchFn: f.fetchFn }).reactivatedAt('w', 'u')).toBe(Date.parse('2026-11-12T12:00:00Z'))
+    expect(f.calls[0].url).toContain('select=reactivated_at')
+    const none = fakeFetch(() => ({ status: 200, body: [{ reactivated_at: null }] }))
+    expect(await createDb({ url: URL_, serviceKey: JWT_KEY, fetchFn: none.fetchFn }).reactivatedAt('w', 'u')).toBeNull()
+  })
   it('rpc com erro HTTP levanta com o corpo', async () => {
     const f = fakeFetch(() => ({ status: 400, text: '{"message":"pin_invalido"}' }))
     await expect(createDb({ url: URL_, serviceKey: JWT_KEY, fetchFn: f.fetchFn }).pinSet('w', 'u', '1')).rejects.toThrow('pin_invalido')

@@ -27,6 +27,7 @@ import type { DatabaseContextData, LoadStatus } from './DatabaseContext';
 import { useToast } from './ToastContext';
 import { formatDateOnly } from '../utils/dates';
 import { isTauri } from '../utils/platform';
+import { registerBeforeReload } from '../utils/beforeReload';
 
 // Provider da NUVEM (docs/NUVEM-SPEC.md seção 4). Entrega o MESMO contexto do modo arquivo (`DatabaseContext`),
 // então as telas não mudam. Os `setX` são os do React; um efeito por coleção chama o motor (`SyncEngine`) com
@@ -147,6 +148,7 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
     });
   }
   const flushLocal = useCallback(() => scheduler.current?.flush(), []);
+  useEffect(() => registerBeforeReload(flushLocal), [flushLocal]);
   const schedule = useCallback((c: CollectionKey) => scheduler.current?.schedule(c), []);
 
   // Um efeito por coleção: mudou o estado, o motor compara (referência igual e JSON igual não geram op).
@@ -252,7 +254,9 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
           if (cancelled) return;
           const st = eng.getStatus();
           const outcome = firstPullOutcome({ hasPulled: eng.hasPulled(), online: st.online, lastError: st.lastError });
-          if (outcome === 'ok') { retryFirstRef.current = null; setFirstPullFailed(null); setLoadStatus('ok'); } else setFirstPullFailed(outcome);
+          if (outcome === 'ok') { retryFirstRef.current = null; setFirstPullFailed(null); setLoadStatus('ok'); }
+          else if (outcome === 'acesso') setFirstPullFailed(null); // segue em "Preparando"; a tela de acesso assume (CloudRoot) e o novo login repete o pull
+          else setFirstPullFailed(outcome);
         };
         if (firstOpen) {
           retryFirstRef.current = () => { void runFirstPull(); };
@@ -287,7 +291,11 @@ export const CloudDatabaseProvider: React.FC<CloudDatabaseProviderProps> = ({
   }, [supabase, workshopId, userId, role, deviceId]);
 
   // Novo login da mesma pessoa: tira o motor de `sem_acesso`.
-  useEffect(() => { if (resumeSignal) engineRef.current?.resumeAfterLogin(); }, [resumeSignal]);
+  useEffect(() => {
+    if (!resumeSignal) return;
+    engineRef.current?.resumeAfterLogin();
+    retryFirstRef.current?.(); // primeira abertura travada por sem_acesso: repete o primeiro pull
+  }, [resumeSignal]);
 
   // Janela: foco puxa tudo; internet volta/cai; ao esconder/fechar, descarrega o debounce.
   useEffect(() => {

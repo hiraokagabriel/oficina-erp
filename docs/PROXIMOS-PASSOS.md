@@ -164,7 +164,7 @@ Não fazer: diagnóstico automático por foto do carro (risco alto; no máximo a
 
 **Custo estimado:** centavos de real por nota lida; R$ 10 a 50/mês no volume atual. **Cuidados:** LGPD (dados passam pela Anthropic; não enviar dados pessoais de cliente); chave da API em conta própria da Anthropic (console.anthropic.com), cobrada à parte.
 
-**Estado:** em discussão; aguardando o dono escolher por qual uso começar.
+**Estado:** **planejado** (dono, 2026-11-18): usos 1 a 4 aprovados; o 5 fica para depois. Ordem de implementação sugerida: 1 (nota do fornecedor, destrava custo e markup), 2 (catálogo padronizado, junto da Fase 1 do item B), 3 (orçamento pelo relato, depende da base de serviços do item B), 4 (mensagens ao cliente). Antes de começar: conta e chave da API da Anthropic do dono, guardada como segredo do Supabase real.
 
 ## Já levantados (2026-11-18)
 

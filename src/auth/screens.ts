@@ -1,4 +1,5 @@
 // Escolha de tela por estado do acesso (docs/NUVEM-UX.md seções 1 a 4 e 6.3). Puro: o `CloudRoot` só desenha o resultado.
+import type { ImportState } from './membership';
 
 export type AuthRoute = 'app' | 'convite' | 'nova-senha';
 
@@ -34,11 +35,15 @@ export interface ScreenInput {
   sharedDevice: boolean;
   /** Aparelho compartilhado "fechado" (ao abrir, bloqueio por inatividade, "Trocar de pessoa"). */
   gateClosed: boolean;
+  /** `workshops.import_state`: enquanto não for `concluido`, o app não abre (docs/NUVEM-PR9.md). */
+  importState: ImportState;
+  /** Papel da pessoa: só o Dono vê a tela de importar. */
+  role: string | null;
 }
 
 export type ScreenKind =
   | 'notConfigured' | 'loading' | 'inviteLinkError' | 'invite' | 'resetLinkError' | 'resetPassword' | 'mfa'
-  | 'deactivated' | 'who' | 'lockedApp' | 'login' | 'app';
+  | 'deactivated' | 'who' | 'lockedApp' | 'login' | 'importar' | 'preparando' | 'app';
 
 export function pickScreen(i: ScreenInput): ScreenKind {
   if (!i.configured) return 'notConfigured';
@@ -50,10 +55,14 @@ export function pickScreen(i: ScreenInput): ScreenKind {
   if (i.hasSession && i.membership === 'none') return 'deactivated';
   if (i.sharedDevice) {
     if (!i.hasSession) return 'who';
-    return i.gateClosed ? 'lockedApp' : 'app';
+    return i.gateClosed ? 'lockedApp' : appOrImport(i);
   }
-  return i.hasSession ? 'app' : 'login';
+  return i.hasSession ? appOrImport(i) : 'login';
 }
+
+/** Com a importação pendente o app não monta: o Dono vê `importar`, os outros `preparando`. */
+const appOrImport = (i: ScreenInput): ScreenKind =>
+  i.importState === 'concluido' ? 'app' : i.role === 'dono' ? 'importar' : 'preparando';
 
 /**
  * Erro do Auth para usuário banido (a pessoa foi desativada pelo Dono). Medido no projeto de teste: o refresh devolve 400 com

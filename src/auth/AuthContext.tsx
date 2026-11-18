@@ -11,7 +11,7 @@ import {
 import type { DeviceKind, RosterPerson } from './deviceStore';
 import type { IdleMinutes } from './idle';
 import { clearCachedMembership, fetchMembership, readCachedMembership, writeCachedMembership } from './membership';
-import type { MembershipInfo } from './membership';
+import type { ImportState, MembershipInfo } from './membership';
 import {
   PIN_OFFLINE_BLOCKED_MESSAGE, RECENT_PASSWORD_MESSAGE, checkVerifier, interpretPinError, makeVerifier, registerFail, remainingTries,
   validateNewPin, wrongPinMessage, PIN_FORMAT_MESSAGES,
@@ -46,6 +46,12 @@ export interface AuthContextValue {
   workshopName: string;
   role: Role | null;
   membershipState: MembershipState;
+  /** Estado da importação do banco antigo; só `concluido` abre o app. */
+  importState: ImportState;
+  /** Última cópia diária (ISO) ou null. */
+  lastExportAt: string | null;
+  /** Lê de novo `workshops` e a membership (depois de importar, de uma cópia, ou quando o Dono termina a importação). */
+  reloadMembership(): Promise<void>;
   /** Falta o código de 2 etapas do Dono. */
   mfaPending: boolean;
   /** PC compartilhado autorizado (`null` = aparelho pessoal ou navegador: fica entrado, sem PIN nem bloqueio). */
@@ -640,12 +646,17 @@ export const AuthProvider: React.FC<Props> = ({ url, children }) => {
   // Carrega os cartões ao abrir a tela de cartões (com cópia em cache enquanto isso).
   useEffect(() => { if (gateClosed && device && online) void refreshRoster(); }, [gateClosed, device, online, refreshRoster]);
 
+  const reloadMembership = useCallback(async (): Promise<void> => {
+    if (userId) await loadMembership(userId, 'refresh');
+  }, [userId, loadMembership]);
+
   const sharedDevice = device !== null && deviceBlock !== 'revoked';
   const shownRole = membership?.role ?? null;
 
   const value = useMemo<AuthContextValue>(() => ({
     loading, session, userId, email, displayName: membership?.displayName || (session?.user.user_metadata?.display_name as string | undefined) || '',
     workshopId, workshopName: membership?.workshopName ?? '', role: shownRole, membershipState, mfaPending,
+    importState: membership?.importState ?? 'concluido', lastExportAt: membership?.lastExportAt ?? null, reloadMembership,
     device, deviceId: device?.id ?? localDeviceId(), deviceName: device?.name ?? (typeof navigator !== 'undefined' && /Mobi|Android|iPhone/i.test(navigator.userAgent) ? 'Celular' : 'Navegador'),
     sharedDevice, deviceBlock, online, supabase, api, url,
     signIn, verifyMfa, sendResetLink, setNewPassword, changePassword, createPin, changePin, signOut,
@@ -657,7 +668,7 @@ export const AuthProvider: React.FC<Props> = ({ url, children }) => {
     online, supabase, api, url, signIn, verifyMfa, sendResetLink, setNewPassword, changePassword, createPin, changePin, signOut,
     gateClosed, gateReason, gatePerson, switching, roster, rosterLoading, refreshRoster, lock, switchPerson, unlock, closeGate,
     registerThisDevice, setIdleMinutes, forgetThisDevice, registerFlush, pinSetup, finishPinSetup, accessCase, pendingRole, probeAccess, acceptRoleChange, leaveDeactivated,
-    resumeSignal, lastEmail,
+    resumeSignal, lastEmail, reloadMembership,
   ]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

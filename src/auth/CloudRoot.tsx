@@ -1,13 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CloudDatabaseProvider } from '../context/CloudDatabaseProvider';
 import { useDatabase } from '../context/DatabaseContext';
+import { useToast } from '../context/ToastContext';
+import { isExportDue } from '../sync/dailyExport';
+import { isTauri } from '../utils/platform';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import { Icon } from '../components/ui/Icon';
 import { AccessGateProps } from './types';
 import { useAuth } from './AuthContext';
 import { DeactivatedScreen, NotConfiguredScreen, ReauthScreen, RoleChangedScreen } from './AccessScreens';
 import { AuthShell, AuthStatusIcon } from './AuthShell';
+import { exportNow } from './exportNow';
+import { exportOutcome } from './exportView';
 import { IdleLock } from './IdleLock';
+import { ImportScreen, PreparingScreen } from './ImportScreen';
 import { InviteLinkError, InviteScreen, ResetLinkError, ResetPasswordScreen } from './InviteScreens';
 import { LoginScreen, MfaScreen } from './LoginScreen';
 import { pickScreen } from './screens';
@@ -44,6 +50,25 @@ const CloudBridge: React.FC<{ inert: boolean; children: React.ReactNode; overlay
     });
     return () => registerFlush(null);
   }, [registerFlush]);
+
+  // Cópia diária (docs/NUVEM-PR9.md): só o Dono, só no programa instalado, depois da primeira sincronização e uma vez por abertura.
+  // Roda em segundo plano; só avisa se algo deu errado.
+  const { addToast } = useToast();
+  const { supabase, workshopId, deviceName, role, lastExportAt, reloadMembership } = auth;
+  const exportTried = useRef(false);
+  const synced = !db.isLoading && !!db.cloud && db.cloud.online && db.cloud.syncState === 'salvo';
+  useEffect(() => {
+    if (exportTried.current || !synced || role !== 'dono' || !isTauri() || !workshopId) return;
+    exportTried.current = true;
+    if (!isExportDue(lastExportAt, new Date())) return;
+    exportNow({ supabase, workshopId, deviceName })
+      .then(res => {
+        const out = exportOutcome(res, true);
+        if (out) addToast(out.message, out.type);
+        return reloadMembership();
+      })
+      .catch(e => addToast(`Não consegui fazer a cópia de segurança. ${e instanceof Error ? e.message : String(e)}`, 'error'));
+  }, [synced, role, workshopId, lastExportAt, supabase, deviceName, addToast, reloadMembership]);
 
   // O motor travou por falta de acesso: descobre se foi desativação, entrar de novo ou troca de papel.
   const lastError = db.cloud?.lastError ?? null;
@@ -105,6 +130,7 @@ export const CloudRoot: React.FC<AccessGateProps> = ({ app }) => {
   const screen = pickScreen({
     configured: supabaseConfigured(), loading: a.loading, route: a.url.route, linkError: a.url.linkError, hasSession: !!a.session,
     membership: a.membershipState, mfaPending: a.mfaPending, sharedDevice: a.sharedDevice, gateClosed: a.gateClosed,
+    importState: a.importState, role: a.role,
   });
   const key = a.workshopId && a.userId && a.role ? `${a.workshopId}${a.userId}${a.role}` : null;
   const tab = useTabLock(screen === 'app' || screen === 'lockedApp' ? (key ? `oficinapro-sync-${key}` : null) : null);
@@ -119,12 +145,18 @@ export const CloudRoot: React.FC<AccessGateProps> = ({ app }) => {
     case 'mfa': return <MfaScreen />;
     case 'deactivated': return <DeactivatedScreen />;
     case 'login': return <LoginScreen />;
+    // Importação pendente: o app (motor de envio, fila, Realtime) nem monta.
+    case 'importar': return <ImportScreen />;
+    case 'preparando': return <PreparingScreen />;
     case 'who':
       // Mesma estrutura de 'lockedApp' (posição 0 vazia): a tela de cartões não perde o estado ao trocar de pessoa.
       return <>{null}<WhoIsUsing /></>;
     case 'app':
     case 'lockedApp': break;
   }
+
+  // PC compartilhado fechado com a importação pendente: só a tela de cartões, sem montar o app.
+  if (screen === 'lockedApp' && a.importState !== 'concluido') return <>{null}<WhoIsUsing /></>;
 
   if (!key || !a.workshopId || !a.userId || !a.role) return <LoadingSkeleton type="page" />;
   if (tab.state === 'busy') return <TabBusy onTakeOver={tab.takeOver} />;

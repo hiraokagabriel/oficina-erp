@@ -188,13 +188,6 @@ export const ConfigPage: React.FC<ConfigPageProps> = ({
         </React.Suspense>
       )}
 
-      {show.dataLocation && (
-        <section className="card cfg-card" aria-labelledby="cfg-where">
-          <h3 id="cfg-where" className="cfg-title"><Icon name="nuvem" size={20} /> Onde ficam os dados</h3>
-          <p className="cfg-help">Os dados da oficina ficam guardados na internet. Cada aparelho guarda uma cópia para continuar funcionando sem internet.</p>
-        </section>
-      )}
-
       {/* CADASTROS */}
       {show.cadastros && <section className="card cfg-card" aria-labelledby="cfg-cadastros">
         <div className="cfg-row">

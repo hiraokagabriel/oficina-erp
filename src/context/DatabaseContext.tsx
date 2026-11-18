@@ -7,6 +7,8 @@ import { diffLocalChanges, LocalChange } from '../utils/conflictDiff';
 import { generateId } from '../utils/helpers';
 import { adoptSecrets, hasSecrets, persistSecrets, stripDbSecrets } from '../utils/secrets';
 import { decideExternalChange, DiskMetaInfo } from '../utils/externalChange';
+import { readSealedInfo, sealedBannerText } from '../utils/sealed';
+import type { SealedInfo } from '../utils/sealed';
 import { useToast } from './ToastContext';
 import type { CloudInfo } from '../sync/syncEngine';
 
@@ -50,6 +52,8 @@ interface PreparedDb {
   history: string[];
   readOnly: boolean;
   migratedFrom: number | null;
+  /** Arquivo lacrado depois de enviado para a nuvem (docs/NUVEM-PR9.md D4): abre só para leitura. */
+  sealed?: SealedInfo | null;
 }
 
 const MAX_HISTORY = 50;
@@ -223,6 +227,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const { addToast } = useToast();
   const [pathDraft, setPathDraft] = useState(dbPath);
   const [readOnly, setReadOnly] = useState(false);
+  const [sealed, setSealed] = useState<SealedInfo | null>(null);
   const [conflict, setConflict] = useState<ConflictState | null>(null);
   const [reloading, setReloading] = useState(false);
   const [reloadError, setReloadError] = useState<string | null>(null);
@@ -272,8 +277,9 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const history = parsed.meta?.history ?? [];
     const { db, from, changed } = migrate(parsed);
 
-    // Versão futura: abre só para leitura, sem migrar nem gravar.
-    if (from > CURRENT_SCHEMA_VERSION) return { db, revision, history, readOnly: true, migratedFrom: null };
+    // Banco lacrado (já foi para a nuvem; `schemaVersion` 1000) ou de versão futura: abre só para leitura, sem migrar nem gravar.
+    const sealedInfo = readSealedInfo(content);
+    if (sealedInfo || from > CURRENT_SCHEMA_VERSION) return { db, revision, history, readOnly: true, migratedFrom: null, sealed: sealedInfo };
 
     if (changed) {
       const bk = await invoke<IoResult>('backup_pre_migration', { content, fromVersion: from });
@@ -291,6 +297,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     machineRef.current = machine || 'desconhecido';
     readOnlyRef.current = p.readOnly;
     setReadOnly(p.readOnly);
+    setSealed(p.sealed ?? null);
     // Dados novos do disco: o horário do último salvamento daqui não vale mais; o efeito de salvar reavalia o pendente.
     setLastSavedAt(null);
     setHasPendingChanges(false);
@@ -817,7 +824,13 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   return (
     <DatabaseContext.Provider value={contextValue}>
       <div className="app-shell">
-        {readOnly && !blocked && (
+        {sealed && !blocked && (
+          <div role="alert" className="app-banner app-banner--warning">
+            {sealedBannerText(sealed)}
+            <span style={{ fontWeight: 400 }}> Modo somente leitura: nenhuma alteração será gravada.</span>
+          </div>
+        )}
+        {readOnly && !sealed && !blocked && (
           <div role="alert" className="app-banner app-banner--warning">
             Este banco foi salvo por uma versão mais nova. Atualize o OficinaPro neste computador.
             <span style={{ fontWeight: 400 }}> Modo somente leitura: nenhuma alteração será gravada.</span>

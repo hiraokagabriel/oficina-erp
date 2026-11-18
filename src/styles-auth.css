@@ -114,3 +114,26 @@
   .pin-dots--busy, .auth-spinner, .auth-progress > span { animation: none; }
   .pin-key:active:not(:disabled) { transform: none; }
 }
+
+/* Importação para a nuvem (PR 9) */
+.auth-card .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.import-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.import-step { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-base); color: var(--text-2); }
+.import-step--feito { color: var(--text-success); }
+.import-step--agora { color: var(--text); font-weight: var(--fw-semibold); }
+.import-step .auth-spinner { margin-right: 0; }
+.import-dot { display: inline-block; width: 8px; height: 8px; margin: 0 4px; border-radius: 50%; background: var(--border-strong); }
+.import-count { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: var(--fw-regular); color: var(--text-2); }
+.import-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.import-table th, .import-table td { padding: var(--sp-2); border-bottom: 1px solid var(--border); text-align: right; color: var(--text); }
+.import-table th:first-child { text-align: left; font-weight: var(--fw-regular); }
+.import-table thead th { font-weight: var(--fw-semibold); color: var(--text-2); }
+.import-table td:last-child, .import-table thead th:last-child { text-align: center; width: 32px; }
+.import-diff th, .import-diff td { color: var(--text-danger); font-weight: var(--fw-semibold); }
+.import-list { margin: 0; padding-left: var(--sp-5); max-height: 240px; overflow: auto; font-size: var(--fs-sm); color: var(--text); line-height: var(--lh-base); }
+.import-warn { display: flex; align-items: flex-start; gap: var(--sp-2); margin: 0; padding: var(--sp-3); border: 1px solid var(--text-warning); border-radius: var(--radius-md); font-size: var(--fs-sm); color: var(--text-warning); }
+.import-warn svg { flex: none; margin-top: 2px; }
+.import-photos { display: flex; flex-direction: column; gap: var(--sp-2); }
+.import-confirm { display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-3); border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-2); }
+.import-table td svg { color: var(--text-success); }
+.import-diff td svg { color: var(--text-danger); }

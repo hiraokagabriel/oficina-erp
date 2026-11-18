@@ -4,7 +4,7 @@ import type { ScreenInput } from './screens';
 
 const base: ScreenInput = {
   configured: true, loading: false, route: 'app', linkError: false, hasSession: false, membership: 'unknown',
-  mfaPending: false, sharedDevice: false, gateClosed: false,
+  mfaPending: false, sharedDevice: false, gateClosed: false, importState: 'concluido', role: 'dono',
 };
 const pick = (o: Partial<ScreenInput>) => pickScreen({ ...base, ...o });
 
@@ -34,6 +34,24 @@ describe('pickScreen', () => {
   });
   it('desativado vale mesmo em PC compartilhado', () => {
     expect(pick({ sharedDevice: true, hasSession: true, membership: 'none', gateClosed: true })).toBe('deactivated');
+  });
+});
+
+describe('pickScreen com importação pendente', () => {
+  const on = { hasSession: true, membership: 'active' as const };
+  it('Dono vê importar; os outros veem preparando; concluido abre o app', () => {
+    expect(pick({ ...on, importState: 'vazio' })).toBe('importar');
+    expect(pick({ ...on, importState: 'importando' })).toBe('importar');
+    expect(pick({ ...on, importState: 'vazio', role: 'recepcao' })).toBe('preparando');
+    expect(pick({ ...on, importState: 'importando', role: 'mecanico' })).toBe('preparando');
+    expect(pick({ ...on, importState: 'concluido', role: 'recepcao' })).toBe('app');
+  });
+  it('PC compartilhado aberto também respeita; fechado continua bloqueado; login e 2 etapas vêm antes', () => {
+    expect(pick({ ...on, sharedDevice: true, importState: 'vazio' })).toBe('importar');
+    expect(pick({ ...on, sharedDevice: true, importState: 'vazio', gateClosed: true })).toBe('lockedApp');
+    expect(pick({ importState: 'vazio' })).toBe('login');
+    expect(pick({ ...on, importState: 'vazio', mfaPending: true })).toBe('mfa');
+    expect(pick({ hasSession: true, membership: 'none', importState: 'vazio' })).toBe('deactivated');
   });
 });
 

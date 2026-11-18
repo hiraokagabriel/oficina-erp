@@ -217,6 +217,24 @@ describe('money: ledger.toggle (receber parcela)', () => {
     expect(t.store.get('ledger', 'd2')?.data.paymentDate).toBe('2026-11-12T12:00:00.000Z');
   });
 
+  it('despesa legada paga pela regra (sem paymentDate): desfazer é recusado (409) e nada muda (M2)', async () => {
+    const t = setup();
+    t.store.put('ledger', 'd3', entry({ id: 'd3', type: 'DEBIT', effectiveDate: '2026-11-01T15:00:00.000Z' }), null);
+    const r = await t.call('ledger.toggle', { osId: undefined, entryId: 'd3' }, OWNER);
+    expect(r.status).toBe(409);
+    const data = t.store.get('ledger', 'd3')?.data as Record<string, unknown>;
+    expect('pending' in data).toBe(false);
+    expect('paymentDate' in data).toBe(false);
+  });
+
+  it('despesa ligada a uma OS não alterna (422) (S1)', async () => {
+    const t = setup();
+    t.store.seedOS(baseOS(), [entry({ id: 'dx', type: 'DEBIT', pending: true })]);
+    const r = await t.call('ledger.toggle', { osId: undefined, entryId: 'dx' });
+    expect(r.status).toBe(422);
+    expect('paymentDate' in (t.store.get('ledger', 'dx')?.data as Record<string, unknown>)).toBe(false);
+  });
+
   it('adiantamento é travado (422) e lançamento inexistente dá 404', async () => {
     const t = setup();
     t.store.seedOS(baseOS({ advances: [{ id: 'a1', date: '2026-11-05T15:00:00.000Z', amount: 4000, entryId: 'ea1' }] }),

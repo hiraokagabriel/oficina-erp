@@ -105,7 +105,7 @@ export const FinDueList: React.FC<Props> = ({
                         busyLabel={busyLabel} busyKey={row.id}
                         aria-label={`${actionLabel}: ${row.description}`}
                       >
-                        <Icon name={kind === 'pay' ? 'pagar' : 'receber'} size={18} />{actionLabel}
+                        <Icon name={kind === 'pay' ? 'check' : 'receber'} size={18} />{actionLabel}
                       </OnlineOnlyButton>
                       <span className={`fin-due__state fin-due__state--${row.tone}`}>{row.stateText}</span>
                     </li>

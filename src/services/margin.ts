@@ -1,8 +1,10 @@
 // Margem de lucro: itens sem custo ficam FORA da conta e são contados à parte. Puro, sem telas.
 // Dinheiro em centavos inteiros; só as porcentagens são float (arredonde só na exibição).
-import { CatalogItem, OrderItem, PART_CATEGORY_META, PartCategory, WorkOrder, WorkshopSettings } from '../types';
+import { CatalogItem, LedgerEntry, OrderItem, PART_CATEGORY_META, PartCategory, WorkOrder, WorkshopSettings } from '../types';
 import { normalizeName } from '../utils/links';
 import { suggestHistoricalPrice } from './pricing';
+import { isFinishedOS, osRevenueDay } from './financeKpis';
+import { toLocalDay } from './expenseStatus';
 
 export const DEFAULT_TARGET_MARGIN = 70;
 
@@ -149,9 +151,16 @@ export interface MarginReportInput {
   catalogServices: CatalogItem[];
   /** 'AAAA-MM-DD' local; âncora da janela de 12 meses da mediana. */
   today: string;
+  /** Lançamentos (para achar o dia do recebimento, como a Visão geral). Ausente = só os dados da própria OS. */
+  ledger?: LedgerEntry[];
 }
 
-const SCOPE_STATUS: WorkOrder['status'][] = ['FINALIZADO', 'AGUARDANDO_PAGAMENTO'];
+// Mesmo critério da Visão geral: OS finalizada (isFinishedOS) pelo dia da receita (osRevenueDay); aguardando
+// pagamento ainda não tem receita e entra pela data de criação.
+const scopeDay = (o: WorkOrder, ledger: LedgerEntry[]): string | null => {
+  if (o.status === 'AGUARDANDO_PAGAMENTO') return toLocalDay(o.createdAt);
+  return isFinishedOS(o) ? osRevenueDay(o, ledger) : null;
+};
 const LABOR_KEY = 'MAO_DE_OBRA';
 const LABOR_LABEL = 'Mão de obra';
 
@@ -192,7 +201,11 @@ function toRow(g: Group, medianPrice: number | null, catalogPrice: number | null
 export function buildMarginReport(input: MarginReportInput): MarginReport {
   const { workOrders, mode, selectedMonth, catalogParts, catalogServices, today } = input;
   const target = getTargetMargin(input.settings);
-  const scope = workOrders.filter(o => SCOPE_STATUS.includes(o.status) && inPeriod(o, mode, selectedMonth));
+  const ledger = input.ledger ?? [];
+  const scope = workOrders.filter(o => {
+    const day = scopeDay(o, ledger);
+    return day !== null && inPeriod({ createdAt: day }, mode, selectedMonth);
+  });
 
   const osBelowTarget: { os: WorkOrder; margin: MarginResult }[] = [];
   const allItems: OrderItem[] = [];

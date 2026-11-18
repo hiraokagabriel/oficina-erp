@@ -170,6 +170,18 @@ describe('buildMarginReport', () => {
   ];
   const r = buildMarginReport({ ...base, workOrders: wos, settings: { targetMargin: 70 } });
 
+  it('período pelo dia do recebimento (osRevenueDay), como a Visão geral', () => {
+    const criadaAgo = { ...os('2026-08-20', [pastilha(20000, 5000)]), paymentDate: iso('2026-09-02') };
+    const criadaSetPagaOut = { ...os('2026-09-20', [pastilha(20000, 5000)]), paymentDate: iso('2026-10-02') };
+    const rr = buildMarginReport({ ...base, workOrders: [criadaAgo, criadaSetPagaOut], settings: { targetMargin: 70 } });
+    expect(rr.scopeCount).toBe(1);
+  });
+  it('ARQUIVADO com receita ligada entra; ARQUIVADO sem receita não', () => {
+    const arq = { ...os('2026-09-10', [pastilha(20000, 5000)], [], 'ARQUIVADO'), financialId: 'l1' };
+    const rr = buildMarginReport({ ...base, workOrders: [arq, os('2026-09-11', [pastilha(1, 1)], [], 'ARQUIVADO')], settings: null });
+    expect(rr.scopeCount).toBe(1);
+  });
+
   it('escopo: só finalizadas e aguardando pagamento do período', () => {
     expect(r.target).toBe(70);
     expect(r.scopeCount).toBe(4);

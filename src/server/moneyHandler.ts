@@ -23,7 +23,7 @@ import {
   applyInstallmentToOS, buildInstallmentEntries, calculateFinancials, ensureUniqueItemIds, finalizeOSSingle,
   findAdvanceOwner, formatDateOnly, getDateTimeZone, getRemainingAmount, joinWorkOrder, mergeOSEdit, parseDateOnly,
   planDeleteOS, prepareOSSave, removeAllAdvances, removeOSReceipt, restoreFinancial, setDateTimeZone, settleOpenReceipt,
-  splitWorkOrder, stable, statusChangeEffects, togglePayment, validateAdvance,
+  splitWorkOrder, stable, statusChangeEffects, togglePayment, validateAdvance, canUndoDebitPayment, isDebitPaid, toLocalDay,
 } from '../services/serverEntry'
 import type { WorkOrderCosts, WorkOrderFinance, WorkOrderMain } from '../services/serverEntry'
 import type { AuditEvent, InstallmentConfig, LedgerEntry, OSAdvanceDraft, OSStatus, WorkOrder } from '../types'
@@ -500,6 +500,15 @@ function planToggle(c: Ctx): Plan {
   const os = c.loaded.os
   if (os && findAdvanceOwner([os], entryId)) {
     return reject(422, 'bloqueado', `Este lançamento é um adiantamento. Edite pela OS #${os.osNumber}.`)
+  }
+  const own = c.loaded.ledger.find(e => e.id === entryId)
+  // Despesa não se liga a OS: recusa (o recibo da OS só se mexe pela OS).
+  if (own && own.type === 'DEBIT' && os) {
+    return reject(422, 'bloqueado', `Este lançamento pertence à OS #${os.osNumber}. Mexa nele pela OS.`)
+  }
+  // Despesa antiga já paga pela data (sem "paga em" gravado): desfazer moveria o mês dela.
+  if (own && own.type === 'DEBIT' && isDebitPaid(own, toLocalDay(c.now)) && !canUndoDebitPayment(own, toLocalDay(c.now))) {
+    return reject(409, 'sem_desfazer', 'Esta despesa antiga já conta como paga. Para mudar, use Editar e ajuste a data.')
   }
   const r = togglePayment(c.loaded.ledger, os ? [os] : [], entryId, c.now)
   // Receita e despesa alternam (despesa: paymentDate/pending, sem tocar OS). O "agora" já está no fuso da oficina (withZone).

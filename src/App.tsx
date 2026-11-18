@@ -68,7 +68,8 @@ import { editWarning, findReceiptOwner, parcelas, planDeleteOS, planReopenOS, re
 import { mergeOSEdit, OS_DELETED_MESSAGE, CHANGED_ELSEWHERE_MESSAGE, ADVANCES_IGNORED_MESSAGE, PHOTOS_TRIMMED_MESSAGE, conflictsMessage } from './services/osEditMerge';
 import { buildFinalizeMessage, buildInstallmentMessage } from './services/finalizeText';
 import { linkClient, linkCatalogItems, linkTechnician, preferredClientId } from './utils/links';
-import { toISOFromDateInput } from './utils/dates';
+import { formatDateOnly, toISOFromDateInput } from './utils/dates';
+import { applyEntryEdit, paymentToast } from './services/entryBuild';
 import { FINALIZE_DENIED_MESSAGE, moneyBusyLabel, moneyFailToastType, saveNeedsMoney, statusNeedsMoneyOp } from './services/moneyRoute';
 import { MONEY_OFFLINE_TOAST } from './utils/cloudStatus';
 import type { MoneyCall, MoneyKind } from './sync/moneyClient';
@@ -572,8 +573,7 @@ export function AppContent({ topbar, phone: phoneShell }: { topbar?: ReactNode; 
     if (moneyOffline()) return; // lançamento do Financeiro só online (nuvem)
     const absVal = Math.abs(val);
     if (editingEntry) {
-      const { pending: oldPending, ...editingBase } = editingEntry; // `pending` é só de DEBIT
-      finance.updateEntry({ ...(type === 'DEBIT' && oldPending ? { ...editingBase, pending: oldPending } : editingBase), description: desc, amount: Money.fromFloat(absVal), type, effectiveDate: toISOFromDateInput(dateStr) });
+      finance.updateEntry(applyEntryEdit(editingEntry, { desc, amountCents: Money.fromFloat(absVal), type, dateStr, today: formatDateOnly(new Date()) })); // regra em entryBuild.ts
       addToast('Lançamento atualizado.', 'success');
       setEditingEntry(null);
     } else {
@@ -613,6 +613,7 @@ Abrir OS?`)) {
   const handleTogglePayment = (entryId: string) => {
     if (guardReadOnly()) return;
     if (refuseIfAdvance(entryId)) return;
+    const toggledEntry = ledger.find(e => e.id === entryId);
     if (cloud) {
       if (moneyOffline()) return;
       runMoney('ledger.toggle', { entryId }, info => {
@@ -625,7 +626,7 @@ Abrir OS?`)) {
             'info'
           );
         } else {
-          addToast(info.paid === true ? '💵 Marcado como pago!' : '⏳ Marcado como pendente', 'info');
+          addToast(toggledEntry ? paymentToast(toggledEntry, info.paid === true, Money.format) : (info.paid === true ? 'Marcado como pago.' : 'Marcado como pendente.'), 'info');
         }
         SoundFX.pop();
       });
@@ -645,7 +646,7 @@ Abrir OS?`)) {
         'info'
       );
     } else {
-      addToast(result.paid ? '💵 Marcado como pago!' : '⏳ Marcado como pendente', 'info');
+      addToast(toggledEntry ? paymentToast(toggledEntry, result.paid, Money.format) : (result.paid ? 'Marcado como pago.' : 'Marcado como pendente.'), 'info');
     }
     SoundFX.pop();
   };
@@ -1141,7 +1142,7 @@ Abrir OS?`)) {
                 expectedExpenses={finance.expectedExpenses}
                 payables={finance.payables}
                 chartDataFluxo={finance.chartFluxo}
-                chartDataPie={finance.chartPie}
+                pieCents={finance.pieCents}
                 ledger={finance.filteredLedger}
                 allLedger={ledger}
                 Money={Money}

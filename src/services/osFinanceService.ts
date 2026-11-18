@@ -2,7 +2,7 @@ import { InstallmentConfig, LedgerEntry, OSStatus, WorkOrder } from '../types';
 import { generateId } from '../utils/helpers';
 import { addMonths, formatDateOnly, parseDateFlexible, parseDateOnly } from '../utils/dates';
 import { getRemainingAmount, sumAdvances } from './osRemaining';
-import { isDebitPaid, toLocalDay } from './expenseStatus';
+import { canUndoDebitPayment, isDebitPaid, toLocalDay } from './expenseStatus';
 import { BACKWARD_FROM_PAYMENT, getOSReceipt, planReceiveOS, planReopenOS } from './osFinanceGuards';
 
 // Regras financeiras da OS extraídas do App.tsx como funções puras (extração literal).
@@ -113,7 +113,10 @@ export const togglePayment = (
   // Despesa (DEBIT): sem OS ligada. Pagar grava paymentDate e tira `pending`; desfazer grava `pending` e tira paymentDate
   // (as chaves somem, nunca `undefined`). "Paga" segue a regra única de expenseStatus.ts.
   if (entry.type === 'DEBIT') {
-    const paidNow = isDebitPaid(entry, toLocalDay(now));
+    const today = toLocalDay(now);
+    const paidNow = isDebitPaid(entry, today);
+    // Despesa legada paga pela regra (sem paymentDate): desfazer moveria o mês dela. Recusa (null); use Editar.
+    if (paidNow && !canUndoDebitPayment(entry, today)) return null;
     const next = ledger.map(e => {
       if (e.id !== entryId) return e;
       if (paidNow) {

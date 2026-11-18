@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { debitPaidDay, getDueDate, isDebitPaid, toLocalDay } from './expenseStatus';
+import { canUndoDebitPayment, debitPaidDay, getDueDate, isDebitPaid, toLocalDay } from './expenseStatus';
 import type { LedgerEntry } from '../types';
 
 // Datas em meio-dia local: o dia local não depende do fuso do teste (rode também com TZ=UTC).
@@ -47,5 +47,17 @@ describe('helpers de data', () => {
     expect(getDueDate(d('a', day(2026, 6, 10), { dueDate: day(2026, 7, 1) }))).toBe(day(2026, 7, 1));
     expect(toLocalDay(new Date(2026, 5, 15, 23, 30))).toBe('2026-06-15');
     expect(toLocalDay('2026-06-15')).toBe('2026-06-15');
+  });
+});
+
+describe('canUndoDebitPayment (M2)', () => {
+  it('só despesa paga com paymentDate explícito', () => {
+    expect(canUndoDebitPayment(d('a', day(2026, 6, 10), { paymentDate: day(2026, 6, 10) }), TODAY)).toBe(true);
+  });
+  it('legada paga pela regra (sem paymentDate): não', () => {
+    expect(canUndoDebitPayment(d('a', day(2026, 6, 10)), TODAY)).toBe(false);
+  });
+  it('prevista: não (nada a desfazer)', () => {
+    expect(canUndoDebitPayment(d('a', day(2026, 6, 10), { pending: true }), TODAY)).toBe(false);
   });
 });

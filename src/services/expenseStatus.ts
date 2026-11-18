@@ -24,3 +24,10 @@ export const isDebitPaid = (entry: LedgerEntry, todayDay: string): boolean => {
 /** Dia local em que a despesa paga saiu do caixa: `paymentDate`, senão o vencimento. */
 export const debitPaidDay = (entry: LedgerEntry): string =>
   toLocalDay(entry.paymentDate ?? getDueDate(entry));
+
+/**
+ * "Desfazer pagamento" só existe para despesa paga com `paymentDate` explícito (marcada como paga). A legada paga
+ * pela regra (sem `paymentDate` nem `pending`) não: desfazer moveria a despesa de mês. Para ela, use Editar.
+ */
+export const canUndoDebitPayment = (entry: LedgerEntry, todayDay: string): boolean =>
+  entry.type === 'DEBIT' && !!entry.paymentDate && isDebitPaid(entry, todayDay);

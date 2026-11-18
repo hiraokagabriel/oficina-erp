@@ -12,15 +12,13 @@ interface Props {
   entrou: number;
   saiu: number;
   saldo: number;
-  /** Só o Dono vê a linha "Lucro do período". */
-  showProfit: boolean;
   format: (cents: number) => string;
 }
 
 const widthOf = (value: number, max: number): React.CSSProperties =>
   ({ '--w': `${max > 0 ? Math.round((value / max) * 100) : 0}%` } as React.CSSProperties);
 
-export const FinResultPanel: React.FC<Props> = ({ isLoading, periodLabel, isYear, entrou, saiu, saldo, showProfit, format }) => {
+export const FinResultPanel: React.FC<Props> = ({ isLoading, periodLabel, isYear, entrou, saiu, saldo, format }) => {
   const title = `Dinheiro de ${periodLabel}`;
   if (isLoading) {
     return (
@@ -38,9 +36,6 @@ export const FinResultPanel: React.FC<Props> = ({ isLoading, periodLabel, isYear
       <div className="fin-result__head">
         <div>
           <h2 id="fin-result-title" className="fin-box__title">{title}</h2>
-          {showProfit && (
-            <span className="fin-result__profit">{positive ? 'Lucro do período' : 'Prejuízo do período'}</span>
-          )}
         </div>
         <span className={positive ? 'fin-result__sum fin-result__sum--pos' : 'fin-result__sum fin-result__sum--neg'}>
           {positive ? 'Sobrou' : 'Faltou'} {format(Math.abs(saldo))}

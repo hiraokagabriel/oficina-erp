@@ -224,10 +224,10 @@ describe('togglePayment', () => {
       expect(r.ledger[0].pending).toBe(true);
       expect(has(r.ledger[0], 'paymentDate')).toBe(false);
     });
-    it('legado vencido (paga pela regra) desfaz para pending; legado futuro paga com paymentDate', () => {
-      const past = togglePayment([debit()], [], 'd1', NOW)!;
-      expect(past.paid).toBe(false);
-      expect(past.ledger[0].pending).toBe(true);
+    it('legado vencido (paga pela regra, sem paymentDate): desfazer é recusado (null)', () => {
+      expect(togglePayment([debit()], [], 'd1', NOW)).toBeNull();
+    });
+    it('legado futuro (prevista pela regra) paga com paymentDate', () => {
       const future = togglePayment([debit({ effectiveDate: '2026-04-20T12:00:00.000Z' })], [], 'd1', NOW)!;
       expect(future.paid).toBe(true);
       expect(future.ledger[0].paymentDate).toBe(NOW);

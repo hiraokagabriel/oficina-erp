@@ -77,3 +77,5 @@ Acessibilidade: Tab = período, Exportar, Novo lançamento, abas, aviso, listas,
 | 4 | ui-dev | `FinFlowChart` e `FinMixBar`; sai o PieChart |
 | 5 | ui-dev | Lançamentos; apagar CSS órfão (`.fin-stats`, `.receivables-table`, `.fin-receber`, `#a8453a`) sem afetar a aba Margem |
 | 6 | ux-revisor / verificador | 1280 e 800 px, Escuro e Pastel, contraste, Tab, "Paguei" com duplo clique, Recepção (sem "Lucro", sem Excluir), offline |
+
+Nota (B5): a lista de Lançamentos filtra pela data do lançamento (`effectiveDate`) e os totais (KPIs e gráficos) pelo dia do pagamento; a coluna "Pago em" mostra a diferença quando as duas datas caem em meses diferentes.

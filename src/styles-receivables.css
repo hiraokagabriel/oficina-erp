@@ -33,7 +33,8 @@ button.debtor-row:focus-visible { outline: 2px solid var(--primary); outline-off
    FINANCEIRO (rodada 8): A receber no topo, indicadores sem aparência de botão,
    gráficos com legenda, tabela com botões de texto. Só tokens; sem gradiente nem hover que sobe.
    ========================================================================== */
-.fin-page .fin-actions { display: flex; gap: var(--sp-3); align-items: center; flex-wrap: wrap; }
+.fin-page .header-area { flex-wrap: wrap; gap: var(--sp-3) var(--sp-4); }
+.fin-page .fin-actions { justify-content: flex-end; display: flex; gap: var(--sp-3); align-items: center; flex-wrap: wrap; }
 .fin-page .fin-period-input { width: auto; min-height: var(--control-h); font-weight: var(--fw-bold); }
 .fin-page .fin-year-input { width: 110px; }
 

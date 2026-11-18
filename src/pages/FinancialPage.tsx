@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { LedgerEntry, ChartFluxoPoint, ChartPiePoint, WorkOrder, WorkshopSettings, CatalogItem } from '../types';
+import { LedgerEntry, ChartFluxoPoint, WorkOrder, WorkshopSettings, CatalogItem } from '../types';
 import { MarginReport } from '../components/MarginReport';
 import { Icon } from '../components/ui/Icon';
 import { FinAlertStrip } from '../components/finance/FinAlertStrip';
@@ -17,7 +17,7 @@ import { useDatabase } from '../context/DatabaseContext';
 import { summarizeReceivables, getClientReceivables } from '../services/receivables';
 import type { ExpectedExpenses } from '../services/financeKpis';
 import type { Payables } from '../services/financeFlow';
-import { isDebitPaid, debitPaidDay, getDueDate, toLocalDay } from '../services/expenseStatus';
+import { canUndoDebitPayment, isDebitPaid, debitPaidDay, getDueDate, toLocalDay } from '../services/expenseStatus';
 import { buildPayGroups, buildReceiveGroups, shortDay } from '../services/financeDueView';
 import type { FinDueRow } from '../services/financeDueView';
 
@@ -38,7 +38,8 @@ interface FinancialPageProps {
   /** Contas a pagar: vencidas (qualquer data) e as que vencem no período. */
   payables: Payables;
   chartDataFluxo: ChartFluxoPoint[];
-  chartDataPie: ChartPiePoint[];
+  /** Peças e serviços em centavos (da mesma conta do gráfico, sem passar por reais). */
+  pieCents: { parts: number; services: number };
   ledger: LedgerEntry[];
   /** Ledger COMPLETO (sem filtro de mês/tipo): base do "Para receber". */
   allLedger: LedgerEntry[];
@@ -66,7 +67,7 @@ interface FinancialPageProps {
 }
 
 export const FinancialPage: React.FC<FinancialPageProps> = ({
-  isLoading, kpiData, payables, chartDataFluxo, chartDataPie, ledger, allLedger, Money,
+  isLoading, kpiData, payables, chartDataFluxo, pieCents, ledger, allLedger, Money,
   onOpenExport, onOpenEntry, onEditEntry, onDeleteEntry, onOpenOS, onTogglePayment, onReceiveOS,
   selectedMonth, onMonthChange, viewMode, setViewMode,
   filterType, setFilterType,
@@ -161,8 +162,8 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
     alertActions.push({ label: 'Ver quem deve', targetId: 'fin-receive-title' });
   }
 
-  const partsCents = MoneyUtil.fromFloat(chartDataPie.find(p => p.name === 'Peças')?.value ?? 0);
-  const servicesCents = MoneyUtil.fromFloat(chartDataPie.find(p => p.name === 'Serviços')?.value ?? 0);
+  const partsCents = pieCents.parts;
+  const servicesCents = pieCents.services;
 
   const totalPages = Math.ceil(ledger.length / ITEMS_PER_PAGE);
   const paginatedLedger = ledger.slice(
@@ -232,6 +233,7 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
       {tab === 'MARGEM' ? (
         <MarginReport
           workOrders={workOrders}
+          ledger={allLedger}
           settings={settings}
           catalogParts={catalogParts}
           catalogServices={catalogServices}
@@ -250,7 +252,6 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
           entrou={kpiData.receitas}
           saiu={kpiData.despesas}
           saldo={kpiData.saldo}
-          showProfit={canMargin}
           format={Money.format}
         />
       </div>
@@ -316,6 +317,8 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                     const isPaid = paidDay !== null;
                     const dateText = `${isPaid ? 'Pago em' : 'Vence em'} ${shortDay(paidDay ?? toLocalDay(getDueDate(e)), todayDay)}`;
                     const advanceOS = advanceOwners.get(e.id);
+                    // Despesa antiga paga pela regra (sem "paga em" gravado): sem Desfazer (para mudar, use Editar).
+                    const legacyPaid = e.type === 'DEBIT' && isPaid && !canUndoDebitPayment(e, todayDay);
                     return (
                         <tr key={e.id}>
                             <td className="fin-ledger__desc">
@@ -336,7 +339,7 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                                 {advanceOS ? (
                                     <button className="btn-sm" onClick={() => onOpenOS(advanceOS)} aria-label={`Editar na OS #${advanceOS.osNumber}`}><Icon name="editar" size={16} />Editar na OS #{advanceOS.osNumber}</button>
                                 ) : (<>
-                                <OnlineOnlyButton
+                                {!legacyPaid && <OnlineOnlyButton
                                     busyLabel={e.type === 'CREDIT' ? 'Recebendo...' : 'Pagando...'} busyKey={e.id}
                                     className={isPaid ? 'btn-sm fin-pay fin-pay--paid' : 'btn-sm fin-pay'}
                                     onClick={(ev) => payClick(ev, e.id)}
@@ -344,7 +347,7 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                                     aria-label={isPaid ? `Pago, clique para desfazer: ${e.description}` : `${e.type === 'CREDIT' ? 'Marcar como pago' : 'Paguei'}: ${e.description}`}
                                 >
                                     <Icon name="check" size={16} />{isPaid ? 'Desfazer pagamento' : e.type === 'CREDIT' ? 'Marcar como pago' : 'Paguei'}
-                                </OnlineOnlyButton>
+                                </OnlineOnlyButton>}
                                 <OnlineOnlyButton className="btn-sm" onClick={() => onEditEntry(e.id)} aria-label={`Editar: ${e.description}`}><Icon name="editar" size={16} />Editar</OnlineOnlyButton>
                                 {canDeleteEntry && <OnlineOnlyButton className="btn-sm fin-del" onClick={() => onDeleteEntry(e)} aria-label={`Excluir: ${e.description}`}><Icon name="excluir" size={16} />Excluir</OnlineOnlyButton>}
                                 </>)}

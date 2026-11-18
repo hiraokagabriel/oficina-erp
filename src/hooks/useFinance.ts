@@ -75,9 +75,11 @@ export const useFinance = () => {
     }, [ledger, selectedMonth, viewMode, filterType]);
 
     // Regra "só o que entrou": ver src/services/financeKpis.ts.
+    // Dia local calculado a cada render: entra nas dependências para virar o dia sem recarregar.
+    const todayDay = formatDateOnly(new Date());
     const kpis = useMemo(
         () => computeFinanceKpis({ ledger, workOrders, period: { mode: viewMode, month: selectedMonth }, today: new Date() }),
-        [ledger, workOrders, selectedMonth, viewMode]
+        [ledger, workOrders, selectedMonth, viewMode, todayDay]
     );
 
     const kpiData = useMemo(() => ({
@@ -93,7 +95,7 @@ export const useFinance = () => {
     // Entrou e saiu (só o pago, pelo dia do pagamento), todos os dias do mês ou meses do ano; ignora o filtro de tipo.
     const chartFluxo = useMemo(
         () => buildFlowSeries(ledger, { mode: viewMode, month: selectedMonth }, new Date()),
-        [ledger, viewMode, selectedMonth]
+        [ledger, viewMode, selectedMonth, todayDay]
     );
 
     const chartPie = useMemo(() => {
@@ -105,7 +107,7 @@ export const useFinance = () => {
         selectedMonth, setSelectedMonth,
         viewMode, setViewMode,
         filterType, setFilterType,
-        filteredLedger, kpiData, expectedExpenses, payables, chartFluxo, chartPie,
+        filteredLedger, kpiData, expectedExpenses, payables, chartFluxo, chartPie, pieCents: kpis.pie,
         addEntryWithRecurrence, updateEntry, deleteEntry, deleteGroup 
     };
 };

@@ -13,6 +13,7 @@ export { findAdvanceOwner, removeAllAdvances, validateAdvance } from './advances
 export { prepareOSSave } from './osSave';
 export { mergeOSEdit } from './osEditMerge';
 export { formatDateOnly, getDateTimeZone, parseDateOnly, setDateTimeZone } from '../utils/dates';
+export { canUndoDebitPayment, isDebitPaid, toLocalDay } from './expenseStatus';
 export { joinWorkOrder, splitWorkOrder } from '../sync/split';
 export type { SplitOS, WorkOrderCosts, WorkOrderFinance, WorkOrderMain } from '../sync/split';
 export { stable } from './osEditMerge';

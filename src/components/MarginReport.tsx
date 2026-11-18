@@ -1,11 +1,13 @@
 import React, { useMemo } from 'react';
-import { CatalogItem, WorkOrder, WorkshopSettings } from '../types';
+import { CatalogItem, LedgerEntry, WorkOrder, WorkshopSettings } from '../types';
 import { buildMarginReport, formatPct, marginLevel, MarginLevel, MarginRow, PeriodMode } from '../services/margin';
 import { isLowCoverage, levelText, priceHintCents, priceHintText, rowMarginText } from '../services/marginReportView';
 import { toLocalDay } from '../services/receivables';
 import { Money } from '../utils/helpers';
 
 interface MarginReportProps {
+  /** Ledger completo: dá o dia do recebimento (mesma base da Visão geral). */
+  ledger: LedgerEntry[];
   workOrders: WorkOrder[];
   settings: WorkshopSettings;
   catalogParts: CatalogItem[];
@@ -79,14 +81,14 @@ const RowsTable: React.FC<RowsTableProps> = ({ caption, rows, target, withPrices
 );
 
 export const MarginReport: React.FC<MarginReportProps> = ({
-  workOrders, settings, catalogParts, catalogServices, selectedMonth, viewMode,
+  workOrders, ledger, settings, catalogParts, catalogServices, selectedMonth, viewMode,
 }) => {
   const report = useMemo(
     () => buildMarginReport({
-      workOrders, settings, mode: viewMode, selectedMonth, catalogParts, catalogServices,
+      workOrders, ledger, settings, mode: viewMode, selectedMonth, catalogParts, catalogServices,
       today: toLocalDay(new Date()),
     }),
-    [workOrders, settings, viewMode, selectedMonth, catalogParts, catalogServices],
+    [workOrders, ledger, settings, viewMode, selectedMonth, catalogParts, catalogServices],
   );
 
   const { totals, target } = report;

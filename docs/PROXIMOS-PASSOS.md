@@ -71,9 +71,23 @@ Desde 2026-11-18 a oficina usa o modo nuvem (versão 0.3.0) com dados reais. Tod
 - **Calibração pelo histórico real:** comparar a fórmula com o que a oficina já cobrou (1096 OS na nuvem) e mostrar o valor-hora praticado por serviço, apontando onde a tabela está acima ou abaixo.
 - Na OS, valor sugerido pela fórmula, sempre editável, com o histórico ao lado; arredondamento configurável.
 
-**Perguntas abertas:** valor-hora base atual; usar ou não o fator do veículo; arredondar para R$ 5, R$ 10 ou não arredondar.
+**Decisões do dono (2026-11-18):**
+- **Fator do veículo: sim, com 4 categorias:** Popular 1,0; Médio 1,15; Premium/importado 1,3; **Vintage 1,5** (pedido do dono; trabalho mais lento, peças difíceis, risco maior). Valores iniciais, editáveis.
+- **Sem arredondamento.**
+- **Valor-hora base:** calcular para oficina no Brooklin/Chácara Santo Antônio (SP), aluguel R$ 5.000 + outros fixos ~R$ 1.000/mês, margem-alvo 50 a 70% com a mão de obra inclusa.
 
-**Estado:** em discussão; fórmula definida, aguardando as respostas acima.
+**Cálculo do valor-hora (premissas a confirmar com o dono):** 132 h faturáveis por mecânico/mês (22 dias × 8 h × 75%); custo do mecânico com encargos ~R$ 4.500/mês (≈ R$ 34 por hora faturável); preço = custo ÷ (1 − margem).
+
+| | Custo/h | Margem 50% | 60% | 70% |
+|---|---|---|---|---|
+| 1 mecânico | ~R$ 80 | R$ 160 | R$ 200 | R$ 265 |
+| 2 mecânicos | ~R$ 57 | R$ 115 | R$ 140 | R$ 190 |
+
+**Valor-hora base inicial recomendado: R$ 180/h** (dentro da faixa de 50 a 70% nos dois cenários; perfil premium da região). Sem fonte pública atual e confiável de hora técnica em SP (pesquisa de 2026-11-18): o número final sai da calibração pelo histórico das 1096 OS.
+
+**Perguntas abertas:** quantos mecânicos e custo mensal de cada um; se o pró-labore do dono entra no custo.
+
+**Estado:** em discussão; fórmula, categorias e valor-hora inicial definidos; falta confirmar as premissas de pessoal.
 
 ## Já levantados (2026-11-18)
 

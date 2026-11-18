@@ -63,9 +63,17 @@ Desde 2026-11-18 a oficina usa o modo nuvem (versão 0.3.0) com dados reais. Tod
 
 **Mão de obra pela tabela do dono (2026-11-18):** o dono aprovou os pontos 2 e 3 acima. No ponto 1, em vez de só o histórico, quer automatizar o valor da mão de obra com a **tabela própria** que já usava (tipo de custo de mão de obra por serviço, inspirada em tempários nacionais e internacionais). Desenho provável, a confirmar com a tabela: cada serviço da base guarda o seu tipo de custo; cada veículo da OS cai numa categoria (marca e modelo da FIPE + faixa de ano); valor sugerido = tabela(tipo de custo, categoria do veículo), sempre editável; tabela editável em Configurações com reajuste em lote (ex.: +8%). O histórico de vendas (`pricing.ts`) fica como conferência ao lado do valor sugerido.
 
-**Pendente do dono:** enviar a tabela (.xlsx ou colada; `.csv` só com liberação explícita) e explicar colunas, o que é o "tipo de custo" (classe, tempo ou R$) e como modelo e ano entram (colunas por categoria, multiplicador ou valor por modelo).
+**A tabela antiga se perdeu; a lógica dela (dono, 2026-11-18):** `valor da mão de obra = valor-hora base × tempo do serviço (h) × coeficiente do tipo de serviço (0,5 a 1,5)`. Proposta para reconstruir:
+- **Valor-hora base** único da oficina, em Configurações.
+- Cada serviço da base pronta guarda **tempo (h)** e **coeficiente** (0,5 simples/rápido, 1,0 padrão, 1,5 complexo/alto risco).
+- **Fator do veículo opcional** (ex.: popular 1,0, médio 1,15, premium/importado 1,3), pela marca e modelo da FIPE, trocável na OS; sem ele a conta fica igual à tabela antiga.
+- Base inicial de ~150 serviços com tempo e coeficiente **sugeridos** (estimativas de tempário para o dono calibrar, não valores definitivos).
+- **Calibração pelo histórico real:** comparar a fórmula com o que a oficina já cobrou (1096 OS na nuvem) e mostrar o valor-hora praticado por serviço, apontando onde a tabela está acima ou abaixo.
+- Na OS, valor sugerido pela fórmula, sempre editável, com o histórico ao lado; arredondamento configurável.
 
-**Estado:** em discussão; aguardando a tabela de mão de obra do dono.
+**Perguntas abertas:** valor-hora base atual; usar ou não o fator do veículo; arredondar para R$ 5, R$ 10 ou não arredondar.
+
+**Estado:** em discussão; fórmula definida, aguardando as respostas acima.
 
 ## Já levantados (2026-11-18)
 

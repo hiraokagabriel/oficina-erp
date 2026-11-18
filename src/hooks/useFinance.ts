@@ -3,6 +3,7 @@ import { useDatabase } from '../context/DatabaseContext';
 import { createEntry, Money, splitCents } from '../utils/helpers';
 import { addMonths, formatDateOnly, parseDateOnly } from '../utils/dates';
 import { LedgerEntry } from '../types';
+import { computeFinanceKpis } from '../services/financeKpis';
 
 // Helpers internos de data (locais para o hook)
 const getLocalMonth = () => {
@@ -91,29 +92,17 @@ export const useFinance = () => {
         return data;
     }, [ledger, selectedMonth, viewMode, filterType]);
 
-    const filteredWorkOrders = useMemo(() => {
-        if (viewMode === 'YEAR') {
-            const year = selectedMonth.slice(0, 4);
-            return workOrders.filter(o => o.createdAt.startsWith(year));
-        }
-        return workOrders.filter(o => o.createdAt.startsWith(selectedMonth));
-    }, [workOrders, selectedMonth, viewMode]);
+    // Regra "só o que entrou": ver src/services/financeKpis.ts.
+    const kpis = useMemo(
+        () => computeFinanceKpis({ ledger, workOrders, period: { mode: viewMode, month: selectedMonth }, today: new Date() }),
+        [ledger, workOrders, selectedMonth, viewMode]
+    );
 
-    const kpiData = useMemo(() => {
-        let kpiLedger = ledger;
-        if (viewMode === 'YEAR') {
-            const year = selectedMonth.slice(0, 4);
-            kpiLedger = kpiLedger.filter(e => e.effectiveDate.startsWith(year));
-        } else {
-            kpiLedger = kpiLedger.filter(e => e.effectiveDate.startsWith(selectedMonth));
-        }
-        return {
-            saldo: kpiLedger.reduce((a,e) => a + (e.type === 'CREDIT' ? e.amount : -e.amount), 0),
-            receitas: kpiLedger.filter(e => e.type === 'CREDIT').reduce((a,e)=>a+e.amount, 0),
-            despesas: kpiLedger.filter(e => e.type === 'DEBIT').reduce((a,e)=>a+e.amount, 0),
-            ticketMedio: Math.round(filteredWorkOrders.filter(o => o.status === 'FINALIZADO').reduce((a,o)=>a+o.total, 0) / (filteredWorkOrders.filter(o => o.status === 'FINALIZADO').length || 1))
-        };
-    }, [ledger, filteredWorkOrders, selectedMonth, viewMode]);
+    const kpiData = useMemo(() => ({
+        saldo: kpis.saldo, receitas: kpis.receitas, despesas: kpis.despesas, ticketMedio: kpis.ticketMedio,
+    }), [kpis]);
+
+    const expectedExpenses = kpis.expectedExpenses;
 
     const chartFluxo = useMemo(() => {
         const map: Record<string, number> = {};
@@ -137,16 +126,15 @@ export const useFinance = () => {
     }, [filteredLedger, viewMode, filterType]);
 
     const chartPie = useMemo(() => {
-        let parts = 0, servs = 0;
-        filteredWorkOrders.forEach(o => { parts += o.parts.reduce((a,i)=>a+i.price,0); servs += o.services.reduce((a,i)=>a+i.price,0); });
-        return parts+servs === 0 ? [{name:'-', value:1}] : [{name:'Peças', value: Money.toFloat(parts)}, {name:'Serviços', value: Money.toFloat(servs)}];
-    }, [filteredWorkOrders]);
+        const { parts, services } = kpis.pie;
+        return parts + services === 0 ? [{name:'-', value:1}] : [{name:'Peças', value: Money.toFloat(parts)}, {name:'Serviços', value: Money.toFloat(services)}];
+    }, [kpis]);
 
     return {
         selectedMonth, setSelectedMonth,
         viewMode, setViewMode,
         filterType, setFilterType,
-        filteredLedger, kpiData, chartFluxo, chartPie,
+        filteredLedger, kpiData, expectedExpenses, chartFluxo, chartPie,
         addEntryWithRecurrence, updateEntry, deleteEntry, deleteGroup 
     };
 };

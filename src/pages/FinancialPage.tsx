@@ -11,6 +11,7 @@ import { OnlineOnlyButton } from '../components/OnlineOnlyButton';
 import { FIN_TABLE_OFFLINE_BANNER } from '../services/moneyOfflineView';
 import { useDatabase } from '../context/DatabaseContext';
 import { summarizeReceivables, formatDueDate, getReceivableLabel, getReceivableStatus } from '../services/receivables';
+import type { ExpectedExpenses } from '../services/financeKpis';
 
 const COLORS = {
   primary: '#8257e6', secondary: '#00bcd4', success: '#04d361', warning: '#ff9800', 
@@ -25,6 +26,8 @@ const ITEMS_PER_PAGE = 20;
 interface FinancialPageProps {
   isLoading: boolean;
   kpiData: { saldo: number; receitas: number; despesas: number; ticketMedio: number; };
+  /** Saídas ainda não pagas: total do período, total vencido e lista por vencimento (financeKpis.ts). */
+  expectedExpenses: ExpectedExpenses;
   chartDataFluxo: ChartFluxoPoint[];
   chartDataPie: ChartPiePoint[];
   ledger: LedgerEntry[];
@@ -54,7 +57,7 @@ interface FinancialPageProps {
 }
 
 export const FinancialPage: React.FC<FinancialPageProps> = ({ 
-  isLoading, kpiData, chartDataFluxo, chartDataPie, ledger, allLedger, Money, 
+  isLoading, kpiData, expectedExpenses, chartDataFluxo, chartDataPie, ledger, allLedger, Money, 
   onOpenExport, onOpenEntry, onEditEntry, onDeleteEntry, onOpenOS, onTogglePayment, onReceiveOS,
   selectedMonth, onMonthChange, viewMode, setViewMode,
   filterType, setFilterType,
@@ -276,10 +279,54 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                <div className={kpiData.saldo >= 0 ? 'stat-value stat-value--success' : 'stat-value stat-value--danger'}>{Money.format(kpiData.saldo)}</div>
                <div className="stat-trend">{kpiData.saldo >= 0 ? (canMargin ? 'Lucro do período' : 'Saldo positivo do período') : (canMargin ? 'Prejuízo do período' : 'Saldo negativo do período')}</div>
             </div>
-            <div className="stat-card"><div className="stat-label">Receitas</div><div className="stat-value stat-value--success">{Money.format(kpiData.receitas)}</div></div>
-            <div className="stat-card"><div className="stat-label">Despesas</div><div className="stat-value stat-value--danger">{Money.format(kpiData.despesas)}</div></div>
+            <div className="stat-card"><div className="stat-label">Receitas (recebido)</div><div className="stat-value stat-value--success">{Money.format(kpiData.receitas)}</div></div>
+            <div className="stat-card"><div className="stat-label">Despesas (pagas)</div><div className="stat-value stat-value--danger">{Money.format(kpiData.despesas)}</div></div>
             <div className="stat-card"><div className="stat-label">Ticket médio</div><div className="stat-value">{Money.format(kpiData.ticketMedio)}</div></div>
           </div>
+      )}
+
+      {!isLoading && (
+        <section className="card fin-receber" aria-labelledby="fin-prev-title">
+          <div className="fin-receber-head">
+            <h2 id="fin-prev-title" className="fin-section-title">Despesas previstas</h2>
+            <div className="fin-receber-totals">
+              <div className="fin-receber-total">
+                <span className="fin-receber-label">Previsto no {viewMode === 'YEAR' ? 'ano' : 'mês'}</span>
+                <strong className="fin-receber-value">{Money.format(expectedExpenses.periodTotal)}</strong>
+                <span className="fin-receber-sub">{expectedExpenses.periodCount} {expectedExpenses.periodCount === 1 ? 'conta a pagar' : 'contas a pagar'}</span>
+              </div>
+              <div className={expectedExpenses.overdueCount > 0 ? 'fin-receber-total fin-receber-total--late' : 'fin-receber-total'}>
+                <span className="fin-receber-label">
+                  {expectedExpenses.overdueCount > 0 && <Icon name="alerta" size={16} />}Vencido (qualquer mês)
+                </span>
+                <strong className="fin-receber-value">{Money.format(expectedExpenses.overdueTotal)}</strong>
+                <span className="fin-receber-sub">{expectedExpenses.overdueCount} {expectedExpenses.overdueCount === 1 ? 'conta vencida' : 'contas vencidas'}</span>
+              </div>
+            </div>
+          </div>
+          {expectedExpenses.items.length === 0 ? (
+            <p className="fin-chart-empty">Nenhuma despesa a pagar.</p>
+          ) : (
+            <div className="receivables-scroll">
+              <table className="data-table receivables-table">
+                <thead><tr><th>Vencimento</th><th>Descrição</th><th>Valor</th><th>Situação</th></tr></thead>
+                <tbody>
+                  {expectedExpenses.items.slice(0, 8).map(x => (
+                    <tr key={x.entry.id}>
+                      <td>{formatDueDate(x.entry)}</td>
+                      <td className="receivable-desc" title={x.entry.description}>{x.entry.description}</td>
+                      <td style={{fontWeight:'bold'}}>{Money.format(x.entry.amount)}</td>
+                      <td><span className={`receivable-status ${x.overdue ? 'late' : 'open'}`}>{x.overdue && <Icon name="alerta" size={14} />}{x.overdue ? 'Vencida' : 'A pagar'}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {expectedExpenses.items.length > 8 && (
+                <p className="fin-receber-sub">e mais {expectedExpenses.items.length - 8} (ver na lista de lançamentos)</p>
+              )}
+            </div>
+          )}
+        </section>
       )}
 
       <div className="dashboard-grid">

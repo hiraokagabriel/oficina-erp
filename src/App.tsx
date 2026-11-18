@@ -1137,6 +1137,7 @@ Abrir OS?`)) {
               <FinancialPage
                 isLoading={isLoading}
                 kpiData={finance.kpiData}
+                expectedExpenses={finance.expectedExpenses}
                 chartDataFluxo={finance.chartFluxo}
                 chartDataPie={finance.chartPie}
                 ledger={finance.filteredLedger}

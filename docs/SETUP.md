@@ -28,6 +28,8 @@ Projetos Supabase:
 
 ## Fase A. Preparar este PC
 
+> **Onde digitar os comandos.** Os comandos deste guia são para o **PowerShell** (`$env:TEMP...`). Se digitar pelo `!` dentro do Claude, ele roda no **Git Bash**: troque `$env:TEMPpasta` por `$TEMP/pasta` (ex.: `node scripts/make-synthetic-db.mjs "$TEMP/oficina-teste" --fotos`).
+
 Tempo: 15 a 30 minutos. Uma vez só.
 
 1. **Node e dependências.** No terminal, na pasta do projeto:

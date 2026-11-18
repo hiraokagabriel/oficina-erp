@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import {
   getDeliveryStatus, getDaysLate, formatExpectedDate, summarizeDeliveries,
-  groupAppointmentsByDay, startOfWeek, shiftWeek, appointmentToOSDraft,
+  groupAppointmentsByDay, startOfWeek, shiftWeek, appointmentToOSDraft, defaultDay,
 } from './schedule';
 import { formatDateOnly } from '../utils/dates';
 import type { Appointment, OSStatus, WorkOrder } from '../types';
@@ -250,4 +250,17 @@ describe('fusos e horário de verão', () => {
       expect(formatDateOnly(shiftWeek('2026-10-26', 1))).toBe('2026-11-02');
     });
   }
+});
+
+describe('defaultDay', () => {
+  it('hoje quando está na semana', () => {
+    const monday = startOfWeek(noon(2026, 3, 10));
+    expect(defaultDay(monday, new Date(2026, 2, 12, 12))).toBe('2026-03-12');
+    expect(defaultDay(monday, '2026-03-15')).toBe('2026-03-15');
+  });
+  it('segunda-feira quando hoje está fora da semana', () => {
+    const monday = startOfWeek(noon(2026, 3, 10));
+    expect(defaultDay(monday, '2026-03-16')).toBe('2026-03-09');
+    expect(defaultDay(monday, '2026-03-08')).toBe('2026-03-09');
+  });
 });

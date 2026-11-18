@@ -2,12 +2,13 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { listPastPending } from '../services/agendaPending';
 import { Appointment, Client, WorkOrder } from '../types';
 import { AppointmentAction, AppointmentInput, canApplyAction, canCreateOS, statusLabel, weekRangeLabel } from '../services/agenda';
-import { groupAppointmentsByDay, shiftWeek, startOfWeek } from '../services/schedule';
+import { defaultDay, groupAppointmentsByDay, shiftWeek, startOfWeek } from '../services/schedule';
 import { formatDateOnly, parseDateFlexible, parseDateOnly } from '../utils/dates';
 import { AppointmentModal, AppointmentModalMode } from '../modals/AppointmentModal';
 import { ConfirmationModal } from '../modals/ConfirmationModal';
 import { Icon, IconName } from '../components/ui/Icon';
 import { useAccess } from '../hooks/useAccess';
+import { useIsPhoneLayout } from '../hooks/useIsPhoneLayout';
 
 interface AgendaPageProps {
   appointments: Appointment[];
@@ -33,11 +34,18 @@ const STATUS_ICON: Record<Appointment['status'], IconName> = {
   CANCELADO: 'fechar',
 };
 
+const chipWeekday = (dayKey: string): string => {
+  const w = parseDateOnly(dayKey).toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
+  return w.charAt(0).toUpperCase() + w.slice(1);
+};
+
 const dayTitle = (dayKey: string): string =>
   parseDateOnly(dayKey).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' });
 
 export const AgendaPage: React.FC<AgendaPageProps> = ({ appointments, workOrders, clients, onSave, onAction, onDelete, onCreateOS }) => {
   const access = useAccess();
+  const phone = useIsPhoneLayout();
+  const [pickedDay, setPickedDay] = useState<string | null>(null);
   const canNewOS = access.can('os.create');
   const canDeleteAppt = access.can('appointments.delete');
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
@@ -91,6 +99,7 @@ export const AgendaPage: React.FC<AgendaPageProps> = ({ appointments, workOrders
     const first = pending[0];
     if (!first) return;
     setWeekStart(startOfWeek(parseDateFlexible(first.date)));
+    setPickedDay(formatDateOnly(parseDateFlexible(first.date)));
     focusLater(`appt-chip-${first.id}`);
   };
 
@@ -113,6 +122,10 @@ export const AgendaPage: React.FC<AgendaPageProps> = ({ appointments, workOrders
   const firstPastIdx = todayIdx > 0 ? days.length - todayIdx : -1;
   const upcomingDays = firstPastIdx > 0 ? ordered.slice(0, firstPastIdx) : ordered;
   const pastDays = firstPastIdx > 0 ? ordered.slice(firstPastIdx) : [];
+
+  // Celular: um dia por vez (o escolhido, se ainda estiver na semana; senão hoje ou a segunda-feira).
+  const selectedKey = days.some(d => d.dayKey === pickedDay) ? (pickedDay as string) : defaultDay(weekStart, todayDate);
+  const selectedDay = days.find(d => d.dayKey === selectedKey) ?? days[0];
 
   // Esc fecha a confirmação de exclusão (o App não conhece esse estado).
   useEffect(() => {
@@ -224,6 +237,98 @@ export const AgendaPage: React.FC<AgendaPageProps> = ({ appointments, workOrders
     );
   };
 
+  const modals = (
+    <>
+      {modal && (
+        <AppointmentModal
+          isOpen
+          mode={modal.mode}
+          editing={modal.editing}
+          defaultDate={modal.date}
+          clients={clients}
+          workOrders={workOrders}
+          onClose={() => setModal(null)}
+          onSave={input => { onSave(input, modal.editing, modal.mode); setModal(null); }}
+        />
+      )}
+      {toDelete && (
+        <ConfirmationModal
+          isOpen
+          title="Excluir agendamento?"
+          message={`O agendamento de ${toDelete.clientName} em ${parseDateFlexible(toDelete.date).toLocaleDateString('pt-BR')} será removido. A OS ligada a ele, se houver, não é afetada.`}
+          confirmText="Excluir"
+          cancelText="Não excluir"
+          confirmColor="danger"
+          onClose={() => setToDelete(null)}
+          onConfirm={() => { onDelete(toDelete.id); focusLater(`appt-day-${formatDateOnly(parseDateFlexible(toDelete.date))}`); }}
+        />
+      )}
+    </>
+  );
+
+  const pendingBanner = pending.length > 0 && (
+    <div className="app-banner app-banner--warning appt-pending">
+      <Icon name="alerta" size={18} />
+      <span>
+        {pending.length === 1
+          ? '1 agendamento de dia anterior sem registro de comparecimento.'
+          : `${pending.length} agendamentos de dias anteriores sem registro de comparecimento.`}
+        {' '}Registre Compareceu ou Faltou.
+      </span>
+      <button type="button" className="btn-sm" onClick={goToFirstPending}>Ver</button>
+    </div>
+  );
+
+  if (phone) {
+    return (
+      <div className="appt-page appt-page--phone">
+        <h1 className="appt-title">Agenda</h1>
+        <button type="button" className="btn appt-phone-new" onClick={() => openNew(selectedKey)}>
+          <Icon name="adicionar" size={18} />Agendar veículo
+        </button>
+        <div className="appt-phone-nav" role="group" aria-label="Navegação por semana">
+          <button type="button" className="btn-sm" onClick={() => { setWeekStart(w => shiftWeek(w, -1)); setPickedDay(null); }}>
+            <Icon name="voltar" size={16} />Anterior
+          </button>
+          <button type="button" className="btn-sm" onClick={() => { setWeekStart(startOfWeek(new Date())); setPickedDay(todayKey); }}>Hoje</button>
+          <button type="button" className="btn-sm" onClick={() => { setWeekStart(w => shiftWeek(w, 1)); setPickedDay(null); }}>
+            Próxima<Icon name="proximo" size={16} />
+          </button>
+        </div>
+        <span className="appt-range" aria-live="polite">{weekRangeLabel(weekStart)}</span>
+        {pendingBanner}
+        <div className="appt-daychips" role="group" aria-label="Dias da semana">
+          {days.map(d => {
+            const n = d.items.length;
+            return (
+              <button
+                key={d.dayKey}
+                type="button"
+                className={`appt-daychip${d.dayKey === selectedKey ? ' is-selected' : ''}${d.isToday ? ' is-today' : ''}`}
+                aria-pressed={d.dayKey === selectedKey}
+                aria-label={`${dayTitle(d.dayKey)}${d.isToday ? ', hoje' : ''}, ${n === 0 ? 'sem agendamentos' : n === 1 ? '1 agendamento' : `${n} agendamentos`}`}
+                onClick={() => setPickedDay(d.dayKey)}
+              >
+                <span className="appt-daychip-wd">{chipWeekday(d.dayKey)}</span>
+                <span className="appt-daychip-num">{parseDateOnly(d.dayKey).getDate()}</span>
+                <span className="appt-daychip-count" aria-hidden="true">{n > 0 ? n : ''}</span>
+              </button>
+            );
+          })}
+        </div>
+        <section aria-labelledby={`appt-day-${selectedDay.dayKey}`} className="appt-phone-day">
+          <h2 className="appt-day-title" id={`appt-day-${selectedDay.dayKey}`} tabIndex={-1}>{dayTitle(selectedDay.dayKey)}{renderTags(selectedDay)}</h2>
+          {selectedDay.items.length === 0 ? (
+            <p className="appt-day-empty">Sem agendamentos neste dia.</p>
+          ) : (
+            <ul className="appt-list">{selectedDay.items.map(renderItem)}</ul>
+          )}
+        </section>
+        {modals}
+      </div>
+    );
+  }
+
   return (
     <div className="appt-page">
       <header className="appt-header">
@@ -243,18 +348,7 @@ export const AgendaPage: React.FC<AgendaPageProps> = ({ appointments, workOrders
         </button>
       </header>
 
-      {pending.length > 0 && (
-        <div className="app-banner app-banner--warning appt-pending">
-          <Icon name="alerta" size={18} />
-          <span>
-            {pending.length === 1
-              ? '1 agendamento de dia anterior sem registro de comparecimento.'
-              : `${pending.length} agendamentos de dias anteriores sem registro de comparecimento.`}
-            {' '}Registre Compareceu ou Faltou.
-          </span>
-          <button type="button" className="btn-sm" onClick={goToFirstPending}>Ver</button>
-        </div>
-      )}
+      {pendingBanner}
 
       {weekTotal === 0 ? (
         <div className="empty-state">
@@ -282,31 +376,7 @@ export const AgendaPage: React.FC<AgendaPageProps> = ({ appointments, workOrders
         </div>
       )}
 
-      {modal && (
-        <AppointmentModal
-          isOpen
-          mode={modal.mode}
-          editing={modal.editing}
-          defaultDate={modal.date}
-          clients={clients}
-          workOrders={workOrders}
-          onClose={() => setModal(null)}
-          onSave={input => { onSave(input, modal.editing, modal.mode); setModal(null); }}
-        />
-      )}
-
-      {toDelete && (
-        <ConfirmationModal
-          isOpen
-          title="Excluir agendamento?"
-          message={`O agendamento de ${toDelete.clientName} em ${parseDateFlexible(toDelete.date).toLocaleDateString('pt-BR')} será removido. A OS ligada a ele, se houver, não é afetada.`}
-          confirmText="Excluir"
-          cancelText="Não excluir"
-          confirmColor="danger"
-          onClose={() => setToDelete(null)}
-          onConfirm={() => { onDelete(toDelete.id); focusLater(`appt-day-${formatDateOnly(parseDateFlexible(toDelete.date))}`); }}
-        />
-      )}
+      {modals}
     </div>
   );
 };

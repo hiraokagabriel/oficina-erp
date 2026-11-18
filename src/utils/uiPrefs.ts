@@ -41,3 +41,24 @@ export function setShowCostColumn(v: boolean): boolean {
     return false;
   }
 }
+
+const PHONE_CHIP_KEY = 'oficina_phone_chip';
+
+/** Último chip de status usado no Kanban do celular neste aparelho (texto cru; `initialChip` valida). Null se não houver ou falhar. */
+export function getPhoneChip(): string | null {
+  try {
+    return localStorage.getItem(PHONE_CHIP_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** Grava o chip. Devolve false se o navegador bloqueou o armazenamento. */
+export function setPhoneChip(v: string): boolean {
+  try {
+    localStorage.setItem(PHONE_CHIP_KEY, v);
+    return true;
+  } catch {
+    return false;
+  }
+}

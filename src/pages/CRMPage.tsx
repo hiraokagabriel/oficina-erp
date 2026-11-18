@@ -10,6 +10,7 @@ import { ClientEditModal } from '../modals/ClientEditModal';
 import { ClientPhotos } from '../components/ClientPhotos';
 import { useDatabase } from '../context/DatabaseContext';
 import { useAccess } from '../hooks/useAccess';
+import { useIsPhoneLayout } from '../hooks/useIsPhoneLayout';
 
 // Declaração global do Tauri
 declare global {
@@ -80,6 +81,7 @@ export const CRMPage: React.FC<CRMPageProps> = ({
   const searchId = useId();
   const { dbPath } = useDatabase();
   const access = useAccess();
+  const phone = useIsPhoneLayout();
   const showMoney = access.os.canSeePrices;
   const canEditClient = access.can('clients.edit');
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -227,7 +229,7 @@ export const CRMPage: React.FC<CRMPageProps> = ({
     <>
       <div className="header-area" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <h1 className="page-title">Clientes</h1>
-        <button
+        {!phone && <button
           type="button"
           className="btn btn-secondary"
           aria-expanded={showDashboard}
@@ -235,10 +237,10 @@ export const CRMPage: React.FC<CRMPageProps> = ({
         >
           <Icon name="financeiro" />
           {showDashboard ? 'Ocultar painel' : 'Mostrar painel'}
-        </button>
+        </button>}
       </div>
 
-      {showDashboard && (
+      {showDashboard && !phone && (
         <div className="crm-dash-wrap">
           <CRMDashboard
             clients={clients}
@@ -252,9 +254,9 @@ export const CRMPage: React.FC<CRMPageProps> = ({
         </div>
       )}
 
-      <div className={showDashboard ? 'crm-layout crm-layout--below-dashboard' : 'crm-layout'}>
+      <div className={showDashboard && !phone ? 'crm-layout crm-layout--below-dashboard' : 'crm-layout'}>
           {/* LISTA DE CLIENTES */}
-          <div className="client-list">
+          <div className={phone && selectedClient ? 'client-list crm-phone-off' : 'client-list'}>
               <div className="client-list-head">
                 <button type="button" className="btn" onClick={startNewClient}>
                   <Icon name="adicionar" />
@@ -345,10 +347,16 @@ export const CRMPage: React.FC<CRMPageProps> = ({
           </div>
 
           {/* PAINEL DE DETALHES */}
-          <div className="crm-details">
+          <div className={phone && !selectedClient ? 'crm-details crm-phone-off' : 'crm-details'}>
               {selectedClient ? (
                   <>
                       {/* CABEÇALHO DO CLIENTE */}
+                      {phone && (
+                        <button type="button" className="btn btn-secondary crm-phone-back" onClick={() => setSelectedClient(null)}>
+                          <Icon name="voltar" />
+                          Clientes
+                        </button>
+                      )}
                       <div className="crm-head">
                         <div className="crm-head-top">
                           <div className="crm-head-id">
@@ -359,6 +367,12 @@ export const CRMPage: React.FC<CRMPageProps> = ({
                             </div>
                           </div>
                           <div className="crm-head-actions">
+                            {phone && selectedClient.phone && selectedClient.phone.replace(/\D/g, '').length >= 8 && (
+                              <a className="btn" href={`tel:${selectedClient.phone.replace(/[^\d+]/g, '')}`}>
+                                <Icon name="telefone" />
+                                Ligar
+                              </a>
+                            )}
                             {selectedClient.phone && (
                               <button
                                 type="button"

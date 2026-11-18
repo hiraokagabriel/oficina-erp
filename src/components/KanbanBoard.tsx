@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState, useMemo, useEffect } from 'react';
+import React, { Suspense, lazy, useCallback, useRef, useState, useMemo, useEffect } from 'react';
 import { WorkOrder, OSStatus, STATUS_LABELS } from '../types';
 import { KanbanCard } from '../components/KanbanCard';
 import type { KanbanCardActions } from './KanbanCardMenu';
@@ -13,6 +13,11 @@ import { useToast } from '../context/ToastContext';
 import { canMoveToStatus, MECANICO_FINALIZE_MESSAGE } from '../services/accessView';
 import { OFFLINE_COLUMN_HINT, finalizeColumnHint } from '../services/moneyOfflineView';
 import { useDatabase } from '../context/DatabaseContext';
+import { filterWorkOrders } from '../services/mobileKanban';
+import { useIsPhoneLayout } from '../hooks/useIsPhoneLayout';
+
+// Celular (nuvem, < 800 px): quadro por chips em chunk à parte; o modo arquivo nunca o carrega.
+const MobileKanban = lazy(() => import('./MobileKanban'));
 
 interface KanbanBoardProps {
   workOrders: WorkOrder[];
@@ -191,7 +196,9 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
     const [technicianFilter, setTechnicianFilter] = useState<'ALL' | 'NONE' | string>('ALL');
     const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
     const access = useAccess();
-    const cloudOnline = useDatabase().cloud?.online !== false;
+    const cloudInfo = useDatabase().cloud;
+    const cloudOnline = cloudInfo?.online !== false;
+    const phone = useIsPhoneLayout();
     const { addToast } = useToast();
     const showPrices = access.os.canSeePrices;
     // Selo de margem precisa de custo: só quem vê custo (Dono), mesmo com a opção ligada.
@@ -249,15 +256,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
 
       if (!searchTerm) return base;
 
-      const term = searchTerm.toLowerCase();
-      return base.filter(
-        (os) =>
-          os.clientName.toLowerCase().includes(term) ||
-          os.vehicle.toLowerCase().includes(term) ||
-          os.osNumber.toString().includes(term) ||
-          (os.clientPhone && os.clientPhone.includes(term)) ||
-          ((os.technician || '').toLowerCase().includes(term))
-      );
+      return filterWorkOrders(base, searchTerm);
     }, [workOrders, searchTerm, technicianFilter]);
 
     const activeWorkOrder = useMemo(
@@ -366,6 +365,24 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
             </div>
           ))}
         </div>
+      );
+    }
+
+    if (phone && !showArchived) {
+      return (
+        <Suspense fallback={<div className="skeleton skeleton-block" />}>
+          <MobileKanban
+            workOrders={workOrders}
+            actions={actions}
+            formatMoney={formatMoney}
+            onStatusChange={handleStep}
+            today={today}
+            targetMargin={targetMargin}
+            showMargin={marginAllowed}
+            showPrices={showPrices}
+            canManage={canManage}
+          />
+        </Suspense>
       );
     }
 

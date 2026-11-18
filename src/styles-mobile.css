@@ -89,7 +89,96 @@
 [data-layout="phone"] .ctx-menu button { min-height: 48px; }
 
 /* R5 */
+[data-layout="phone"] .mk { display: flex; flex-direction: column; height: 100%; min-height: 0; gap: var(--sp-3); }
+[data-layout="phone"] .mk-search { flex: none; width: 100%; }
+[data-layout="phone"] .mk-search .search-input { width: 100%; }
+/* Chips quebram em linhas: a tela nunca rola para o lado */
+[data-layout="phone"] .mk-chips { flex: none; display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+[data-layout="phone"] .mk-chip { gap: var(--sp-2); white-space: nowrap; min-height: 44px; }
+[data-layout="phone"] .mk-chip { padding-inline: var(--sp-3); }
+[data-layout="phone"] .mk-chip-n { font-weight: 700; font-variant-numeric: tabular-nums; }
+[data-layout="phone"] .mk-found { flex: none; font-size: var(--fs-sm); color: var(--text-2); }
+[data-layout="phone"] .mk-list { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: var(--sp-3); padding-bottom: var(--sp-4); }
+[data-layout="phone"] .mk-list .kcard-wrap { width: 100%; touch-action: auto; }
+[data-layout="phone"] .mk-more { width: 100%; min-height: 48px; flex: none; }
 
 /* R6 */
+/* OS em tela cheia: cabeçalho fixo no topo, rodapé fixo embaixo, só o corpo rola. */
+[data-layout="phone"] .modal-content.osm { display: flex; flex-direction: column; }
+[data-layout="phone"] .osm-head { flex: none; display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2) var(--sp-3); background: var(--surface-1); border-bottom: 1px solid var(--border); }
+[data-layout="phone"] .osm-head .modal-title { flex: 1; min-width: 0; margin: 0; }
+[data-layout="phone"] .osm-back { min-height: var(--control-h); min-width: var(--control-h); }
+[data-layout="phone"] .osm-body { flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-4); }
+[data-layout="phone"] .osm-foot { flex: none; padding: var(--sp-3) var(--sp-4) calc(var(--sp-3) + var(--mobile-safe-bottom)); }
+[data-layout="phone"] .osm-foot-actions { width: 100%; margin-left: 0; }
+[data-layout="phone"] .osm-foot-actions .btn, [data-layout="phone"] .osm-foot-actions .osm-save { flex: 1; min-height: var(--control-h); }
+[data-layout="phone"] .modal-overlay:has(.osm), [data-layout="phone"] .modal-overlay:has(.checklist-modal), [data-layout="phone"] .modal-overlay:has(.appt-modal) { padding: 0; }
+/* Ordem da ficha de campo (UX 8.4): Situação, Cliente e veículo (com Km), Vistoria, Fotos, Serviço, Observações, Pagamento */
+[data-layout="phone"] .osm-sec--vist { order: 1; }
+[data-layout="phone"] .osm-sec--fotos { order: 2; }
+[data-layout="phone"] .osm-sec--serv { order: 3; }
+[data-layout="phone"] .osm-sec--obs { order: 4; }
+[data-layout="phone"] .osm-sec--pagto { order: 5; }
+[data-layout="phone"] .osm--field .osm-field-kv { grid-template-columns: 1fr; }
+[data-layout="phone"] .osm--field .osm-field-km { max-width: none; }
+[data-layout="phone"] .osm-field-status .btn, [data-layout="phone"] .osm-field-contact > *, [data-layout="phone"] .osm--field .osm-section > .btn { min-height: var(--control-h); }
+[data-layout="phone"] .osm-field-status .btn { width: 100%; justify-content: center; }
+[data-layout="phone"] .osm--field .osm-section > .btn { width: 100%; }
+[data-layout="phone"] .osm-field-contact > * { flex: 1; justify-content: center; }
+
+/* Fotos: botões de largura toda, miniaturas em 3 colunas */
+[data-layout="phone"] .ph-bar { flex-direction: column; align-items: stretch; }
+[data-layout="phone"] .ph-add { width: 100%; justify-content: center; min-height: var(--control-h); }
+[data-layout="phone"] .ph-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); }
+[data-layout="phone"] .ph-remove { min-height: var(--control-h); width: 100%; padding: 0; justify-content: center; font-size: var(--fs-xs); }
+
+/* Vistoria em tela cheia, alvos de 44 px, situação ao lado do nome */
+[data-layout="phone"] .checklist-modal { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
+[data-layout="phone"] .checklist-header { flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); padding: var(--sp-2) var(--sp-3); }
+[data-layout="phone"] .checklist-grid { flex: 1; min-height: 0; overflow-y: auto; }
+[data-layout="phone"] .checklist-item { min-height: var(--control-h); flex-wrap: nowrap; }
+[data-layout="phone"] .item-state, [data-layout="phone"] .checklist-item .item-delete,
+[data-layout="phone"] .checklist-category-header .btn-icon, [data-layout="phone"] .checklist-header .btn-icon { min-height: var(--control-h); min-width: var(--control-h); }
+[data-layout="phone"] .checklist-actions .btn, [data-layout="phone"] .checklist-actions button { min-height: var(--control-h); }
+
+/* Agendamento em tela cheia */
+[data-layout="phone"] .appt-modal { display: flex; flex-direction: column; overflow-y: auto; }
+[data-layout="phone"] .appt-modal .modal-actions { position: sticky; bottom: 0; background: var(--surface-1); padding-top: var(--sp-3); }
+[data-layout="phone"] .appt-modal .modal-actions button { flex: 1; min-height: var(--control-h); }
 
 /* R7 */
+/* Agenda por dia */
+[data-layout="phone"] .appt-page--phone { gap: var(--sp-3); }
+[data-layout="phone"] .appt-phone-new { width: 100%; min-height: 48px; justify-content: center; }
+[data-layout="phone"] .appt-phone-nav { display: grid; grid-template-columns: 1fr auto 1fr; gap: var(--sp-2); }
+[data-layout="phone"] .appt-phone-nav .btn-sm { min-height: var(--control-h); justify-content: center; }
+[data-layout="phone"] .appt-page--phone .appt-range { padding: 0; font-size: var(--fs-sm); color: var(--text-2); }
+[data-layout="phone"] .appt-daychips { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--sp-1); }
+[data-layout="phone"] .appt-daychip {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 0; min-height: 64px; padding: var(--sp-1) 0;
+  font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); cursor: pointer;
+}
+[data-layout="phone"] .appt-daychip.is-today { border-color: var(--accent); }
+[data-layout="phone"] .appt-daychip.is-selected { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-text); box-shadow: 0 0 0 1px var(--accent); }
+[data-layout="phone"] .appt-daychip:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+[data-layout="phone"] .appt-daychip-wd { font-size: var(--fs-xs); font-weight: var(--fw-semibold); color: var(--text-2); }
+[data-layout="phone"] .appt-daychip.is-selected .appt-daychip-wd { color: var(--accent-text); }
+[data-layout="phone"] .appt-daychip-num { font-size: var(--fs-base); font-weight: var(--fw-bold); }
+[data-layout="phone"] .appt-daychip-count { min-height: 1em; font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--accent-text); }
+[data-layout="phone"] .appt-phone-day { display: flex; flex-direction: column; gap: var(--sp-2); }
+[data-layout="phone"] .appt-actions-end { margin-left: 0; padding-left: 0; border-left: 0; }
+[data-layout="phone"] .appt-actions .btn, [data-layout="phone"] .appt-actions .btn-sm { min-height: var(--control-h); }
+[data-layout="phone"] .appt-actions .appt-btn-main { flex: 1 1 100%; justify-content: center; }
+[data-layout="phone"] .appt-time { min-width: 0; flex: 1 1 100%; }
+
+/* Clientes: lista OU detalhe */
+[data-layout="phone"] .crm-phone-off { display: none; }
+[data-layout="phone"] .crm-layout { display: block; height: auto; overflow: visible; }
+[data-layout="phone"] .crm-layout > .client-list { width: 100%; max-height: none; overflow: visible; }
+[data-layout="phone"] .client-items { overflow: visible; }
+[data-layout="phone"] .client-list-item { min-height: 56px; }
+[data-layout="phone"] .crm-layout > .crm-details { padding: var(--sp-3); border-radius: var(--radius-card); }
+[data-layout="phone"] .crm-phone-back { margin-bottom: var(--sp-3); }
+[data-layout="phone"] .crm-head { padding: var(--sp-4); }
+[data-layout="phone"] .crm-head-actions { width: 100%; }
+[data-layout="phone"] .crm-head-actions .btn { flex: 1 1 130px; justify-content: center; min-height: var(--control-h); text-decoration: none; }

@@ -88,6 +88,18 @@ export const shiftWeek = (weekStart: string | Date, delta: number): Date => {
   return d;
 };
 
+/** Dia aberto por padrão na Agenda do celular: hoje se estiver na semana; senão a segunda-feira. */
+export const defaultDay = (weekStart: string | Date, today: string | Date): string => {
+  const start = toDay(weekStart);
+  const todayKey = toLocalDay(today);
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start.getTime());
+    d.setDate(start.getDate() + i);
+    if (formatDateOnly(d) === todayKey) return todayKey;
+  }
+  return formatDateOnly(start);
+};
+
 export interface AppointmentDay {
   dayKey: string;
   isToday: boolean;

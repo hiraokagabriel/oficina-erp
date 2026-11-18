@@ -30,6 +30,8 @@ import { openWhatsApp } from '../components/KanbanCardMenu';
 import { getShowCosts, setShowCosts, getShowCostColumn, setShowCostColumn as saveShowCostColumn } from '../utils/uiPrefs';
 import { trashPhoto } from '../services/photoStore';
 import { photosChanged, trimCaptions } from '../services/photosView';
+import { useIsPhoneLayout } from '../hooks/useIsPhoneLayout';
+import { getRemainingAmount, sumAdvances } from '../services/osRemaining';
 
 /** Sugestão discreta do histórico de vendas; só sugere, o botão grava apenas o preço da linha. */
 const HistoryHint: React.FC<{
@@ -94,7 +96,9 @@ export const OSModal: React.FC<OSModalProps> = ({
   // Papéis (docs/NUVEM-UX.md 7.3): Recepção não vê custo nem margem; Mecânico tem a visão de campo (sem preços, só leitura, com status, km, vistoria e fotos).
   const access = useAccess();
   const canCosts = access.os.canSeeCosts;
-  const fieldView = !!editingOS && !access.can('os.editFields');
+  const phone = useIsPhoneLayout();
+  // Visão de campo: Mecânico (sem permissão de editar campos) e, no celular, qualquer papel (preços e pagamento só no computador).
+  const fieldView = !!editingOS && (!access.can('os.editFields') || phone);
   // --- REFS PARA ATALHOS ---
   const partInputRef = useRef<HTMLInputElement>(null);
   const serviceInputRef = useRef<HTMLInputElement>(null);
@@ -601,11 +605,18 @@ export const OSModal: React.FC<OSModalProps> = ({
       <div className="modal-overlay" ref={guard.overlayRef}>
         <div className="modal-content osm osm--field" role="dialog" aria-modal="true" aria-labelledby="os-modal-title">
           <header className="osm-head">
+            {phone && (
+              <button type="button" className="btn-ghost osm-back" onClick={guard.requestClose}>
+                <Icon name="voltar" size={18} /> Voltar
+              </button>
+            )}
             <h2 id="os-modal-title" className="modal-title">OS {osNumber}</h2>
             <p className="osm-field-meta">Data {date.split('-').reverse().join('/')}</p>
-            <button type="button" className="btn-ghost osm-close" onClick={guard.requestClose}>
-              <Icon name="fechar" size={18} /> Fechar
-            </button>
+            {!phone && (
+              <button type="button" className="btn-ghost osm-close" onClick={guard.requestClose}>
+                <Icon name="fechar" size={18} /> Fechar
+              </button>
+            )}
           </header>
 
           <div className="osm-body">
@@ -644,7 +655,7 @@ export const OSModal: React.FC<OSModalProps> = ({
               </div>
             </section>
 
-            <section className="osm-section" aria-labelledby="osm-h-itens">
+            <section className="osm-section osm-sec--serv" aria-labelledby="osm-h-itens">
               <h3 id="osm-h-itens" className="osm-h"><Icon name="oficina" size={18} /> Serviço <span className="osm-h-count">{itemsCount(items.length)}</span></h3>
               {(technician.trim() || expectedDate) && (
                 <dl className="osm-field-kv">
@@ -667,7 +678,7 @@ export const OSModal: React.FC<OSModalProps> = ({
             </section>
 
             {onOpenChecklist && (
-              <section className="osm-section" aria-labelledby="osm-h-vistoria">
+              <section className="osm-section osm-sec--vist" aria-labelledby="osm-h-vistoria">
                 <h3 id="osm-h-vistoria" className="osm-h"><Icon name="prancheta" size={18} /> Vistoria</h3>
                 <button type="button" className="btn" onClick={() => onOpenChecklist(live)}>
                   <Icon name="prancheta" size={18} /> Fazer vistoria
@@ -675,13 +686,25 @@ export const OSModal: React.FC<OSModalProps> = ({
               </section>
             )}
 
-            <section className="osm-section" aria-labelledby="osm-h-fotos">
+            <section className="osm-section osm-sec--fotos" aria-labelledby="osm-h-fotos">
               <h3 id="osm-h-fotos" className="osm-h"><Icon name="camera" size={18} /> Fotos do carro</h3>
               <OSPhotos dbPath={dbPath} osId={osId} osNumber={parseInt(osNumber, 10) || 0} photos={photos} setPhotos={setPhotos} sessionRef={sessionPhotos} readOnly={readOnly} onBusyChange={setPhotosBusy} />
             </section>
 
+            {phone && access.os.canSeePrices && (
+              <section className="osm-section osm-sec--pagto" aria-labelledby="osm-h-pagto">
+                <h3 id="osm-h-pagto" className="osm-h"><Icon name="cifrao" size={18} /> Pagamento</h3>
+                <dl className="osm-field-kv">
+                  <div><dt>Total</dt><dd>{formatMoney(live.total)}</dd></div>
+                  <div><dt>Adiantado</dt><dd>{formatMoney(sumAdvances(live))}</dd></div>
+                  <div><dt>Falta pagar</dt><dd>{formatMoney(getRemainingAmount(live))}</dd></div>
+                </dl>
+                <p className="osm-hint">Para mudar preços e pagamentos, use o computador.</p>
+              </section>
+            )}
+
             {obsLines.length > 0 && (
-              <section className="osm-section" aria-labelledby="osm-h-obs">
+              <section className="osm-section osm-sec--obs" aria-labelledby="osm-h-obs">
                 <h3 id="osm-h-obs" className="osm-h"><Icon name="prancheta" size={18} /> Observações</h3>
                 {obsLines.map(l => <p key={l} className="osm-field-obs">{l}</p>)}
               </section>
@@ -691,7 +714,7 @@ export const OSModal: React.FC<OSModalProps> = ({
           <footer className="osm-foot">
             <div className="osm-foot-actions">
               {photosBusy > 0 && <p className="osm-foot-why" role="status">Aguarde o envio das fotos para salvar.</p>}
-              <button type="button" className="btn-secondary" onClick={guard.requestClose}>Fechar</button>
+              {!phone && <button type="button" className="btn-secondary" onClick={guard.requestClose}>Fechar</button>}
               {fieldDirty && (
                 <button type="button" className="btn osm-save" onClick={handleConfirm} disabled={isSaving || photosBusy > 0} aria-busy={isSaving} title="Atalho: Ctrl + Shift + Enter">
                   <Icon name="salvar" size={18} /> {isSaving ? 'Salvando...' : 'Salvar'}

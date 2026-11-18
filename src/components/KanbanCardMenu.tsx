@@ -4,6 +4,10 @@ import { ContextMenu, MenuItem } from './ContextMenu';
 import { Icon } from './ui/Icon';
 import { useDatabase } from '../context/DatabaseContext';
 import { statusMoveNeedsInternet } from '../services/moneyOfflineView';
+import { useIsPhoneLayout } from '../hooks/useIsPhoneLayout';
+import { useToast } from '../context/ToastContext';
+
+const PRINT_ON_DESKTOP = 'Imprimir: no computador';
 
 declare global {
   interface Window {
@@ -81,13 +85,19 @@ interface KanbanCardMenuProps {
 /** Menu de ações do cartão. Só é montado enquanto está aberto (botão "Mais" ou clique direito). */
 export const KanbanCardMenu = ({ os, status, actions, x, y, onClose, canManage = true, showPrices = true }: KanbanCardMenuProps) => {
   // Modo nuvem sem internet: o que mexe no caixa aparece cinza com o motivo (docs/NUVEM-UX.md 6.2). Modo arquivo: nunca.
-  const offline = useDatabase().cloud?.online === false;
+  const cloud = useDatabase().cloud;
+  const offline = cloud?.online === false;
+  const phone = useIsPhoneLayout();
+  const { addToast } = useToast();
   const items = useMemo(() => {
     const list: MenuItem[] = [
       { icon: ic('editar'), label: canManage ? 'Editar OS' : 'Abrir OS', onClick: () => actions.onEdit(os), variant: 'primary' },
       { icon: ic('prancheta'), label: 'Vistoria (Checklist de Inspeção)', onClick: () => actions.onChecklist(os) },
       { divider: true },
-      { icon: ic('imprimir'), label: showPrices ? 'Documentos...' : 'Imprimir vistoria', onClick: (origin) => actions.onDocuments(os, origin) },
+      // Celular: sem janela de impressão; o item fica travado e só avisa (docs/NUVEM-UX.md 8.2).
+      phone
+        ? { icon: ic('cadeado'), label: PRINT_ON_DESKTOP, onClick: () => addToast(PRINT_ON_DESKTOP, 'info') }
+        : { icon: ic('imprimir'), label: showPrices ? 'Documentos...' : 'Imprimir vistoria', onClick: (origin) => actions.onDocuments(os, origin) },
     ];
 
     const show = actions.onShowClient;
@@ -123,7 +133,7 @@ export const KanbanCardMenu = ({ os, status, actions, x, y, onClose, canManage =
     }
 
     return list;
-  }, [os, status, actions, canManage, showPrices, offline]);
+  }, [os, status, actions, canManage, showPrices, offline, phone, addToast]);
 
   return <ContextMenu x={x} y={y} items={items} onClose={onClose} />;
 };

@@ -330,3 +330,38 @@ describe('mergeOSEdit: OS excluída', () => {
     expect(mergeOSEdit({ opened, edited: edit(opened), current: undefined, drafts: undefined })).toEqual({ ok: false, reason: 'DELETED' });
   });
 });
+
+describe('mergeOSEdit: salvar da ficha de campo (celular; Mecânico ou Dono)', () => {
+  // O ramo de campo do OSModal não edita preço nem pagamento: manda itens como abriu e `advances: undefined`.
+  // O salvar (App.handleSaveOS) passa por mergeOSEdit e prepareOSSave com drafts do merge.
+  const ph = (id: string) => ({ id, createdAt: '2026-03-01T12:00:00.000Z' });
+  const opened = os({ advances: [adv('a1', 4000)], photos: [ph('f1')], total: 15000 });
+  const ledgerOf = (): LedgerEntry[] => [{
+    id: 'e-a1', description: 'Adiantamento OS 7', amount: 4000, type: 'CREDIT', effectiveDate: '2026-03-01T12:00:00.000Z', createdAt: '2026-03-01T12:00:00.000Z', paymentDate: '2026-03-01T12:00:00.000Z',
+  }];
+
+  it('só km e fotos: preços, total e adiantamentos ficam como estavam', () => {
+    const edited = edit(opened, { mileage: 321, photos: [ph('f1'), ph('f2'), ph('f3')] });
+    const r = ok(merge({ opened, current: opened, edited, drafts: undefined }));
+    expect(r.base.mileage).toBe(321);
+    expect(r.base.photos?.map(p => p.id)).toEqual(['f1', 'f2', 'f3']);
+    expect(r.base.parts).toEqual(opened.parts);
+    expect(r.base.services).toEqual(opened.services);
+    expect(r.base.total).toBe(15000);
+    expect(r.base.advances).toEqual(opened.advances);
+    expect(r.drafts).toBeUndefined();
+    expect(r.advancesIgnored).toBe(false);
+  });
+
+  it('prepareOSSave com os drafts do merge não mexe em adiantamento nem no caixa', () => {
+    const ledger = ledgerOf();
+    const edited = edit(opened, { mileage: 321 });
+    const m = ok(merge({ opened, current: opened, edited, drafts: undefined }));
+    const saved = prepareOSSave({ base: m.base, previous: opened, drafts: m.drafts, ledger, today: TODAY, now: '2026-03-15T12:00:00.000Z', newId: () => 'novo', machine: 'T' });
+    if (!saved.ok) throw new Error('esperava ok');
+    expect(saved.os.advances).toEqual(opened.advances);
+    expect(saved.os.total).toBe(15000);
+    expect(saved.os.parts).toEqual(opened.parts);
+    expect(saved.ledger.map(e => [e.id, e.amount])).toEqual([['e-a1', 4000]]); // mesmo lançamento, mesmo valor
+  });
+});

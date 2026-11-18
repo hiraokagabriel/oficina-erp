@@ -5,14 +5,15 @@ import { summarizeDeliveries } from '../services/schedule';
 import { Icon } from '../components/ui/Icon';
 import type { KanbanCardActions } from '../components/KanbanCardMenu';
 import { useAccess } from '../hooks/useAccess';
+import { useIsPhoneLayout } from '../hooks/useIsPhoneLayout';
 
 interface WorkshopPageProps {
   workOrders: WorkOrder[];
   isLoading: boolean;
   formatMoney: (val: number) => string;
-  /** Meta de margem global (%), das Configurações. */
+  /** Meta de margem global (%), das ConfiguraÃ§Ãµes. */
   targetMargin?: number;
-  /** Selo de margem nos cartões (opção da Configuração). */
+  /** Selo de margem nos cartÃµes (opÃ§Ã£o da ConfiguraÃ§Ã£o). */
   showMargin?: boolean;
   onNewOS: () => void;
   /** Abre a janela Documentos pelo seletor de OS. */
@@ -33,7 +34,10 @@ export const WorkshopPage: React.FC<WorkshopPageProps> = ({
   kanbanActions
 }) => {
   const access = useAccess();
-  const [showArchived, setShowArchived] = useState(false);
+  // Celular: sem Nova OS, Documentos e Arquivados (ficam para o computador).
+  const phone = useIsPhoneLayout();
+  const [showArchivedState, setShowArchived] = useState(false);
+  const showArchived = showArchivedState && !phone;
 
   // Conta OS arquivadas
   const archivedCount = useMemo(() => 
@@ -47,17 +51,17 @@ export const WorkshopPage: React.FC<WorkshopPageProps> = ({
   return (
     <div className="workshop-page" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div className="page-header" style={{ marginBottom: 15, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 className="page-title" style={{ margin: 0 }}>Gestão de Oficina</h1>
+        <h1 className="page-title" style={{ margin: 0 }}>GestÃ£o de Oficina</h1>
         
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {(lateCount > 0 || deliveries.hoje > 0) && (
             <span className="delivery-summary" role="status">
               <span className="delivery-late">{lateCount} {lateCount === 1 ? 'atrasada' : 'atrasadas'}</span>
-              <span aria-hidden="true">·</span>
+              <span aria-hidden="true">Â·</span>
               <span className="delivery-today">{deliveries.hoje} com entrega hoje</span>
             </span>
           )}
-          <button
+          {!phone && <button
             type="button"
             className="btn-secondary"
             onClick={() => setShowArchived(!showArchived)}
@@ -67,14 +71,14 @@ export const WorkshopPage: React.FC<WorkshopPageProps> = ({
             {archivedCount > 0 && !showArchived && (
               <span className="count-pill" title={`${archivedCount} OS arquivadas`}>{archivedCount}</span>
             )}
-          </button>
+          </button>}
 
-          <button type="button" className="btn-secondary" onClick={(e) => onDocuments(e.currentTarget)}>
+          {!phone && <button type="button" className="btn-secondary" onClick={(e) => onDocuments(e.currentTarget)}>
             <Icon name="imprimir" size={18} />
             Documentos
-          </button>
+          </button>}
 
-          {access.can('os.create') && (
+          {!phone && access.can('os.create') && (
             <button type="button" className="btn" onClick={onNewOS}>
               <Icon name="adicionar" size={18} />
               Nova OS (F2)

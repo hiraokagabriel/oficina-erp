@@ -145,6 +145,10 @@ A importação "Enviar banco para a nuvem" só funciona no app instalado, e até
 
 Tempo: 1 hora. O site aponta para o projeto de **teste** até a virada.
 
+> **Feito em 2026-11-18**: nome `andersonmecanica`, conta Cloudflare criada, site publicado em `https://andersonmecanica.pages.dev` (apontando para o teste) e `SITE_URL` do teste trocado. Falta o D.4 item 1 (Auth do teste, no painel) e o D.5 (celular).
+>
+> Para publicar de novo (Claude faz): `$env:VITE_SITE_URL="https://andersonmecanica.pages.dev"; npm run build:web; npx wrangler pages deploy dist --project-name andersonmecanica --branch main`.
+
 ### D.1 Escolher o nome do site
 
 O endereço será `https://<nome>.pages.dev` e aparece nos e-mails de convite. Exemplos: `andersonmecanica`, `oficina-anderson`. Só letras minúsculas, números e hífen. **Decida e avise o Claude.**

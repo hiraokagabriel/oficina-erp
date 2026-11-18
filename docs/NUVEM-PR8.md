@@ -9,7 +9,7 @@ Plano do `arquiteto` (2026-11-17). Sem mudança de formato do banco. Modo arquiv
 | D1 | Service worker ou só manifest | SW próprio, sem dependência nova (abre sem sinal; navegação rede primeiro, `/assets/` cache primeiro, Supabase não interceptado, sem `skipWaiting`) |
 | D2 | `connect-src` | `https://*.supabase.co wss://*.supabase.co` (serve teste e real) |
 | D3 | Publicação | Direct Upload deste PC: `npx wrangler pages deploy dist` (sem ligar o Git) |
-| D4 | Nome do projeto no Pages (`<nome>.pages.dev`, aparece nos convites) | **pendente: dono escolhe** |
+| D4 | Nome do projeto no Pages (`<nome>.pages.dev`, aparece nos convites) | `andersonmecanica` (2026-11-18): `https://andersonmecanica.pages.dev`, publicado apontando para o projeto de teste |
 
 Premissa: no iPhone, o menu do cartão abre só pelo "⋯"; no Android, o toque longo já dispara `contextmenu`.
 

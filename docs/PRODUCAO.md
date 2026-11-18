@@ -222,7 +222,7 @@ Pendências do dono:
 - Testar o exe com a CSP nova com banco sintético em pasta temporária (nunca o real em `C:\OficinaData`): abrir, salvar OS, foto, imprimir, PDF, CSV, WhatsApp, tema Pastel, backup no Drive, F12 sem "Refused to...". Não liberar versão aos PCs sem isso.
 - Definir o nome do site no Cloudflare Pages e abrir a conta (PR 8 R8); depois Site URL e Redirect URLs do Auth.
 - Testar em celular real (câmera, PWA, offline).
-- Testar a importação no app Tauri real com banco sintético.
+- ~~Testar a importação no app Tauri real com banco sintético~~ e ~~o exe com a CSP nova~~: feitos pelo dono em 2026-11-18.
 - Responder: "Receitas" e Peças/Serviços do painel do Financeiro devem somar OS ainda em aberto? (visto no teste com 5 OS)
 - SMTP do projeto real: tirar os e-mails do spam (hoje Brevo com remetente Gmail).
 - Combinar o dia da virada: todos os PCs no mesmo dia, dono presente; ok para aplicar no projeto real.
@@ -284,7 +284,7 @@ Riscos:
 
 ## Próximo passo
 
-0. (2026-11-18, Iniciativa E) Dono: teste do exe com a CSP nova e da importação no Tauri real com banco sintético, celular real, nome do site no Pages, SMTP do real, resposta sobre "Receitas"; depois combinar a virada. Sessão principal e `entregador`: PR 11 só com o ok do dono (ordem das migrações em `docs/NUVEM-ESTADO.md`). Os itens 1 a 5 abaixo são anteriores à nuvem.
+0. (2026-11-18, Iniciativa E) Dono: (exe com a CSP nova e importação no Tauri real: feitos em 2026-11-18) celular real, nome do site no Pages, SMTP do real, resposta sobre "Receitas"; depois combinar a virada. Sessão principal e `entregador`: PR 11 só com o ok do dono (ordem das migrações em `docs/NUVEM-ESTADO.md`). Os itens 1 a 5 abaixo são anteriores à nuvem.
 1. Dono: aprovar ou ajustar os PDFs de impressão e decidir o homônimo na galeria.
 2. Sessão principal: atualizar `CLAUDE.md` (v5), excluir `.claude/worktrees` do Vitest, remover worktrees mescladas.
 3. `entregador`: gerar o instalador, preparar notas em `docs/VERSOES.md` e o checklist de atualização dos PCs (v4 + v5 no mesmo dia).

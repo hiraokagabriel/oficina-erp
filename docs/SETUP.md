@@ -128,6 +128,8 @@ Aperte F12 para abrir o console (no exe de debug) e deixe aberto. Em cada passo,
 
 Deu certo se tudo funciona e o console não mostra "Refused to". Se aparecer, copie a mensagem e mande ao Claude.
 
+> **Feito pelo dono em 2026-11-18** (C.3 e C.4 sem falhas).
+
 ### C.4 Testar a importação no app instalado (opcional, recomendado)
 
 A importação "Enviar banco para a nuvem" só funciona no app instalado, e até agora foi testada de forma simulada. Para testá-la de verdade, o Claude precisa gerar um exe no **modo nuvem apontando para o teste** (ainda não há script pronto para isso; ver "O que ainda falta construir"). Peça ao Claude: "gere o exe nuvem de teste". Depois:
@@ -347,7 +349,12 @@ Tempo: meio período. **Você precisa estar presente**, de preferência num dia 
 
 ## O que ainda falta construir (o Claude faz antes do dia)
 
-1. **Script para gerar o exe no modo nuvem** apontando para o teste (Fase C.4) e para o real (Fase E.8). Hoje o `npm run tauri build` gera só o modo arquivo.
+1. **Script para gerar o exe no modo nuvem** apontando para o real (Fase E.8). Para o **teste** já há a receita (identificador próprio `com.oficinapro.nuvemteste`, dados separados do app instalado, chaves do `.env.cloud.local`), numa pasta de compilação à parte para não sobrescrever o exe do modo arquivo:
+   ```powershell
+   $env:CARGO_TARGET_DIR = "$env:TEMP	arget-nuvem"
+   npm run tauri build -- --debug --no-bundle --config scripts/tauri.nuvem-teste.json
+   ```
+   O exe sai em `%TEMP%	arget-nuvemdebugoficina-erp.exe`. Precisa de uns 4 GB livres no C:. Hoje o `npm run tauri build` sem `--config` gera só o modo arquivo.
 2. **Script de build do site com as chaves do real** (Fase E.7). Hoje o `npm run build:web` usa `.env.cloud.local`, que aponta para o teste.
 3. **Revisão do SQL** antes de aplicar no real (Fase E.3).
 4. **Cadastro da verificação em 2 etapas (TOTP) do Dono pelo app**: ainda não existe tela para isso. Sem TOTP, o Dono entra só com e-mail e senha (o sistema já aceita assim). Recomendado ativar depois da virada.

@@ -1,0 +1,5 @@
+{
+  "identifier": "com.oficinapro.nuvemteste",
+  "productName": "OficinaPro Nuvem Teste",
+  "build": { "beforeBuildCommand": "npm run build:web" }
+}

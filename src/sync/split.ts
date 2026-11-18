@@ -40,11 +40,34 @@ function cleanOS(os: WorkOrder): WorkOrder {
  */
 export function prepareForCloud(db: DatabaseSchema): DatabaseSchema {
   const stripped = stripDbSecrets(db);
+  // Peças e serviços dividem o mesmo espaço de ids na nuvem (catalog_prices/catalog_costs são por id do item).
+  const taken = new Set<string>();
+  const catalogParts = fixCatalogIds(stripped.catalogParts ?? [], 'peca', taken);
+  const catalogServices = fixCatalogIds(stripped.catalogServices ?? [], 'servico', taken);
   return {
     ...stripped,
+    catalogParts,
+    catalogServices,
     workOrders: db.workOrders.map(cleanOS),
     clients: db.clients.map(cleanClient),
   };
+}
+
+/**
+ * Catálogo de bancos antigos pode ter item sem id ou com id repetido (o modo arquivo nunca exigiu). Na nuvem o id é a
+ * chave: o primeiro com cada id fica como está (as OS que apontam para ele continuam ligadas) e os demais ganham um id
+ * novo e estável (mesmo arquivo = mesmo id, então reenviar a importação continua idempotente). Nenhum item é apagado.
+ */
+export function fixCatalogIds<T extends { id?: string }>(items: T[], prefix: string, taken: Set<string>): T[] {
+  return items.map((item, i) => {
+    const id = typeof item.id === 'string' ? item.id.trim() : '';
+    if (id && !taken.has(id)) { taken.add(id); return item; }
+    let n = 0;
+    let fresh = `${prefix}-ajuste-${i + 1}`;
+    while (taken.has(fresh)) fresh = `${prefix}-ajuste-${i + 1}-${++n}`;
+    taken.add(fresh);
+    return { ...item, id: fresh };
+  });
 }
 
 // ---------- ledgerOwnerIndex ----------

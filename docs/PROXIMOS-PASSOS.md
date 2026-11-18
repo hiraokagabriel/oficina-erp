@@ -100,7 +100,17 @@ Desde 2026-11-18 a oficina usa o modo nuvem (versão 0.3.0) com dados reais. Tod
 
 **Recomendação revisada:** valor-hora base **R$ 200 a 250**; fatores iniciais Popular 1,0, Médio 1,1, Premium/importado 1,7, Vintage 1,8, todos calibráveis. A calibração confiável exige **serviços com nome** em vez de "MÃO DE OBRA" (Fase 1 do item B), para o app calcular o valor-hora real por serviço e categoria de veículo.
 
-**Estado:** fórmula e categorias definidas; valor-hora e fatores a fixar com o dono (faixa recomendada acima). Fase 1 (serviços com nome por sistema) vira pré-requisito da calibração.
+**Levantamento das peças nas 1096 OS reais (2026-11-18, só descrições e preços, sem dados de cliente):** 2.201 itens de peça, 523 descrições distintas.
+- **706 itens são "TOTAL PEÇAS"** (uma linha com o valor somado, mediana R$ 780): nessas OS não se sabe o que foi trocado; o histórico delas não serve para calibrar.
+- **Nomes duplicados** para a mesma peça (ex.: "FILTRO ÓLEO" / "FILTRO ÓLEO MOTOR" / "ÓLEO MOTOR E FILTRO"; "FLUIDO RADIADOR" / "ADITIVO RADIADOR"; "VELAS" / "VELAS IGNIÇÃO"; três nomes de fluido de freio): as 523 cairiam para ~150 padronizadas.
+- **Mais usados por sistema (somando nomes parecidos):** Freios: pastilhas 64, discos 20, fluido ~34. Suspensão: amortecedores ~40, bieletas ~34, mancal da barra 12, pivô 10, buchas ~14. Fluidos e filtros: óleo ~49, filtro de combustível 32, de óleo ~28, de ar 23, cabine 6, óleo de câmbio 13. Arrefecimento: aditivo/fluido ~50, água desmineralizada ~21, bomba d'água 15, termostática 14, radiador 10. Ignição: velas ~37, cabos 14, bobina 10. Injeção: descarbonizante 21, TBI 14, bomba de combustível 14, injetores ~20, bicos ~11, sonda 6. Motor: correias ~26, coxins ~23, juntas ~23, correia dentada 5. Direção e rodas: alinhamento ~22, terminal 7, rolamento 10. Embreagem e câmbio: embreagem 8, coifas ~13. Elétrica: motor de partida ~13.
+
+**Consequências para a Fase 1:**
+1. A base de serviços sai destes números: ~40 serviços cobrem a grande maioria das OS.
+2. Padronizar o catálogo antes (juntar nomes duplicados num item só, já com o sistema): o Claude propõe a lista de junções e o dono aprova antes de aplicar (dados reais).
+3. OS nova deve detalhar as peças: impedir ou desestimular "TOTAL PEÇAS" para o histórico passar a valer na calibração.
+
+**Estado:** fórmula e categorias definidas; valor-hora e fatores a fixar com o dono (faixa recomendada acima). Fase 1 (serviços com nome por sistema, catálogo padronizado, peças detalhadas) vira pré-requisito da calibração.
 
 ## Já levantados (2026-11-18)
 

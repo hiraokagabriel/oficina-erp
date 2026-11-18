@@ -22,6 +22,9 @@ import "./styles-checklist.css";
 // CONTAS A RECEBER
 import "./styles-receivables.css";
 
+// FINANCEIRO > VISÃO GERAL ("Três caixas")
+import "./styles-finance.css";
+
 // PREVISÃO DE ENTREGA
 import "./styles-schedule.css";
 

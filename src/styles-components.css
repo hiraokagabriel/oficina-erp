@@ -115,6 +115,10 @@ button.chip:hover, a.chip:hover { background: var(--surface-3); color: var(--tex
 .status-light--finalizado { --_c: var(--status-finalizado); --_t: var(--status-finalizado-text); }
 .status-light--arquivado { --_c: var(--status-arquivado); --_t: var(--status-arquivado-text); }
 .status-light--atrasado { --_c: var(--status-atrasado); --_t: var(--status-atrasado-text); }
+/* Financeiro: vencido/atrasado, a vencer, em aberto (sem data) */
+.status-light--late { --_c: var(--fin-late); --_t: var(--fin-late-text); }
+.status-light--due { --_c: var(--fin-due); --_t: var(--fin-due-text); }
+.status-light--open { --_c: var(--fin-out); --_t: var(--fin-out-text); }
 
 /* ---------- JANELA (.modal base e .modal-content) ---------- */
 .modal-overlay { background-color: rgba(0, 0, 0, 0.65); backdrop-filter: none; animation: fadeIn var(--dur-base) ease-out; }

@@ -177,6 +177,32 @@
   --status-atrasado-bg: color-mix(in srgb, var(--status-atrasado) 12%, transparent);
 }
 
+/* Financeiro > Visão geral ("Três caixas"): entrou, saiu, a vencer, vencido, categorias. Saiu não é alarme; vermelho só no vencido. */
+:root {
+  --fin-in: var(--success);               --fin-in-text: var(--text-success);
+  --fin-out: #94A3B8;                     --fin-out-text: #CBD5E1;
+  --fin-due: var(--warning);              --fin-due-text: var(--text-warning);
+  --fin-late: var(--status-atrasado);     --fin-late-text: var(--status-atrasado-text);
+  --fin-parts: #38BDF8;                   --fin-services: #A78BFA;
+  --fin-in-bg: color-mix(in srgb, var(--fin-in) 14%, transparent);
+  --fin-out-bg: color-mix(in srgb, var(--fin-out) 14%, transparent);
+  --fin-due-bg: color-mix(in srgb, var(--fin-due) 14%, transparent);
+  --fin-late-bg: color-mix(in srgb, var(--fin-late) 14%, transparent);
+  --fin-parts-bg: color-mix(in srgb, var(--fin-parts) 14%, transparent);
+  --fin-services-bg: color-mix(in srgb, var(--fin-services) 14%, transparent);
+}
+[data-theme="pastel"] {
+  --fin-in: #059669;                      --fin-late: #DC2626;   /* preenchimento >= 3:1 sobre branco (barras e luzes) */
+  --fin-out: #64748B;                     --fin-out-text: #475569;
+  --fin-parts: #0284C7;                   --fin-services: #7C3AED;
+  --fin-in-bg: color-mix(in srgb, var(--fin-in) 12%, transparent);
+  --fin-out-bg: color-mix(in srgb, var(--fin-out) 12%, transparent);
+  --fin-due-bg: color-mix(in srgb, var(--fin-due) 12%, transparent);
+  --fin-late-bg: color-mix(in srgb, var(--fin-late) 12%, transparent);
+  --fin-parts-bg: color-mix(in srgb, var(--fin-parts) 12%, transparent);
+  --fin-services-bg: color-mix(in srgb, var(--fin-services) 12%, transparent);
+}
+
 /* --- Base tipográfica --- */
 body {
   font-family: var(--font-ui);

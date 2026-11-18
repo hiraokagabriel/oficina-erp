@@ -98,7 +98,11 @@ Desde 2026-11-18 a oficina usa o modo nuvem (versão 0.3.0) com dados reais. Tod
 - Valor-hora praticado de fato ≈ **R$ 250/h** (R$ 120 é o mínimo para cobrir custos com 70% de margem, não o preço praticado).
 - Por categoria (cobrado ÷ fórmula): Popular ≈ 2,3×; Médio ≈ 1,7×; Premium ≈ 2,7× (troca de óleo de Volvo 4,8×). O fator premium real fica perto de 1,6 a 2,0; popular e médio irregulares (parte é erro da estimativa de tempo).
 
-**Recomendação revisada:** valor-hora base **R$ 200 a 250**; fatores iniciais Popular 1,0, Médio 1,1, Premium/importado 1,7, Vintage 1,8, todos calibráveis. A calibração confiável exige **serviços com nome** em vez de "MÃO DE OBRA" (Fase 1 do item B), para o app calcular o valor-hora real por serviço e categoria de veículo.
+**Calibração ampliada (2026-11-18), só OS do padrão atual:** de 1.080 finalizadas, ignoradas 703 com "TOTAL PEÇAS", 20 sem mão de obra e 207 com peça sem tempo conhecido; sobraram **150 OS**. Valor-hora praticado (mão de obra ÷ tempo estimado, coeficiente 1,0): **Todas** mediana R$ 260 (metade central R$ 150 a 429); **Popular** R$ 208 (74 OS; R$ 135 a 375); **Médio** R$ 267 (57 OS; R$ 167 a 400); **Premium** R$ 429 (17 OS; R$ 330 a 700); **Vintage** R$ 214 (2 OS, insuficiente). A ordem ficou coerente (popular < médio < premium) e dá os fatores: **Médio ≈ 1,3**, **Premium ≈ 2,0**. A variação dentro de cada categoria segue grande (tempos estimados, coeficiente não aplicado, preço negociado por serviço).
+
+**Proposta calibrada:** base **R$ 210/h** (Popular 1,0); Médio 1,3 (R$ 273); Premium/importado 2,0 (R$ 420); Vintage 1,8 provisório (R$ 378). Acerta a mediana de cada categoria; a precisão por OS vem depois, com serviços com nome (Fase 1) e coeficiente medido por serviço.
+
+**Recomendação anterior (24 OS, substituída pela calibração ampliada):** valor-hora base **R$ 200 a 250**; fatores iniciais Popular 1,0, Médio 1,1, Premium/importado 1,7, Vintage 1,8, todos calibráveis. A calibração confiável exige **serviços com nome** em vez de "MÃO DE OBRA" (Fase 1 do item B), para o app calcular o valor-hora real por serviço e categoria de veículo.
 
 **Levantamento das peças nas 1096 OS reais (2026-11-18, só descrições e preços, sem dados de cliente):** 2.201 itens de peça, 523 descrições distintas.
 - **706 itens são "TOTAL PEÇAS"** (uma linha com o valor somado, mediana R$ 780): nessas OS não se sabe o que foi trocado; o histórico delas não serve para calibrar.

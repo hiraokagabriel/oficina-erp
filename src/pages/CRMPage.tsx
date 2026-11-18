@@ -10,6 +10,7 @@ import { ClientEditModal } from '../modals/ClientEditModal';
 import { ClientPhotos } from '../components/ClientPhotos';
 import { useDatabase } from '../context/DatabaseContext';
 import { useAccess } from '../hooks/useAccess';
+import { formatPhoneDisplay } from '../utils/phoneFormat';
 import { useIsPhoneLayout } from '../hooks/useIsPhoneLayout';
 
 // Declaração global do Tauri
@@ -53,7 +54,7 @@ const ClientRow = React.memo(({ client, selected, debt, formatMoney, onSelect }:
         onClick={() => onSelect(client)}
       >
         <span className="client-name">{client.name || 'Sem nome'}</span>
-        <span className="client-contact">{s.phone}</span>
+        <span className="client-contact">{formatPhoneDisplay(s.phone)}</span>
         <span className="client-contact">{s.vehicle}</span>
         {debt && (
           <span className="client-debt">
@@ -363,7 +364,7 @@ export const CRMPage: React.FC<CRMPageProps> = ({
                             <h2 className="crm-head-name">{selectedClient.name}</h2>
                             <div className="crm-head-phone">
                               <Icon name="telefone" size={18} />
-                              <span>{selectedClient.phone || 'Sem telefone'}</span>
+                              <span>{formatPhoneDisplay(selectedClient.phone) || 'Sem telefone'}</span>
                             </div>
                           </div>
                           <div className="crm-head-actions">

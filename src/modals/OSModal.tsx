@@ -13,6 +13,7 @@ import { VehicleCombobox, useShopVehicles } from '../components/VehicleCombobox'
 import { computeOSMargin, formatPct, marginLabel, marginLevel, suggestPriceForTarget } from '../services/margin';
 import { PriceSuggestion, suggestHistoricalPrice } from '../services/pricing';
 import { useDirtyGuard } from '../hooks/useDirtyGuard';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { normalizeItemCost, partialMarginNote } from '../services/marginView';
 import { firstErrorField, OSFieldErrors, OSFieldId, validateOSFields } from '../services/osModalView';
 import { MoneyField } from '../components/MoneyField';
@@ -483,7 +484,7 @@ export const OSModal: React.FC<OSModalProps> = ({
 
   const handleConfirm = () => {
     if (photosBusy > 0) return; // botão e atalho esperam o envio das fotos
-    const found = validateOSFields({ clientName, vehicle, needsClientChoice, osNumber });
+    const found = validateOSFields({ clientName, vehicle, needsClientChoice, osNumber, fieldView });
     const first = firstErrorField(found);
     if (first) {
       setErrors(found);
@@ -564,6 +565,15 @@ export const OSModal: React.FC<OSModalProps> = ({
     resetKey: editingOS ? `os:${editingOS.id}` : draft ? `draft:${draft.clientName}|${draft.vehicle}|${draft.notes}` : 'nova',
   });
 
+  // Ficha de campo em tela cheia: foco preso na janela e foco inicial em Voltar/Fechar (o Esc segue pelo guard).
+  const fieldRef = useRef<HTMLDivElement>(null);
+  const fieldActive = isOpen && fieldView;
+  useFocusTrap(fieldActive, fieldRef);
+  useEffect(() => {
+    if (!fieldActive) return;
+    fieldRef.current?.querySelector<HTMLElement>('.osm-back, .osm-close')?.focus();
+  }, [fieldActive]);
+
   if (!isOpen) return null;
 
   const costToggle = (
@@ -591,7 +601,7 @@ export const OSModal: React.FC<OSModalProps> = ({
 
   const advTotals = advanceTotals(advanceRows, totalRevenue);
 
-  // ---- Visão de campo (Mecânico): ramo do mesmo modal. Nunca desenha dinheiro: sem preço, custo, total, adiantamento. ----
+  // ---- Visão de campo (Mecânico e celular): ramo do mesmo modal. Não desenha preço, custo, total nem adiantamento: dinheiro só no computador. ----
   if (fieldView && editingOS) {
     const live = workOrders.find(o => o.id === editingOS.id) ?? editingOS; // status vivo: muda sem fechar a janela
     const step = nextStep(live.status);
@@ -603,7 +613,7 @@ export const OSModal: React.FC<OSModalProps> = ({
     return (
       <>
       <div className="modal-overlay" ref={guard.overlayRef}>
-        <div className="modal-content osm osm--field" role="dialog" aria-modal="true" aria-labelledby="os-modal-title">
+        <div className="modal-content osm osm--field" ref={fieldRef} role="dialog" aria-modal="true" aria-labelledby="os-modal-title">
           <header className="osm-head">
             {phone && (
               <button type="button" className="btn-ghost osm-back" onClick={guard.requestClose}>
@@ -680,7 +690,7 @@ export const OSModal: React.FC<OSModalProps> = ({
             {onOpenChecklist && (
               <section className="osm-section osm-sec--vist" aria-labelledby="osm-h-vistoria">
                 <h3 id="osm-h-vistoria" className="osm-h"><Icon name="prancheta" size={18} /> Vistoria</h3>
-                <button type="button" className="btn" onClick={() => onOpenChecklist(live)}>
+                <button type="button" className={fieldDirty ? 'btn-secondary' : 'btn'} onClick={() => onOpenChecklist(live)}>
                   <Icon name="prancheta" size={18} /> Fazer vistoria
                 </button>
               </section>

@@ -8,6 +8,8 @@ export interface OSValidationInput {
   vehicle: string;
   needsClientChoice: boolean;
   osNumber: string;
+  /** Ficha de campo: não edita cliente nem veículo (o merge preserva o que não mudou), então não os valida. */
+  fieldView?: boolean;
 }
 
 export type OSFieldErrors = Partial<Record<OSFieldId, string>>;
@@ -15,10 +17,12 @@ export type OSFieldErrors = Partial<Record<OSFieldId, string>>;
 /** Mesmas regras de antes (cliente e veículo, escolha de homônimo, número da OS), agora por campo. */
 export function validateOSFields(i: OSValidationInput): OSFieldErrors {
   const errors: OSFieldErrors = {};
-  if (!i.clientName) errors['os-client'] = 'Preencha o cliente.';
-  if (!i.vehicle) errors['os-vehicle'] = 'Preencha o veículo.';
-  if (i.clientName && i.needsClientChoice) {
-    errors['os-client-choice'] = 'Há mais de um cliente com esse nome. Escolha o cliente em "Qual cliente?".';
+  if (!i.fieldView) {
+    if (!i.clientName) errors['os-client'] = 'Preencha o cliente.';
+    if (!i.vehicle) errors['os-vehicle'] = 'Preencha o veículo.';
+    if (i.clientName && i.needsClientChoice) {
+      errors['os-client-choice'] = 'Há mais de um cliente com esse nome. Escolha o cliente em "Qual cliente?".';
+    }
   }
   if (Number.isNaN(parseInt(i.osNumber, 10))) errors['os-number'] = 'Número da OS inválido.';
   return errors;

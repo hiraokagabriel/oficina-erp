@@ -147,7 +147,7 @@ describe('planDeleteOS / removeOSReceipt (item 2)', () => {
     expect(r.message).toContain('15,00');
   });
   it('OS sem financeiro: só a frase de exclusão', () => {
-    expect(planDeleteOS(os(), [])).toEqual({ ok: true, message: 'Vai excluir a OS #5.' });
+    expect(planDeleteOS(os(), [])).toEqual({ ok: true, message: `Vai excluir a OS #5 de ${os().clientName}. Não dá para desfazer.` });
   });
 });
 

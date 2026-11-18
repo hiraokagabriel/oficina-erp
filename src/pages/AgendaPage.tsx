@@ -39,8 +39,10 @@ const chipWeekday = (dayKey: string): string => {
   return w.charAt(0).toUpperCase() + w.slice(1);
 };
 
-const dayTitle = (dayKey: string): string =>
-  parseDateOnly(dayKey).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' });
+const dayTitle = (dayKey: string): string => {
+  const t = parseDateOnly(dayKey).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' });
+  return t.charAt(0).toUpperCase() + t.slice(1); // só a primeira letra ("Terça-feira"), não cada palavra
+};
 
 export const AgendaPage: React.FC<AgendaPageProps> = ({ appointments, workOrders, clients, onSave, onAction, onDelete, onCreateOS }) => {
   const access = useAccess();

@@ -13,7 +13,7 @@
 .appt-day--empty .appt-day-empty { flex: 1 1 auto; }
 .appt-past-title { margin: 8px 0 0; font-size: 0.85rem; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; }
 .appt-day-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
-.appt-day-title { margin: 0; font-size: 1rem; font-weight: 700; color: var(--text-main); text-transform: capitalize; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.appt-day-title { margin: 0; font-size: 1rem; font-weight: 700; color: var(--text-main); display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .appt-day-empty { margin: 0; color: var(--text-muted); font-size: 0.9rem; }
 
 /* "Hoje" usa a cor de ação; "Amanhã" é neutro. */

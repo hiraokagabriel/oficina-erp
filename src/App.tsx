@@ -314,7 +314,7 @@ export function AppContent({ topbar, phone: phoneShell }: { topbar?: ReactNode; 
     if (duplicate && !confirm(`OS #${data.osNumber} duplicada. Continuar?`)) return;
 
     // Vínculos por id (plano 4.6): usa o ESTADO do render, como handleSaveClient. Os textos continuam gravados.
-    const linkedClient = linkClient({
+    const linkedByName = linkClient({
       clients,
       clientName: data.clientName,
       clientPhone: data.clientPhone,
@@ -323,6 +323,11 @@ export function AppContent({ topbar, phone: phoneShell }: { topbar?: ReactNode; 
       clientId: preferredClientId(editingOS, data.clientName, data.clientId),
       newId: generateId,
     });
+    // Ficha de campo do celular não edita o cliente: OS de homônimo sem clientId segue com os vínculos que já tinha (sem fundir nem cadastrar).
+    const clientUntouched = !!editingOS && data.clientName === editingOS.clientName;
+    const linkedClient = linkedByName.ambiguous && clientUntouched
+      ? { ...linkedByName, ambiguous: false, clients, clientId: editingOS.clientId, vehicleId: editingOS.vehicleId }
+      : linkedByName;
     if (linkedClient.ambiguous) {
       addToast('Há mais de um cliente com esse nome. Escolha qual cliente na OS antes de salvar.', 'error');
       return;

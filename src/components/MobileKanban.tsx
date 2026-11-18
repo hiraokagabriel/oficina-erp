@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { OSStatus, STATUS_LABELS, WorkOrder } from '../types';
 import { KanbanCard } from './KanbanCard';
 import type { KanbanCardActions } from './KanbanCardMenu';
@@ -41,6 +41,14 @@ export default function MobileKanban({ workOrders, actions, formatMoney, onStatu
 
   const { paginatedItems, loadMore, hasMore, totalItems } = usePagination({ items: list, itemsPerPage: 30 });
 
+  // Chip ativo visível ao abrir (o trilho rola sozinho; a página não).
+  const activeChipRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    const el = activeChipRef.current;
+    const rail = el?.parentElement;
+    if (el && rail) rail.scrollLeft = Math.max(0, el.offsetLeft - (rail.clientWidth - el.offsetWidth) / 2);
+  }, [chip, searching]);
+
   const pick = (s: OSStatus): void => {
     setChip(s);
     setPhoneChip(s);
@@ -72,6 +80,7 @@ export default function MobileKanban({ workOrders, actions, formatMoney, onStatu
           <button
             key={s}
             type="button"
+            ref={!searching && chip === s ? activeChipRef : undefined}
             className={`chip mk-chip${!searching && chip === s ? ' chip--accent' : ''}`}
             aria-pressed={!searching && chip === s}
             onClick={() => { pick(s); setTerm(''); }}

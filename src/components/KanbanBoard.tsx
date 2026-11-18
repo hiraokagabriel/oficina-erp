@@ -330,7 +330,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
       if (firstColumn) {
         setColumnWidth(firstColumn.offsetWidth + 16); // largura + gap
       }
-    }, [filteredWorkOrders.length, showArchived]);
+    }, [filteredWorkOrders.length, showArchived, phone]);
 
     useEffect(() => {
       if (!scrollRef.current || showArchived) return;
@@ -348,7 +348,7 @@ export const KanbanBoard = React.memo<KanbanBoardProps>(
       return () => {
         el.removeEventListener('scroll', updateScrollFlags);
       };
-    }, [filteredWorkOrders.length, showArchived]);
+    }, [filteredWorkOrders.length, showArchived, phone]);
 
     const handleStepScroll = (direction: 'left' | 'right') => {
       if (!scrollRef.current || !columnWidth) return;

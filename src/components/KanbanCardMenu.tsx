@@ -114,10 +114,10 @@ export const KanbanCardMenu = ({ os, status, actions, x, y, onClose, canManage =
     list.push({ divider: true });
 
     if (status !== 'ARQUIVADO' && status !== 'ORCAMENTO' && (canManage || status !== 'FINALIZADO')) {
-      list.push({ icon: ic('voltar'), label: 'Voltar Status', onClick: () => actions.onRegress(os.id), needsInternet: offline && statusMoveNeedsInternet(status, status === 'FINALIZADO' ? 'AGUARDANDO_PAGAMENTO' : status === 'AGUARDANDO_PAGAMENTO' ? 'EM_SERVICO' : 'ORCAMENTO') });
+      list.push({ icon: ic('voltar'), label: 'Voltar situação', onClick: () => actions.onRegress(os.id), needsInternet: offline && statusMoveNeedsInternet(status, status === 'FINALIZADO' ? 'AGUARDANDO_PAGAMENTO' : status === 'AGUARDANDO_PAGAMENTO' ? 'EM_SERVICO' : 'ORCAMENTO') });
     }
     if (status !== 'ARQUIVADO' && status !== 'FINALIZADO' && (canManage || status !== 'AGUARDANDO_PAGAMENTO')) {
-      list.push({ icon: ic('proximo'), label: 'Avançar Status', onClick: () => actions.onAdvance(os.id), needsInternet: offline && statusMoveNeedsInternet(status, status === 'ORCAMENTO' ? 'APROVADO' : status === 'APROVADO' ? 'EM_SERVICO' : status === 'EM_SERVICO' ? 'AGUARDANDO_PAGAMENTO' : 'FINALIZADO') });
+      list.push({ icon: ic('proximo'), label: 'Avançar situação', onClick: () => actions.onAdvance(os.id), needsInternet: offline && statusMoveNeedsInternet(status, status === 'ORCAMENTO' ? 'APROVADO' : status === 'APROVADO' ? 'EM_SERVICO' : status === 'EM_SERVICO' ? 'AGUARDANDO_PAGAMENTO' : 'FINALIZADO') });
     }
 
     if (canManage) {

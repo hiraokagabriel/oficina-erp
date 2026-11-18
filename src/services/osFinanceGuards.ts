@@ -113,7 +113,7 @@ export const planDeleteOS = (os: WorkOrder, ledger: LedgerEntry[]): GuardResult 
         + `somando ${Money.format(t.paidAmount)}. Desmarque o pagamento dessas parcelas em Financeiro > A receber e tente de novo.`,
     };
   }
-  const lines = [`Vai excluir a OS #${os.osNumber}.`];
+  const lines = [`Vai excluir a OS #${os.osNumber}${os.clientName ? ` de ${os.clientName}` : ''}. Não dá para desfazer.`];
   if (grouped) {
     lines.push(`Apaga também ${parcelas(t.openCount)} em aberto (${Money.format(t.openAmount)}) do caixa.`);
   } else if (entries.length > 0) {

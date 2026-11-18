@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useIsPhoneLayout } from '../hooks/useIsPhoneLayout';
 import { useTopmostEscape } from '../hooks/useTopmostEscape';
 import { ConfirmationModal } from '../modals/ConfirmationModal';
 import { PhotoViewerModal, ViewerPhoto } from '../modals/PhotoViewerModal';
@@ -40,6 +41,7 @@ export const OSPhotos: React.FC<OSPhotosProps> = ({ dbPath, osId, osNumber, phot
   const cameraRef = useRef<HTMLInputElement>(null);
   const cloud = photoStoreKind() === 'cloud';
   const touch = cloud && isTouchDevice();
+  const phoneLayout = useIsPhoneLayout();
   const hintId = useId();
   const photosRef = useRef(photos);
   photosRef.current = photos;
@@ -204,7 +206,9 @@ export const OSPhotos: React.FC<OSPhotosProps> = ({ dbPath, osId, osNumber, phot
         {readOnly
           ? 'Banco somente leitura: não é possível adicionar nem remover fotos.'
           : available
-            ? 'Escolha as fotos, arraste para cá ou cole com Ctrl+V. As fotos só ficam na OS depois de clicar em Salvar.'
+            ? (phoneLayout
+              ? 'As fotos só ficam na OS depois de tocar em Salvar.'
+              : 'Escolha as fotos, arraste para cá ou cole com Ctrl+V. As fotos só ficam na OS depois de clicar em Salvar.')
             : 'Fotos só no programa instalado.'}
       </p>
 

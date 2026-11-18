@@ -18,6 +18,11 @@ describe('validateOSFields', () => {
     const e = validateOSFields({ ...ok, needsClientChoice: true });
     expect(firstErrorField(e)).toBe('os-client-choice');
   });
+  it('ficha de campo não valida cliente nem veículo (homônimo sem clientId, veículo vazio)', () => {
+    const homonimo = { clientName: 'Ana', vehicle: '', needsClientChoice: true, osNumber: '12', fieldView: true };
+    expect(validateOSFields(homonimo)).toEqual({});
+    expect(validateOSFields({ ...homonimo, osNumber: 'x' })['os-number']).toBeTruthy();
+  });
   it('número da OS inválido', () => {
     expect(firstErrorField(validateOSFields({ ...ok, osNumber: 'x' }))).toBe('os-number');
     expect(validateOSFields({ ...ok, osNumber: '' })['os-number']).toBeTruthy();

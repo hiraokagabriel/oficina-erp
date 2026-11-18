@@ -1,5 +1,5 @@
 // Projeto Supabase de TESTE: cria a oficina "Oficina Teste" e uma conta de Dono (e-mail confirmado, senha temporária impressa).
-// Uso: node scripts/test-db.mjs migrate && node scripts/test-seed-owner.cjs <email> [--vazio]. Recusa o projeto real.
+// Uso: node scripts/test-db.mjs migrate && node scripts/test-seed-owner.cjs <email> [--vazio]. Recusa o projeto real. Se a conta já tem oficina, só troca a senha.
 // Sem e-mail: o projeto de teste não tem SMTP próprio, então convite e recuperação de senha não servem para entrar.
 const { createRequire } = require('module')
 const repo = process.cwd()
@@ -17,8 +17,6 @@ const importState = process.argv.includes('--vazio') ? 'vazio' : 'concluido'
   const sql = postgres(DB, { max: 1, onnotice: () => {} })
   const admin = (m, p, b) => fetch(URL_ + '/auth/v1' + p, { method: m, headers: { apikey: SERVICE, Authorization: 'Bearer ' + SERVICE, 'Content-Type': 'application/json' }, body: b ? JSON.stringify(b) : undefined })
   const password = 'Teste-' + randomBytes(5).toString('hex')
-  const ws = randomUUID()
-  await sql`insert into public.workshops (id,name,import_state) values (${ws}, ${'Oficina Teste'}, ${importState})`
   // O reset do banco não apaga contas do Auth: conta existente ganha senha temporária nova.
   const [old] = await sql`select id from auth.users where lower(email) = lower(${email})`
   const r = old
@@ -26,8 +24,16 @@ const importState = process.argv.includes('--vazio') ? 'vazio' : 'concluido'
     : await admin('POST', '/admin/users', { email, password, email_confirm: true })
   const j = await r.json()
   if (!r.ok) throw new Error('auth ' + r.status + ' ' + JSON.stringify(j))
-  await sql`insert into public.memberships (workshop_id,user_id,role,display_name) values (${ws}, ${j.id}, 'dono', 'Dono')`
-  console.log('ok workshop', ws, 'user', j.id)
+  // Já tem oficina (sem reset no meio): só troca a senha, sem criar uma segunda "Oficina Teste".
+  const [member] = await sql`select workshop_id from public.memberships where user_id = ${j.id} limit 1`
+  if (member) {
+    console.log('ok senha nova; oficina existente', member.workshop_id, 'user', j.id)
+  } else {
+    const ws = randomUUID()
+    await sql`insert into public.workshops (id,name,import_state) values (${ws}, ${'Oficina Teste'}, ${importState})`
+    await sql`insert into public.memberships (workshop_id,user_id,role,display_name) values (${ws}, ${j.id}, 'dono', 'Dono')`
+    console.log('ok workshop', ws, 'user', j.id)
+  }
   console.log('SENHA_TEMP', password)
   await sql.end()
 })().catch(e => { console.error(String(e.message).replace(DB, '<db>')); process.exit(1) })

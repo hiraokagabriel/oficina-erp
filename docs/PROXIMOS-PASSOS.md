@@ -94,7 +94,13 @@ Desde 2026-11-18 a oficina usa o modo nuvem (versão 0.3.0) com dados reais. Tod
 
 **Valor-hora base recomendado: R$ 120/h** (≈ 70% de margem no cenário realista). Com o fator: Popular R$ 120, Médio R$ 138, Premium/importado R$ 156, Vintage R$ 180 por hora de coeficiente 1,0. Se o mecânico for CLT (FGTS, 13º, férias, ~R$ 800/mês a mais), o custo/h vai a R$ 34 a 42 e R$ 120 fica perto de 65 a 70%. O cálculo é o mínimo para a margem, não o preço da região: a calibração pelo histórico pode indicar subir a base. (Substitui a recomendação anterior de R$ 180/h, feita antes de saber o pessoal.)
 
-**Estado:** desenho fechado para a Fase 1 da mão de obra: fórmula `valor-hora base × tempo × coeficiente × fator do veículo`, 4 categorias de veículo, sem arredondamento, base inicial R$ 120/h calibrável pelo histórico. Pronto para planejar a implementação quando o dono quiser.
+**Simulação com 24 OS reais finalizadas (2026-11-18, só serviços e veículo, sem dados de cliente):** as OS lançam a mão de obra como uma linha genérica "MÃO DE OBRA", então o tempo de cada trabalho foi **estimado** pelas peças trocadas (padrão de tempário). Fórmula com R$ 120/h: total **R$ 7.851**; cobrado de fato: **R$ 16.185** (≈ 2,06×).
+- Valor-hora praticado de fato ≈ **R$ 250/h** (R$ 120 é o mínimo para cobrir custos com 70% de margem, não o preço praticado).
+- Por categoria (cobrado ÷ fórmula): Popular ≈ 2,3×; Médio ≈ 1,7×; Premium ≈ 2,7× (troca de óleo de Volvo 4,8×). O fator premium real fica perto de 1,6 a 2,0; popular e médio irregulares (parte é erro da estimativa de tempo).
+
+**Recomendação revisada:** valor-hora base **R$ 200 a 250**; fatores iniciais Popular 1,0, Médio 1,1, Premium/importado 1,7, Vintage 1,8, todos calibráveis. A calibração confiável exige **serviços com nome** em vez de "MÃO DE OBRA" (Fase 1 do item B), para o app calcular o valor-hora real por serviço e categoria de veículo.
+
+**Estado:** fórmula e categorias definidas; valor-hora e fatores a fixar com o dono (faixa recomendada acima). Fase 1 (serviços com nome por sistema) vira pré-requisito da calibração.
 
 ## Já levantados (2026-11-18)
 

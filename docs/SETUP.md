@@ -76,6 +76,13 @@ Tempo: 20 minutos. Usa a sua conta na "Oficina Teste" (projeto de teste).
 
 **Limitações do teste:** convite e "esqueci a senha" **não chegam por e-mail** no projeto de teste (ele não tem SMTP). Para convidar alguém no teste, peça ao Claude o link de convite gerado pela API.
 
+**Dados de exemplo.** A oficina nasce vazia. Para encher com dados falsos (24 OS, 12 clientes, 28 lançamentos, agendamentos), com a oficina ainda sem dados:
+```powershell
+node scripts/make-synthetic-db.mjs "$env:TEMPoficina-sintetico"
+npx vite-node scripts/test-seed-data.ts <seu e-mail> "$env:TEMPoficina-sinteticodatabase.json"
+```
+O segundo comando usa o mesmo caminho da importação real (conferindo os totais) e imprime uma senha temporária nova.
+
 > Atenção: quando o Claude roda o teste completo do banco (`npm run test:db`), a "Oficina Teste" é apagada e recriada, e você recebe uma senha temporária nova.
 
 ---

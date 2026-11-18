@@ -251,11 +251,15 @@ Ordem obrigatória (o comando aplica todas, na ordem do nome):
 
 Ensaio feito em 2026-11-18 no projeto de teste: `db push` aplicou as 7 migrações, 396 asserções pgTAP verdes, Realtime com 13 tabelas, política de broadcast criada, funções do sistema pertencem a `postgres`.
 
-Antes (só leitura no real): `npx supabase migration list --linked` deve mostrar 0 migrações; não pode existir tabela em `public`, bucket `fotos`, políticas `f_sel`/`f_ins` nem `ws_broadcast_sel` (sobras do spike). Depois: conferir Realtime (13 tabelas) e a política de broadcast, e só então implantar as funções.
+**Atenção:** no CLI 3.x o `db push` sem `--remote` vai para um banco local (Docker) e falha; sempre `--remote`. Em 2026-11-18 o real estava ativo, com 0 migrações, e o `db push --remote --dry-run` listou as 7 na ordem certa.
+
+O CLI entra no real por um papel de login temporário: depois do push, conferir que as funções de `public` e `app` pertencem a `postgres` (`select proowner::regrole, count(*) from pg_proc where pronamespace in ('public'::regnamespace, 'app'::regnamespace) group by 1`). Para isso o Claude precisa da senha do banco real (Project Settings > Database), que você passa na hora e não fica gravada no git.
+
+Antes (só leitura no real): `npx supabase migration list --remote` deve mostrar 0 migrações; não pode existir tabela em `public`, bucket `fotos`, políticas `f_sel`/`f_ins` nem `ws_broadcast_sel` (sobras do spike). Depois: conferir Realtime (13 tabelas) e a política de broadcast, e só então implantar as funções.
 
 ```powershell
-npx supabase db push --dry-run   # mostra o que vai aplicar, sem aplicar
-npx supabase db push             # aplica no projeto ligado (o real)
+npx supabase db push --remote --dry-run   # mostra o que vai aplicar, sem aplicar
+npx supabase db push --remote             # aplica no projeto ligado (o real)
 ```
 
 ### E.5 Implantar as funções no real (Claude, com o seu ok)

@@ -2,6 +2,36 @@
 
 Notas em linguagem simples para a oficina. A versão mais nova fica no topo.
 
+## Próxima versão (não lançada)
+
+Ainda sem número: o `package.json` segue em 0.2.0. Conteúdo acumulado na branch `feat/nuvem-login` que chega aos PCs no modo arquivo (o de hoje). Só vira versão depois do teste do instalador (abaixo) e do ok do dono.
+
+### O que muda para a oficina
+
+- **Janela de parcelamento legível.** No tema Escuro as opções e a prévia estavam quase invisíveis; agora têm contraste correto nos dois temas.
+- **Título "Gestão de Oficina" com acentos certos** na tela da Oficina.
+- **Banco somente leitura sem falso sucesso.** Se o banco estiver bloqueado ou for de versão mais nova, criar, editar, excluir, arrastar, pagar e agendar mostram "Somente leitura: este banco não aceita alterações." em vez de avisar que deu certo sem gravar.
+- **Menu do card:** "Voltar situação" e "Avançar situação".
+- **Telefone com máscara** no cadastro de Clientes.
+- **Excluir OS** diz o nome do cliente e avisa que não dá para desfazer.
+- **"Em Serviço" legível no tema Pastel.**
+- "Terça-feira" escrito certo na Agenda.
+
+### Mudanças técnicas
+
+- Política de segurança do conteúdo (CSP) no app Tauri. **Ainda não foi testada no instalador real**: pode bloquear algo (fotos, impressão, PDF, tema). Teste obrigatório antes de liberar, com banco sintético em pasta temporária e nunca o banco real: abrir, salvar OS, foto, imprimir OS e vistoria, salvar PDF, exportar CSV, WhatsApp, tema Pastel (fechar e abrir sem piscar), backup no Drive, F12 sem "Refused to...".
+- O `npm run build` agora também confere os tipos do `vite.config.ts`.
+- Teste de guarda contra acentos corrompidos em `src/`.
+- Formato do banco: **não muda** (segue v5). Sem migração; mesmo assim, atualizar todos os PCs no mesmo dia.
+
+### Modo nuvem (não chega aos PCs)
+
+O código do modo nuvem (login, papéis, celular, importação) está na mesma branch, mas **só liga quando o app é gerado com `VITE_CLOUD=1`**. O instalador normal continua no modo arquivo, sem Supabase nem IndexedDB. A virada para a nuvem é uma entrega separada (PR 11 em `docs/NUVEM-ESTADO.md`), com o dono presente e todos os PCs no mesmo dia.
+
+### Voltar
+
+Reinstalar a 0.2.0 (o formato do banco é o mesmo).
+
 ## 0.2.0 (novembro de 2026)
 
 ### O que mudou

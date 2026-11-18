@@ -212,6 +212,21 @@ Em andamento. **Sem mudança de formato do banco** (segue schema v5). O quadro d
 
 Regras novas que valem para o código: Receber em OS parcelada com parcela aberta é bloqueado; reabrir OS com parcela paga é proibido (se todas as parcelas estão pagas, desmarcar o pagamento da parcela no Financeiro antes); o `getRemainingAmount` mora em `src/services/osRemaining.ts`.
 
+
+---
+
+### Fase 6: nuvem, login e papéis (Iniciativa E, 2026-11)
+
+Em andamento na branch `feat/nuvem-login` (publicada em `origin`). Muda o formato de dados (nuvem com versão própria); o schema do modo arquivo segue v5. Plano: `docs/NUVEM.md`; estado, pendências e ordem da virada: `docs/NUVEM-ESTADO.md`; quadro e portões: `docs/PRODUCAO.md`. O modo nuvem só liga com `VITE_CLOUD=1`; o modo arquivo continua o padrão e nada foi aplicado no projeto Supabase real.
+
+- [x] PRs 0 a 7: spike, especificação, split/join, SQL com RLS e pgTAP, sync offline (IndexedDB e fila), login com papéis, PIN e aparelhos, dinheiro no servidor, fotos no Storage.
+- [x] PR 8 (código): PWA, CSP do Tauri, celular. [ ] R8 deploy no Cloudflare Pages: depende do dono.
+- [x] PR 9: importação com conferência de totais, lacre e cópia diária (falta exercitar no Tauri real com banco sintético).
+- [x] PR 10: piloto com banco sintético (2 aparelhos, Realtime, offline, papéis) e achados corrigidos. Contagens: 1930 testes Vitest, pgTAP 396, `cargo test` 57, `test-functions` 91.
+- [ ] PR 11, virada: migrações e funções no projeto real, backup `pre-nuvem`, importação, todos os PCs no mesmo dia. Depende do dono (testes manuais, SMTP do real, Pages).
+- [ ] PR 12: remover o modo arquivo do `DatabaseContext` e os comandos Rust sem uso, depois da virada.
+
+Correções do período que também valem para o modo arquivo (próxima versão, `docs/VERSOES.md`): contraste do parcelamento e de "Em Serviço" no Pastel, acentos do título da Oficina, banco somente leitura sem falso sucesso, "Voltar/Avançar situação", telefone com máscara, confirmação de excluir OS com o nome do cliente, CSP do Tauri e checagem de tipos do build.
 ---
 
 ## 3.1 Comportamentos suspeitos registrados nos testes
@@ -262,7 +277,7 @@ Itens que estavam abertos aqui e foram resolvidos (reconferidos em 2026-10-21): 
 
 ## 4. Fora de escopo (por enquanto)
 
-Nuvem, servidor e banco online; distribuir ou vender para outras oficinas; estoque e fornecedores; WhatsApp automático (o botão manual continua); login e permissões; assinatura digital (a assinatura segue física nos impressos).
+Distribuir ou vender para outras oficinas (a nuvem foi pensada para isso, mas a 1ª versão atende uma oficina; ver Fase 6); estoque e fornecedores; WhatsApp automático (o botão manual continua); assinatura digital (a assinatura segue física nos impressos).
 
 ## 5. Decisões em aberto
 

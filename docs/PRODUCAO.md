@@ -20,6 +20,7 @@ Atualizado em 2026-11-05. Branch `printing-overhaul`. Fonte: `git log`, `git sta
 - Iniciativas: A (repaginação) rodadas 0 a 13 concluídas e mescladas. B (resumo do serviço) B1, B2, B3 e V3 (fotos) implementadas e commitadas. C (adiantamentos, schema v4) commitada.
 - Testes (relato da sessão principal): build ok; 6234 testes em fuso normal, UTC e Tóquio; `cargo test` 33 verdes. A contagem inclui duplicados de `.claude/worktrees` (ver riscos).
 - Falta tudo que exige Tauri real e hardware (ver pendências do dono).
+- Atualização de 2026-11-18: branch `feat/nuvem-login` (a partir da D, versão 0.2.0 em `f1f71f4`) publicada em `origin`, árvore limpa, HEAD `88fd9f2`. Testes: 1930 em 134 arquivos (a contagem antiga de 6234 incluía duplicados de worktrees, já excluídos do Vitest). Iniciativa E (nuvem) com PRs 0 a 10 feitos: ver a seção própria. A versão 0.2.0 (tag `v0.2.0`, `f1f71f4`) está em `origin/printing-overhaul` e na branch da nuvem; nada disso entrou no `main`. O registro de push acima é histórico.
 - Estados usados: planejada, em andamento, em verificação, aprovada, commitada, enviada.
 
 ## Iniciativa A: Repaginação visual "Painel de instrumentos"
@@ -176,30 +177,57 @@ Mudanças em serviços existentes: `statusChangeEffects` ganhou o efeito `blocke
 
 ### Estado da entrega
 
-- Versão e instalador ainda NÃO foram gerados (tarefa do `entregador`: versão, notas em `docs/VERSOES.md`, build do Tauri, checklist de atualização dos PCs). `docs/VERSOES.md` ainda não existe.
+- (Atualizado em 2026-11-18) A versão 0.2.0 foi preparada (`f1f71f4`, tag `v0.2.0`, notas em `docs/VERSOES.md`). A próxima versão (correções da branch da nuvem) está descrita em "Próxima versão (não lançada)" e depende do teste do exe com a CSP nova.
 - Push NÃO feito. Só o dono autoriza.
 - Portões da Iniciativa D: P1 (build e testes) rodado pela sessão principal nos commits; P2 (navegador) não registrado, só verificação visual manual do dono; P3 (`revisor`) não registrado; P4 (ok do dono) dado para os commits; P5 (push) não feito.
 
 ## Iniciativa E: Nuvem e login (Supabase, papéis, offline), 2026-11
 
-Branch `feat/nuvem-login` (criada em 2026-11-11). Decisões, padrões assumidos, arquitetura e riscos: `docs/NUVEM.md`. Plano aprovado pelo dono. Muda o formato de dados (nuvem com versão própria): portão extra do `arquiteto` e plano de virada dos PCs no mesmo dia.
+Branch `feat/nuvem-login` (criada em 2026-11-11, publicada em `origin`). Decisões, padrões assumidos, arquitetura e riscos: `docs/NUVEM.md`. Estado detalhado, pendências e ordem da virada: `docs/NUVEM-ESTADO.md`. Plano aprovado pelo dono. Muda o formato de dados (nuvem com versão própria): portão extra do `arquiteto` e plano de virada dos PCs no mesmo dia. O modo nuvem só liga com `VITE_CLOUD=1`; o modo arquivo segue o padrão e nada foi aplicado no projeto Supabase real (só no de teste).
 
-| Etapa | Escopo | Agente | Depende de | Portões de qualidade | Estado |
-|---|---|---|---|---|---|
-| 0 | Branch e registro de decisões | sessão principal, `gerente` | nenhuma | n/a (docs) | feita |
-| 1 | Especificação técnica (tabelas, RLS, Edge Functions, sync, PIN, mapeamento v5) | `arquiteto` | 0 | ok do dono antes de qualquer código | feita (ok do dono em 2026-11-11) |
-| 2 | Telas e textos | `ux-designer` | 1 | ok do dono na direção estética | feita (`docs/NUVEM-UX.md`) |
-| 3 | Supabase: SQL, RLS | `dev` | 1; dono cria o projeto | testes SQL por papel e por oficina; `revisor`; ok do dono | em andamento: SQL `supabase/migrations/20261111120000_nuvem_inicial.sql` com 237 asserções pgTAP passando, revisado pelo `revisor` e corrigido, no projeto de teste `xtnnayaxufhmyrqcwwnr` (`npm run test:db`); falta ok do dono e aplicar no projeto real (nova revisão do SQL antes de aplicar) |
-| 4 | Camada de dados offline | `dev` | 1, 3 | P1 (build, testes, UTC); testes Vitest da fila, diff e conflito; navegador com 2 abas e rede cortada; `revisor` | feita (PRs 3 e 4) |
-| 5 | Login e sessão, permissões por papel | `dev` + `ui-dev` | 2, 3, 4 | P1; `verificador` e `ux-revisor` (800 px); Rede do DevTools como Mecânico sem preço; `revisor` | feita |
-| 6 | Dinheiro no servidor | `dev` | 3, 4; módulos puros sem imports de navegador | P1; testes das Edge Functions; `revisor` | pendente |
-| 7 | Fotos no Storage | `dev` | 3 | P1; `verificador`; `revisor` | pendente |
-| 8 | Web/PWA e celular | `ui-dev` + `dev` | 2, 5 | P1; `verificador` e `ux-revisor` em celular e 800 px; `revisor` | pendente |
-| 9 | Importação e backup diário | `dev` | 3, 4 | P1; totais (OS, clientes, soma do ledger em centavos) conferidos com banco sintético; `revisor` | pendente |
-| 10 | Revisão e piloto | `revisor`, `verificador`, `ux-revisor` | 4 a 9 | P1 a P3; 2 aparelhos, offline e reconexão, papéis | pendente |
-| 11 | Virada | `entregador` | 10 | backup `pre-nuvem`; todos os PCs no mesmo dia; ok do dono; push só com autorização | pendente |
+Estado em 2026-11-18: PRs 0 a 10 feitos (PR 8 sem o deploy). Faltam o deploy do PR 8, os testes manuais do dono, o PR 11 (virada) e o PR 12.
 
-Pendências do dono: aprovar a direção visual (etapa 2); configurar Site URL e Redirect URLs do Supabase quando existir o endereço do Pages (antes do 1º convite real; hoje é `localhost:3000`); confirmar os padrões assumidos de `docs/NUVEM.md`; teste manual em Tauri real, celular e vários PCs (piloto). Feitas em 2026-11-11: especificação aprovada (etapa 1), projeto Supabase em `sa-east-1` e SMTP Brevo (etapa 3).
+| PR | Escopo | Agente | Depende de | Estado |
+|---|---|---|---|---|
+| 0 | Branch, decisões, spike no projeto real (`NUVEM-SPIKE.md`) | sessão principal, `gerente`, `arquiteto` | nenhuma | feito |
+| especificação e UX | `docs/NUVEM-SPEC.md` (ok do dono em 2026-11-11) e `docs/NUVEM-UX.md` | `arquiteto`, `ux-designer` | 0 | feito |
+| 1 | `src/sync/split.ts`: split/join do banco para as tabelas, totais, `exportV5` | `dev` | spec | feito |
+| 2 | Migração inicial: tabelas, RLS por papel, guardas, `sync_push`, `apply_money_op`, `import_*`, Storage | `dev` | 1; projeto de teste | feito (pgTAP no teste; não aplicado no real) |
+| 3 | `permissions`, `diff`, `outbox`, `mergeRecord` | `dev` | 1, 2 | feito |
+| 4 | `syncEngine`, IndexedDB, `supabaseRepo`, `CloudDatabaseProvider` | `dev` | 3 | feito |
+| 5 | Funções `users`/`pin`/`device`; login, convite, PIN, bloqueio, papéis nas telas | `dev`, `ui-dev` | 2, 4 | feito |
+| 6 | Dinheiro no servidor (função `money`, hash do pedido, `OnlineOnlyButton`) | `dev` | 2, 4 | feito e revisado |
+| 7 | Fotos no Storage (fila, cache, "Espaço das fotos") | `dev` | 2 | feito e revisado |
+| 8 | R1 a R7: adaptadores do navegador, PWA, CSP do Tauri, `_headers`, celular. R8: deploy no Cloudflare Pages | `ui-dev`, `dev` | 5 | código feito; **R8 pendente, depende do dono** (nome do site no Pages e conta Cloudflare) |
+| 9 | Importação com conferência de totais, lacre, cópia diária (Rust `backup_pre_cloud`, `save_daily_export`, `photo_inventory`), `scripts/make-synthetic-db.mjs` | `dev` | 2, 4 | feito; falta exercitar no app Tauri real com banco sintético (dono) |
+| 10 | Revisão e piloto com banco sintético (2 aparelhos, Realtime, merge, dinheiro concorrente, offline, papéis, PIN) e correção dos achados | `revisor`, `verificador`, `ux-revisor` | 4 a 9 | feito (2026-11-18) |
+| 11 | Virada: migrações e funções no projeto REAL, backup `pre-nuvem`, importação, todos os PCs no mesmo dia | `entregador` | 10; ok do dono | **pendente, depende do dono** |
+| 12 | Remover o modo arquivo do `DatabaseContext` e os comandos Rust sem uso | `dev` | 11 | pendente (só depois da virada) |
+
+Portões cumpridos até aqui (último estado verificado, relato da sessão principal e commits; datas de execução por PR não registradas):
+
+| Portão | Evidência |
+|---|---|
+| 1. Build e testes | `npm run build` (inclui `tsc` do `vite.config.ts`) ok; Vitest 1930 testes em 134 arquivos, fuso normal e `TZ=UTC`; `tsc` do app e das funções limpos; zero `any` em produção; `cargo test` 57; pgTAP 396 asserções no projeto de teste; `scripts/test-functions.mjs` 91 ok |
+| 2. Navegador | `verificador` e `ux-revisor` no projeto de teste, 360/390/800 px nos dois temas (PR 8), piloto de 2 aparelhos (PR 10). Tauri nos testes foi simulado em JS |
+| 3. Revisor | `revisor` nos PRs 3 a 5, 6 e 7 (achados corrigidos no commit `8a18ad3`), 8 (celular) e 9; PR 10 com achados corrigidos em `6f1618d` e `0af9d04`. Revisão do SQL antes de aplicar no real: ainda a fazer |
+| 4. Ok do dono | especificação aprovada em 2026-11-11; commits da branch feitos a pedido; ok para a virada (PR 11): não dado |
+| 5. Push | branch já está em `origin/feat/nuvem-login`; push de qualquer versão aos PCs não feito |
+| Extra: formato do banco | `arquiteto` na especificação; SQL por migração em `supabase/migrations/` (ordem em `docs/NUVEM-ESTADO.md`); o `CURRENT_SCHEMA_VERSION` do modo arquivo segue 5 (a nuvem tem versão própria e a importação usa `migrate` até v5); plano de atualização dos PCs: só no PR 11 |
+
+Correções feitas na branch que também valem para o modo arquivo (chegam aos PCs na próxima versão, ver `docs/VERSOES.md`): contraste da janela de parcelamento (`1e3485a`); acentos do título da Oficina e teste de guarda `src/utils/encoding.test.ts` (`cb2a965`); banco somente leitura sem falso sucesso (`88a8899`); "Voltar/Avançar situação" no menu do card, telefone com máscara em Clientes, excluir OS diz o cliente e que não dá para desfazer, contraste de "Em Serviço" no Pastel (`56a9572`); CSP do Tauri (`c88f4f8`); checagem de tipos do `vite.config.ts` no build (`f2e7679`, `8c6bb69`).
+
+Pendências do dono:
+
+- Testar o exe com a CSP nova com banco sintético em pasta temporária (nunca o real em `C:\OficinaData`): abrir, salvar OS, foto, imprimir, PDF, CSV, WhatsApp, tema Pastel, backup no Drive, F12 sem "Refused to...". Não liberar versão aos PCs sem isso.
+- Definir o nome do site no Cloudflare Pages e abrir a conta (PR 8 R8); depois Site URL e Redirect URLs do Auth.
+- Testar em celular real (câmera, PWA, offline).
+- Testar a importação no app Tauri real com banco sintético.
+- Responder: "Receitas" e Peças/Serviços do painel do Financeiro devem somar OS ainda em aberto? (visto no teste com 5 OS)
+- SMTP do projeto real: tirar os e-mails do spam (hoje Brevo com remetente Gmail).
+- Combinar o dia da virada: todos os PCs no mesmo dia, dono presente; ok para aplicar no projeto real.
+
+Riscos aceitos do piloto: objetos de foto já enviados ficam no Storage ao remover a foto ou excluir a OS; Storage sem cota por oficina; "fotos presas" depende de `indexedDB.databases()`. Não verificado ao vivo: e-mail de convite (teste sem SMTP), TOTP do Dono, queda do Auth, câmera real, leitor de tela nas 6 caixas do PIN.
 
 ## Portões por rodada ou etapa
 
@@ -212,7 +240,7 @@ Todos na ordem.
 | 3. Revisor | `revisor` no diff: correção, risco ao banco, compatibilidade entre PCs, `any`, testes faltando | todas |
 | 4. Ok do dono | aprovação para commit | todas |
 | 5. Push | só com autorização explícita do dono | todas |
-| Extra: formato do banco | `arquiteto`, versão do schema, migração com teste, plano de atualização dos PCs no mesmo dia | C (v4) e V3 (v5) |
+| Extra: formato do banco | `arquiteto`, versão do schema, migração com teste, plano de atualização dos PCs no mesmo dia | C (v4), V3 (v5) e E (nuvem) |
 
 Registro de evidência (onde não há registro, "não registrado"):
 
@@ -256,6 +284,7 @@ Riscos:
 
 ## Próximo passo
 
+0. (2026-11-18, Iniciativa E) Dono: teste do exe com a CSP nova e da importação no Tauri real com banco sintético, celular real, nome do site no Pages, SMTP do real, resposta sobre "Receitas"; depois combinar a virada. Sessão principal e `entregador`: PR 11 só com o ok do dono (ordem das migrações em `docs/NUVEM-ESTADO.md`). Os itens 1 a 5 abaixo são anteriores à nuvem.
 1. Dono: aprovar ou ajustar os PDFs de impressão e decidir o homônimo na galeria.
 2. Sessão principal: atualizar `CLAUDE.md` (v5), excluir `.claude/worktrees` do Vitest, remover worktrees mescladas.
 3. `entregador`: gerar o instalador, preparar notas em `docs/VERSOES.md` e o checklist de atualização dos PCs (v4 + v5 no mesmo dia).

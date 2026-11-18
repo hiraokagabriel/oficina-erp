@@ -1,0 +1,5 @@
+{
+  "identifier": "com.oficinapro.app",
+  "productName": "OficinaPro",
+  "build": { "beforeBuildCommand": "npm run build:web:real" }
+}

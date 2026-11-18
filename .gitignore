@@ -58,3 +58,4 @@ graphify-out/
 
 # capturas e logs do Playwright MCP
 .playwright-mcp/
+.env.real.local

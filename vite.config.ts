@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import { readFileSync } from "node:fs";
 import type { Plugin, UserConfig } from "vite";
 import { isCloudBuild, precacheList, renderServiceWorker } from "./src/pwa/precache";
+import { assertSupabaseTarget } from "./src/pwa/buildGuard";
 
 // PWA do modo nuvem: manifest, ícones, service worker e as tags do index.html. Só entra com VITE_CLOUD=1; o build do
 // modo arquivo (Tauri) não ganha nenhum arquivo nem tag.
@@ -66,8 +67,10 @@ const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(async ({ mode }): Promise<UserConfig> => {
-  const isProd = mode === 'production' || mode === 'cloud';
-  const isCloud = isCloudBuild(loadEnv(mode, process.cwd(), 'VITE_').VITE_CLOUD);
+  const isProd = mode === 'production' || mode === 'cloud' || mode === 'real';
+  const env = loadEnv(mode, process.cwd(), 'VITE_');
+  assertSupabaseTarget(mode, env.VITE_SUPABASE_URL);
+  const isCloud = isCloudBuild(env.VITE_CLOUD);
   
   // Lazy load imagemin plugin only when needed
   let viteImagemin: any = null;

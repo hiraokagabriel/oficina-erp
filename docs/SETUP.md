@@ -274,11 +274,20 @@ npx supabase secrets set SITE_URL=https://<nome>.pages.dev CORS_ORIGINS=https://
 
 ### E.7 Publicar o site apontando para o real (Claude)
 
-Na véspera ou no dia, o Claude gera o site com as chaves do **real** e publica no mesmo endereço (ver "O que ainda falta construir": falta o script de build com as chaves do real).
+Na véspera ou no dia, o Claude gera o site com as chaves do **real** e publica no mesmo endereço. As chaves ficam em `.env.real.local` (fora do git: `VITE_CLOUD=1`, `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` do real, `VITE_SITE_URL=https://andersonmecanica.pages.dev`).
+
+```powershell
+npm run build:web:real      # só compila (dist/), não publica
+npm run deploy:web:real     # compila e publica: wrangler pages deploy dist --project-name andersonmecanica --branch main
+```
+
+O build do modo `real` falha se `VITE_SUPABASE_URL` não contiver `stblagzkkffbjuzltfrt` (e o `build:web` de teste falha se não contiver `xtnnayaxufhmyrqcwwnr`): proteção contra trocar as chaves. Publicar sobrescreve o site de teste atual no mesmo endereço; só faça no dia.
 
 ### E.8 Gerar o instalador do app nuvem (Claude + entregador)
 
 O `entregador` prepara a versão nova (número de versão, notas em `docs/VERSOES.md`, instalador) já no modo nuvem apontando para o real, e você testa o instalador em um PC antes do dia (com o real ainda vazio: só login e a tela "Falta trazer os dados").
+
+O instalador definitivo sai de `npm run tauri:build:real` (usa `scripts/tauri.nuvem-real.json`: identificador `com.oficinapro.app`, o mesmo do app atual, então o PC do Dono mantém o `oficina_db_path` e a importação já sugere o caminho do banco; roda antes `npm run build:web:real`). É build de release com instalador (bundles em `src-tauri	argeteleaseundle`) e precisa de pelo menos 6 GB livres no C:. Não o gere antes de o dono marcar o dia: ele substitui o app instalado.
 
 ---
 
@@ -355,13 +364,8 @@ Tempo: meio período. **Você precisa estar presente**, de preferência num dia 
 
 ## O que ainda falta construir (o Claude faz antes do dia)
 
-1. **Script para gerar o exe no modo nuvem** apontando para o real (Fase E.8). Para o **teste** já há a receita (identificador próprio `com.oficinapro.nuvemteste`, dados separados do app instalado, chaves do `.env.cloud.local`), numa pasta de compilação à parte para não sobrescrever o exe do modo arquivo:
-   ```powershell
-   $env:CARGO_TARGET_DIR = "$env:TEMP	arget-nuvem"
-   npm run tauri build -- --debug --no-bundle --config scripts/tauri.nuvem-teste.json
-   ```
-   O exe sai em `%TEMP%	arget-nuvemdebugoficina-erp.exe`. Precisa de uns 4 GB livres no C:. Hoje o `npm run tauri build` sem `--config` gera só o modo arquivo.
-2. **Script de build do site com as chaves do real** (Fase E.7). Hoje o `npm run build:web` usa `.env.cloud.local`, que aponta para o teste.
+1. ~~Script para gerar o exe no modo nuvem apontando para o real~~ (resolvido): `scripts/tauri.nuvem-real.json` (identificador `com.oficinapro.app`, o mesmo do app atual) e `npm run tauri:build:real`. Veja E.8. Para o **teste** continua valendo a receita com `scripts/tauri.nuvem-teste.json` (identificador `com.oficinapro.nuvemteste`).
+2. ~~Script de build do site com as chaves do real~~ (resolvido): `npm run build:web:real` e `npm run deploy:web:real`. Veja E.7.
 3. **Revisão do SQL** antes de aplicar no real (Fase E.3).
 4. **Cadastro da verificação em 2 etapas (TOTP) do Dono pelo app**: ainda não existe tela para isso. Sem TOTP, o Dono entra só com e-mail e senha (o sistema já aceita assim). Recomendado ativar depois da virada.
 5. **Pergunta em aberto para você**: no Financeiro, "Receitas" hoje soma OS que ainda estão em aberto. É essa a regra que você quer?

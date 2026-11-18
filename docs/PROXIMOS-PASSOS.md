@@ -51,12 +51,17 @@ Desde 2026-11-18 a oficina usa o modo nuvem (versão 0.3.0) com dados reais. Tod
 - Fase 2 (muda o formato dos dados; passa pelo `arquiteto` e por migração na nuvem): "serviço" como grupo dentro da OS, mão de obra por tempo, pacotes.
 - Fase 3: prioridade e aprovação por serviço, ponte com a vistoria, lembretes e histórico por sistema.
 
-**Perguntas abertas ao dono:**
-1. Mão de obra cobrada por hora, por valor fixo por serviço, ou os dois?
-2. O cliente às vezes aprova só parte do orçamento?
-3. A lista de sistemas cobre tudo o que a oficina atende (diesel, híbridos, funilaria)?
+**Respostas do dono (2026-11-18) e ajustes:**
+1. **Mão de obra por valor fixo, conforme modelo e ano do carro.** Sai a hora técnica (proposta 3). Entra o **preço sugerido por serviço e por veículo**: ao pôr um serviço na OS, sugerir pelo histórico do mesmo serviço em carro do mesmo modelo e ano próximo; sem histórico, mesma marca ou porte; por fim, qualquer carro. Valor sempre editável. Evolui o `suggestHistoricalPrice` (`src/services/pricing.ts`, mediana com mínimo de 3 vendas em 12 meses), que hoje não considera o veículo; o veículo vem de `vehicleCatalog`/`vehicleField` (marca e modelo da FIPE).
+2. **Aprovação quase sempre inteira; às vezes o cliente tira partes.** Sai a prioridade em três níveis (proposta 6). Entra um botão por serviço, **"Cliente não quis"**: sai do total, fica registrado e aparece como pendente na próxima visita do mesmo veículo.
+3. **Sistemas:** os ~14 bastam (sem diesel, híbridos nem funilaria). Mapeamento das 8 categorias atuais: Motor, Freios, Suspensão, Ar-condicionado e Outros iguais; Elétrica vira "Elétrica e bateria"; Transmissão vira "Embreagem e câmbio"; Carroceria vira "Carroceria e acessórios" (preserva o que já foi categorizado).
 
-**Estado:** em discussão.
+**Fases revisadas:**
+- Fase 1 (sem mudar a estrutura da OS): os ~14 sistemas com o mapeamento acima; base de operações padrão no catálogo (editável e criável sob demanda); OS, impressão e resumo ao cliente agrupados por sistema.
+- Fase 2 (muda o formato; `arquiteto` + migração na nuvem): "serviço" como grupo dentro da OS (peças e mão de obra do mesmo trabalho juntas), pacotes prontos, preço sugerido por serviço e veículo.
+- Fase 3: "Cliente não quis" com pendência na próxima visita, ponte com a vistoria e histórico por sistema do veículo.
+
+**Estado:** em discussão; perguntas respondidas. Próximo: desenho detalhado da Fase 1 quando o dono quiser começar.
 
 ## Já levantados (2026-11-18)
 

@@ -36,7 +36,7 @@ Atualizado em 2026-11-17. Branch `feat/nuvem-login` (publicada em `origin`). Pla
 | 9 | Importação e cópia diária: `importCheck.ts`, `importRunner.ts` (lotes, fotos, volta completa, revision, lacre `schemaVersion 1000`), `fullPull.ts`, `dailyExport.ts`; Rust `backup_pre_cloud`, `save_daily_export` (30 cópias em `backups
 uvem`), `photo_inventory`; SQL `import_aal2` e `import_finish(ws, commit, p_expected)` (conclui só com totais iguais); `money` 423 até concluir; telas `ImportScreen` e "Onde ficam os dados"; `scripts/make-synthetic-db.mjs` | pgTAP 391; `cargo test` 57; `test-functions` 82; navegador com Tauri simulado (enviar, bloqueado, arquivo mudou, totais mudaram, v3, lacre, cópia) |
 
-Contagem atual: 130 arquivos, 1882 testes Vitest (local e `TZ=UTC`); `tsc` do app e das funções limpos; `dist/` do modo arquivo sem supabase-js/IndexedDB. O modo nuvem só liga com `VITE_CLOUD=1`; o modo arquivo continua o padrão.
+Contagem atual: 134 arquivos, 1930 testes Vitest (local e `TZ=UTC`); `tsc` do app e das funções limpos; `dist/` do modo arquivo sem supabase-js/IndexedDB. O modo nuvem só liga com `VITE_CLOUD=1`; o modo arquivo continua o padrão.
 
 ## Pendências conhecidas (antes do piloto)
 

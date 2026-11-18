@@ -49,6 +49,8 @@ App do Dono no Tauri, ao abrir, se `last_export_at` > 20 h ou vazio, e botão "F
 | 7 | `scripts/make-synthetic-db.mjs` (banco v3/v5 sintético com fotos) | com 6 |
 | 8 | `verificador` + `revisor` no projeto de teste com oficina `vazio` | por último |
 
+Banco de teste da importação: `node scripts/make-synthetic-db.mjs <pasta> [--versao 3|5] [--os N] [--fotos]` (nunca sobrescreve; recusa `C:\OficinaData` e as pastas em `OFICINA_PASTA_SINCRONIZADA`, separadas por `;`; `--fotos` exige v5).
+
 ## Riscos
 
 - Fotos não entram em nenhuma cópia; Storage grátis sem backup. Voltar à versão antiga perde fotos tiradas na nuvem.

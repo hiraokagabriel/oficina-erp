@@ -31,6 +31,33 @@ Desde 2026-11-18 a oficina usa o modo nuvem (versão 0.3.0) com dados reais. Tod
 4. Conferir no celular (Android e iPhone) e no exe: tempo de compressão por foto e peso final.
 5. Entrega: `npm run deploy:web:real` (celulares) e instalador novo em todos os PCs. Sem migração; vale só para fotos novas.
 
+### B. Serviços organizados por sistema, com base pronta (2026-11-18)
+
+**Pedido do dono:** partir de uma base maior de categorias (mantendo criar sob demanda) e categorizar os serviços (disco de freio, cabeçote, fluido de freio, filtro da cabine...). Hoje peças, serviços e mão de obra parecem "uma grande lista sendo adicionada".
+
+**Hoje:** a OS tem duas listas soltas (`parts`, `services`) de `OrderItem` com `category?` opcional entre 8 fixas (`PartCategory` em `src/types.ts`: Motor, Freio, Suspensão, Elétrica, Transmissão, Ar-condicionado, Carroceria, Outros). Mão de obra é uma linha de serviço; nada liga a peça à mão de obra do mesmo trabalho.
+
+**Proposta (consultoria, padrão oficina premium):**
+1. Orçamento em três níveis: Sistema, Serviço e itens (peças, mão de obra, insumos). O cliente aprova o serviço; impressão e resumo agrupados por sistema com subtotal por serviço.
+2. Base pronta editável: ~14 sistemas (Motor, Arrefecimento, Alimentação/injeção, Ignição, Embreagem/câmbio, Suspensão, Direção, Freios, Elétrica/bateria, Ar-condicionado, Escapamento, Pneus/rodas/alinhamento, Fluidos e filtros, Diagnóstico) e ~150 operações padrão com peças típicas e tempo de mão de obra sugerido; a oficina edita, desliga e cria as suas.
+3. Mão de obra por tempo: valor da hora configurável × tempo-padrão do serviço, com ajuste livre.
+4. Pacotes prontos (ex.: "Revisão 10.000 km").
+5. Ponte com a vistoria: item "precisa trocar" vira serviço sugerido.
+6. Prioridade por serviço (Urgente / Recomendado / Pode esperar), aprovação ou recusa por serviço, e o recusado vira lembrete na próxima visita.
+7. Histórico por sistema do veículo e lembrete de manutenção.
+
+**Fases sugeridas:**
+- Fase 1 (sem mudar a estrutura da OS): ampliar as 8 categorias para os ~14 sistemas, categorizar o catálogo, OS e impressão agrupadas por sistema.
+- Fase 2 (muda o formato dos dados; passa pelo `arquiteto` e por migração na nuvem): "serviço" como grupo dentro da OS, mão de obra por tempo, pacotes.
+- Fase 3: prioridade e aprovação por serviço, ponte com a vistoria, lembretes e histórico por sistema.
+
+**Perguntas abertas ao dono:**
+1. Mão de obra cobrada por hora, por valor fixo por serviço, ou os dois?
+2. O cliente às vezes aprova só parte do orçamento?
+3. A lista de sistemas cobre tudo o que a oficina atende (diesel, híbridos, funilaria)?
+
+**Estado:** em discussão.
+
 ## Já levantados (2026-11-18)
 
 | # | Item | Por quê | Estado |

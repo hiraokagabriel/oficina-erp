@@ -85,9 +85,16 @@ Desde 2026-11-18 a oficina usa o modo nuvem (versão 0.3.0) com dados reais. Tod
 
 **Valor-hora base inicial recomendado: R$ 180/h** (dentro da faixa de 50 a 70% nos dois cenários; perfil premium da região). Sem fonte pública atual e confiável de hora técnica em SP (pesquisa de 2026-11-18): o número final sai da calibração pelo histórico das 1096 OS.
 
-**Perguntas abertas:** quantos mecânicos e custo mensal de cada um; se o pró-labore do dono entra no custo.
+**Pessoal (dono, 2026-11-18):** 2 mecânicos; um contratado a R$ 1.700 + R$ 300 de vale-transporte; o outro fica com o lucro (não entra no custo). Custo mensal: R$ 6.000 fixos + R$ 2.000 = **R$ 8.000/mês**. Margem = sobra ÷ preço.
 
-**Estado:** em discussão; fórmula, categorias e valor-hora inicial definidos; falta confirmar as premissas de pessoal.
+| Tempo produtivo | Horas cobráveis/mês | Custo/h | Margem 50% | 60% | 70% |
+|---|---|---|---|---|---|
+| 75% | 264 h | R$ 30 | R$ 61 | R$ 76 | R$ 101 |
+| 60% | 211 h | R$ 38 | R$ 76 | R$ 95 | R$ 126 |
+
+**Valor-hora base recomendado: R$ 120/h** (≈ 70% de margem no cenário realista). Com o fator: Popular R$ 120, Médio R$ 138, Premium/importado R$ 156, Vintage R$ 180 por hora de coeficiente 1,0. Se o mecânico for CLT (FGTS, 13º, férias, ~R$ 800/mês a mais), o custo/h vai a R$ 34 a 42 e R$ 120 fica perto de 65 a 70%. O cálculo é o mínimo para a margem, não o preço da região: a calibração pelo histórico pode indicar subir a base. (Substitui a recomendação anterior de R$ 180/h, feita antes de saber o pessoal.)
+
+**Estado:** desenho fechado para a Fase 1 da mão de obra: fórmula `valor-hora base × tempo × coeficiente × fator do veículo`, 4 categorias de veículo, sem arredondamento, base inicial R$ 120/h calibrável pelo histórico. Pronto para planejar a implementação quando o dono quiser.
 
 ## Já levantados (2026-11-18)
 

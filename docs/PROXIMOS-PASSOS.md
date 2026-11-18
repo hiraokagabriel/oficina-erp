@@ -209,7 +209,7 @@ Ao lançar o custo de uma peça, o programa já sugere o preço certo pela faixa
 
 ### Pendências / perguntas abertas
 
-- Quem lança custo e vê o preço sugerido: só o Dono (como hoje) ou liberar a Recepção (exige mudar a RLS de custos, migração)?
+- ~~Quem lança custo e vê o preço sugerido~~: **decidido pelo dono (2026-11-18): só o Dono**, como hoje; a RLS de custos não muda.
 - A tabela de markup pode ficar em `settings` (lida pelo Mecânico)? Alternativa: tabela própria só do Dono.
 - Peças "pesquisáveis": quais exatamente (sugestão dos consultores: pastilha, disco, filtro, óleo, bateria).
 - Desconto de 5% no PIX: o dono confirma essa regra e se o programa deve oferecer o botão?
@@ -273,7 +273,7 @@ Não fazer: diagnóstico automático por foto do carro (risco alto; no máximo a
 
 **Rodada D1.2. Ler nota do fornecedor (tela)** (`dev`; `ui-dev` para o visual; `verificador`)
 - Botão "Ler nota do fornecedor" na parte de Peças da janela da OS (`OSModal.tsx`): escolhe o arquivo, mostra uma tabela de conferência (cada linha com caixa de marcar, descrição, quantidade, custo), liga cada linha ao catálogo pela normalização de `src/utils/links.ts` (`normalizeName`, `linkCatalogItems`) e acrescenta as peças marcadas com o custo.
-- Custo: só o Dono grava custo hoje (RLS). Se a Recepção também for usar, decidir antes (pendência de C).
+- Custo: só o Dono grava e vê custo (decisão do dono, 2026-11-18); a leitura da nota do fornecedor (D1) é só do Dono.
 - Funciona só com internet (`OnlineOnlyButton`).
 
 **Rodada D2. Padronizar o catálogo** (`dev`; sessão principal aplica com o dono)
@@ -306,7 +306,7 @@ O dono fotografa a nota do fornecedor e as peças entram na OS com o custo; o ca
 - Conta e chave da API da Anthropic do dono (antes da rodada D0).
 - Modelo: Opus 5.5, Sonnet 5.5 ou Haiku 5.5 (decisão do dono; pode ser um por uso).
 - Limite diário: quantas leituras por dia.
-- Quem usa D1: só Dono (custo) ou também Recepção (exige decisão de C sobre custos).
+- ~~Quem usa D1~~: **só o Dono** (decisão do dono, 2026-11-18).
 
 ### Estado
 
@@ -469,7 +469,7 @@ O orçamento sai organizado por sistema (Freios, Suspensão...) com subtotal; o 
 
 ### Pendências / perguntas abertas
 
-- **Conflito a confirmar:** a primeira decisão do dono fixou o fator em Médio 1,15, Premium 1,3 e Vintage 1,5; a proposta calibrada (base R$ 210, Médio 1,3, Premium 2,0, Vintage 1,8) foi registrada como aprovada no resumo de 2026-11-18, mas o arquivo anterior dizia "valor-hora e fatores a fixar com o dono". Confirmar com o dono os números finais antes da Fase 2 (não bloqueia a Fase 1).
+- ~~Conflito a confirmar~~: **confirmado pelo dono (2026-11-18): valores calibrados** — base R$ 210/h; Popular 1,0; Médio 1,3; Premium/importado 2,0; Vintage 1,8 (substituem os primeiros 1,15 / 1,3 / 1,5). Editáveis em Configurações.
 - Como o veículo cai em cada categoria: lista de marcas/modelos Premium e Médio, e a partir de que ano é Vintage.
 - Lista dos ~150 serviços com tempo e coeficiente: estimativas para o dono calibrar.
 - Pacotes: quais (além de "Revisão 10.000 km").
@@ -573,7 +573,7 @@ Proposta de desenho a validar:
 - **Instantâneo:** ao gerar o link, o servidor grava uma cópia congelada do orçamento (sistema, descrição, quantidade, preço de venda, total, prazo, garantia, nome da oficina, primeiro nome do cliente, modelo do carro, ids das fotos marcadas como "do defeito"). Nunca custo, margem, telefone, placa completa, observação interna (`notes`) nem dados de outras OS. Se a OS mudar, o link antigo mostra "Este orçamento foi atualizado; peça o novo link".
 - **Banco (migração nova):** `quote_links` (`workshop_id`, `id`, `os_id`, `token_hash` único, `snapshot jsonb`, `version`, `expires_at`, `revoked_at`, `created_by`, `created_at`) e `quote_responses` (somente acréscimo: `link_id`, `at`, `decisions jsonb` por item, `total_aprovado`, `nome_digitado`, `aceite_texto`, `user_agent` resumido, IP truncado ou hash). RLS: nenhuma policy para `anon`; Dono e Recepção leem as da oficina; escrita só pela função (service role). Realtime para a oficina ver a resposta chegar.
 - **Função pública `orcamento`** (`src/server/quoteHandler.ts` + `supabase/functions/orcamento/index.ts`, `verify_jwt = false`): `GET` com o token devolve o instantâneo (ou "vencido/cancelado", sem dizer qual OS); `POST` grava a resposta uma única vez (segunda tentativa: "Já respondido em..."); `create`/`revoke` com JWT de Dono ou Recepção. Limite de tentativas por IP e por token (evita adivinhação), respostas iguais para token inexistente e vencido.
-- **Fotos:** a função devolve URLs assinadas de curta duração (minutos) do bucket `fotos` só das fotos do instantâneo, ou os bytes; a CSP do site (`public/_headers`) hoje tem `img-src 'self' blob: data:`, então ou a página baixa as fotos pela função e mostra como `blob:`, ou a CSP ganha o domínio do Storage em `img-src`. Decidir no desenho.
+- **Fotos:** a função devolve URLs assinadas de curta duração (minutos) do bucket `fotos` só das fotos do instantâneo, ou os bytes; a CSP do site (`public/_headers`) hoje tem `img-src 'self' blob: data:`, então a página baixa as fotos pela função e mostra como `blob:`. **Decidido pelo dono (2026-11-18): fotos só pelo servidor, e só as daquela OS**; a CSP não abre o Storage.
 - **Aplicar a resposta na OS:** a função não mexe na OS (preço e total são guardados por `app.guard_finance` e pela função `money`). Quando a resposta chega, a OS ganha o aviso "Cliente respondeu pelo link" e a Recepção confere e aplica com 1 clique: itens recusados recebem `OrderItem.declined?: { at, via: 'LINK' }` e saem do total. Alternativa: a função `money` ganha uma operação `quote.apply`. Decidir no desenho.
 
 **Rodada F1. Banco e função** (`dev`; pgTAP em `supabase/tests/`; `scripts/test-functions.mjs`; `revisor` com olhar de segurança)

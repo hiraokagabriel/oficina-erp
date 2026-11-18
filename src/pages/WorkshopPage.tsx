@@ -11,9 +11,9 @@ interface WorkshopPageProps {
   workOrders: WorkOrder[];
   isLoading: boolean;
   formatMoney: (val: number) => string;
-  /** Meta de margem global (%), das ConfiguraÃ§Ãµes. */
+  /** Meta de margem global (%), das Configurações. */
   targetMargin?: number;
-  /** Selo de margem nos cartÃµes (opÃ§Ã£o da ConfiguraÃ§Ã£o). */
+  /** Selo de margem nos cartões (opção da Configuração). */
   showMargin?: boolean;
   onNewOS: () => void;
   /** Abre a janela Documentos pelo seletor de OS. */
@@ -51,13 +51,13 @@ export const WorkshopPage: React.FC<WorkshopPageProps> = ({
   return (
     <div className="workshop-page" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div className="page-header" style={{ marginBottom: 15, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 className="page-title" style={{ margin: 0 }}>GestÃ£o de Oficina</h1>
+        <h1 className="page-title" style={{ margin: 0 }}>Gestão de Oficina</h1>
         
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {(lateCount > 0 || deliveries.hoje > 0) && (
             <span className="delivery-summary" role="status">
               <span className="delivery-late">{lateCount} {lateCount === 1 ? 'atrasada' : 'atrasadas'}</span>
-              <span aria-hidden="true">Â·</span>
+              <span aria-hidden="true">·</span>
               <span className="delivery-today">{deliveries.hoje} com entrega hoje</span>
             </span>
           )}

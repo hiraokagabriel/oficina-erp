@@ -15,6 +15,8 @@ export class MemoryMoneyStore implements MoneyStore {
   ops = new Map<string, StoredOp>()
   audit: { id: string; data: unknown }[] = []
   tz: string | null = 'America/Sao_Paulo'
+  /** `workshops.import_state`: `concluido` por padrão; outro valor faz a `money` recusar (423). */
+  importState: string | null = 'concluido'
   applyCalls = 0
   /** Roda logo antes da conferência de versões em `apply` (simula outra pessoa gravando no meio). */
   beforeApply: (() => void) | null = null
@@ -47,6 +49,7 @@ export class MemoryMoneyStore implements MoneyStore {
 
   async getOp(opId: string) { return this.ops.get(opId) ?? null }
   async workshopTz() { return this.tz }
+  async workshopImportState() { return this.importState }
   async loadOS(_ws: string, osId: string) {
     return (['work_orders', 'work_order_finance', 'work_order_costs'] as const)
       .map(t => this.row(t, osId)).filter((r): r is MoneyRow => !!r)

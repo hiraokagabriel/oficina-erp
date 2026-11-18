@@ -9,7 +9,7 @@
 //         | os.save {isNew?, opened?, base, drafts?} | ledger.toggle (entryId)
 // Respostas: 200 { ok, kind, replay?, rows:[{table,id,version}], info }; 409 `conflito_versao` com `rows` atuais;
 // 409 `estado_mudou` e 422 `bloqueado` com a mensagem pronta para a tela; 403 `sem_permissao` (Mecânico) ou
-// `exige_mfa`; 400 dados inválidos; 500 `fuso_do_servidor`.
+// `exige_mfa`; 400 dados inválidos; 500 `fuso_do_servidor`; 423 `importacao_pendente` (oficina com `import_state` diferente de `concluido`).
 // `op_id` repetido devolve o resultado gravado (linhas e `info`) SEM refazer as guardas (o estado já mudou), mas só se
 // oficina, usuário, kind e o hash do corpo (`req_hash` = sha256 de stable({kind, osId, entryId, payload})) forem os mesmos:
 // corpo diferente com o mesmo `op_id` é 409 `op_id_reutilizado`.
@@ -77,6 +77,8 @@ export class MoneyStoreError extends Error {
 export interface MoneyStore {
   getOp(opId: string): Promise<StoredOp | null>
   workshopTz(workshopId: string): Promise<string | null>
+  /** `workshops.import_state` (`vazio`, `importando`, `concluido`); `null` se a oficina não existe. */
+  workshopImportState(workshopId: string): Promise<string | null>
   /** `work_orders`, `work_order_finance` e `work_order_costs` do id (sem filtrar `deleted_at`). */
   loadOS(workshopId: string, osId: string): Promise<MoneyRow[]>
   /** `ledger where os_id = osId and deleted_at is null`. */
@@ -96,6 +98,7 @@ const pure = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T
 export const WRONG_STATE_MESSAGE = 'Esta OS mudou em outro aparelho. Os dados foram atualizados: confira e tente de novo.'
 export const VERSION_CONFLICT_MESSAGE = 'Outra pessoa mexeu nesta OS ou no caixa agora há pouco. Os dados foram atualizados: confira e tente de novo.'
 export const ZONE_MESSAGE = 'O servidor não conseguiu acertar o fuso da oficina. Nada foi gravado. Avise quem cuida do sistema.'
+export const IMPORT_PENDING_MESSAGE = 'Os dados antigos ainda estão sendo trazidos para a nuvem. Termine a importação e tente de novo.'
 const INCOMPLETE_MESSAGE = 'Os dados desta OS ainda estão chegando. Tente de novo em instantes.'
 
 // ---------- fuso ----------
@@ -563,6 +566,11 @@ export async function handleMoneyOp(deps: MoneyDeps, req: HandlerRequest): Promi
     if (caller.role === 'dono') requireOwner(caller)
     const r = parseRequest(req.body, caller)
     const ws = caller.workshopId
+
+    // Importação pendente (D7): nenhum dinheiro se mexe antes de conferir e concluir a importação.
+    if ((await deps.store.workshopImportState(ws)) !== 'concluido') {
+      throw new HttpError(423, 'importacao_pendente', IMPORT_PENDING_MESSAGE)
+    }
 
     // Idempotência primeiro: o estado já mudou e as guardas recusariam a repetição.
     const reqHash = await sha256Hex(stable({ kind: r.kind, osId: r.osId, entryId: r.entryId, payload: r.payload }))

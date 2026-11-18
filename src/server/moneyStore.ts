@@ -38,6 +38,10 @@ export function createMoneyStore(cfg: RestConfig): MoneyStore {
       const [j] = await select(`workshops?id=eq.${q(ws)}&select=tz&limit=1`)
       return j && typeof j.tz === 'string' ? j.tz : null
     },
+    async workshopImportState(ws) {
+      const [j] = await select(`workshops?id=eq.${q(ws)}&select=import_state&limit=1`)
+      return j && typeof j.import_state === 'string' ? j.import_state : null
+    },
     async loadOS(ws, osId) {
       const out: MoneyRow[] = []
       for (const t of OS_TABLES) {

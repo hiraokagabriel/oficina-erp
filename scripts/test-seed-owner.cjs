@@ -1,5 +1,5 @@
 // Projeto Supabase de TESTE: cria a oficina "Oficina Teste" e uma conta de Dono (e-mail confirmado, senha temporária impressa).
-// Uso: node scripts/test-db.mjs migrate && node scripts/test-seed-owner.cjs <email>. Recusa o projeto real.
+// Uso: node scripts/test-db.mjs migrate && node scripts/test-seed-owner.cjs <email> [--vazio]. Recusa o projeto real.
 // Sem e-mail: o projeto de teste não tem SMTP próprio, então convite e recuperação de senha não servem para entrar.
 const { createRequire } = require('module')
 const repo = process.cwd()
@@ -10,13 +10,15 @@ for (const l of fs.readFileSync(repo + '/.env.test.local', 'utf8').split('\n')) 
 const DB = env.TEST_DB_URL, URL_ = env.TEST_SUPABASE_URL.replace(/\/+$/, '')
 if (!DB.includes('xtnnayaxufhmyrqcwwnr') || DB.includes('stblagzkkffbjuzltfrt') || !URL_.includes('xtnnayaxufhmyrqcwwnr')) throw new Error('nao e teste')
 const SERVICE = JSON.parse(execFileSync('npx', ['supabase', 'projects', 'api-keys', '--project-ref', 'xtnnayaxufhmyrqcwwnr', '-o', 'json'], { encoding: 'utf8', shell: true, cwd: repo })).find(x => x.name === 'service_role').api_key
-const email = process.argv[2]
+const email = process.argv.slice(2).find(a => !a.startsWith('--'))
+// --vazio: oficina nova com import_state 'vazio' (para testar a importação); padrão 'concluido'.
+const importState = process.argv.includes('--vazio') ? 'vazio' : 'concluido'
 ;(async () => {
   const sql = postgres(DB, { max: 1, onnotice: () => {} })
   const admin = (m, p, b) => fetch(URL_ + '/auth/v1' + p, { method: m, headers: { apikey: SERVICE, Authorization: 'Bearer ' + SERVICE, 'Content-Type': 'application/json' }, body: b ? JSON.stringify(b) : undefined })
   const password = 'Teste-' + randomBytes(5).toString('hex')
   const ws = randomUUID()
-  await sql`insert into public.workshops (id,name,import_state) values (${ws}, ${'Oficina Teste'}, 'concluido')`
+  await sql`insert into public.workshops (id,name,import_state) values (${ws}, ${'Oficina Teste'}, ${importState})`
   // O reset do banco não apaga contas do Auth: conta existente ganha senha temporária nova.
   const [old] = await sql`select id from auth.users where lower(email) = lower(${email})`
   const r = old

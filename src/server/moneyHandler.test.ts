@@ -827,3 +827,42 @@ describe('money: revisão do PR 6', () => {
     expect((await t.call('os.installment', { payload: ok })).status).toBe(200);
   });
 });
+
+describe('money: importação pendente (D7)', () => {
+  const kinds: [string, Body][] = [
+    ['os.finalizeSingle', {}],
+    ['os.status', { payload: { newStatus: 'APROVADO' } }],
+    ['os.delete', {}],
+    ['ledger.toggle', { osId: undefined, entryId: 'e1' }],
+  ];
+  for (const state of ['vazio', 'importando', null]) {
+    it(`recusa tudo com import_state ${String(state)} (423, nada gravado)`, async () => {
+      const t = setup();
+      t.store.seedOS(baseOS(), [entry()]);
+      t.store.importState = state;
+      for (const [kind, body] of kinds) {
+        for (const who of [OWNER, RECEP]) {
+          const r = await t.call(kind, body, who);
+          expect(r.status).toBe(423);
+          expect(r.body.error).toBe('importacao_pendente');
+          expect(String(r.body.message)).toContain('importação');
+        }
+      }
+      expect(t.store.applyCalls).toBe(0);
+    });
+  }
+
+  it('com concluido segue normal', async () => {
+    const t = setup();
+    t.store.seedOS(baseOS());
+    const r = await t.call('os.finalizeSingle');
+    expect(r.status).toBe(200);
+  });
+
+  it('mecânico segue recebendo 403 (papel vem antes)', async () => {
+    const t = setup();
+    t.store.importState = 'importando';
+    const r = await t.call('os.status', { payload: { newStatus: 'APROVADO' } }, MECH);
+    expect(r.status).toBe(403);
+  });
+});

@@ -1,44 +1,46 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { LedgerEntry, ChartFluxoPoint, ChartPiePoint, WorkOrder, WorkshopSettings, CatalogItem } from '../types';
 import { MarginReport } from '../components/MarginReport';
 import { Icon } from '../components/ui/Icon';
+import { FinAlertStrip } from '../components/finance/FinAlertStrip';
+import { FinResultPanel } from '../components/finance/FinResultPanel';
+import { FinDueList } from '../components/finance/FinDueList';
+import { FinFlowChart } from '../components/finance/FinFlowChart';
+import { FinMixBar } from '../components/finance/FinMixBar';
 import { Money as MoneyUtil } from '../utils/helpers';
-import { formatAxisBRL, parseYearDraft, YEAR_INVALID_MESSAGE } from '../services/financeView';
+import { parseYearDraft, YEAR_INVALID_MESSAGE } from '../services/financeView';
 import { shouldIgnoreStep } from '../services/kanbanCardView';
 import { useAccess } from '../hooks/useAccess';
 import { OnlineOnlyButton } from '../components/OnlineOnlyButton';
 import { FIN_TABLE_OFFLINE_BANNER } from '../services/moneyOfflineView';
 import { useDatabase } from '../context/DatabaseContext';
-import { summarizeReceivables, formatDueDate, getReceivableLabel, getReceivableStatus } from '../services/receivables';
+import { summarizeReceivables, getClientReceivables } from '../services/receivables';
 import type { ExpectedExpenses } from '../services/financeKpis';
 import type { Payables } from '../services/financeFlow';
-import { isDebitPaid, debitPaidDay, toLocalDay } from '../services/expenseStatus';
+import { isDebitPaid, debitPaidDay, getDueDate, toLocalDay } from '../services/expenseStatus';
+import { buildPayGroups, buildReceiveGroups, shortDay } from '../services/financeDueView';
+import type { FinDueRow } from '../services/financeDueView';
 
-const COLORS = {
-  primary: '#8257e6', secondary: '#00bcd4', success: '#04d361', warning: '#ff9800', 
-  danger: '#e54c4c', grid: 'var(--border)', text: 'var(--text-2)'
-};
-const PIE_COLORS = [COLORS.secondary, COLORS.warning];
 // Os dados dos gráficos vêm em reais (float); o texto sai no formato brasileiro via Money.
 const brl = (v: number | string): string => MoneyUtil.format(MoneyUtil.fromFloat(Number(v)));
 
 const ITEMS_PER_PAGE = 20;
 
-// 'AAAA-MM-DD' -> 'DD/MM/AAAA' (dia só-data; sem passar por Date).
-const formatDebitDay = (day: string): string => day.split('-').reverse().join('/');
+/** "novembro" (mês) ou "2026" (ano): texto do período nos títulos e nos vazios. */
+const periodText = (month: string, isYear: boolean): string =>
+  isYear ? month.slice(0, 4) : new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1, 1).toLocaleDateString('pt-BR', { month: 'long' });
 
 interface FinancialPageProps {
   isLoading: boolean;
   kpiData: { saldo: number; receitas: number; despesas: number; ticketMedio: number; finalizedCount: number; };
-  /** Saídas ainda não pagas: total do período, total vencido e lista por vencimento (financeKpis.ts). */
+  /** Saídas ainda não pagas (financeKpis.ts). Não é mais usado na tela: as contas vêm de `payables`. */
   expectedExpenses: ExpectedExpenses;
-  /** Contas a pagar (vencidas e do período); a repaginação (rodada 3) passa a usar isto. */
+  /** Contas a pagar: vencidas (qualquer data) e as que vencem no período. */
   payables: Payables;
   chartDataFluxo: ChartFluxoPoint[];
   chartDataPie: ChartPiePoint[];
   ledger: LedgerEntry[];
-  /** Ledger COMPLETO (sem filtro de mês/tipo): base do "A receber". */
+  /** Ledger COMPLETO (sem filtro de mês/tipo): base do "Para receber". */
   allLedger: LedgerEntry[];
   Money: { format: (val: number) => string; toFloat: (val: number) => number; };
   onOpenExport: () => void;
@@ -47,7 +49,7 @@ interface FinancialPageProps {
   onDeleteEntry: (entry: LedgerEntry) => void;
   /** Abre a janela da OS (usado pelo "Editar na OS" dos adiantamentos). */
   onOpenOS: (os: WorkOrder) => void;
-  onTogglePayment: (id: string) => void; // 🆕 NOVA PROP
+  onTogglePayment: (id: string) => void;
   /** Receber uma OS em Aguardando Pagamento que ainda não tem lançamento (abre o fluxo de finalizar). */
   onReceiveOS: (os: WorkOrder) => void;
   selectedMonth: string;
@@ -63,8 +65,8 @@ interface FinancialPageProps {
   catalogServices: CatalogItem[];
 }
 
-export const FinancialPage: React.FC<FinancialPageProps> = ({ 
-  isLoading, kpiData, expectedExpenses, chartDataFluxo, chartDataPie, ledger, allLedger, Money, 
+export const FinancialPage: React.FC<FinancialPageProps> = ({
+  isLoading, kpiData, payables, chartDataFluxo, chartDataPie, ledger, allLedger, Money,
   onOpenExport, onOpenEntry, onEditEntry, onDeleteEntry, onOpenOS, onTogglePayment, onReceiveOS,
   selectedMonth, onMonthChange, viewMode, setViewMode,
   filterType, setFilterType,
@@ -127,21 +129,55 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
     setCurrentPage(1);
   }, [ledger.length, filterType, viewMode, selectedMonth]);
 
-  // "A receber" é geral: não depende do mês/ano nem do filtro de tipo.
-  const today = new Date();
-  const receivables = useMemo(() => summarizeReceivables(allLedger, new Date(), workOrders), [allLedger, workOrders]);
+  const isYear = viewMode === 'YEAR';
+  const period = periodText(selectedMonth, isYear);
+  const todayDay = toLocalDay(new Date());
+
+  // "Para receber" é geral: não depende do mês/ano nem do filtro de tipo.
+  const receivables = useMemo(() => summarizeReceivables(allLedger, todayDay, workOrders), [allLedger, workOrders, todayDay]);
+  const lateClients = useMemo(
+    () => getClientReceivables(workOrders, allLedger, todayDay).ranking.filter(c => c.atrasado > 0).length,
+    [workOrders, allLedger, todayDay]
+  );
+  const payGroups = useMemo(() => buildPayGroups(payables, todayDay, Money.format, period), [payables, todayDay, Money, period]);
+  const receiveGroups = useMemo(() => buildReceiveGroups(receivables, todayDay, Money.format), [receivables, todayDay, Money]);
+  const osById = useMemo(() => new Map(receivables.pendingOS.map(p => [`os-${p.os.id}`, p.os])), [receivables]);
+
+  const onReceiveRow = (row: FinDueRow, e: React.MouseEvent) => {
+    const os = osById.get(row.id);
+    if (os) onReceiveOS(os); else payClick(e, row.id);
+  };
+
+  // Faixa de atenção: só conta vencida e valor atrasado.
+  const alertMessages: string[] = [];
+  const alertActions: { label: string; targetId: string }[] = [];
+  if (payables.countOverdue > 0) {
+    alertMessages.push(`Atenção: ${payables.countOverdue === 1 ? '1 conta vencida soma' : `${payables.countOverdue} contas vencidas somam`} ${Money.format(payables.totalOverdue)}.`);
+    alertActions.push({ label: 'Ver contas', targetId: 'fin-pay-title' });
+  }
+  if (receivables.totalAtrasado > 0) {
+    const who = lateClients === 0 ? 'Há recebimentos atrasados' : lateClients === 1 ? '1 cliente está atrasado' : `${lateClients} clientes estão atrasados`;
+    alertMessages.push(`${who}: ${Money.format(receivables.totalAtrasado)}.`);
+    alertActions.push({ label: 'Ver quem deve', targetId: 'fin-receive-title' });
+  }
+
+  const partsCents = MoneyUtil.fromFloat(chartDataPie.find(p => p.name === 'Peças')?.value ?? 0);
+  const servicesCents = MoneyUtil.fromFloat(chartDataPie.find(p => p.name === 'Serviços')?.value ?? 0);
 
   const totalPages = Math.ceil(ledger.length / ITEMS_PER_PAGE);
   const paginatedLedger = ledger.slice(
-      (currentPage - 1) * ITEMS_PER_PAGE, 
+      (currentPage - 1) * ITEMS_PER_PAGE,
       currentPage * ITEMS_PER_PAGE
   );
+  const filterOptions: { value: 'ALL' | 'CREDIT' | 'DEBIT'; label: string }[] = [
+    { value: 'ALL', label: 'Todos' }, { value: 'CREDIT', label: 'Entradas' }, { value: 'DEBIT', label: 'Saídas' },
+  ];
 
   return (
     <>
       <div className="fin-page">
       <div className="header-area">
-        <h1 className="page-title">Painel Financeiro</h1>
+        <h1 className="page-title">Financeiro</h1>
         <div className="financial-actions fin-actions">
 
           <div className="segmented" role="group" aria-label="Período">
@@ -177,7 +213,7 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
           )}
 
           <button className="btn-secondary" onClick={onOpenExport}><Icon name="arquivo" size={18} />Exportar</button>
-          <OnlineOnlyButton className="btn" onClick={onOpenEntry}><Icon name="adicionar" size={18} />Lançamento</OnlineOnlyButton>
+          <OnlineOnlyButton className="btn" onClick={onOpenEntry}><Icon name="adicionar" size={18} />Novo lançamento</OnlineOnlyButton>
         </div>
       </div>
 
@@ -204,305 +240,137 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
         />
       ) : (
       <>
-      <section className="card fin-receber" aria-labelledby="fin-receber-title">
-          <div className="fin-receber-head">
-            <h2 id="fin-receber-title" className="fin-section-title">A receber</h2>
-            <div className="fin-receber-totals">
-              <div className="fin-receber-total">
-                <span className="fin-receber-label">Total a receber (inclui atrasado)</span>
-                <strong className="fin-receber-value">{Money.format(receivables.totalAReceber + receivables.totalAtrasado)}</strong>
-                <span className="fin-receber-sub">{receivables.countAReceber + receivables.countAtrasado} {receivables.countAReceber + receivables.countAtrasado === 1 ? 'item' : 'itens'} (total geral)</span>
-              </div>
-              <div className={receivables.countAtrasado > 0 ? 'fin-receber-total fin-receber-total--late' : 'fin-receber-total'}>
-                <span className="fin-receber-label">
-                  {receivables.countAtrasado > 0 && <Icon name="alerta" size={16} />}Atrasado
-                </span>
-                <strong className="fin-receber-value">{Money.format(receivables.totalAtrasado)}</strong>
-                <span className="fin-receber-sub">{receivables.countAtrasado} {receivables.countAtrasado === 1 ? 'lançamento vencido' : 'lançamentos vencidos'}</span>
-              </div>
-            </div>
-          </div>
-          {offlineCloud && (
-            <p className="cfg-warn fin-offline-banner" role="note"><Icon name="sem-internet" size={16} /> {FIN_TABLE_OFFLINE_BANNER}</p>
-          )}
-          <div className="receivables-scroll">
-            <table className="data-table receivables-table">
-              <thead><tr><th>Vencimento</th><th>Descrição</th><th>Valor</th><th>Situação</th><th>Ação</th></tr></thead>
-              <tbody>
-                {receivables.items.length === 0 && receivables.pendingOS.length === 0 ? (
-                  <tr><td colSpan={5} style={{textAlign:'center', padding:20, color:'var(--text-muted)'}}>Nada a receber</td></tr>
-                ) : receivables.items.map(e => {
-                  const late = getReceivableStatus(e, today) === 'ATRASADO';
-                  return (
-                    <tr key={e.id}>
-                      <td>{formatDueDate(e)}</td>
-                      <td className="receivable-desc" title={e.description}>{e.description}</td>
-                      <td style={{fontWeight:'bold'}}>{Money.format(e.amount)}</td>
-                      <td><span className={`receivable-status ${late ? 'late' : 'open'}`}>{late && <Icon name="alerta" size={14} />}{getReceivableLabel(e, today)}</span></td>
-                      <td>
-                        <OnlineOnlyButton
-                          className="btn btn-success receivable-pay"
-                          onClick={(ev) => payClick(ev, e.id)}
-                          busyLabel="Recebendo..." busyKey={e.id}
-                          aria-label={`Receber pagamento: ${e.description}`}
-                        >
-                          <Icon name="receber" size={18} />Receber
-                        </OnlineOnlyButton>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {receivables.pendingOS.map(({ os, amount }) => (
-                  <tr key={`os-${os.id}`}>
-                    <td>Sem data</td>
-                    <td className="receivable-desc" title={`OS #${os.osNumber} - ${os.clientName}`}>OS #{os.osNumber} - {os.clientName} (aguardando pagamento)</td>
-                    <td style={{fontWeight:'bold'}}>{Money.format(amount)}</td>
-                    <td><span className="receivable-status open">A receber</span></td>
-                    <td>
-                      <OnlineOnlyButton
-                        className="btn btn-success receivable-pay"
-                        onClick={() => onReceiveOS(os)}
-                        busyLabel="Recebendo..." busyKey={os.id}
-                        aria-label={`Receber a OS #${os.osNumber}: ${os.clientName}`}
-                      >
-                        <Icon name="receber" size={18} />Receber
-                      </OnlineOnlyButton>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-      </section>
+      {!isLoading && <FinAlertStrip messages={alertMessages} actions={alertActions} />}
 
-      {isLoading ? (
-          <div className="stats-row fin-stats">
-             {[1,2,3,4].map(i => <div key={i} className="skeleton" style={{height: 110, borderRadius: 16}}/>)}
-          </div>
-      ) : (
-          <div className="stats-row fin-stats">
-            <div className="stat-card">
-               <div className="stat-label">Resultado ({viewMode === 'YEAR' ? 'ano' : 'mês'})</div>
-               <div className={kpiData.saldo >= 0 ? 'stat-value stat-value--success' : 'stat-value stat-value--danger'}>{Money.format(kpiData.saldo)}</div>
-               <div className="stat-trend">{kpiData.saldo >= 0 ? (canMargin ? 'Lucro do período' : 'Saldo positivo do período') : (canMargin ? 'Prejuízo do período' : 'Saldo negativo do período')}</div>
-            </div>
-            <div className="stat-card"><div className="stat-label">Receitas (recebido)</div><div className="stat-value stat-value--success">{Money.format(kpiData.receitas)}</div></div>
-            <div className="stat-card"><div className="stat-label">Despesas (pagas)</div><div className="stat-value stat-value--danger">{Money.format(kpiData.despesas)}</div></div>
-            <div className="stat-card"><div className="stat-label">Ticket médio</div><div className="stat-value">{Money.format(kpiData.ticketMedio)}</div></div>
-          </div>
-      )}
-
-      {!isLoading && (
-        <section className="card fin-receber" aria-labelledby="fin-prev-title">
-          <div className="fin-receber-head">
-            <h2 id="fin-prev-title" className="fin-section-title">Despesas previstas</h2>
-            <div className="fin-receber-totals">
-              <div className="fin-receber-total">
-                <span className="fin-receber-label">Previsto no {viewMode === 'YEAR' ? 'ano' : 'mês'}</span>
-                <strong className="fin-receber-value">{Money.format(expectedExpenses.periodTotal)}</strong>
-                <span className="fin-receber-sub">{expectedExpenses.periodCount} {expectedExpenses.periodCount === 1 ? 'conta a pagar' : 'contas a pagar'}</span>
-              </div>
-              <div className={expectedExpenses.overdueCount > 0 ? 'fin-receber-total fin-receber-total--late' : 'fin-receber-total'}>
-                <span className="fin-receber-label">
-                  {expectedExpenses.overdueCount > 0 && <Icon name="alerta" size={16} />}Vencido (qualquer mês)
-                </span>
-                <strong className="fin-receber-value">{Money.format(expectedExpenses.overdueTotal)}</strong>
-                <span className="fin-receber-sub">{expectedExpenses.overdueCount} {expectedExpenses.overdueCount === 1 ? 'conta vencida' : 'contas vencidas'}</span>
-              </div>
-            </div>
-          </div>
-          {expectedExpenses.items.length === 0 ? (
-            <p className="fin-chart-empty">Nenhuma despesa a pagar.</p>
-          ) : (
-            <div className="receivables-scroll">
-              <table className="data-table receivables-table">
-                <thead><tr><th>Vencimento</th><th>Descrição</th><th>Valor</th><th>Situação</th><th>Ação</th></tr></thead>
-                <tbody>
-                  {expectedExpenses.items.slice(0, 8).map(x => (
-                    <tr key={x.entry.id}>
-                      <td>{formatDueDate(x.entry)}</td>
-                      <td className="receivable-desc" title={x.entry.description}>{x.entry.description}</td>
-                      <td style={{fontWeight:'bold'}}>{Money.format(x.entry.amount)}</td>
-                      <td><span className={`receivable-status ${x.overdue ? 'late' : 'open'}`}>{x.overdue && <Icon name="alerta" size={14} />}{x.overdue ? 'Vencida' : 'A pagar'}</span></td>
-                      <td>
-                        <OnlineOnlyButton
-                          busyLabel="Pagando..." busyKey={x.entry.id}
-                          className="btn-sm fin-pay"
-                          onClick={(ev) => payClick(ev, x.entry.id)}
-                          aria-label={`Paguei: ${x.entry.description}`}
-                        >
-                          <Icon name="check" size={16} />Paguei
-                        </OnlineOnlyButton>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {expectedExpenses.items.length > 8 && (
-                <p className="fin-receber-sub">e mais {expectedExpenses.items.length - 8} (ver na lista de lançamentos)</p>
-              )}
-            </div>
-          )}
-        </section>
-      )}
-
-      <div className="dashboard-grid">
-        <div className="chart-card">
-            <div className="chart-header"><div className="chart-title">Entrou e saiu ({viewMode === 'YEAR' ? 'por mês' : 'por dia'})</div></div>
-            <div style={{flex:1, minHeight: 0}}>
-                <ResponsiveContainer>
-                    <BarChart data={chartDataFluxo}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} vertical={false}/>
-                        <XAxis dataKey="name" stroke={COLORS.text} fontSize={12} tickLine={false} axisLine={false}/>
-                        <YAxis stroke={COLORS.text} fontSize={12} tickLine={false} axisLine={false} width={76} tickFormatter={(v: number) => formatAxisBRL(Number(v))}/>
-                        <Tooltip
-                            contentStyle={{
-                                backgroundColor: 'var(--bg-panel)',
-                                borderColor: 'var(--border)',
-                                color: 'var(--text-main)',
-                                borderRadius: '12px',
-                                boxShadow: '0 10px 20px rgba(0,0,0,0.2)'
-                            }}
-                            itemStyle={{ color: 'var(--text-main)' }}
-                            labelStyle={{ color: 'var(--text-muted)' }}
-                            formatter={(value: number | string, name: string) => [brl(value), name === 'entrou' ? 'Entrou' : 'Saiu']}
-                        />
-                        <Bar dataKey="entrou" fill={COLORS.success} isAnimationActive={false} />
-                        <Bar dataKey="saiu" fill={COLORS.danger} isAnimationActive={false} />
-                    </BarChart>
-                </ResponsiveContainer>
-            </div>
-        </div>
-        <div className="chart-card">
-            <div className="chart-header"><div className="chart-title">Receita (peças x serviços)</div></div>
-            {chartDataPie.length === 1 && chartDataPie[0].name === '-' ? (
-              <p className="fin-chart-empty">Sem receita no período.</p>
-            ) : (
-              <>
-                <div style={{flex:1, minHeight: 0}}>
-                    <ResponsiveContainer>
-                        <PieChart>
-                            <Pie data={chartDataPie} cx="50%" cy="50%" innerRadius={50} outerRadius={72} dataKey="value" isAnimationActive={false}>
-                                {chartDataPie.map((p, i) => <Cell key={p.name} fill={PIE_COLORS[i % PIE_COLORS.length]}/>)}
-                            </Pie>
-                            <Tooltip
-                              contentStyle={{ backgroundColor: 'var(--bg-panel)', borderColor: 'var(--border)', borderRadius: '12px' }}
-                              itemStyle={{ color: 'var(--text-main)' }}
-                              formatter={(value: number | string, name: string) => [brl(value), name]}
-                            />
-                        </PieChart>
-                    </ResponsiveContainer>
-                </div>
-                <ul className="fin-legend" aria-label="Legenda do gráfico">
-                  {chartDataPie.map((p, i) => (
-                    <li key={p.name}>
-                      <span className="fin-legend-swatch" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} aria-hidden="true" />
-                      <span className="fin-legend-name">{p.name}</span>
-                      <span className="fin-legend-value">{brl(p.value)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-        </div>
+      <div className="fin-stack">
+        <FinResultPanel
+          isLoading={isLoading}
+          periodLabel={period}
+          isYear={isYear}
+          entrou={kpiData.receitas}
+          saiu={kpiData.despesas}
+          saldo={kpiData.saldo}
+          showProfit={canMargin}
+          format={Money.format}
+        />
       </div>
 
-      <div className="card">
-          <div className="fin-ledger-head">
-              <h2 className="fin-section-title">Lançamentos</h2>
-              <div className="segmented" role="group" aria-label="Filtrar por tipo">
-                  <button type="button" aria-pressed={filterType === 'ALL'} onClick={() => setFilterType('ALL')}>Todos</button>
-                  <button type="button" aria-pressed={filterType === 'CREDIT'} onClick={() => setFilterType('CREDIT')}>Receitas</button>
-                  <button type="button" aria-pressed={filterType === 'DEBIT'} onClick={() => setFilterType('DEBIT')}>Despesas</button>
+      {offlineCloud && (
+        <p className="cfg-warn fin-offline-banner" role="note"><Icon name="sem-internet" size={16} /> {FIN_TABLE_OFFLINE_BANNER}</p>
+      )}
+
+      <div className="fin-grid">
+        <FinDueList
+          idPrefix="fin-pay" kind="pay" title="Contas para pagar"
+          scope={`Vencidas (qualquer data) e as que vencem em ${period}.`}
+          total={Money.format(payables.totalOverdue + payables.totalDue)}
+          lateTotal={payables.totalOverdue > 0 ? Money.format(payables.totalOverdue) : undefined}
+          groups={payGroups}
+          actionLabel="Paguei" busyLabel="Pagando..."
+          onAction={(row, e) => payClick(e, row.id)}
+          emptyText="Nenhuma conta para pagar. Tudo em dia."
+        />
+        <FinDueList
+          idPrefix="fin-receive" kind="receive" title="Para receber"
+          scope="Todas as datas."
+          total={Money.format(receivables.totalAReceber + receivables.totalAtrasado)}
+          lateTotal={receivables.totalAtrasado > 0 ? Money.format(receivables.totalAtrasado) : undefined}
+          groups={receiveGroups}
+          actionLabel="Receber" busyLabel="Recebendo..."
+          onAction={onReceiveRow}
+          emptyText="Ninguém deve nada agora."
+        />
+      </div>
+
+      <div className="fin-grid">
+        <FinFlowChart data={chartDataFluxo} isYear={isYear} periodLabel={period} formatReais={brl} />
+        <FinMixBar
+          parts={partsCents} services={servicesCents} average={kpiData.ticketMedio}
+          finalizedCount={kpiData.finalizedCount} periodLabel={period} format={Money.format}
+        />
+      </div>
+
+      <section className="fin-box" aria-labelledby="fin-ledger-title">
+          <div className="fin-box__head">
+              <h2 id="fin-ledger-title" className="fin-box__title">Lançamentos (entradas e saídas)</h2>
+              <div className="fin-filter" role="group" aria-label="Filtrar por tipo">
+                  {filterOptions.map(o => (
+                    <button key={o.value} type="button" className="chip" aria-pressed={filterType === o.value} onClick={() => setFilterType(o.value)}>{o.label}</button>
+                  ))}
               </div>
           </div>
 
+          {paginatedLedger.length === 0 ? (
+            <div className="fin-empty">
+              <p className="fin-empty__title">{ledger.length === 0 ? 'Nenhum lançamento encontrado.' : 'Página vazia.'}</p>
+            </div>
+          ) : (
           <table className="data-table fin-ledger-table">
             <thead><tr><th>Descrição</th><th>Valor</th><th>Data</th><th>Ações</th></tr></thead>
             <tbody>
-                {paginatedLedger.length === 0 ? (
-                   <tr><td colSpan={4} style={{textAlign:'center', padding:20, color:'var(--text-muted)'}}>
-                       {ledger.length === 0 ? "Nenhum lançamento encontrado." : "Página vazia."}
-                   </td></tr>
-                ) : (
-                    paginatedLedger.map(e => {
-                        let displayDate: string;
-                        let isPaymentDate = false;
-
-                        if (e.type === 'CREDIT') {
-                            if (e.paymentDate) {
-                                displayDate = new Date(e.paymentDate).toLocaleDateString('pt-BR');
-                                isPaymentDate = true;
-                            } else {
-                                displayDate = new Date(e.effectiveDate).toLocaleDateString('pt-BR');
-                                isPaymentDate = false;
-                            }
-                        } else {
-                            // Despesa: "paga" segue a regra única (expenseStatus.ts); a data é a do pagamento ou do vencimento.
-                            const debitPaid = isDebitPaid(e, toLocalDay(today));
-                            displayDate = formatDebitDay(debitPaid ? debitPaidDay(e) : toLocalDay(e.dueDate ?? e.effectiveDate));
-                            isPaymentDate = debitPaid;
-                        }
-
-                        const advanceOS = advanceOwners.get(e.id);
-                        return (
-                            <tr key={e.id}>
-                                <td>
-                                    {e.description}
-                                    {advanceOS && <span className="fin-badge fin-badge--paid">Adiantamento da OS #{advanceOS.osNumber}</span>}
-                                </td>
-                                <td className={e.type === 'DEBIT' ? 'fin-amount fin-amount--debit' : 'fin-amount fin-amount--credit'}>
-                                    {e.type === 'DEBIT' ? '- ' : '+ '}{Money.format(e.amount)}
-                                </td>
-                                <td className="fin-date">
-                                    {displayDate}
-                                    {isPaymentDate && (
-                                        <span className="fin-badge fin-badge--paid"><Icon name="check" size={14} />Pago</span>
-                                    )}
-                                    {!isPaymentDate && (
-                                        <span className="fin-badge fin-badge--pending"><Icon name="relogio" size={14} />Pendente</span>
-                                    )}
-                                </td>
-                                <td>
-                                    <div className="fin-row-actions">
-                                    {advanceOS ? (
-                                        <button className="btn-sm" onClick={() => onOpenOS(advanceOS)} aria-label={`Editar na OS #${advanceOS.osNumber}`}><Icon name="editar" size={16} />Editar na OS #{advanceOS.osNumber}</button>
-                                    ) : (<>
-                                    <OnlineOnlyButton
-                                        busyLabel={e.type === 'CREDIT' ? 'Recebendo...' : 'Pagando...'} busyKey={e.id}
-                                        className={isPaymentDate ? 'btn-sm fin-pay fin-pay--paid' : 'btn-sm fin-pay'}
-                                        onClick={(ev) => payClick(ev, e.id)}
-                                        aria-pressed={isPaymentDate}
-                                        aria-label={isPaymentDate ? `Pago, clique para desfazer: ${e.description}` : `${e.type === 'CREDIT' ? 'Marcar como pago' : 'Paguei'}: ${e.description}`}
-                                    >
-                                        <Icon name="check" size={16} />{isPaymentDate ? 'Desfazer pagamento' : e.type === 'CREDIT' ? 'Marcar como pago' : 'Paguei'}
-                                    </OnlineOnlyButton>
-                                    <OnlineOnlyButton className="btn-sm" onClick={() => onEditEntry(e.id)} aria-label={`Editar: ${e.description}`}><Icon name="editar" size={16} />Editar</OnlineOnlyButton>
-                                    {canDeleteEntry && <OnlineOnlyButton className="btn-sm fin-del" onClick={() => onDeleteEntry(e)} aria-label={`Excluir: ${e.description}`}><Icon name="excluir" size={16} />Excluir</OnlineOnlyButton>}
-                                    </>)}
-                                    </div>
-                                </td>
-                            </tr>
-                        );
-                    })
-                )}
+                {paginatedLedger.map(e => {
+                    // Paga: receita com paymentDate; despesa pela regra única (expenseStatus.ts).
+                    const paidDay = e.type === 'CREDIT'
+                      ? (e.paymentDate ? toLocalDay(e.paymentDate) : null)
+                      : (isDebitPaid(e, todayDay) ? debitPaidDay(e) : null);
+                    const isPaid = paidDay !== null;
+                    const dateText = `${isPaid ? 'Pago em' : 'Vence em'} ${shortDay(paidDay ?? toLocalDay(getDueDate(e)), todayDay)}`;
+                    const advanceOS = advanceOwners.get(e.id);
+                    return (
+                        <tr key={e.id}>
+                            <td className="fin-ledger__desc">
+                                {e.description}
+                                {advanceOS && <span className="fin-tag fin-tag--paid">Adiantamento da OS #{advanceOS.osNumber}</span>}
+                            </td>
+                            <td className={e.type === 'DEBIT' ? 'fin-amount fin-amount--debit' : 'fin-amount fin-amount--credit'}>
+                                {e.type === 'DEBIT' ? '- ' : '+ '}{Money.format(e.amount)}
+                            </td>
+                            <td className="fin-date">
+                                {dateText}
+                                {isPaid
+                                  ? <span className="fin-tag fin-tag--paid"><Icon name="check" size={14} />Pago</span>
+                                  : <span className="fin-tag fin-tag--pending"><Icon name="relogio" size={14} />Pendente</span>}
+                            </td>
+                            <td>
+                                <div className="fin-row-actions">
+                                {advanceOS ? (
+                                    <button className="btn-sm" onClick={() => onOpenOS(advanceOS)} aria-label={`Editar na OS #${advanceOS.osNumber}`}><Icon name="editar" size={16} />Editar na OS #{advanceOS.osNumber}</button>
+                                ) : (<>
+                                <OnlineOnlyButton
+                                    busyLabel={e.type === 'CREDIT' ? 'Recebendo...' : 'Pagando...'} busyKey={e.id}
+                                    className={isPaid ? 'btn-sm fin-pay fin-pay--paid' : 'btn-sm fin-pay'}
+                                    onClick={(ev) => payClick(ev, e.id)}
+                                    aria-pressed={isPaid}
+                                    aria-label={isPaid ? `Pago, clique para desfazer: ${e.description}` : `${e.type === 'CREDIT' ? 'Marcar como pago' : 'Paguei'}: ${e.description}`}
+                                >
+                                    <Icon name="check" size={16} />{isPaid ? 'Desfazer pagamento' : e.type === 'CREDIT' ? 'Marcar como pago' : 'Paguei'}
+                                </OnlineOnlyButton>
+                                <OnlineOnlyButton className="btn-sm" onClick={() => onEditEntry(e.id)} aria-label={`Editar: ${e.description}`}><Icon name="editar" size={16} />Editar</OnlineOnlyButton>
+                                {canDeleteEntry && <OnlineOnlyButton className="btn-sm fin-del" onClick={() => onDeleteEntry(e)} aria-label={`Excluir: ${e.description}`}><Icon name="excluir" size={16} />Excluir</OnlineOnlyButton>}
+                                </>)}
+                                </div>
+                            </td>
+                        </tr>
+                    );
+                })}
             </tbody>
           </table>
+          )}
 
           {totalPages > 1 && (
-             <div style={{display:'flex', justifyContent:'center', alignItems:'center', gap: 15, marginTop: 20}}>
+             <div className="fin-pager">
                  <button
-                    className="btn-secondary"
+                    className="btn btn-secondary"
                     disabled={currentPage === 1}
                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                  >
                     Anterior
                  </button>
-                 <span style={{color: 'var(--text-muted)', fontSize: '0.9rem'}}>
+                 <span className="fin-pager__info">
                     Página {currentPage} de {totalPages}
                  </span>
                  <button
-                    className="btn-secondary"
+                    className="btn btn-secondary"
                     disabled={currentPage === totalPages}
                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                  >
@@ -510,7 +378,7 @@ export const FinancialPage: React.FC<FinancialPageProps> = ({
                  </button>
              </div>
           )}
-      </div>
+      </section>
       </>
       )}
       </div>

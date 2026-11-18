@@ -121,24 +121,25 @@
 }
 .fin-due__row:last-child { border-bottom: 0; }
 .fin-due__date { font-variant-numeric: tabular-nums; color: var(--text-2); white-space: nowrap; }
-.fin-due__desc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.fin-due__desc { min-width: 0; overflow: hidden; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; color: var(--text); }
 .fin-due__amount { font-weight: var(--fw-bold); font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--text); }
-.fin-due__state { grid-column: 3 / 4; font-size: var(--fs-sm); color: var(--text-2); }
+.fin-due__state { grid-column: 2 / -1; font-size: var(--fs-sm); color: var(--text-2); }
 .fin-due__state--late { color: var(--fin-late-text); font-weight: var(--fw-semibold); }
 .fin-due__state--due { color: var(--fin-due-text); font-weight: var(--fw-semibold); }
 .fin-due__row .btn { min-height: 44px; min-width: 44px; }
 .fin-due__more { display: flex; justify-content: center; margin-top: var(--sp-3); }
 .fin-due__more .btn { min-height: var(--control-h); }
 @media (max-width: 959px) {
-  .fin-due__row { grid-template-columns: auto minmax(0, 1fr) auto; }
-  .fin-due__date { grid-column: 2 / 3; }
-  .fin-due__amount { grid-column: 3 / 4; }
-  .fin-due__state { grid-column: 1 / -1; }
-  .fin-due__row .btn { grid-column: 1 / -1; justify-self: start; }
+  .fin-due__row { grid-template-columns: auto auto minmax(0, 1fr) auto; }
+  .fin-due__desc { grid-column: 1 / -1; grid-row: 2; }
+  .fin-due__date { grid-column: 2 / 3; grid-row: 1; }
+  .fin-due__amount { grid-column: 4 / 5; grid-row: 1; justify-self: end; }
+  .fin-due__state { grid-column: 1 / -1; grid-row: 3; }
+  .fin-due__row .btn { grid-column: 1 / -1; grid-row: 4; justify-self: start; }
 }
 
 /* ---------- Gráfico de fluxo diário ---------- */
-.fin-flow { min-width: 0; }
+.fin-flow { position: relative; min-width: 0; }
 .fin-flow__chart { width: 100%; height: 260px; }
 .fin-flow__legend { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); margin: var(--sp-3) 0 0; padding: 0; list-style: none; font-size: var(--fs-sm); color: var(--text-2); }
 .fin-flow__key { display: inline-flex; align-items: center; gap: var(--sp-2); }
@@ -185,6 +186,9 @@
 }
 .fin-pager .btn { min-height: var(--control-h); min-width: var(--control-h); }
 .fin-pager__info { font-variant-numeric: tabular-nums; }
+
+.fin-ledger__desc .fin-tag { margin-left: var(--sp-2); }
+.fin-date .fin-tag { margin-left: var(--sp-2); }
 
 /* ---------- Vazio ---------- */
 .fin-empty {

@@ -229,6 +229,15 @@ Projeto **real** (`stblagzkkffbjuzltfrt`), Authentication > URL Configuration:
 
 Antes de aplicar no real, o `revisor` confere as 7 migrações em ordem contra o projeto vazio. É a única revisão ainda não feita.
 
+### E.2b Ajustes de segurança do Auth no painel do real (você)
+
+O `db push` aplica só o banco. Estes itens são do painel do projeto **real** (revisão de 2026-11-18). **Nunca** rode `npx supabase config push` no real: o `supabase/config.toml` tem valores de desenvolvimento (cadastro aberto, senha de 6, TOTP desligado) que sobrescreveriam o Auth.
+1. **Authentication > Sign In / Providers**: desligar "Allow new users to sign up" (só convite). O Claude confirma antes no teste que o convite continua funcionando com o cadastro desligado.
+2. **Senha mínima**: 8 caracteres.
+3. **MFA**: ligar TOTP se o Dono for usar.
+4. **API > Exposed schemas**: só `public` e `graphql_public` (não expor `app`).
+5. **Storage**: limite global de tamanho de pelo menos 3 MB.
+
 ### E.4 Aplicar as migrações no real (Claude, com o seu ok)
 
 Ordem obrigatória (o comando aplica todas, na ordem do nome):
@@ -239,6 +248,10 @@ Ordem obrigatória (o comando aplica todas, na ordem do nome):
 5. `20261118120000_import_aal2.sql`
 6. `20261118130000_import_finish_expected.sql`
 7. `20261118140000_member_reactivated_at.sql`
+
+Ensaio feito em 2026-11-18 no projeto de teste: `db push` aplicou as 7 migrações, 396 asserções pgTAP verdes, Realtime com 13 tabelas, política de broadcast criada, funções do sistema pertencem a `postgres`.
+
+Antes (só leitura no real): `npx supabase migration list --linked` deve mostrar 0 migrações; não pode existir tabela em `public`, bucket `fotos`, políticas `f_sel`/`f_ins` nem `ws_broadcast_sel` (sobras do spike). Depois: conferir Realtime (13 tabelas) e a política de broadcast, e só então implantar as funções.
 
 ```powershell
 npx supabase db push --dry-run   # mostra o que vai aplicar, sem aplicar
